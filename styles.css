@@ -56,16 +56,11 @@ a {
   font-weight: 700;
 }
 
-.brand-mark {
-  display: grid;
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--mint);
-  color: var(--white);
-  font-size: 20px;
+.brand-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: clamp(110px, 14vw, 158px);
+  height: auto;
 }
 
 .brand-name,
@@ -277,6 +272,15 @@ h3 {
 }
 
 .image-message p:last-child {
+  color: var(--muted);
+}
+
+.support-message {
+  background: var(--white);
+}
+
+.support-message p:last-child {
+  max-width: 860px;
   color: var(--muted);
 }
 
@@ -639,6 +643,10 @@ h3 {
 
   .brand-name {
     font-size: 14px;
+  }
+
+  .brand-logo {
+    width: 106px;
   }
 
   .hero {
