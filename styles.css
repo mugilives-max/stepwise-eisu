@@ -258,6 +258,28 @@ h3 {
   color: var(--muted);
 }
 
+.image-message {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1fr);
+  gap: clamp(24px, 5vw, 60px);
+  align-items: center;
+  padding: clamp(56px, 8vw, 96px) clamp(18px, 6vw, 84px);
+  background: var(--paper);
+}
+
+.image-message img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.image-message p:last-child {
+  color: var(--muted);
+}
+
 .feature-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -446,6 +468,7 @@ h3 {
 
   .problem-grid,
   .feature-list,
+  .image-message,
   .flow {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -470,6 +493,7 @@ h3 {
 
   .problem-grid,
   .feature-list,
+  .image-message,
   .subject-grid,
   .flow {
     grid-template-columns: 1fr;
