@@ -96,17 +96,25 @@ a {
 }
 
 .hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-  gap: clamp(28px, 6vw, 72px);
+  position: relative;
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   min-height: calc(100vh - 68px);
   padding: clamp(44px, 8vw, 96px) clamp(18px, 6vw, 84px);
   border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, rgba(8, 18, 24, 0.08) 0%, rgba(8, 18, 24, 0.36) 44%, rgba(8, 18, 24, 0.78) 100%),
+    url("./assets/students-sakura-web.jpg") center / cover no-repeat;
 }
 
 .hero-copy {
-  max-width: 720px;
+  max-width: 690px;
+  color: var(--white);
+}
+
+.hero .eyebrow {
+  color: #9fd5c4;
 }
 
 .eyebrow {
@@ -149,6 +157,11 @@ h3 {
   margin: 24px 0 0;
   color: #3d4a55;
   font-size: 17px;
+}
+
+.hero .lead {
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.26);
 }
 
 .cta-row {
@@ -197,140 +210,8 @@ h3 {
   font-size: 14px;
 }
 
-.hero-visual {
-  position: relative;
-  min-height: 430px;
-}
-
-.screen {
-  position: relative;
-  overflow: hidden;
-  min-height: 390px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--white);
-  box-shadow: var(--shadow);
-}
-
-.screen::before {
-  position: absolute;
-  inset: auto -12% -28% 18%;
-  height: 210px;
-  background: linear-gradient(135deg, rgba(47, 111, 189, 0.2), rgba(46, 139, 114, 0.16));
-  content: "";
-  transform: rotate(-8deg);
-}
-
-.screen-top {
-  display: flex;
-  gap: 7px;
-  margin-bottom: 22px;
-}
-
-.screen-top span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--line);
-}
-
-.screen-top span:first-child {
-  background: var(--coral);
-}
-
-.screen-top span:nth-child(2) {
-  background: var(--yellow);
-}
-
-.screen-top span:nth-child(3) {
-  background: var(--mint);
-}
-
-.lesson-board {
-  position: relative;
-  display: grid;
-  min-height: 302px;
-  align-content: space-between;
-  padding: clamp(22px, 4vw, 36px);
-  border-radius: 8px;
-  background: #10232e;
-  color: var(--white);
-}
-
-.board-label {
-  margin: 0 0 12px;
-  color: #9fd5c4;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.formula {
-  margin: 0;
-  color: var(--white);
-  font-size: clamp(35px, 5vw, 54px);
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.answer {
-  display: inline-block;
-  margin: 18px 0 0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(243, 201, 76, 0.18);
-  color: #ffe28a;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.teacher-card {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  padding: 9px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  font-weight: 700;
-}
-
-.avatar {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--mint);
-}
-
-.note-card {
-  position: absolute;
-  right: -8px;
-  bottom: 12px;
-  width: min(240px, 70%);
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--white);
-  box-shadow: 0 12px 30px rgba(31, 48, 64, 0.14);
-}
-
-.note-card span,
-.note-card strong {
-  display: block;
-}
-
-.note-card span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.note-card strong {
-  margin-top: 4px;
-  color: var(--mint-dark);
-  font-size: 18px;
+.hero .micro-copy {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .section,
@@ -551,13 +432,16 @@ h3 {
 }
 
 @media (max-width: 980px) {
-  .hero,
   .profile {
     grid-template-columns: 1fr;
   }
 
   .hero {
     min-height: auto;
+    justify-content: flex-start;
+    background:
+      linear-gradient(90deg, rgba(8, 18, 24, 0.72) 0%, rgba(8, 18, 24, 0.52) 100%),
+      url("./assets/students-sakura-web.jpg") 30% center / cover no-repeat;
   }
 
   .problem-grid,
@@ -582,18 +466,6 @@ h3 {
 
   .hero {
     padding-top: 42px;
-  }
-
-  .hero-visual {
-    min-height: 350px;
-  }
-
-  .screen {
-    min-height: 330px;
-  }
-
-  .lesson-board {
-    min-height: 248px;
   }
 
   .problem-grid,
