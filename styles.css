@@ -229,7 +229,7 @@ h3 {
   gap: 14px;
 }
 
-.problem-grid p,
+.problem-grid article,
 .feature-list article,
 .subject-grid article,
 .profile-facts,
@@ -239,12 +239,32 @@ h3 {
   background: var(--white);
 }
 
-.problem-grid p {
+.problem-grid article {
+  display: grid;
+  align-content: start;
+  gap: 14px;
   margin: 0;
   min-height: 146px;
   padding: 20px;
+}
+
+.problem-grid p {
+  margin: 0;
   color: #34424f;
   font-weight: 700;
+}
+
+.problem-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--white);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .section-note {
@@ -663,7 +683,7 @@ h3 {
     grid-template-columns: 1fr;
   }
 
-  .problem-grid p {
+  .problem-grid article {
     min-height: auto;
   }
 
