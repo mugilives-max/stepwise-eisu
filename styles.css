@@ -905,6 +905,28 @@ h3 {
   list-style: none;
 }
 
+.trial-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.trial-block {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.trial-block > h3 {
+  margin-bottom: 18px;
+}
+
+.compact-flow {
+  grid-template-columns: 1fr;
+}
+
 .flow li {
   display: grid;
   grid-template-columns: 38px 1fr;
@@ -912,6 +934,13 @@ h3 {
   padding: 22px 18px;
   border-top: 3px solid var(--primary);
   background: var(--white);
+}
+
+.trial-block .flow li {
+  border-top-width: 0;
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  background: #fbfcfd;
 }
 
 .flow-visual {
@@ -923,6 +952,32 @@ h3 {
   padding: 14px;
   border-radius: 8px;
   background: linear-gradient(135deg, #eef4fb, #f8edf2);
+}
+
+.compact-flow .flow-visual {
+  height: 112px;
+}
+
+.trial-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.trial-note p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.trial-note .button {
+  margin-left: auto;
 }
 
 .flow span {
@@ -1036,6 +1091,7 @@ h3 {
   .voice-grid,
   .strength-grid,
   .story-layout,
+  .trial-layout,
   .subject-grid,
   .price-layout,
   .info-grid,
@@ -1071,6 +1127,7 @@ h3 {
   .voice-grid,
   .strength-grid,
   .story-layout,
+  .trial-layout,
   .subject-grid,
   .price-layout,
   .info-grid,
