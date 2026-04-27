@@ -223,13 +223,46 @@ h3 {
   background: var(--white);
 }
 
-.problem-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+.section-heading p {
+  color: var(--muted);
 }
 
-.problem-grid article,
+.problem-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.problem-checklist li {
+  position: relative;
+  min-height: 72px;
+  padding: 18px 18px 18px 52px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: #34424f;
+  font-weight: 700;
+}
+
+.problem-checklist li::before {
+  position: absolute;
+  top: 20px;
+  left: 18px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--white);
+  content: "✓";
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .feature-list article,
 .subject-grid article,
 .profile-facts,
@@ -237,150 +270,6 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--white);
-}
-
-.problem-grid article {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  margin: 0;
-  min-height: 260px;
-  padding: 20px;
-}
-
-.problem-grid h3 {
-  margin: 0;
-  font-size: 17px;
-}
-
-.problem-grid p {
-  margin: 0;
-  color: #34424f;
-  font-size: 15px;
-}
-
-.problem-number {
-  color: var(--primary);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.problem-illustration {
-  position: relative;
-  overflow: hidden;
-  height: 112px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #eef4fb, #f8edf2);
-}
-
-.problem-illustration::before {
-  position: absolute;
-  inset: 18px;
-  border: 1px dashed rgba(7, 23, 168, 0.22);
-  border-radius: 8px;
-  content: "";
-}
-
-.problem-illustration span {
-  position: absolute;
-  display: block;
-  background: var(--primary);
-  box-shadow: 0 8px 18px rgba(7, 23, 168, 0.14);
-}
-
-.problem-illustration.books span {
-  bottom: 26px;
-  width: 28px;
-  height: 54px;
-  border-radius: 4px;
-}
-
-.problem-illustration.books span:first-child {
-  left: 34%;
-  transform: rotate(-9deg);
-}
-
-.problem-illustration.books span:nth-child(2) {
-  left: 46%;
-  height: 64px;
-  background: #d86f8d;
-}
-
-.problem-illustration.books span:nth-child(3) {
-  left: 58%;
-  transform: rotate(8deg);
-}
-
-.problem-illustration.test span:first-child {
-  inset: 20px auto auto 50%;
-  width: 72px;
-  height: 72px;
-  border-radius: 8px;
-  background: var(--white);
-  border: 2px solid var(--primary);
-  transform: translateX(-50%) rotate(-4deg);
-}
-
-.problem-illustration.test span:nth-child(2),
-.problem-illustration.test span:nth-child(3) {
-  left: calc(50% - 22px);
-  width: 44px;
-  height: 4px;
-  border-radius: 999px;
-}
-
-.problem-illustration.test span:nth-child(2) {
-  top: 46px;
-}
-
-.problem-illustration.test span:nth-child(3) {
-  top: 60px;
-  width: 32px;
-  background: #d86f8d;
-}
-
-.problem-illustration.checklist span:first-child {
-  inset: 22px auto auto 50%;
-  width: 80px;
-  height: 68px;
-  border-radius: 8px;
-  background: var(--white);
-  border: 2px solid var(--primary);
-  transform: translateX(-50%);
-}
-
-.problem-illustration.checklist span:nth-child(2),
-.problem-illustration.checklist span:nth-child(3) {
-  left: calc(50% - 22px);
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-}
-
-.problem-illustration.checklist span:nth-child(2) {
-  top: 48px;
-}
-
-.problem-illustration.checklist span:nth-child(3) {
-  top: 66px;
-  background: #d86f8d;
-}
-
-.problem-illustration.chat span:first-child {
-  top: 30px;
-  left: 24%;
-  width: 68px;
-  height: 42px;
-  border-radius: 18px 18px 18px 4px;
-}
-
-.problem-illustration.chat span:nth-child(2) {
-  right: 24%;
-  bottom: 28px;
-  width: 62px;
-  height: 38px;
-  border-radius: 18px 18px 4px 18px;
-  background: #d86f8d;
 }
 
 .section-note {
@@ -1111,7 +1000,7 @@ h3 {
       url("./assets/students-sakura-web.jpg") 30% center / cover no-repeat;
   }
 
-  .problem-grid,
+  .problem-checklist,
   .feature-list,
   .image-message,
   .voice-grid,
@@ -1148,7 +1037,7 @@ h3 {
     padding-top: 42px;
   }
 
-  .problem-grid,
+  .problem-checklist,
   .feature-list,
   .image-message,
   .voice-grid,
@@ -1161,10 +1050,6 @@ h3 {
   .info-grid,
   .flow {
     grid-template-columns: 1fr;
-  }
-
-  .problem-grid article {
-    min-height: auto;
   }
 
   .button {
