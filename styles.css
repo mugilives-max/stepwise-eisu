@@ -477,6 +477,32 @@ h3 {
   color: var(--muted);
 }
 
+.interview {
+  background: var(--soft);
+}
+
+.interview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.interview-grid article {
+  padding: clamp(22px, 4vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.interview-grid ul {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding-left: 1.2em;
+  color: var(--muted);
+}
+
 .strengths {
   background: var(--white);
 }
@@ -1089,6 +1115,7 @@ h3 {
   .feature-list,
   .image-message,
   .voice-grid,
+  .interview-grid,
   .strength-grid,
   .story-layout,
   .trial-layout,
@@ -1125,6 +1152,7 @@ h3 {
   .feature-list,
   .image-message,
   .voice-grid,
+  .interview-grid,
   .strength-grid,
   .story-layout,
   .trial-layout,
