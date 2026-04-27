@@ -420,6 +420,54 @@ h3 {
   color: var(--muted);
 }
 
+.fit {
+  background: var(--white);
+}
+
+.fit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.fit-grid article {
+  padding: clamp(22px, 4vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.fit-grid article:nth-child(2) {
+  background: #fbfcfd;
+  box-shadow: none;
+}
+
+.fit-grid ul {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fit-grid li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--muted);
+}
+
+.fit-grid li::before {
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  content: "";
+}
+
 .feature-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -811,6 +859,23 @@ h3 {
   list-style: none;
 }
 
+.trial-points {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.trial-points p {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .flow li {
   display: grid;
   grid-template-columns: 38px 1fr;
@@ -939,9 +1004,11 @@ h3 {
   .problem-grid,
   .feature-list,
   .image-message,
+  .fit-grid,
   .subject-grid,
   .price-layout,
   .info-grid,
+  .trial-points,
   .flow {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -971,9 +1038,11 @@ h3 {
   .problem-grid,
   .feature-list,
   .image-message,
+  .fit-grid,
   .subject-grid,
   .price-layout,
   .info-grid,
+  .trial-points,
   .flow {
     grid-template-columns: 1fr;
   }
