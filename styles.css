@@ -627,7 +627,7 @@ h3 {
 
 .price-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.85fr) minmax(320px, 1.1fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -658,8 +658,12 @@ h3 {
 
 .price-card h3 {
   margin-bottom: 14px;
-  font-size: clamp(30px, 4vw, 46px);
+  font-size: clamp(28px, 3vw, 42px);
   color: var(--primary-dark);
+}
+
+.add-on-card {
+  background: linear-gradient(180deg, #ffffff, #f8edf2);
 }
 
 .lesson-preview {
@@ -715,7 +719,7 @@ h3 {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   margin-top: 16px;
 }
