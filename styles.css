@@ -801,9 +801,11 @@ h3 {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center 42%;
+  padding: 22px;
   border-radius: 8px;
+  background: linear-gradient(135deg, #eef4fb, #f8edf2);
 }
 
 .profile-photo figcaption {
