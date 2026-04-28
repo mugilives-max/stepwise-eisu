@@ -1072,6 +1072,20 @@ h3 {
     padding-top: 42px;
   }
 
+  .intro {
+    padding-top: 38px;
+    padding-bottom: 38px;
+  }
+
+  .intro .section-heading {
+    margin-bottom: 14px;
+  }
+
+  .intro .section-heading p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
   .problem-checklist,
   .solution-grid,
   .image-message,
@@ -1086,6 +1100,47 @@ h3 {
   .info-grid,
   .flow {
     grid-template-columns: 1fr;
+  }
+
+  .problem-checklist {
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+
+  .problem-checklist li {
+    min-height: 0;
+    padding: 9px 12px 9px 34px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .problem-checklist li:last-child {
+    border-bottom: 0;
+  }
+
+  .problem-checklist li::before {
+    top: 11px;
+    left: 12px;
+    width: 14px;
+    height: 14px;
+    font-size: 9px;
+  }
+
+  .problem-checklist strong {
+    font-weight: 900;
+  }
+
+  .intro .section-note {
+    margin-top: 14px;
+    font-size: 13px;
+    line-height: 1.6;
   }
 
   .button {
