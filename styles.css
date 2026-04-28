@@ -272,6 +272,22 @@ h3 {
   font-weight: 900;
 }
 
+.problem-bridge {
+  margin: 22px 0 0;
+  padding: 16px 18px;
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.problem-bridge strong {
+  color: var(--primary-dark);
+  font-weight: 900;
+}
+
 .problem-checklist li::before {
   position: absolute;
   top: 20px;
@@ -1135,6 +1151,13 @@ h3 {
 
   .problem-checklist strong {
     font-weight: 900;
+  }
+
+  .problem-bridge {
+    margin-top: 12px;
+    padding: 11px 12px;
+    font-size: 15px;
+    line-height: 1.45;
   }
 
   .intro .section-note {
