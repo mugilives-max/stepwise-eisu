@@ -267,6 +267,11 @@ h3 {
   font-weight: 700;
 }
 
+.problem-checklist strong {
+  color: #c64262;
+  font-weight: 900;
+}
+
 .problem-checklist li::before {
   position: absolute;
   top: 20px;
