@@ -498,6 +498,51 @@ h3 {
   margin-top: 12px;
 }
 
+.pattern-blocks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.pattern-blocks div {
+  display: grid;
+  min-height: 76px;
+  place-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(198, 66, 98, 0.18);
+  border-radius: 8px;
+  background: #fff7eb;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.pattern-arrow {
+  margin: -4px 0 6px;
+  color: #c64262;
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.pattern-result {
+  display: grid;
+  min-height: 64px;
+  place-items: center;
+  margin: 0 0 16px;
+  border: 2px solid rgba(198, 66, 98, 0.28);
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: clamp(20px, 3vw, 30px);
+  font-weight: 900;
+  text-align: center;
+}
+
 .pretend-understanding strong {
   color: #c64262;
   font-weight: 900;
@@ -1525,6 +1570,14 @@ h3 {
   align-items: end;
 }
 
+.strength-grid article:first-child .strength-card-body,
+.strength-grid article:nth-child(2) .strength-card-body,
+.strength-grid article:nth-child(3) .strength-card-body,
+.strength-grid article:nth-child(4) .strength-card-body,
+.strength-grid article:nth-child(5) .strength-card-body {
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+
 .strength-icon {
   display: block;
   width: 92px;
@@ -1533,6 +1586,13 @@ h3 {
   padding: 10px;
   border-radius: 8px;
   background: var(--soft);
+}
+
+.strength-icon-large {
+  width: 140px;
+  height: 140px;
+  padding: 0;
+  background: transparent;
 }
 
 .strength-grid p {
@@ -2093,7 +2153,7 @@ h3 {
 
 .story-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(24px, 5vw, 64px);
   align-items: start;
 }
@@ -2496,10 +2556,24 @@ h3 {
     gap: 12px;
   }
 
+  .strength-grid article:first-child .strength-card-body,
+  .strength-grid article:nth-child(2) .strength-card-body,
+  .strength-grid article:nth-child(3) .strength-card-body,
+  .strength-grid article:nth-child(4) .strength-card-body,
+  .strength-grid article:nth-child(5) .strength-card-body {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+
   .strength-icon {
     width: 74px;
     height: 74px;
     padding: 8px;
+  }
+
+  .strength-icon-large {
+    width: 104px;
+    height: 104px;
+    padding: 0;
   }
 
   .voice-card-head {
@@ -2902,6 +2976,25 @@ h3 {
   .pretend-understanding p {
     font-size: 14px;
     line-height: 1.7;
+  }
+
+  .pattern-blocks {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pattern-blocks div {
+    min-height: 52px;
+    font-size: 14px;
+  }
+
+  .pattern-arrow {
+    font-size: 28px;
+  }
+
+  .pattern-result {
+    min-height: 54px;
+    font-size: 18px;
   }
 
   .cause-transition p {
