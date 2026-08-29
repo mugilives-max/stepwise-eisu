@@ -270,7 +270,8 @@
             .then(function (r) { return r.json(); });
         }
 
-        function myKey() { return lsGet("sw_k") || ""; }
+        var previewK = null; // 先生が生徒画面をプレビュー中の生徒コード
+        function myKey() { return previewK || lsGet("sw_k") || ""; }
 
         function loadState() {
           return apiGet({ action: "state", k: myKey() }).then(function (res) {
@@ -359,6 +360,9 @@
           });
 
           var html = "";
+          if (previewK) {
+            html += '<div style="background:#fdf3e3;border:1px solid #d99a2b;color:#a8721c;border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me ? S.me.name : "") + 'さんのページを表示中</strong>(ここでの操作は本人として反映されます)</span><button class="btn-quiet btn-sm" data-action="exitpreview">先生モードへ戻る</button></div>';
+          }
           html += '<h1>授業の予約</h1><p class="sub">' + esc(S.me.name) + 'さんの予約ページです</p>';
 
           var offers = slots.filter(function (s) { return s.st === "offer"; });
@@ -670,6 +674,7 @@
                 html += '<button class="btn-primary btn-sm" data-action="savefee" data-id="' + esc(s.id) + '"' + (busy ? " disabled" : "") + ">保存</button>";
                 html += '<button class="btn-quiet btn-sm" data-action="cancelfee">やめる</button>';
               } else {
+                html += '<button class="btn-ghost btn-sm" data-action="viewstudent" data-id="' + esc(s.id) + '">画面を見る</button>';
                 html += '<button class="btn-ghost btn-sm" data-action="copylink" data-id="' + esc(s.id) + '">リンクをコピー</button>';
                 html += '<button class="btn-quiet btn-sm" data-action="newlink" data-id="' + esc(s.id) + '">再発行</button>';
                 html += '<button class="btn-quiet btn-sm" data-action="editemail" data-id="' + esc(s.id) + '">メール</button>';
@@ -858,6 +863,7 @@
 
           switch (act) {
             case "teacher":
+              previewK = null;
               ssSet("sw_mode", "auth"); authM = null; render();
               apiGet({ action: "authmode", t: Date.now() }).then(function (res) {
                 authM = res.mode === "account" ? "account" : "pin";
@@ -1029,6 +1035,28 @@
                 lines2.push("合計: " + lessons.length + "回・" + totalMin + "分 = " + Math.round(totalMin / 30 * (stu.rate30 || 0)).toLocaleString() + "円");
               }
               copyText(lines2.join("\n"), "請求文面をコピーしました。LINEに貼り付けできます");
+              break;
+            case "viewstudent":
+              var st6 = null;
+              A.students.forEach(function (x) { if (x.id === id) st6 = x; });
+              if (!st6 || !st6.code) { toast("リンクがまだ発行されていません"); return; }
+              previewK = st6.code;
+              ssSet("sw_mode", "student");
+              pending = null; selDate = null; selManual = false;
+              busy = true; render();
+              loadState().catch(function () { toast("通信に失敗しました"); })
+                .then(function () { busy = false; render(); });
+              break;
+            case "exitpreview":
+              previewK = null;
+              ssSet("sw_mode", "teacher");
+              pending = null; selDate = null; selManual = false;
+              busy = true; render();
+              apiPost({ action: "admin", token: admToken(), op: "state" }).then(function (res) {
+                busy = false;
+                if (res.ok) { A = res.admin; render(); return; }
+                A = null; authM = "account"; ssSet("sw_mode", "auth"); render();
+              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "copylink":
               var st4 = null;
