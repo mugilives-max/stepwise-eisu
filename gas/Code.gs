@@ -84,7 +84,7 @@ function studentState_(code) {
   var me = findStudentByCode_(code);
   if (!me) return { me: null, slots: [], today: todayStr_() };
   var today = todayStr_();
-  // 本人の予定・提案のみ返す(他の生徒の予定は一切送らない)
+  // 本人の予定・案内のみ返す(他の生徒の予定は一切送らない)
   var slots = readRows_('slots')
     .filter(function (s) {
       return s.date >= today && String(s.studentId) === String(me.id);
@@ -114,18 +114,18 @@ function accept_(slotId, code) {
   var student = findStudentByCode_(code);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var r = findSlotRow_(slotId);
-  if (!r) return { error: 'この提案は見つかりません', refresh: true };
+  if (!r) return { error: 'この案内は見つかりません', refresh: true };
   if (r.slot.status !== 'offered' || String(r.slot.studentId) !== String(student.id)) {
-    return { error: 'この提案は確定できません', refresh: true };
+    return { error: 'この案内は承認できません', refresh: true };
   }
   r.slot.status = 'booked';
   var cal = createCalEvent_(r.slot, student);
   r.slot.eventId = cal.eventId;
   r.slot.meetUrl = cal.meetUrl;
   writeSlotRow_(r);
-  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の提案をOK');
+  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を承認');
   notify_('【確定】' + student.name + 'さん',
-    student.name + 'さんが提案をOKし、授業が確定しました。\n' +
+    student.name + 'さんが案内を承認し、授業が確定しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min) +
     (cal.meetUrl ? '\nMeet: ' + cal.meetUrl : ''));
   return { ok: true, state: studentState_(code) };
@@ -135,15 +135,15 @@ function decline_(slotId, code) {
   var student = findStudentByCode_(code);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var r = findSlotRow_(slotId);
-  if (!r) return { error: 'この提案は見つかりません', refresh: true };
+  if (!r) return { error: 'この案内は見つかりません', refresh: true };
   if (r.slot.status !== 'offered' || String(r.slot.studentId) !== String(student.id)) {
-    return { error: 'この提案は操作できません', refresh: true };
+    return { error: 'この案内は操作できません', refresh: true };
   }
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   sheet_('slots').deleteRow(r.rowIndex);
-  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の提案を「都合が悪い」');
+  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を「都合が悪い」');
   notify_('【都合が悪い】' + student.name + 'さん',
-    student.name + 'さんが提案「' + when + '」を都合が悪いと回答しました。\n別の時間を提案してください。');
+    student.name + 'さんが案内「' + when + '」を都合が悪いと回答しました。\n別の時間を案内してください。');
   return { ok: true, state: studentState_(code) };
 }
 
@@ -230,7 +230,7 @@ function adminOffer_(req) {
     if (String(rows[i].id) === String(req.studentId) &&
         !(String(rows[i].active) === 'false' || rows[i].active === false)) student = rows[i];
   }
-  if (!student) return { error: '提案する生徒をえらんでください' };
+  if (!student) return { error: '案内する生徒をえらんでください' };
   var sh = sheet_('slots');
   var existing = readRows_('slots');
   var added = 0;
@@ -245,25 +245,25 @@ function adminOffer_(req) {
     added++;
   }
   if (added > 0) {
-    addLog_('先生が' + student.name + 'さんに' + added + '件提案(' + fmtDateJa_(req.date) + ' ' + req.start + (repeat > 1 ? ' から毎週' : '') + ')');
+    addLog_('先生が' + student.name + 'さんに' + added + '件案内(' + fmtDateJa_(req.date) + ' ' + req.start + (repeat > 1 ? ' から毎週' : '') + ')');
     offerMailToStudent_(student, dates, req.start, Number(req.min) || 60);
   }
   return { ok: true, added: added, admin: adminState_() };
 }
 
-// メール登録済みの生徒には提案の連絡を送る(専用リンク付き)
+// メール登録済みの生徒には案内の連絡を送る(専用リンク付き)
 function offerMailToStudent_(student, dates, start, min) {
   var email = normEmail_(student.email);
   if (!email) return;
   try {
     var link = SITE_URL + '?k=' + String(student.code || '');
     MailApp.sendEmail(email,
-      '[ステップワイズ] 授業の提案が届いています',
-      student.name + 'さん\n\n先生から授業の提案が届いています。\n\n' +
+      '[ステップワイズ] 授業のご案内が届いています',
+      student.name + 'さん\n\n先生から授業のご案内が届いています。\n\n' +
       dates.map(function (d) { return '・' + d + ' ' + start + '〜' + endTime_(start, min); }).join('\n') +
-      '\n\n下のあなた専用リンクをひらいて、OKか都合が悪いかを選んでください。\n' + link);
+      '\n\n下のあなた専用リンクをひらいて、承認するか、都合が悪いかを選んでください。\n' + link);
   } catch (err) {
-    addLog_('提案メールの送信に失敗: ' + err);
+    addLog_('案内メールの送信に失敗: ' + err);
   }
 }
 
