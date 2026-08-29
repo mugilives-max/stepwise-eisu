@@ -18,7 +18,7 @@ function setup() {
   var ss = SpreadsheetApp.getActive();
   ensureSheet_(ss, 'config', ['key', 'value']);
   ensureSheet_(ss, 'students', ['id', 'name', 'active']);
-  ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId']);
+  ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl']);
   ensureSheet_(ss, 'log', ['time', 'message']);
   if (!getConfig_('pin')) setConfig_('pin', '0000');
   if (!getConfig_('calendarSync')) setConfig_('calendarSync', 'on');
@@ -53,6 +53,7 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     ensureEmailHeader_();
+    ensureMeetHeader_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
@@ -84,7 +85,10 @@ function studentState_(sid) {
       var st = 'taken';
       if (s.status === 'open') st = 'open';
       else if (sid && String(s.studentId) === String(sid)) st = 'mine';
-      return { id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st };
+      return {
+        id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
+        meet: st === 'mine' ? String(s.meetUrl || '') : ''
+      };
     });
   var students = readRows_('students')
     .filter(function (s) { return String(s.active) !== 'false' && s.active !== false; })
@@ -101,12 +105,15 @@ function book_(slotId, sid) {
 
   r.slot.status = 'booked';
   r.slot.studentId = sid;
-  r.slot.eventId = createCalEvent_(r.slot, student);
+  var cal = createCalEvent_(r.slot, student);
+  r.slot.eventId = cal.eventId;
+  r.slot.meetUrl = cal.meetUrl;
   writeSlotRow_(r);
   addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を予約');
   notify_('【予約】' + student.name + 'さん',
     student.name + 'さんが授業を予約しました。\n' +
-    fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min));
+    fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min) +
+    (cal.meetUrl ? '\nMeet: ' + cal.meetUrl : ''));
   return { ok: true, state: studentState_(sid) };
 }
 
@@ -122,6 +129,7 @@ function cancel_(slotId, sid) {
   r.slot.studentId = '';
   r.slot.done = '';
   r.slot.eventId = '';
+  r.slot.meetUrl = '';
   writeSlotRow_(r);
   addLog_(name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を取消');
   notify_('【取消】' + name + 'さん',
@@ -164,7 +172,8 @@ function adminState_() {
     return {
       id: s.id, date: s.date, start: s.start, min: Number(s.min),
       status: s.status, studentName: s.studentId ? studentName_(s.studentId) : '',
-      done: String(s.done) === 'true' || s.done === true
+      done: String(s.done) === 'true' || s.done === true,
+      meetUrl: String(s.meetUrl || '')
     };
   });
   var students = readRows_('students').map(function (s) {
@@ -212,6 +221,7 @@ function adminUnbook_(req) {
   r.slot.studentId = '';
   r.slot.done = '';
   r.slot.eventId = '';
+  r.slot.meetUrl = '';
   writeSlotRow_(r);
   addLog_('先生が ' + name + 'さんの ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を解除');
   return { ok: true, admin: adminState_() };
@@ -274,7 +284,7 @@ function adminHideStudent_(req) {
 /* ================= カレンダー・通知 ================= */
 
 function createCalEvent_(slot, student) {
-  if (getConfig_('calendarSync') !== 'on') return '';
+  if (getConfig_('calendarSync') !== 'on') return { eventId: '', meetUrl: '' };
   try {
     var start = dateTimeOf_(slot.date, slot.start);
     var end = new Date(start.getTime() + Number(slot.min) * 60000);
@@ -288,10 +298,46 @@ function createCalEvent_(slot, student) {
     var ev = CalendarApp.getDefaultCalendar()
       .createEvent(CAL_TITLE_PREFIX + student.name + 'さん 授業', start, end, opts);
     ev.addPopupReminder(60);
-    return ev.getId();
+    var meetUrl = '';
+    try {
+      meetUrl = addMeet_(ev.getId());
+    } catch (e2) {
+      addLog_('Meet作成に失敗: ' + e2);
+    }
+    return { eventId: ev.getId(), meetUrl: meetUrl };
   } catch (err) {
     addLog_('カレンダー登録に失敗: ' + err);
-    return '';
+    return { eventId: '', meetUrl: '' };
+  }
+}
+
+// 高度なサービス「Google Calendar API」(識別子 Calendar) を有効にしておくこと
+function addMeet_(calEventId) {
+  var id = String(calEventId).split('@')[0];
+  var existing = Calendar.Events.get('primary', id);
+  if (existing.hangoutLink) return existing.hangoutLink;
+  var res = Calendar.Events.patch(
+    {
+      conferenceData: {
+        createRequest: {
+          requestId: uid_() + uid_(),
+          conferenceSolutionKey: { type: 'hangoutsMeet' }
+        }
+      }
+    },
+    'primary', id, { conferenceDataVersion: 1 });
+  if (res.hangoutLink) return res.hangoutLink;
+  var eps = (res.conferenceData && res.conferenceData.entryPoints) || [];
+  for (var i = 0; i < eps.length; i++) {
+    if (eps[i].entryPointType === 'video') return eps[i].uri || '';
+  }
+  return '';
+}
+
+function ensureMeetHeader_() {
+  var sh = sheet_('slots');
+  if (sh && sh.getRange(1, 9).getValue() !== 'meetUrl') {
+    sh.getRange(1, 9).setValue('meetUrl');
   }
 }
 
@@ -348,8 +394,8 @@ function findSlotRow_(slotId) {
 
 function writeSlotRow_(r) {
   var s = r.slot;
-  sheet_('slots').getRange(r.rowIndex, 1, 1, 8)
-    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId]]);
+  sheet_('slots').getRange(r.rowIndex, 1, 1, 9)
+    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '']]);
 }
 
 function findStudent_(sid) {
