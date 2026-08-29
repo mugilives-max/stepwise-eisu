@@ -18,7 +18,7 @@ var SITE_URL = 'https://www.stepwise-education.jp/yoyaku/';
 function setup() {
   var ss = SpreadsheetApp.getActive();
   ensureSheet_(ss, 'config', ['key', 'value']);
-  ensureSheet_(ss, 'students', ['id', 'name', 'active', 'email', 'code']);
+  ensureSheet_(ss, 'students', ['id', 'name', 'active', 'email', 'code', 'rate30', 'monthly']);
   ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl']);
   ensureSheet_(ss, 'log', ['time', 'message']);
   if (!getConfig_('pin')) setConfig_('pin', '0000');
@@ -56,6 +56,7 @@ function doPost(e) {
     ensureEmailHeader_();
     ensureMeetHeader_();
     ensureCodeHeader_();
+    ensureFeeHeaders_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
@@ -190,6 +191,7 @@ function admin_(req) {
     case 'toggleDone':  return adminToggleDone_(req);
     case 'addStudent':  return adminAddStudent_(req);
     case 'setEmail':    return adminSetEmail_(req);
+    case 'setFee':      return adminSetFee_(req);
     case 'newCode':     return adminNewCode_(req);
     case 'hideStudent': return adminHideStudent_(req);
     case 'setPin':
@@ -205,7 +207,8 @@ function adminState_() {
   var slots = readRows_('slots').map(function (s) {
     return {
       id: s.id, date: s.date, start: s.start, min: Number(s.min),
-      status: s.status, studentName: s.studentId ? studentName_(s.studentId) : '',
+      status: s.status, studentId: String(s.studentId || ''),
+      studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
       meetUrl: String(s.meetUrl || '')
     };
@@ -214,6 +217,8 @@ function adminState_() {
     return {
       id: s.id, name: s.name, email: String(s.email || ''),
       code: String(s.code || ''),
+      rate30: Number(s.rate30 || 0),
+      monthly: Number(s.monthly || 0),
       active: !(String(s.active) === 'false' || s.active === false)
     };
   });
@@ -305,8 +310,28 @@ function adminAddStudent_(req) {
     return s.name === name && !(String(s.active) === 'false' || s.active === false);
   });
   if (dup) return { error: '同じ名前の生徒がいます' };
-  sheet_('students').appendRow([uid_(), name, true, normEmail_(req.email), newCode_()]);
+  sheet_('students').appendRow([uid_(), name, true, normEmail_(req.email), newCode_(), 1500, '']);
   return { ok: true, admin: adminState_() };
+}
+
+function adminSetFee_(req) {
+  var rate30 = Math.max(0, Number(req.rate30) || 0);
+  var monthly = Math.max(0, Number(req.monthly) || 0);
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.studentId)) {
+      sheet_('students').getRange(i + 2, 6, 1, 2).setValues([[rate30, monthly || '']]);
+      return { ok: true, admin: adminState_() };
+    }
+  }
+  return { error: '生徒が見つかりません' };
+}
+
+function ensureFeeHeaders_() {
+  var sh = sheet_('students');
+  if (!sh) return;
+  if (sh.getRange(1, 6).getValue() !== 'rate30') sh.getRange(1, 6).setValue('rate30');
+  if (sh.getRange(1, 7).getValue() !== 'monthly') sh.getRange(1, 7).setValue('monthly');
 }
 
 function newCode_() {
@@ -326,15 +351,19 @@ function adminNewCode_(req) {
   return { error: '生徒が見つかりません' };
 }
 
-// コード未発行の生徒に自動発行(旧データの移行用)
+// コード・単価が未設定の生徒に自動設定(旧データの移行用)
 function backfillCodes_() {
   ensureCodeHeader_();
+  ensureFeeHeaders_();
   var rows = readRows_('students');
   for (var i = 0; i < rows.length; i++) {
     if (!String(rows[i].code || '')) {
       var cell = sheet_('students').getRange(i + 2, 5);
       cell.setNumberFormat('@');
       cell.setValue(newCode_());
+    }
+    if (!Number(rows[i].rate30 || 0)) {
+      sheet_('students').getRange(i + 2, 6).setValue(1500);
     }
   }
 }
