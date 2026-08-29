@@ -250,6 +250,29 @@
           if (s.meet) u += "&details=" + encodeURIComponent("Meetで参加: " + s.meet);
           return u;
         }
+        function addDaysStr(ds, n) {
+          var p = ds.split("-");
+          var d = new Date(+p[0], +p[1] - 1, +p[2] + n);
+          return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+        }
+        // 連続する日付(同じメモ)を1つのグループにまとめる
+        function groupBlocked(list) {
+          var sorted = list.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+          var groups = [], cur = null;
+          sorted.forEach(function (b) {
+            if (cur && String(b.note || "") === cur.note && b.date === addDaysStr(cur.end, 1)) {
+              cur.end = b.date;
+              cur.ids.push(b.id);
+            } else {
+              cur = { start: b.date, end: b.date, note: String(b.note || ""), ids: [b.id] };
+              groups.push(cur);
+            }
+          });
+          return groups;
+        }
+        function rangeLabel(g) {
+          return g.start === g.end ? fmtDateW(g.start) : fmtDateW(g.start) + "〜" + fmtDateW(g.end);
+        }
         var toastTimer = null;
         function toast(msg) {
           var t = document.getElementById("toast");
@@ -397,19 +420,19 @@
           }
 
           html += "<h2>都合が悪い日</h2>";
-          var blocked = (S.blocked || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+          var blocked = S.blocked || [];
           if (blocked.length > 0) {
             html += '<div class="card">';
-            blocked.forEach(function (b) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(b.date) + "</span>";
-              html += '<span class="who">' + (b.note ? esc(b.note) : "") + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="delblock" data-id="' + esc(b.id) + '">取消</button>';
+            groupBlocked(blocked).forEach(function (g) {
+              html += '<div class="slotline"><span class="time">' + rangeLabel(g) + "</span>";
+              html += '<span class="who">' + (g.note ? esc(g.note) : "") + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(g.ids.join(",")) + '">取消</button>';
               html += "</div>";
             });
             html += "</div>";
           }
-          html += '<div class="row" style="margin-top:10px"><input type="date" id="f-bdate" min="' + today + '"><input type="text" id="f-bnote" placeholder="部活・用事など(任意)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + ">登録</button></div>";
-          html += '<div class="note">登録すると先生に伝わり、その日への案内を避けてもらえます。</div>';
+          html += '<div class="row" style="margin-top:10px"><input type="date" id="f-bdate" min="' + today + '"><span style="color:var(--muted)">〜</span><input type="date" id="f-bdate2" min="' + today + '"><input type="text" id="f-bnote" placeholder="部活・旅行など(任意)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + ">登録</button></div>";
+          html += '<div class="note">1日だけなら左の日付のみでOK。旅行や大会など連日の場合は「〜」の右に最終日を入れてください。登録すると先生に伝わり、その期間への案内を避けてもらえます。</div>';
 
           html += "<h2>予定表</h2>";
           var byDate = {}, dates = [];
@@ -588,9 +611,27 @@
           });
           html += "</select>";
           html += '<input type="date" id="b-date" min="' + today + '">';
+          html += '<span style="color:var(--muted)">〜</span><input type="date" id="b-date2" min="' + today + '">';
           html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px">';
           html += '<button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + ">登録</button>";
-          html += '</div><div class="note">保護者から聞いたNG日をここに登録できます(生徒も自分のページから登録可能)。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
+          html += "</div>";
+          var ngGroups = [];
+          A.students.forEach(function (st7) {
+            var own = (A.blocked || []).filter(function (b) { return b.studentId === st7.id; });
+            groupBlocked(own).forEach(function (g) { g.name = st7.name; ngGroups.push(g); });
+          });
+          ngGroups.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+          if (ngGroups.length > 0) {
+            html += '<div style="margin-top:12px">';
+            ngGroups.forEach(function (g) {
+              html += '<div class="slotline"><span class="time">' + rangeLabel(g) + "</span>";
+              html += '<span class="who"><span class="name">' + esc(g.name) + "</span> " + (g.note ? esc(g.note) : "") + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="tdelblock" data-ids="' + esc(g.ids.join(",")) + '">削除</button>';
+              html += "</div>";
+            });
+            html += "</div>";
+          }
+          html += '<div class="note">1日だけなら左の日付のみ、連日の場合は「〜」の右に最終日を。保護者から聞いたNG日をここに登録できます(生徒も自分のページから登録可能)。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
 
           html += "<h2>最近の動き</h2>";
           if (A.log.length === 0) {
@@ -957,22 +998,26 @@
             case "taddblock":
               var bs = (document.getElementById("b-student") || {}).value;
               var bd2 = (document.getElementById("b-date") || {}).value;
+              var bd2to = (document.getElementById("b-date2") || {}).value;
               var bn2 = ((document.getElementById("b-note") || {}).value || "").trim();
               if (!bs) { toast("生徒をえらんでください"); return; }
               if (!bd2) { toast("日付をえらんでください"); return; }
-              adminAction("addBlock", { studentId: bs, date: bd2, note: bn2 }, "登録しました");
+              adminAction("addBlock", { studentId: bs, date: bd2, dateTo: bd2to || bd2, note: bn2 }, "登録しました");
               break;
             case "tdelblock":
-              adminAction("delBlock", { blockId: id }, "削除しました");
+              var tids = btn.getAttribute("data-ids");
+              adminAction("delBlock", tids ? { blockIds: tids.split(",") } : { blockId: id }, "削除しました");
               break;
             case "addblock":
               var bd = (document.getElementById("f-bdate") || {}).value;
+              var bdto = (document.getElementById("f-bdate2") || {}).value;
               var bn = ((document.getElementById("f-bnote") || {}).value || "").trim();
               if (!bd) { toast("日付をえらんでください"); return; }
-              studentAction({ action: "block", k: myKey(), date: bd, note: bn }, "登録しました");
+              studentAction({ action: "block", k: myKey(), date: bd, dateTo: bdto || bd, note: bn }, "登録しました");
               break;
             case "delblock":
-              studentAction({ action: "unblock", k: myKey(), blockId: id }, "取り消しました");
+              var sids = btn.getAttribute("data-ids");
+              studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "取り消しました");
               break;
             case "delslot":
               pending = { kind: "tdel", slotId: id }; render(); break;
