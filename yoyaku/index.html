@@ -310,7 +310,6 @@
             if (it && !past) {
               if (it.mine) { marks += '<span class="calmark">✓</span>'; cls += " mine"; }
               if (it.offer) marks += '<span class="caldot of"></span>';
-              if (!it.mine && !it.offer && it.taken) marks += '<span class="caldot tk"></span>';
             }
             marks += "</span>";
             if (past || !it) {
@@ -322,7 +321,6 @@
           h += '</div><div class="callegend">';
           h += '<span><span class="caldot of"></span> 先生からの提案</span>';
           h += '<span><span class="calmark">✓</span> あなたの授業</span>';
-          h += '<span><span class="caldot tk"></span> 予定あり</span>';
           h += "</div></div>";
           return h;
         }
@@ -399,7 +397,7 @@
           }
           var info = {};
           slots.forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, taken: 0 });
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0 });
             it[s.st]++;
           });
           html += renderCal(info, today);
@@ -408,10 +406,10 @@
             html += '<div class="empty">いま予定はありません。先生から提案が届くとここに表示されます。</div>';
           } else {
             var dwd = wdOf(selDate);
-            html += "<h2>" + fmtDate(selDate) + "(" + WD[dwd] + ")の枠</h2>";
+            html += "<h2>" + fmtDate(selDate) + "(" + WD[dwd] + ")の予定</h2>";
             var ds2 = byDate[selDate] || [];
             if (ds2.length === 0) {
-              html += '<div class="empty">この日の枠はありません。●の付いた日をタップしてください。</div>';
+              html += '<div class="empty">この日の予定はありません。印の付いた日をタップしてください。</div>';
             } else {
               html += '<div class="chips">';
               ds2.forEach(function (s) {
@@ -420,8 +418,6 @@
                   html += '<span class="chip mine">✓ ' + label + "</span>";
                 } else if (s.st === "offer") {
                   html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">提案 ' + label + "</button>";
-                } else {
-                  html += '<span class="chip taken">' + label + " 予定あり</span>";
                 }
               });
               html += "</div>";

@@ -84,13 +84,13 @@ function studentState_(code) {
   var me = findStudentByCode_(code);
   if (!me) return { me: null, slots: [], today: todayStr_() };
   var today = todayStr_();
+  // 本人の予定・提案のみ返す(他の生徒の予定は一切送らない)
   var slots = readRows_('slots')
-    .filter(function (s) { return s.date >= today; })
+    .filter(function (s) {
+      return s.date >= today && String(s.studentId) === String(me.id);
+    })
     .map(function (s) {
-      var st = 'taken';
-      if (String(s.studentId) === String(me.id)) {
-        st = s.status === 'offered' ? 'offer' : 'mine';
-      }
+      var st = s.status === 'offered' ? 'offer' : 'mine';
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
         meet: st === 'mine' ? String(s.meetUrl || '') : ''
