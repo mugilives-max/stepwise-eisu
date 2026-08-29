@@ -11,6 +11,7 @@
 
 var TZ = 'Asia/Tokyo';
 var CAL_TITLE_PREFIX = '【塾】';
+var SITE_URL = 'https://www.stepwise-education.jp/yoyaku/';
 
 /* ================= 初期セットアップ ================= */
 
@@ -58,8 +59,9 @@ function doPost(e) {
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
-      case 'book':   res = book_(req.slotId, req.k); break;
-      case 'cancel': res = cancel_(req.slotId, req.k); break;
+      case 'accept':  res = accept_(req.slotId, req.k); break;
+      case 'decline': res = decline_(req.slotId, req.k); break;
+      case 'cancel':  res = cancel_(req.slotId, req.k); break;
       case 'admin':  res = admin_(req); break;
       default:       res = { error: 'unknown action' };
     }
@@ -86,8 +88,9 @@ function studentState_(code) {
     .filter(function (s) { return s.date >= today; })
     .map(function (s) {
       var st = 'taken';
-      if (s.status === 'open') st = 'open';
-      else if (String(s.studentId) === String(me.id)) st = 'mine';
+      if (String(s.studentId) === String(me.id)) {
+        st = s.status === 'offered' ? 'offer' : 'mine';
+      }
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
         meet: st === 'mine' ? String(s.meetUrl || '') : ''
@@ -107,25 +110,40 @@ function findStudentByCode_(code) {
   return null;
 }
 
-function book_(slotId, code) {
+function accept_(slotId, code) {
   var student = findStudentByCode_(code);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var sid = student.id;
   var r = findSlotRow_(slotId);
-  if (!r) return { error: 'この枠は見つかりません', refresh: true };
-  if (r.slot.status !== 'open') return { error: 'この枠はうまってしまいました', refresh: true };
-
+  if (!r) return { error: 'この提案は見つかりません', refresh: true };
+  if (r.slot.status !== 'offered' || String(r.slot.studentId) !== String(student.id)) {
+    return { error: 'この提案は確定できません', refresh: true };
+  }
   r.slot.status = 'booked';
-  r.slot.studentId = sid;
   var cal = createCalEvent_(r.slot, student);
   r.slot.eventId = cal.eventId;
   r.slot.meetUrl = cal.meetUrl;
   writeSlotRow_(r);
-  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を予約');
-  notify_('【予約】' + student.name + 'さん',
-    student.name + 'さんが授業を予約しました。\n' +
+  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の提案をOK');
+  notify_('【確定】' + student.name + 'さん',
+    student.name + 'さんが提案をOKし、授業が確定しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min) +
     (cal.meetUrl ? '\nMeet: ' + cal.meetUrl : ''));
+  return { ok: true, state: studentState_(code) };
+}
+
+function decline_(slotId, code) {
+  var student = findStudentByCode_(code);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var r = findSlotRow_(slotId);
+  if (!r) return { error: 'この提案は見つかりません', refresh: true };
+  if (r.slot.status !== 'offered' || String(r.slot.studentId) !== String(student.id)) {
+    return { error: 'この提案は操作できません', refresh: true };
+  }
+  var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
+  sheet_('slots').deleteRow(r.rowIndex);
+  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の提案を「都合が悪い」');
+  notify_('【都合が悪い】' + student.name + 'さん',
+    student.name + 'さんが提案「' + when + '」を都合が悪いと回答しました。\n別の時間を提案してください。');
   return { ok: true, state: studentState_(code) };
 }
 
@@ -166,7 +184,7 @@ function admin_(req) {
   if (!pinOk_(req.pin)) return { error: 'PINがちがいます', badPin: true };
   switch (req.op) {
     case 'state':       return { ok: true, admin: adminState_() };
-    case 'addSlots':    return adminAddSlots_(req);
+    case 'offer':       return adminOffer_(req);
     case 'deleteSlot':  return adminDeleteSlot_(req);
     case 'unbook':      return adminUnbook_(req);
     case 'toggleDone':  return adminToggleDone_(req);
@@ -205,20 +223,48 @@ function adminState_() {
   return { slots: slots, students: students, log: log, today: todayStr_() };
 }
 
-function adminAddSlots_(req) {
+function adminOffer_(req) {
+  var student = null;
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.studentId) &&
+        !(String(rows[i].active) === 'false' || rows[i].active === false)) student = rows[i];
+  }
+  if (!student) return { error: '提案する生徒をえらんでください' };
   var sh = sheet_('slots');
   var existing = readRows_('slots');
   var added = 0;
+  var dates = [];
   var repeat = Math.max(1, Math.min(12, Number(req.repeat) || 1));
   for (var w = 0; w < repeat; w++) {
     var d = addDays_(req.date, w * 7);
     var dup = existing.some(function (s) { return s.date === d && s.start === req.start; });
     if (dup) continue;
-    sh.appendRow([uid_(), d, req.start, Number(req.min) || 60, 'open', '', '', '']);
+    sh.appendRow([uid_(), d, req.start, Number(req.min) || 60, 'offered', student.id, '', '', '']);
+    dates.push(fmtDateJa_(d));
     added++;
   }
-  if (added > 0) addLog_('先生が枠を' + added + '件追加(' + fmtDateJa_(req.date) + ' ' + req.start + (repeat > 1 ? ' から毎週' : '') + ')');
+  if (added > 0) {
+    addLog_('先生が' + student.name + 'さんに' + added + '件提案(' + fmtDateJa_(req.date) + ' ' + req.start + (repeat > 1 ? ' から毎週' : '') + ')');
+    offerMailToStudent_(student, dates, req.start, Number(req.min) || 60);
+  }
   return { ok: true, added: added, admin: adminState_() };
+}
+
+// メール登録済みの生徒には提案の連絡を送る(専用リンク付き)
+function offerMailToStudent_(student, dates, start, min) {
+  var email = normEmail_(student.email);
+  if (!email) return;
+  try {
+    var link = SITE_URL + '?k=' + String(student.code || '');
+    MailApp.sendEmail(email,
+      '[ステップワイズ] 授業の提案が届いています',
+      student.name + 'さん\n\n先生から授業の提案が届いています。\n\n' +
+      dates.map(function (d) { return '・' + d + ' ' + start + '〜' + endTime_(start, min); }).join('\n') +
+      '\n\n下のあなた専用リンクをひらいて、OKか都合が悪いかを選んでください。\n' + link);
+  } catch (err) {
+    addLog_('提案メールの送信に失敗: ' + err);
+  }
 }
 
 function adminDeleteSlot_(req) {

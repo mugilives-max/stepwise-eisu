@@ -123,6 +123,10 @@
       .chip.open { border-color: var(--primary); color: var(--primary); }
       .chip.mine { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 700; }
       .chip.taken { background: var(--taken); color: var(--muted); }
+      .chip.offer { background: #fdf3e3; border-color: #d99a2b; color: #a8721c; font-weight: 700; }
+      .caldot.of { background: #d99a2b; }
+      .calday.sel .caldot.of { background: var(--white); }
+      .tag.offer { background: #fdf3e3; color: #a8721c; }
       .chip.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
       .empty { color: var(--muted); font-size: 13.5px; padding: 8px 2px; }
       .slotline {
@@ -305,8 +309,8 @@
             var marks = '<span class="calmarks">';
             if (it && !past) {
               if (it.mine) { marks += '<span class="calmark">✓</span>'; cls += " mine"; }
-              if (it.open) marks += '<span class="caldot op"></span>';
-              if (!it.mine && !it.open && it.taken) marks += '<span class="caldot tk"></span>';
+              if (it.offer) marks += '<span class="caldot of"></span>';
+              if (!it.mine && !it.offer && it.taken) marks += '<span class="caldot tk"></span>';
             }
             marks += "</span>";
             if (past || !it) {
@@ -316,9 +320,9 @@
             }
           }
           h += '</div><div class="callegend">';
-          h += '<span><span class="caldot op"></span> 空きあり</span>';
-          h += '<span><span class="calmark">✓</span> あなたの予約</span>';
-          h += '<span><span class="caldot tk"></span> 満席</span>';
+          h += '<span><span class="caldot of"></span> 先生からの提案</span>';
+          h += '<span><span class="calmark">✓</span> あなたの授業</span>';
+          h += '<span><span class="caldot tk"></span> 予定あり</span>';
           h += "</div></div>";
           return h;
         }
@@ -344,6 +348,20 @@
           var html = "";
           html += '<h1>授業の予約</h1><p class="sub">' + esc(S.me.name) + 'さんの予約ページです</p>';
 
+          var offers = slots.filter(function (s) { return s.st === "offer"; });
+          if (offers.length > 0) {
+            html += "<h2>先生からの提案</h2>";
+            html += '<div class="card">';
+            offers.forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
+              html += '<span class="who"></span>';
+              html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">この時間でOK</button>';
+              html += '<button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">都合が悪い</button>';
+              html += "</div>";
+            });
+            html += '</div><div class="note">OKすると授業が確定し、カレンダー登録とMeetリンクの発行が行われます。</div>';
+          }
+
           var mine = slots.filter(function (s) { return s.st === "mine"; });
           html += "<h2>あなたの予約</h2>";
           if (mine.length === 0) {
@@ -368,7 +386,7 @@
             byDate[s.date].push(s);
           });
           function hasVisible(d) {
-            return (byDate[d] || []).some(function (s) { return s.st === "open" || s.st === "mine"; });
+            return (byDate[d] || []).some(function (s) { return s.st === "offer" || s.st === "mine"; });
           }
           if (selDate === null || (!selManual && !hasVisible(selDate))) {
             var found = null;
@@ -381,13 +399,13 @@
           }
           var info = {};
           slots.forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { open: 0, mine: 0, taken: 0 });
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, taken: 0 });
             it[s.st]++;
           });
           html += renderCal(info, today);
 
           if (slots.length === 0) {
-            html += '<div class="empty">いま予約できる枠はありません。</div>';
+            html += '<div class="empty">いま予定はありません。先生から提案が届くとここに表示されます。</div>';
           } else {
             var dwd = wdOf(selDate);
             html += "<h2>" + fmtDate(selDate) + "(" + WD[dwd] + ")の枠</h2>";
@@ -400,12 +418,10 @@
                 var label = s.start + "〜" + endTime(s.start, s.min);
                 if (s.st === "mine") {
                   html += '<span class="chip mine">✓ ' + label + "</span>";
-                } else if (s.st === "taken") {
-                  html += '<span class="chip taken">' + label + " 予約済</span>";
-                } else if (pending && pending.kind === "book" && pending.slotId === s.id) {
-                  html += '<button class="chip sel" data-action="askbook" data-id="' + esc(s.id) + '">' + label + "</button>";
+                } else if (s.st === "offer") {
+                  html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">提案 ' + label + "</button>";
                 } else {
-                  html += '<button class="chip open" data-action="askbook" data-id="' + esc(s.id) + '">' + label + "</button>";
+                  html += '<span class="chip taken">' + label + " 予定あり</span>";
                 }
               });
               html += "</div>";
@@ -420,9 +436,12 @@
             if (s) {
               var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
               html += '<div class="confirmbar"><div class="inner">';
-              if (pending.kind === "book") {
-                html += '<div class="msg">' + esc(S.me.name) + "さんで " + when + " を予約しますか?</div>";
-                html += '<div class="row"><button class="btn-primary" data-action="dobook"' + (busy ? " disabled" : "") + ">" + (busy ? "予約しています…" : "予約する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+              if (pending.kind === "accept") {
+                html += '<div class="msg">' + when + " の授業をOKして確定しますか?</div>";
+                html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "OKして確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+              } else if (pending.kind === "decline") {
+                html += '<div class="msg">' + when + " の提案を「都合が悪い」と先生に伝えますか?</div>";
+                html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "都合が悪いと伝える") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "cancel") {
                 html += '<div class="msg">' + when + " の予約を取り消しますか?</div>";
                 html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "取り消しています…" : "取り消す") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
@@ -447,7 +466,7 @@
 
           html += "<h2>今後の予定</h2>";
           if (upcoming.length === 0) {
-            html += '<div class="empty">枠がありません。下の「枠を追加」から作成してください。</div>';
+            html += '<div class="empty">予定がありません。下の「授業を提案」から生徒に提案してください。</div>';
           } else {
             var byDate = {}, dates = [];
             upcoming.forEach(function (s) {
@@ -460,9 +479,12 @@
               byDate[d].forEach(function (s) {
                 html += '<div class="slotline"><span class="time">' + s.start + "〜" + endTime(s.start, s.min) + "</span>";
                 if (s.status === "booked") {
-                  html += '<span class="who"><span class="name">' + esc(s.studentName) + '</span> <span class="tag booked">予約</span></span>';
+                  html += '<span class="who"><span class="name">' + esc(s.studentName) + '</span> <span class="tag booked">確定</span></span>';
                   if (s.meetUrl) html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meetUrl) + '">Meet</a>';
                   html += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(s.id) + '">予約解除</button>';
+                } else if (s.status === "offered") {
+                  html += '<span class="who"><span class="name">' + esc(s.studentName) + '</span> <span class="tag offer">返事待ち</span></span>';
+                  html += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">取り下げ</button>';
                 } else {
                   html += '<span class="who"><span class="tag open">空き</span></span>';
                   html += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">枠を削除</button>';
@@ -474,13 +496,18 @@
             html += '<div class="row"><button class="btn-ghost btn-sm" data-action="copyweek">今後7日の予定をコピー(LINE用)</button></div>';
           }
 
-          html += '<h2>枠を追加</h2><div class="card"><div class="formgrid">';
+          html += '<h2>授業を提案</h2><div class="card"><div class="formgrid">';
+          html += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>';
+          A.students.filter(function (x) { return x.active; }).forEach(function (x) {
+            html += '<option value="' + esc(x.id) + '">' + esc(x.name) + "</option>";
+          });
+          html += "</select>";
           html += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + today + '">';
           html += '<label for="f-start">開始</label><input type="time" id="f-start" value="17:00" step="300">';
           html += '<label for="f-min">長さ</label><select id="f-min"><option value="30">30分</option><option value="45">45分</option><option value="60" selected>60分</option><option value="90">90分</option><option value="120">120分</option></select>';
           html += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
-          html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addslot"' + (busy ? " disabled" : "") + ">" + (busy ? "保存中…" : "枠を追加する") + "</button></div>";
-          html += '<div class="note">予約が入るとあなたのGoogleカレンダーに自動で予定が入り、メールでも通知されます。</div></div>';
+          html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + ">" + (busy ? "送信中…" : "この内容で提案する") + "</button></div>";
+          html += '<div class="note">提案は生徒の予約ページに表示されます(メール登録済みの生徒にはメールでもお知らせ)。生徒がOKすると授業が確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
 
           html += "<h2>最近の動き</h2>";
           if (A.log.length === 0) {
@@ -684,10 +711,15 @@
               selDate = btn.getAttribute("data-date");
               selManual = true; pending = null; render(); break;
 
-            case "askbook":
-              pending = { kind: "book", slotId: id }; render(); break;
-            case "dobook":
-              studentAction({ action: "book", slotId: pending.slotId, k: myKey() }, "予約しました ✓");
+            case "askaccept":
+              pending = { kind: "accept", slotId: id }; render(); break;
+            case "doaccept":
+              studentAction({ action: "accept", slotId: pending.slotId, k: myKey() }, "授業が確定しました ✓");
+              break;
+            case "askdecline":
+              pending = { kind: "decline", slotId: id }; render(); break;
+            case "dodecline":
+              studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "先生に伝えました");
               break;
             case "askcancel":
               pending = { kind: "cancel", slotId: id }; render(); break;
@@ -695,13 +727,15 @@
               studentAction({ action: "cancel", slotId: pending.slotId, k: myKey() }, "予約を取り消しました");
               break;
 
-            case "addslot":
+            case "offerslot":
+              var stid = (document.getElementById("f-student") || {}).value;
               var date = (document.getElementById("f-date") || {}).value;
               var start = (document.getElementById("f-start") || {}).value;
               var min = +((document.getElementById("f-min") || {}).value || 60);
               var rep = +((document.getElementById("f-rep") || {}).value || 1);
+              if (!stid) { toast("生徒をえらんでください"); return; }
               if (!date || !start) { toast("日付と時間を入れてください"); return; }
-              adminAction("addSlots", { date: date, start: start, min: min, repeat: rep }, "枠を追加しました");
+              adminAction("offer", { studentId: stid, date: date, start: start, min: min, repeat: rep }, "提案を送りました");
               break;
             case "delslot":
               pending = { kind: "tdel", slotId: id }; render(); break;
