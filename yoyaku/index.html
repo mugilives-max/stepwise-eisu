@@ -154,7 +154,7 @@
         font-variant-numeric: tabular-nums;
       }
       table.rec th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
-      .studentline { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+      .studentline { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
       .studentline:last-child { border-bottom: none; }
       .studentline .nm { flex: 1; font-weight: 600; }
       .confirmbar {
@@ -265,10 +265,10 @@
             .then(function (r) { return r.json(); });
         }
 
-        function myId() { return lsGet("sw_sid") || ""; }
+        function myKey() { return lsGet("sw_k") || ""; }
 
         function loadState() {
-          return apiGet({ action: "state", sid: myId() }).then(function (res) {
+          return apiGet({ action: "state", k: myKey() }).then(function (res) {
             if (res.error) throw new Error(res.error);
             S = res;
             render();
@@ -324,30 +324,29 @@
         }
 
         /* ---------- 生徒画面 ---------- */
+        function renderGuard() {
+          var html = "";
+          html += '<div class="card" style="margin-top:26px;text-align:center;padding:28px 20px">';
+          html += '<div style="font-weight:700;font-size:16px;margin-bottom:8px">専用リンクからひらいてください</div>';
+          html += '<div style="font-size:13.5px;color:var(--muted)">この予約ページは、先生からLINEで送られた<br>あなた専用のリンクからひらく必要があります。<br>リンクが分からないときは、LINEで先生に連絡してください。</div>';
+          html += "</div>";
+          html += '<footer class="app"><span></span><button class="btn-quiet btn-sm" data-action="teacher">先生用</button></footer>';
+          app.innerHTML = html;
+        }
+
         function renderStudent() {
-          var me = myId();
-          var meValid = S.students.some(function (s) { return s.id === me; });
-          if (!meValid) me = "";
+          if (!S || !S.me) { renderGuard(); return; }
           var today = S.today;
           var slots = S.slots.slice().sort(function (a, b) {
             return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
           });
 
           var html = "";
-          html += '<h1>授業の予約</h1><p class="sub">空いている枠をえらんで予約できます</p>';
-
-          html += '<div class="card" style="margin-top:14px"><div class="row between"><label for="mesel" style="font-weight:700">あなたの名前</label>';
-          html += '<select id="mesel" data-change="pickme"><option value="">えらんでください</option>';
-          S.students.forEach(function (s) {
-            html += '<option value="' + esc(s.id) + '"' + (s.id === me ? " selected" : "") + ">" + esc(s.name) + "</option>";
-          });
-          html += "</select></div></div>";
+          html += '<h1>授業の予約</h1><p class="sub">' + esc(S.me.name) + 'さんの予約ページです</p>';
 
           var mine = slots.filter(function (s) { return s.st === "mine"; });
           html += "<h2>あなたの予約</h2>";
-          if (!me) {
-            html += '<div class="empty">名前をえらぶと、あなたの予約が表示されます。</div>';
-          } else if (mine.length === 0) {
+          if (mine.length === 0) {
             html += '<div class="empty">予約はまだありません。下のカレンダーからえらんでください。</div>';
           } else {
             html += '<div class="card">';
@@ -422,15 +421,8 @@
               var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
               html += '<div class="confirmbar"><div class="inner">';
               if (pending.kind === "book") {
-                if (me) {
-                  var nm = "";
-                  S.students.forEach(function (x) { if (x.id === me) nm = x.name; });
-                  html += '<div class="msg">' + esc(nm) + "さんで " + when + " を予約しますか?</div>";
-                  html += '<div class="row"><button class="btn-primary" data-action="dobook"' + (busy ? " disabled" : "") + ">" + (busy ? "予約しています…" : "予約する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-                } else {
-                  html += '<div class="msg">先に上の「あなたの名前」をえらんでください</div>';
-                  html += '<div class="row"><button class="btn-quiet" data-action="closebar">閉じる</button></div>';
-                }
+                html += '<div class="msg">' + esc(S.me.name) + "さんで " + when + " を予約しますか?</div>";
+                html += '<div class="row"><button class="btn-primary" data-action="dobook"' + (busy ? " disabled" : "") + ">" + (busy ? "予約しています…" : "予約する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "cancel") {
                 html += '<div class="msg">' + when + " の予約を取り消しますか?</div>";
                 html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "取り消しています…" : "取り消す") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
@@ -546,6 +538,8 @@
                 html += '<button class="btn-primary btn-sm" data-action="saveemail" data-id="' + esc(s.id) + '"' + (busy ? " disabled" : "") + ">保存</button>";
                 html += '<button class="btn-quiet btn-sm" data-action="cancelemail">やめる</button>';
               } else {
+                html += '<button class="btn-ghost btn-sm" data-action="copylink" data-id="' + esc(s.id) + '">リンクをコピー</button>';
+                html += '<button class="btn-quiet btn-sm" data-action="newlink" data-id="' + esc(s.id) + '">再発行</button>';
                 html += '<button class="btn-quiet btn-sm" data-action="editemail" data-id="' + esc(s.id) + '">メール</button>';
                 html += '<button class="btn-quiet btn-sm" data-action="hidestudent" data-id="' + esc(s.id) + '">外す</button>';
               }
@@ -553,7 +547,7 @@
             });
           }
           html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1;min-width:120px"><input type="email" id="f-newemail" placeholder="メール(任意)" style="flex:1;min-width:150px"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
-          html += '<div class="note">メールを登録した生徒には、予約と同時にGoogleカレンダーの招待が自動で届きます(未登録でも予約画面の「カレンダーに追加」ボタンは使えます)。「外す」と名前えらびから消えます(記録は残ります)。</div></div>';
+          html += '<div class="note">生徒には「リンクをコピー」した<strong>本人専用のリンク</strong>をLINEで送ってください。生徒はそのリンクからだけ予約できます。リンクが他人に知られた場合は「再発行」してください(古いリンクは無効になります)。メールを登録した生徒には予約と同時にカレンダー招待も届きます。</div></div>';
 
           html += '<h2>設定</h2><div class="card"><div class="row">';
           html += '<label for="f-pin" style="font-size:13px;color:var(--muted)">先生用PIN</label>';
@@ -612,6 +606,7 @@
             busy = false; pending = null;
             if (res.error) {
               toast(res.error);
+              if (res.badCode) { S = { me: null, slots: [], today: "" }; render(); return; }
               if (res.refresh) return loadState();
               render();
               return;
@@ -692,12 +687,12 @@
             case "askbook":
               pending = { kind: "book", slotId: id }; render(); break;
             case "dobook":
-              studentAction({ action: "book", slotId: pending.slotId, sid: myId() }, "予約しました ✓");
+              studentAction({ action: "book", slotId: pending.slotId, k: myKey() }, "予約しました ✓");
               break;
             case "askcancel":
               pending = { kind: "cancel", slotId: id }; render(); break;
             case "docancel":
-              studentAction({ action: "cancel", slotId: pending.slotId, sid: myId() }, "予約を取り消しました");
+              studentAction({ action: "cancel", slotId: pending.slotId, k: myKey() }, "予約を取り消しました");
               break;
 
             case "addslot":
@@ -736,6 +731,16 @@
               editEmailId = null;
               adminAction("setEmail", { studentId: id, email: ev2 }, ev2 ? "メールを登録しました" : "メールを削除しました");
               break;
+            case "copylink":
+              var st4 = null;
+              A.students.forEach(function (x) { if (x.id === id) st4 = x; });
+              if (!st4 || !st4.code) { toast("リンクがまだ発行されていません"); return; }
+              copyText(location.origin + location.pathname + "?k=" + st4.code,
+                st4.name + "さんの専用リンクをコピーしました。LINEで送ってください");
+              break;
+            case "newlink":
+              adminAction("newCode", { studentId: id }, "リンクを再発行しました(古いリンクは使えなくなります)");
+              break;
             case "hidestudent":
               adminAction("hideStudent", { studentId: id }, "生徒を外しました");
               break;
@@ -765,18 +770,6 @@
           }
         });
 
-        app.addEventListener("change", function (ev) {
-          var el = ev.target.closest("[data-change]");
-          if (!el) return;
-          if (el.getAttribute("data-change") === "pickme") {
-            lsSet("sw_sid", el.value);
-            pending = null;
-            busy = true; render();
-            loadState().catch(function () {
-              toast("通信に失敗しました");
-            }).then(function () { busy = false; render(); });
-          }
-        });
 
         function copyText(text, okMsg) {
           function fallback() {
@@ -794,6 +787,13 @@
         }
 
         /* ---------- 起動 ---------- */
+        try {
+          var qk = new URLSearchParams(location.search).get("k");
+          if (qk) {
+            lsSet("sw_k", qk);
+            history.replaceState(null, "", location.pathname);
+          }
+        } catch (e) {}
         if (API.indexOf("http") !== 0) {
           app.innerHTML = '<div class="loading">予約システムは準備中です。<br>もうしばらくお待ちください。</div>';
         } else {

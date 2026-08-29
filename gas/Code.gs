@@ -17,7 +17,7 @@ var CAL_TITLE_PREFIX = '【塾】';
 function setup() {
   var ss = SpreadsheetApp.getActive();
   ensureSheet_(ss, 'config', ['key', 'value']);
-  ensureSheet_(ss, 'students', ['id', 'name', 'active']);
+  ensureSheet_(ss, 'students', ['id', 'name', 'active', 'email', 'code']);
   ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl']);
   ensureSheet_(ss, 'log', ['time', 'message']);
   if (!getConfig_('pin')) setConfig_('pin', '0000');
@@ -41,7 +41,7 @@ function ensureSheet_(ss, name, headers) {
 function doGet(e) {
   try {
     var p = (e && e.parameter) || {};
-    if (p.action === 'state') return json_(studentState_(p.sid || ''));
+    if (p.action === 'state') return json_(studentState_(p.k || ''));
     return json_({ ok: true, service: 'stepwise-yoyaku' });
   } catch (err) {
     return json_({ error: String(err) });
@@ -54,11 +54,12 @@ function doPost(e) {
   try {
     ensureEmailHeader_();
     ensureMeetHeader_();
+    ensureCodeHeader_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
-      case 'book':   res = book_(req.slotId, req.sid); break;
-      case 'cancel': res = cancel_(req.slotId, req.sid); break;
+      case 'book':   res = book_(req.slotId, req.k); break;
+      case 'cancel': res = cancel_(req.slotId, req.k); break;
       case 'admin':  res = admin_(req); break;
       default:       res = { error: 'unknown action' };
     }
@@ -77,28 +78,39 @@ function json_(obj) {
 
 /* ================= 生徒向け ================= */
 
-function studentState_(sid) {
+function studentState_(code) {
+  var me = findStudentByCode_(code);
+  if (!me) return { me: null, slots: [], today: todayStr_() };
   var today = todayStr_();
   var slots = readRows_('slots')
     .filter(function (s) { return s.date >= today; })
     .map(function (s) {
       var st = 'taken';
       if (s.status === 'open') st = 'open';
-      else if (sid && String(s.studentId) === String(sid)) st = 'mine';
+      else if (String(s.studentId) === String(me.id)) st = 'mine';
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
         meet: st === 'mine' ? String(s.meetUrl || '') : ''
       };
     });
-  var students = readRows_('students')
-    .filter(function (s) { return String(s.active) !== 'false' && s.active !== false; })
-    .map(function (s) { return { id: s.id, name: s.name }; });
-  return { students: students, slots: slots, today: today };
+  return { me: { name: me.name }, slots: slots, today: today };
 }
 
-function book_(slotId, sid) {
-  var student = findStudent_(sid);
-  if (!student) return { error: '名前をえらんでください' };
+function findStudentByCode_(code) {
+  code = String(code == null ? '' : code).trim();
+  if (!code) return null;
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].code || '') === code &&
+        !(String(rows[i].active) === 'false' || rows[i].active === false)) return rows[i];
+  }
+  return null;
+}
+
+function book_(slotId, code) {
+  var student = findStudentByCode_(code);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var sid = student.id;
   var r = findSlotRow_(slotId);
   if (!r) return { error: 'この枠は見つかりません', refresh: true };
   if (r.slot.status !== 'open') return { error: 'この枠はうまってしまいました', refresh: true };
@@ -114,16 +126,18 @@ function book_(slotId, sid) {
     student.name + 'さんが授業を予約しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min) +
     (cal.meetUrl ? '\nMeet: ' + cal.meetUrl : ''));
-  return { ok: true, state: studentState_(sid) };
+  return { ok: true, state: studentState_(code) };
 }
 
-function cancel_(slotId, sid) {
+function cancel_(slotId, code) {
+  var student = findStudentByCode_(code);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var r = findSlotRow_(slotId);
   if (!r) return { error: 'この予約は見つかりません', refresh: true };
-  if (r.slot.status !== 'booked' || String(r.slot.studentId) !== String(sid)) {
+  if (r.slot.status !== 'booked' || String(r.slot.studentId) !== String(student.id)) {
     return { error: 'この予約は取り消せません', refresh: true };
   }
-  var name = studentName_(sid);
+  var name = student.name;
   deleteCalEvent_(r.slot);
   r.slot.status = 'open';
   r.slot.studentId = '';
@@ -135,7 +149,7 @@ function cancel_(slotId, sid) {
   notify_('【取消】' + name + 'さん',
     name + 'さんが予約を取り消しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min));
-  return { ok: true, state: studentState_(sid) };
+  return { ok: true, state: studentState_(code) };
 }
 
 /* ================= 先生向け(PIN必須) ================= */
@@ -158,6 +172,7 @@ function admin_(req) {
     case 'toggleDone':  return adminToggleDone_(req);
     case 'addStudent':  return adminAddStudent_(req);
     case 'setEmail':    return adminSetEmail_(req);
+    case 'newCode':     return adminNewCode_(req);
     case 'hideStudent': return adminHideStudent_(req);
     case 'setPin':
       if (!req.newPin || String(req.newPin).length < 4) return { error: 'PINは4けた以上にしてください' };
@@ -168,6 +183,7 @@ function admin_(req) {
 }
 
 function adminState_() {
+  backfillCodes_();
   var slots = readRows_('slots').map(function (s) {
     return {
       id: s.id, date: s.date, start: s.start, min: Number(s.min),
@@ -179,6 +195,7 @@ function adminState_() {
   var students = readRows_('students').map(function (s) {
     return {
       id: s.id, name: s.name, email: String(s.email || ''),
+      code: String(s.code || ''),
       active: !(String(s.active) === 'false' || s.active === false)
     };
   });
@@ -242,8 +259,45 @@ function adminAddStudent_(req) {
     return s.name === name && !(String(s.active) === 'false' || s.active === false);
   });
   if (dup) return { error: '同じ名前の生徒がいます' };
-  sheet_('students').appendRow([uid_(), name, true, normEmail_(req.email)]);
+  sheet_('students').appendRow([uid_(), name, true, normEmail_(req.email), newCode_()]);
   return { ok: true, admin: adminState_() };
+}
+
+function newCode_() {
+  return uid_() + uid_();
+}
+
+function adminNewCode_(req) {
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.studentId)) {
+      var cell = sheet_('students').getRange(i + 2, 5);
+      cell.setNumberFormat('@');
+      cell.setValue(newCode_());
+      return { ok: true, admin: adminState_() };
+    }
+  }
+  return { error: '生徒が見つかりません' };
+}
+
+// コード未発行の生徒に自動発行(旧データの移行用)
+function backfillCodes_() {
+  ensureCodeHeader_();
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (!String(rows[i].code || '')) {
+      var cell = sheet_('students').getRange(i + 2, 5);
+      cell.setNumberFormat('@');
+      cell.setValue(newCode_());
+    }
+  }
+}
+
+function ensureCodeHeader_() {
+  var sh = sheet_('students');
+  if (sh && sh.getRange(1, 5).getValue() !== 'code') {
+    sh.getRange(1, 5).setValue('code');
+  }
 }
 
 function adminSetEmail_(req) {
