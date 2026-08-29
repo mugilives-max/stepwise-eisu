@@ -234,6 +234,15 @@
           var t = (+p[0]) * 60 + (+p[1]) + (+min);
           return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60);
         }
+        var editEmailId = null; // 先生モードでメール編集中の生徒id
+        function gcalUrl(s) {
+          var d = s.date.replace(/-/g, "");
+          var st = s.start.replace(":", "");
+          var en = endTime(s.start, s.min).replace(":", "");
+          return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+            "&text=" + encodeURIComponent("塾の授業(ステップワイズ)") +
+            "&dates=" + d + "T" + st + "00/" + d + "T" + en + "00&ctz=Asia/Tokyo";
+        }
         var toastTimer = null;
         function toast(msg) {
           var t = document.getElementById("toast");
@@ -343,6 +352,7 @@
             mine.forEach(function (s) {
               html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
               html += '<span class="who"></span>';
+              html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(s) + '">カレンダーに追加</a>';
               html += '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取り消す</button>';
               html += "</div>";
             });
@@ -524,13 +534,22 @@
             html += '<div class="empty">まだ生徒が登録されていません。</div>';
           } else {
             act.forEach(function (s) {
-              html += '<div class="studentline"><span class="nm">' + esc(s.name) + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="hidestudent" data-id="' + esc(s.id) + '">外す</button>';
+              html += '<div class="studentline"><span class="nm">' + esc(s.name);
+              if (s.email) html += ' <span style="font-weight:400;font-size:11.5px;color:var(--muted)">' + esc(s.email) + "</span>";
+              html += "</span>";
+              if (editEmailId === s.id) {
+                html += '<input type="email" id="f-email-' + esc(s.id) + '" value="' + esc(s.email || "") + '" placeholder="生徒のメール" style="width:180px">';
+                html += '<button class="btn-primary btn-sm" data-action="saveemail" data-id="' + esc(s.id) + '"' + (busy ? " disabled" : "") + ">保存</button>";
+                html += '<button class="btn-quiet btn-sm" data-action="cancelemail">やめる</button>';
+              } else {
+                html += '<button class="btn-quiet btn-sm" data-action="editemail" data-id="' + esc(s.id) + '">メール</button>';
+                html += '<button class="btn-quiet btn-sm" data-action="hidestudent" data-id="' + esc(s.id) + '">外す</button>';
+              }
               html += "</div>";
             });
           }
-          html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
-          html += '<div class="note">「外す」と名前えらびから消えます(記録は残ります)。</div></div>';
+          html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1;min-width:120px"><input type="email" id="f-newemail" placeholder="メール(任意)" style="flex:1;min-width:150px"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
+          html += '<div class="note">メールを登録した生徒には、予約と同時にGoogleカレンダーの招待が自動で届きます(未登録でも予約画面の「カレンダーに追加」ボタンは使えます)。「外す」と名前えらびから消えます(記録は残ります)。</div></div>';
 
           html += '<h2>設定</h2><div class="card"><div class="row">';
           html += '<label for="f-pin" style="font-size:13px;color:var(--muted)">先生用PIN</label>';
@@ -700,8 +719,18 @@
               break;
             case "addstudent":
               var nm = ((document.getElementById("f-newstudent") || {}).value || "").trim();
+              var em = ((document.getElementById("f-newemail") || {}).value || "").trim();
               if (!nm) { toast("名前を入れてください"); return; }
-              adminAction("addStudent", { name: nm }, nm + "さんを追加しました");
+              adminAction("addStudent", { name: nm, email: em }, nm + "さんを追加しました");
+              break;
+            case "editemail":
+              editEmailId = id; render(); break;
+            case "cancelemail":
+              editEmailId = null; render(); break;
+            case "saveemail":
+              var ev2 = ((document.getElementById("f-email-" + id) || {}).value || "").trim();
+              editEmailId = null;
+              adminAction("setEmail", { studentId: id, email: ev2 }, ev2 ? "メールを登録しました" : "メールを削除しました");
               break;
             case "hidestudent":
               adminAction("hideStudent", { studentId: id }, "生徒を外しました");

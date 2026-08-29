@@ -52,6 +52,7 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    ensureEmailHeader_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
@@ -100,7 +101,7 @@ function book_(slotId, sid) {
 
   r.slot.status = 'booked';
   r.slot.studentId = sid;
-  r.slot.eventId = createCalEvent_(r.slot, student.name);
+  r.slot.eventId = createCalEvent_(r.slot, student);
   writeSlotRow_(r);
   addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を予約');
   notify_('【予約】' + student.name + 'さん',
@@ -148,6 +149,7 @@ function admin_(req) {
     case 'unbook':      return adminUnbook_(req);
     case 'toggleDone':  return adminToggleDone_(req);
     case 'addStudent':  return adminAddStudent_(req);
+    case 'setEmail':    return adminSetEmail_(req);
     case 'hideStudent': return adminHideStudent_(req);
     case 'setPin':
       if (!req.newPin || String(req.newPin).length < 4) return { error: 'PINは4けた以上にしてください' };
@@ -166,7 +168,10 @@ function adminState_() {
     };
   });
   var students = readRows_('students').map(function (s) {
-    return { id: s.id, name: s.name, active: !(String(s.active) === 'false' || s.active === false) };
+    return {
+      id: s.id, name: s.name, email: String(s.email || ''),
+      active: !(String(s.active) === 'false' || s.active === false)
+    };
   });
   var log = readRows_('log').slice(-30).reverse().map(function (l) {
     return { time: fmtLogTime_(l.time), message: l.message };
@@ -227,8 +232,33 @@ function adminAddStudent_(req) {
     return s.name === name && !(String(s.active) === 'false' || s.active === false);
   });
   if (dup) return { error: '同じ名前の生徒がいます' };
-  sheet_('students').appendRow([uid_(), name, true]);
+  sheet_('students').appendRow([uid_(), name, true, normEmail_(req.email)]);
   return { ok: true, admin: adminState_() };
+}
+
+function adminSetEmail_(req) {
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.studentId)) {
+      var cell = sheet_('students').getRange(i + 2, 4);
+      cell.setNumberFormat('@');
+      cell.setValue(normEmail_(req.email));
+      return { ok: true, admin: adminState_() };
+    }
+  }
+  return { error: '生徒が見つかりません' };
+}
+
+function ensureEmailHeader_() {
+  var sh = sheet_('students');
+  if (sh && sh.getRange(1, 4).getValue() !== 'email') {
+    sh.getRange(1, 4).setValue('email');
+  }
+}
+
+function normEmail_(v) {
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : '';
 }
 
 function adminHideStudent_(req) {
@@ -243,13 +273,20 @@ function adminHideStudent_(req) {
 
 /* ================= カレンダー・通知 ================= */
 
-function createCalEvent_(slot, studentName) {
+function createCalEvent_(slot, student) {
   if (getConfig_('calendarSync') !== 'on') return '';
   try {
     var start = dateTimeOf_(slot.date, slot.start);
     var end = new Date(start.getTime() + Number(slot.min) * 60000);
+    var opts = {};
+    var email = normEmail_(student.email);
+    if (email) {
+      // 生徒のメールが登録されていればカレンダー招待を自動送信
+      opts.guests = email;
+      opts.sendInvites = true;
+    }
     var ev = CalendarApp.getDefaultCalendar()
-      .createEvent(CAL_TITLE_PREFIX + studentName + 'さん 授業', start, end);
+      .createEvent(CAL_TITLE_PREFIX + student.name + 'さん 授業', start, end, opts);
     ev.addPopupReminder(60);
     return ev.getId();
   } catch (err) {
