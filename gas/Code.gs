@@ -20,6 +20,7 @@ function setup() {
   ensureSheet_(ss, 'config', ['key', 'value']);
   ensureSheet_(ss, 'students', ['id', 'name', 'active', 'email', 'code', 'rate30', 'monthly']);
   ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl']);
+  ensureSheet_(ss, 'blocked', ['id', 'studentId', 'date', 'note']);
   ensureSheet_(ss, 'log', ['time', 'message']);
   if (!getConfig_('pin')) setConfig_('pin', '0000');
   if (!getConfig_('calendarSync')) setConfig_('calendarSync', 'on');
@@ -58,12 +59,15 @@ function doPost(e) {
     ensureMeetHeader_();
     ensureCodeHeader_();
     ensureFeeHeaders_();
+    ensureBlockedSheet_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
       case 'accept':  res = accept_(req.slotId, req.k); break;
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = cancel_(req.slotId, req.k); break;
+      case 'block':   res = block_(req); break;
+      case 'unblock': res = unblock_(req); break;
       case 'admin':  res = admin_(req); break;
       default:       res = { error: 'unknown action' };
     }
@@ -98,7 +102,52 @@ function studentState_(code) {
         meet: st === 'mine' ? String(s.meetUrl || '') : ''
       };
     });
-  return { me: { name: me.name }, slots: slots, today: today };
+  var blocked = readRows_('blocked')
+    .filter(function (b) {
+      return String(b.studentId) === String(me.id) && b.date >= today;
+    })
+    .map(function (b) { return { id: b.id, date: b.date, note: String(b.note || '') }; });
+  return { me: { name: me.name }, slots: slots, blocked: blocked, today: today };
+}
+
+function ensureBlockedSheet_() {
+  var ss = SpreadsheetApp.getActive();
+  if (!ss.getSheetByName('blocked')) {
+    var sh = ss.insertSheet('blocked');
+    sh.appendRow(['id', 'studentId', 'date', 'note']);
+  }
+}
+
+function block_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var date = String(req.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < todayStr_()) {
+    return { error: '今日以降の日付をえらんでください' };
+  }
+  var dup = readRows_('blocked').some(function (b) {
+    return String(b.studentId) === String(student.id) && b.date === date;
+  });
+  if (dup) return { error: 'この日はすでに登録されています' };
+  var note = String(req.note || '').slice(0, 50);
+  sheet_('blocked').appendRow([uid_(), student.id, date, note]);
+  addLog_(student.name + 'さんが ' + fmtDateJa_(date) + ' を都合が悪い日に登録' + (note ? '(' + note + ')' : ''));
+  return { ok: true, state: studentState_(req.k) };
+}
+
+function unblock_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var rows = readRows_('blocked');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.blockId) &&
+        String(rows[i].studentId) === String(student.id)) {
+      sheet_('blocked').deleteRow(i + 2);
+      addLog_(student.name + 'さんが ' + fmtDateJa_(rows[i].date) + ' の都合が悪い日を取消');
+      return { ok: true, state: studentState_(req.k) };
+    }
+  }
+  return { error: '登録が見つかりません', refresh: true };
 }
 
 function findStudentByCode_(code) {
@@ -285,6 +334,8 @@ function admin_(req) {
     case 'setEmail':    return adminSetEmail_(req);
     case 'setFee':      return adminSetFee_(req);
     case 'newCode':     return adminNewCode_(req);
+    case 'addBlock':    return adminAddBlock_(req);
+    case 'delBlock':    return adminDelBlock_(req);
     case 'hideStudent': return adminHideStudent_(req);
     case 'changePass':  return adminChangePass_(req);
     case 'logout':
@@ -317,8 +368,16 @@ function adminState_() {
   var log = readRows_('log').slice(-30).reverse().map(function (l) {
     return { time: fmtLogTime_(l.time), message: l.message };
   });
+  var blocked = readRows_('blocked')
+    .filter(function (b) { return b.date >= todayStr_(); })
+    .map(function (b) {
+      return {
+        id: b.id, date: b.date, note: String(b.note || ''),
+        studentId: String(b.studentId), studentName: studentName_(b.studentId)
+      };
+    });
   return {
-    slots: slots, students: students, log: log, today: todayStr_(),
+    slots: slots, students: students, log: log, blocked: blocked, today: todayStr_(),
     account: getConfig_('teacherEmail')
   };
 }
@@ -331,11 +390,30 @@ function adminOffer_(req) {
         !(String(rows[i].active) === 'false' || rows[i].active === false)) student = rows[i];
   }
   if (!student) return { error: '案内する生徒をえらんでください' };
+  var repeat = Math.max(1, Math.min(12, Number(req.repeat) || 1));
+  // 生徒が「都合が悪い日」に登録している日への案内は警告(force指定で強行可)
+  if (!req.force) {
+    var blockedRows = readRows_('blocked');
+    var ngDates = [];
+    for (var w0 = 0; w0 < repeat; w0++) {
+      var d0 = addDays_(req.date, w0 * 7);
+      var hit = null;
+      blockedRows.forEach(function (b) {
+        if (String(b.studentId) === String(student.id) && b.date === d0) hit = b;
+      });
+      if (hit) ngDates.push(fmtDateJa_(d0) + (hit.note ? '(' + hit.note + ')' : ''));
+    }
+    if (ngDates.length > 0) {
+      return {
+        error: student.name + 'さんは ' + ngDates.join('、') + ' を「都合が悪い日」に登録しています',
+        needForce: true
+      };
+    }
+  }
   var sh = sheet_('slots');
   var existing = readRows_('slots');
   var added = 0;
   var dates = [];
-  var repeat = Math.max(1, Math.min(12, Number(req.repeat) || 1));
   for (var w = 0; w < repeat; w++) {
     var d = addDays_(req.date, w * 7);
     var dup = existing.some(function (s) { return s.date === d && s.start === req.start; });
@@ -420,6 +498,32 @@ function adminSetFee_(req) {
     }
   }
   return { error: '生徒が見つかりません' };
+}
+
+function adminAddBlock_(req) {
+  var date = String(req.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: '日付をえらんでください' };
+  var name = studentName_(req.studentId);
+  if (name === '(不明)') return { error: '生徒をえらんでください' };
+  var dup = readRows_('blocked').some(function (b) {
+    return String(b.studentId) === String(req.studentId) && b.date === date;
+  });
+  if (dup) return { error: 'この日はすでに登録されています' };
+  var note = String(req.note || '').slice(0, 50);
+  sheet_('blocked').appendRow([uid_(), req.studentId, date, note]);
+  addLog_('先生が' + name + 'さんの ' + fmtDateJa_(date) + ' を都合が悪い日に登録' + (note ? '(' + note + ')' : ''));
+  return { ok: true, admin: adminState_() };
+}
+
+function adminDelBlock_(req) {
+  var rows = readRows_('blocked');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.blockId)) {
+      sheet_('blocked').deleteRow(i + 2);
+      return { ok: true, admin: adminState_() };
+    }
+  }
+  return { error: '登録が見つかりません' };
 }
 
 function ensureFeeHeaders_() {

@@ -316,6 +316,7 @@
                 if (it.mine) { marks += '<span class="calmark">✓</span>'; cls += " mine"; }
                 if (it.offer) marks += '<span class="caldot of"></span>';
               }
+              if (it.ng) marks += '<span class="calmark" style="color:var(--muted)">×</span>';
             }
             marks += "</span>";
             var clickable = !past && (it || kind === "teacher");
@@ -329,9 +330,11 @@
           if (kind === "teacher") {
             h += '<span><span class="caldot op"></span> 確定した授業</span>';
             h += '<span><span class="caldot of"></span> 承認待ちの案内</span>';
+            h += '<span><span class="calmark" style="color:var(--muted)">×</span> 都合が悪い生徒あり</span>';
           } else {
             h += '<span><span class="caldot of"></span> 先生からの案内</span>';
             h += '<span><span class="calmark">✓</span> あなたの授業</span>';
+            h += '<span><span class="calmark" style="color:var(--muted)">×</span> 都合が悪い日</span>';
           }
           h += "</div></div>";
           return h;
@@ -389,6 +392,21 @@
             html += "</div>";
           }
 
+          html += "<h2>都合が悪い日</h2>";
+          var blocked = (S.blocked || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+          if (blocked.length > 0) {
+            html += '<div class="card">';
+            blocked.forEach(function (b) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(b.date) + "</span>";
+              html += '<span class="who">' + (b.note ? esc(b.note) : "") + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="delblock" data-id="' + esc(b.id) + '">取消</button>';
+              html += "</div>";
+            });
+            html += "</div>";
+          }
+          html += '<div class="row" style="margin-top:10px"><input type="date" id="f-bdate" min="' + today + '"><input type="text" id="f-bnote" placeholder="部活・用事など(任意)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + ">登録</button></div>";
+          html += '<div class="note">登録すると先生に伝わり、その日への案内を避けてもらえます。</div>';
+
           html += "<h2>予定表</h2>";
           var byDate = {}, dates = [];
           slots.forEach(function (s) {
@@ -409,8 +427,12 @@
           }
           var info = {};
           slots.forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0 });
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0 });
             it[s.st]++;
+          });
+          blocked.forEach(function (b) {
+            var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0 });
+            it.ng++;
           });
           html += renderCal(info, today, "student");
 
@@ -508,9 +530,13 @@
           }
           var tinfo = {};
           upcoming.forEach(function (s) {
-            var it = tinfo[s.date] || (tinfo[s.date] = { booked: 0, offered: 0 });
+            var it = tinfo[s.date] || (tinfo[s.date] = { booked: 0, offered: 0, ng: 0 });
             if (s.status === "booked") it.booked++;
             else if (s.status === "offered") it.offered++;
+          });
+          (A.blocked || []).forEach(function (b) {
+            var it = tinfo[b.date] || (tinfo[b.date] = { booked: 0, offered: 0, ng: 0 });
+            it.ng++;
           });
           html += renderCal(tinfo, today, "teacher");
 
@@ -522,6 +548,15 @@
           } else {
             html += '<div class="card">';
             dayRows.forEach(function (s) { html += teacherRow(s, false); });
+            html += "</div>";
+          }
+          var dayNg = (A.blocked || []).filter(function (b) { return b.date === selDate; });
+          if (dayNg.length > 0) {
+            html += '<div class="card" style="margin-top:10px">';
+            dayNg.forEach(function (b) {
+              html += '<div class="slotline"><span class="who"><span class="name">' + esc(b.studentName) + '</span> <span class="tag done">都合が悪い</span> ' + (b.note ? esc(b.note) : "") + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>';
+            });
             html += "</div>";
           }
           if (upcoming.length > 0) {
@@ -541,6 +576,17 @@
           html += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
           html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + ">" + (busy ? "送信中…" : "この内容で案内する") + "</button></div>";
           html += '<div class="note">案内は生徒の予約ページに表示されます(メール登録済みの生徒にはメールでもお知らせ)。生徒が承認すると授業が確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
+
+          html += '<h2>都合が悪い日の登録</h2><div class="card"><div class="row">';
+          html += '<select id="b-student"><option value="">生徒</option>';
+          A.students.filter(function (x) { return x.active; }).forEach(function (x) {
+            html += '<option value="' + esc(x.id) + '">' + esc(x.name) + "</option>";
+          });
+          html += "</select>";
+          html += '<input type="date" id="b-date" min="' + today + '">';
+          html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px">';
+          html += '<button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + ">登録</button>";
+          html += '</div><div class="note">保護者から聞いたNG日をここに登録できます(生徒も自分のページから登録可能)。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
 
           html += "<h2>最近の動き</h2>";
           if (A.log.length === 0) {
@@ -649,6 +695,12 @@
 
           html += '<footer class="app"><span></span><span></span></footer>';
 
+          if (pending && pending.kind === "ngconfirm" && offerDraft) {
+            html += '<div class="confirmbar"><div class="inner">';
+            html += '<div class="msg">' + esc(offerDraft.msg || "") + "</div>";
+            html += '<div class="row"><button class="btn-primary" data-action="doforce"' + (busy ? " disabled" : "") + '>それでも案内する</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+            html += "</div></div>";
+          }
           if (pending && (pending.kind === "tdel" || pending.kind === "tcancel")) {
             var s3 = null;
             slots.forEach(function (x) { if (x.id === pending.slotId) s3 = x; });
@@ -738,6 +790,36 @@
             toast("通信に失敗しました。電波の良いところでもう一度お試しください");
             render();
           });
+        }
+
+        var offerDraft = null;
+        function sendOffer(force) {
+          if (!offerDraft || busy) return;
+          busy = true; render();
+          var body = { action: "admin", token: admToken(), op: "offer", force: !!force };
+          ["studentId", "date", "start", "min", "repeat"].forEach(function (k2) { body[k2] = offerDraft[k2]; });
+          apiPost(body).then(function (res) {
+            busy = false;
+            if (res.error) {
+              if (res.needForce) {
+                offerDraft.msg = res.error;
+                pending = { kind: "ngconfirm" };
+                render();
+                return;
+              }
+              toast(res.error);
+              if (res.badAuth) {
+                try { localStorage.removeItem("sw_admt"); } catch (e) {}
+                A = null; authM = "account"; ssSet("sw_mode", "auth");
+              }
+              pending = null; render();
+              return;
+            }
+            pending = null; offerDraft = null;
+            if (res.admin) A = res.admin;
+            render();
+            toast("案内を送りました");
+          }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
         }
 
         function adminAction(op, extra, okMsg) {
@@ -861,7 +943,30 @@
               var rep = +((document.getElementById("f-rep") || {}).value || 1);
               if (!stid) { toast("生徒をえらんでください"); return; }
               if (!date || !start) { toast("日付と時間を入れてください"); return; }
-              adminAction("offer", { studentId: stid, date: date, start: start, min: min, repeat: rep }, "案内を送りました");
+              offerDraft = { studentId: stid, date: date, start: start, min: min, repeat: rep };
+              sendOffer(false);
+              break;
+            case "doforce":
+              sendOffer(true); break;
+            case "taddblock":
+              var bs = (document.getElementById("b-student") || {}).value;
+              var bd2 = (document.getElementById("b-date") || {}).value;
+              var bn2 = ((document.getElementById("b-note") || {}).value || "").trim();
+              if (!bs) { toast("生徒をえらんでください"); return; }
+              if (!bd2) { toast("日付をえらんでください"); return; }
+              adminAction("addBlock", { studentId: bs, date: bd2, note: bn2 }, "登録しました");
+              break;
+            case "tdelblock":
+              adminAction("delBlock", { blockId: id }, "削除しました");
+              break;
+            case "addblock":
+              var bd = (document.getElementById("f-bdate") || {}).value;
+              var bn = ((document.getElementById("f-bnote") || {}).value || "").trim();
+              if (!bd) { toast("日付をえらんでください"); return; }
+              studentAction({ action: "block", k: myKey(), date: bd, note: bn }, "登録しました");
+              break;
+            case "delblock":
+              studentAction({ action: "unblock", k: myKey(), blockId: id }, "取り消しました");
               break;
             case "delslot":
               pending = { kind: "tdel", slotId: id }; render(); break;
