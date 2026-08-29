@@ -17,149 +17,754 @@
         --soft: #eef4fb;
         --primary: #0717a8;
         --primary-dark: #07106f;
+        --coral: #d86f8d;
+        --coral-soft: #fbeef2;
+        --danger: #c0392b;
+        --taken: #eef1f4;
         --white: #ffffff;
-        --shadow: 0 18px 48px rgba(31, 48, 64, 0.12);
+        --shadow: 0 10px 30px rgba(31, 48, 64, 0.1);
       }
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
       body {
-        margin: 0;
         background: var(--paper);
         color: var(--ink);
         font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-        line-height: 1.75;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
+        font-size: 15px;
+        line-height: 1.7;
+        padding-bottom: 120px;
       }
       .site-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        padding: 14px clamp(18px, 4vw, 56px);
-        background: rgba(251, 252, 253, 0.9);
-        border-bottom: 1px solid rgba(219, 227, 234, 0.8);
+        padding: 12px clamp(16px, 4vw, 40px);
+        background: rgba(251, 252, 253, 0.92);
+        border-bottom: 1px solid var(--line);
       }
-      .brand {
-        font-weight: 700;
-        line-height: 1.2;
+      .brand { font-weight: 700; line-height: 1.25; font-size: 15px; }
+      .brand small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
+      .site-header a { color: var(--muted); font-size: 13px; text-decoration: none; }
+      .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+      h1 { font-size: 21px; margin: 22px 0 2px; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0; }
+      h2 {
+        font-size: 15px; font-weight: 700; margin: 26px 0 10px;
+        display: flex; align-items: center; gap: 8px;
       }
-      .brand small {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 400;
-      }
-      .site-header a.back {
-        color: var(--muted);
-        font-size: 13px;
-        text-decoration: none;
-      }
-      main {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 32px 18px 48px;
-      }
+      h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
       .card {
-        width: 100%;
-        max-width: 520px;
-        background: var(--white);
-        border: 1px solid var(--line);
-        border-radius: 20px;
-        box-shadow: var(--shadow);
-        padding: clamp(28px, 5vw, 40px);
-        text-align: center;
+        background: var(--white); border: 1px solid var(--line);
+        border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow);
       }
-      h1 {
-        font-size: clamp(22px, 5vw, 26px);
-        margin: 0 0 10px;
+      select, input[type="text"], input[type="password"], input[type="date"], input[type="time"] {
+        font: inherit; color: var(--ink); background: var(--white);
+        border: 1px solid var(--line); border-radius: 10px;
+        padding: 8px 10px; max-width: 100%;
       }
-      .lead {
-        color: var(--muted);
-        font-size: 14.5px;
-        margin: 0 0 26px;
+      select:focus, input:focus, button:focus-visible {
+        outline: 2px solid var(--primary); outline-offset: 1px;
       }
-      .cta {
-        display: block;
-        background: var(--primary);
-        color: var(--white);
-        text-decoration: none;
-        font-weight: 700;
-        font-size: 17px;
-        padding: 16px 20px;
-        border-radius: 12px;
-        transition: background 0.2s;
+      button {
+        font: inherit; cursor: pointer; border: none; border-radius: 10px;
+        padding: 9px 14px; font-weight: 600;
       }
-      .cta:hover {
-        background: var(--primary-dark);
+      button:disabled { opacity: 0.55; cursor: default; }
+      .btn-primary { background: var(--primary); color: var(--white); }
+      .btn-ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+      .btn-quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+      .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+      .btn-sm { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+      .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .row.between { justify-content: space-between; }
+      /* カレンダー */
+      .cal { padding: 12px 12px 10px; }
+      .calhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+      .callabel { font-weight: 700; font-size: 15px; }
+      .calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
+      .calwd { font-size: 11px; color: var(--muted); padding: 2px 0; }
+      .calwd.sun { color: var(--danger); }
+      .calwd.sat { color: var(--primary); }
+      .calday {
+        position: relative; display: flex; flex-direction: column; align-items: center;
+        justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px;
+        border-radius: 9px; border: 1px solid transparent; background: transparent;
+        font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink);
       }
-      .steps {
-        margin: 26px 0 0;
-        padding: 18px 20px;
-        background: var(--soft);
-        border-radius: 12px;
-        text-align: left;
-        font-size: 13.5px;
+      button.calday { cursor: pointer; font-size: 13px; }
+      .calday.sun { color: var(--danger); }
+      .calday.sat { color: var(--primary); }
+      .calday.off { opacity: 0.35; }
+      .calday.today { border-color: var(--muted); }
+      .calday.mine:not(.sel) { background: var(--coral-soft); }
+      .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
+      .caldot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+      .caldot.op { background: var(--primary); }
+      .caldot.tk { background: var(--muted); }
+      .calday.sel .caldot { background: var(--white); }
+      .calmark { font-size: 10px; line-height: 1; color: var(--coral); font-weight: 700; }
+      .calday.sel .calmark { color: var(--white); }
+      .calmarks { display: flex; align-items: center; gap: 2px; min-height: 7px; }
+      .callegend {
+        display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
+        font-size: 11.5px; color: var(--muted);
       }
-      .steps p {
-        margin: 0 0 6px;
-        font-weight: 700;
+      .callegend span { display: inline-flex; align-items: center; gap: 4px; }
+      /* 枠チップ */
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip {
+        font-variant-numeric: tabular-nums;
+        border-radius: 10px; padding: 8px 12px; font-size: 14px;
+        border: 1px solid var(--line); background: var(--white);
+        display: inline-flex; align-items: center; gap: 6px;
       }
-      .steps ol {
-        margin: 0;
-        padding-left: 20px;
-        color: var(--muted);
+      button.chip { cursor: pointer; font-weight: 600; }
+      .chip.open { border-color: var(--primary); color: var(--primary); }
+      .chip.mine { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 700; }
+      .chip.taken { background: var(--taken); color: var(--muted); }
+      .chip.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
+      .empty { color: var(--muted); font-size: 13.5px; padding: 8px 2px; }
+      .slotline {
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
       }
-      .note {
-        margin-top: 18px;
-        font-size: 12.5px;
-        color: var(--muted);
+      .slotline:last-child { border-bottom: none; }
+      .slotline .time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 104px; }
+      .slotline .who { flex: 1; min-width: 80px; }
+      .slotline .who .name { font-weight: 700; }
+      .tag { font-size: 11.5px; border-radius: 6px; padding: 1px 7px; font-weight: 700; }
+      .tag.open { background: var(--soft); color: var(--primary); }
+      .tag.done { background: var(--taken); color: var(--muted); }
+      .tag.booked { background: var(--coral-soft); color: var(--coral); }
+      .daygroup { margin-bottom: 14px; }
+      .daylabel { font-weight: 700; font-size: 14px; margin: 0 0 6px 2px; }
+      .daylabel .wd { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .daylabel .wd.sat { color: var(--primary); }
+      .daylabel .wd.sun { color: var(--danger); }
+      .formgrid { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; }
+      .formgrid label { font-size: 13px; color: var(--muted); }
+      .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+      .loglist { font-size: 13px; color: var(--muted); }
+      .loglist div { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+      .loglist div:last-child { border-bottom: none; }
+      table.rec { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+      table.rec th, table.rec td {
+        text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line);
+        font-variant-numeric: tabular-nums;
       }
-      footer {
-        text-align: center;
-        padding: 18px;
-        color: var(--muted);
-        font-size: 12px;
-        border-top: 1px solid var(--line);
+      table.rec th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .studentline { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+      .studentline:last-child { border-bottom: none; }
+      .studentline .nm { flex: 1; font-weight: 600; }
+      .confirmbar {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+        background: var(--white); border-top: 1px solid var(--line);
+        box-shadow: 0 -4px 16px rgba(31, 48, 64, 0.12);
+        padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+      }
+      .confirmbar .inner { max-width: 640px; margin: 0 auto; }
+      .confirmbar .msg { font-weight: 700; margin-bottom: 10px; }
+      #toast {
+        position: fixed; left: 50%; transform: translateX(-50%);
+        bottom: 24px; z-index: 30;
+        background: var(--ink); color: var(--paper);
+        border-radius: 99px; padding: 9px 18px; font-size: 13.5px;
+        opacity: 0; pointer-events: none; transition: opacity 0.25s; max-width: 88vw;
+      }
+      @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+      #toast.show { opacity: 1; }
+      .loading { text-align: center; color: var(--muted); padding: 60px 0; }
+      .spinner {
+        width: 28px; height: 28px; margin: 0 auto 12px;
+        border: 3px solid var(--line); border-top-color: var(--primary);
+        border-radius: 50%; animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+      footer.app {
+        margin-top: 44px; padding: 16px 0 24px;
+        display: flex; justify-content: space-between; align-items: center;
+        color: var(--muted); font-size: 12.5px;
       }
     </style>
   </head>
   <body>
     <header class="site-header">
-      <span class="brand">
-        ステップワイズ個別指導
-        <small>英数教室・個別指導部</small>
-      </span>
-      <a class="back" href="../">トップページへ</a>
+      <span class="brand">ステップワイズ個別指導<small>英数教室・個別指導部</small></span>
+      <a href="../">トップページへ</a>
     </header>
-    <main>
-      <div class="card">
-        <h1>授業の予約</h1>
-        <p class="lead">
-          空いている枠をスマホからえらんで、そのまま予約できます。
-        </p>
-        <a
-          class="cta"
-          href="https://claude.ai/code/artifact/2e1915ec-709c-45bc-9645-a8bfcb73a82a"
-          >予約ページをひらく</a
-        >
-        <div class="steps">
-          <p>予約のながれ</p>
-          <ol>
-            <li>上のボタンから予約ページをひらく</li>
-            <li>自分の名前をえらぶ</li>
-            <li>カレンダーで空いている枠をタップして予約</li>
-          </ol>
-        </div>
-        <p class="note">
-          うまくひらけない場合は、LINEでそのままご連絡ください。
-        </p>
-      </div>
-    </main>
-    <footer>ステップワイズ英数教室・個別指導部</footer>
+    <div class="wrap" id="app">
+      <div class="loading"><div class="spinner"></div>読み込んでいます…</div>
+    </div>
+    <div id="toast" role="status"></div>
+
+    <script>
+      (function () {
+        "use strict";
+        /* デプロイしたApps ScriptウェブアプリのURL(/exec)をここに設定 */
+        var API = "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec";
+
+        var app = document.getElementById("app");
+        var WD = ["日", "月", "火", "水", "木", "金", "土"];
+        var S = null;          // 生徒向け状態 {students, slots, today}
+        var A = null;          // 先生向け状態
+        var pending = null;    // {kind, slotId}
+        var busy = false;
+        var calNow = new Date();
+        var calY = calNow.getFullYear(), calM = calNow.getMonth();
+        var selDate = null, selManual = false;
+
+        function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+        function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+        function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+        function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+        function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+        function esc(s) {
+          return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+          });
+        }
+        function pad(n) { return String(n).length < 2 ? "0" + n : String(n); }
+        function wdOf(ds) { var p = ds.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]).getDay(); }
+        function fmtDate(ds) { var p = ds.split("-"); return (+p[1]) + "/" + (+p[2]); }
+        function fmtDateW(ds) { return fmtDate(ds) + "(" + WD[wdOf(ds)] + ")"; }
+        function endTime(start, min) {
+          var p = start.split(":");
+          var t = (+p[0]) * 60 + (+p[1]) + (+min);
+          return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60);
+        }
+        var toastTimer = null;
+        function toast(msg) {
+          var t = document.getElementById("toast");
+          t.textContent = msg; t.classList.add("show");
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800);
+        }
+
+        /* ---------- API ---------- */
+        function apiGet(params) {
+          var q = Object.keys(params).map(function (k) {
+            return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
+          }).join("&");
+          return fetch(API + "?" + q).then(function (r) { return r.json(); });
+        }
+        function apiPost(body) {
+          return fetch(API, { method: "POST", body: JSON.stringify(body) })
+            .then(function (r) { return r.json(); });
+        }
+
+        function myId() { return lsGet("sw_sid") || ""; }
+
+        function loadState() {
+          return apiGet({ action: "state", sid: myId() }).then(function (res) {
+            if (res.error) throw new Error(res.error);
+            S = res;
+            render();
+          });
+        }
+
+        /* ---------- カレンダー ---------- */
+        function renderCal(info, today) {
+          var label = calY + "年" + (calM + 1) + "月";
+          var minIdx = calNow.getFullYear() * 12 + calNow.getMonth();
+          var curIdx = calY * 12 + calM;
+          var maxIdx = minIdx + 3;
+          var h = '<div class="card cal"><div class="calhead">';
+          h += '<button class="btn-quiet btn-sm" data-action="calprev"' + (curIdx <= minIdx ? " disabled" : "") + ' aria-label="前の月">◀</button>';
+          h += '<span class="callabel">' + label + "</span>";
+          h += '<button class="btn-quiet btn-sm" data-action="calnext"' + (curIdx >= maxIdx ? " disabled" : "") + ' aria-label="次の月">▶</button>';
+          h += '</div><div class="calgrid">';
+          WD.forEach(function (w, i) {
+            h += '<span class="calwd' + (i === 0 ? " sun" : i === 6 ? " sat" : "") + '">' + w + "</span>";
+          });
+          var startWd = new Date(calY, calM, 1).getDay();
+          for (var i = 0; i < startWd; i++) h += "<span></span>";
+          var days = new Date(calY, calM + 1, 0).getDate();
+          for (var d = 1; d <= days; d++) {
+            var ds = calY + "-" + pad(calM + 1) + "-" + pad(d);
+            var it = info[ds];
+            var wd = (startWd + d - 1) % 7;
+            var cls = "calday";
+            if (wd === 0) cls += " sun";
+            if (wd === 6) cls += " sat";
+            if (ds === today) cls += " today";
+            if (ds === selDate) cls += " sel";
+            var past = ds < today;
+            var marks = '<span class="calmarks">';
+            if (it && !past) {
+              if (it.mine) { marks += '<span class="calmark">✓</span>'; cls += " mine"; }
+              if (it.open) marks += '<span class="caldot op"></span>';
+              if (!it.mine && !it.open && it.taken) marks += '<span class="caldot tk"></span>';
+            }
+            marks += "</span>";
+            if (past || !it) {
+              h += '<span class="' + cls + ' off">' + d + marks + "</span>";
+            } else {
+              h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
+            }
+          }
+          h += '</div><div class="callegend">';
+          h += '<span><span class="caldot op"></span> 空きあり</span>';
+          h += '<span><span class="calmark">✓</span> あなたの予約</span>';
+          h += '<span><span class="caldot tk"></span> 満席</span>';
+          h += "</div></div>";
+          return h;
+        }
+
+        /* ---------- 生徒画面 ---------- */
+        function renderStudent() {
+          var me = myId();
+          var meValid = S.students.some(function (s) { return s.id === me; });
+          if (!meValid) me = "";
+          var today = S.today;
+          var slots = S.slots.slice().sort(function (a, b) {
+            return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
+          });
+
+          var html = "";
+          html += '<h1>授業の予約</h1><p class="sub">空いている枠をえらんで予約できます</p>';
+
+          html += '<div class="card" style="margin-top:14px"><div class="row between"><label for="mesel" style="font-weight:700">あなたの名前</label>';
+          html += '<select id="mesel" data-change="pickme"><option value="">えらんでください</option>';
+          S.students.forEach(function (s) {
+            html += '<option value="' + esc(s.id) + '"' + (s.id === me ? " selected" : "") + ">" + esc(s.name) + "</option>";
+          });
+          html += "</select></div></div>";
+
+          var mine = slots.filter(function (s) { return s.st === "mine"; });
+          html += "<h2>あなたの予約</h2>";
+          if (!me) {
+            html += '<div class="empty">名前をえらぶと、あなたの予約が表示されます。</div>';
+          } else if (mine.length === 0) {
+            html += '<div class="empty">予約はまだありません。下のカレンダーからえらんでください。</div>';
+          } else {
+            html += '<div class="card">';
+            mine.forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
+              html += '<span class="who"></span>';
+              html += '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取り消す</button>';
+              html += "</div>";
+            });
+            html += "</div>";
+          }
+
+          html += "<h2>予定表</h2>";
+          var byDate = {}, dates = [];
+          slots.forEach(function (s) {
+            if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); }
+            byDate[s.date].push(s);
+          });
+          function hasVisible(d) {
+            return (byDate[d] || []).some(function (s) { return s.st === "open" || s.st === "mine"; });
+          }
+          if (selDate === null || (!selManual && !hasVisible(selDate))) {
+            var found = null;
+            for (var di = 0; di < dates.length; di++) {
+              if (hasVisible(dates[di])) { found = dates[di]; break; }
+            }
+            selDate = found || today;
+            var sp = selDate.split("-");
+            calY = +sp[0]; calM = +sp[1] - 1;
+          }
+          var info = {};
+          slots.forEach(function (s) {
+            var it = info[s.date] || (info[s.date] = { open: 0, mine: 0, taken: 0 });
+            it[s.st]++;
+          });
+          html += renderCal(info, today);
+
+          if (slots.length === 0) {
+            html += '<div class="empty">いま予約できる枠はありません。</div>';
+          } else {
+            var dwd = wdOf(selDate);
+            html += "<h2>" + fmtDate(selDate) + "(" + WD[dwd] + ")の枠</h2>";
+            var ds2 = byDate[selDate] || [];
+            if (ds2.length === 0) {
+              html += '<div class="empty">この日の枠はありません。●の付いた日をタップしてください。</div>';
+            } else {
+              html += '<div class="chips">';
+              ds2.forEach(function (s) {
+                var label = s.start + "〜" + endTime(s.start, s.min);
+                if (s.st === "mine") {
+                  html += '<span class="chip mine">✓ ' + label + "</span>";
+                } else if (s.st === "taken") {
+                  html += '<span class="chip taken">' + label + " 予約済</span>";
+                } else if (pending && pending.kind === "book" && pending.slotId === s.id) {
+                  html += '<button class="chip sel" data-action="askbook" data-id="' + esc(s.id) + '">' + label + "</button>";
+                } else {
+                  html += '<button class="chip open" data-action="askbook" data-id="' + esc(s.id) + '">' + label + "</button>";
+                }
+              });
+              html += "</div>";
+            }
+          }
+
+          html += '<footer class="app"><span>ページを開くと最新の状態になります</span><button class="btn-quiet btn-sm" data-action="teacher">先生用</button></footer>';
+
+          if (pending) {
+            var s = null;
+            for (var i = 0; i < slots.length; i++) if (slots[i].id === pending.slotId) s = slots[i];
+            if (s) {
+              var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
+              html += '<div class="confirmbar"><div class="inner">';
+              if (pending.kind === "book") {
+                if (me) {
+                  var nm = "";
+                  S.students.forEach(function (x) { if (x.id === me) nm = x.name; });
+                  html += '<div class="msg">' + esc(nm) + "さんで " + when + " を予約しますか?</div>";
+                  html += '<div class="row"><button class="btn-primary" data-action="dobook"' + (busy ? " disabled" : "") + ">" + (busy ? "予約しています…" : "予約する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+                } else {
+                  html += '<div class="msg">先に上の「あなたの名前」をえらんでください</div>';
+                  html += '<div class="row"><button class="btn-quiet" data-action="closebar">閉じる</button></div>';
+                }
+              } else if (pending.kind === "cancel") {
+                html += '<div class="msg">' + when + " の予約を取り消しますか?</div>";
+                html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "取り消しています…" : "取り消す") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+              }
+              html += "</div></div>";
+            }
+          }
+          app.innerHTML = html;
+        }
+
+        /* ---------- 先生画面 ---------- */
+        function renderTeacher() {
+          var today = A.today;
+          var slots = A.slots.slice().sort(function (a, b) {
+            return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
+          });
+          var upcoming = slots.filter(function (s) { return s.date >= today; });
+          var past = slots.filter(function (s) { return s.date < today; }).reverse();
+
+          var html = "";
+          html += '<div class="row between" style="margin-top:22px"><div><h1 style="margin:0">先生モード</h1></div><button class="btn-quiet btn-sm" data-action="exitteacher">生徒画面へ</button></div>';
+
+          html += "<h2>今後の予定</h2>";
+          if (upcoming.length === 0) {
+            html += '<div class="empty">枠がありません。下の「枠を追加」から作成してください。</div>';
+          } else {
+            var byDate = {}, dates = [];
+            upcoming.forEach(function (s) {
+              if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); }
+              byDate[s.date].push(s);
+            });
+            dates.forEach(function (d) {
+              var wd = wdOf(d);
+              html += '<div class="daygroup"><div class="daylabel">' + fmtDate(d) + ' <span class="wd' + (wd === 6 ? " sat" : wd === 0 ? " sun" : "") + '">(' + WD[wd] + ')</span></div><div class="card">';
+              byDate[d].forEach(function (s) {
+                html += '<div class="slotline"><span class="time">' + s.start + "〜" + endTime(s.start, s.min) + "</span>";
+                if (s.status === "booked") {
+                  html += '<span class="who"><span class="name">' + esc(s.studentName) + '</span> <span class="tag booked">予約</span></span>';
+                  html += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(s.id) + '">予約解除</button>';
+                } else {
+                  html += '<span class="who"><span class="tag open">空き</span></span>';
+                  html += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">枠を削除</button>';
+                }
+                html += "</div>";
+              });
+              html += "</div></div>";
+            });
+            html += '<div class="row"><button class="btn-ghost btn-sm" data-action="copyweek">今後7日の予定をコピー(LINE用)</button></div>';
+          }
+
+          html += '<h2>枠を追加</h2><div class="card"><div class="formgrid">';
+          html += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + today + '">';
+          html += '<label for="f-start">開始</label><input type="time" id="f-start" value="17:00" step="300">';
+          html += '<label for="f-min">長さ</label><select id="f-min"><option value="30">30分</option><option value="45">45分</option><option value="60" selected>60分</option><option value="90">90分</option><option value="120">120分</option></select>';
+          html += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
+          html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addslot"' + (busy ? " disabled" : "") + ">" + (busy ? "保存中…" : "枠を追加する") + "</button></div>";
+          html += '<div class="note">予約が入るとあなたのGoogleカレンダーに自動で予定が入り、メールでも通知されます。</div></div>';
+
+          html += "<h2>最近の動き</h2>";
+          if (A.log.length === 0) {
+            html += '<div class="empty">まだ動きはありません。</div>';
+          } else {
+            html += '<div class="card loglist">';
+            A.log.slice(0, 15).forEach(function (l) {
+              html += "<div>" + esc(l.time) + " " + esc(l.message) + "</div>";
+            });
+            html += "</div>";
+          }
+
+          html += "<h2>実施の記録</h2>";
+          var pastBooked = past.filter(function (s) { return s.status === "booked"; });
+          if (pastBooked.length === 0) {
+            html += '<div class="empty">過去の授業はまだありません。</div>';
+          } else {
+            var months = {}, mkeys = [];
+            pastBooked.forEach(function (s) {
+              if (!s.done) return;
+              var mk = s.date.slice(0, 7);
+              if (!months[mk]) { months[mk] = {}; mkeys.push(mk); }
+              months[mk][s.studentName] = (months[mk][s.studentName] || 0) + 1;
+            });
+            if (mkeys.length > 0) {
+              html += '<div class="card"><table class="rec"><tr><th>月</th><th>生徒</th><th>実施</th></tr>';
+              mkeys.sort().reverse().forEach(function (mk) {
+                Object.keys(months[mk]).sort().forEach(function (nm, i) {
+                  html += "<tr><td>" + (i === 0 ? esc((+mk.slice(5, 7)) + "月") : "") + "</td><td>" + esc(nm) + "</td><td>" + months[mk][nm] + "回</td></tr>";
+                });
+              });
+              html += "</table></div>";
+            }
+            html += '<div class="card" style="margin-top:10px">';
+            pastBooked.slice(0, 20).forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "</span>";
+              html += '<span class="who"><span class="name">' + esc(s.studentName) + "</span>" + (s.done ? ' <span class="tag done">実施済</span>' : "") + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
+              html += "</div>";
+            });
+            html += '</div><div class="note">「実施にする」を押すと月ごとの回数に集計されます。</div>';
+          }
+
+          html += '<h2>生徒の管理</h2><div class="card">';
+          var act = A.students.filter(function (s) { return s.active; });
+          if (act.length === 0) {
+            html += '<div class="empty">まだ生徒が登録されていません。</div>';
+          } else {
+            act.forEach(function (s) {
+              html += '<div class="studentline"><span class="nm">' + esc(s.name) + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="hidestudent" data-id="' + esc(s.id) + '">外す</button>';
+              html += "</div>";
+            });
+          }
+          html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
+          html += '<div class="note">「外す」と名前えらびから消えます(記録は残ります)。</div></div>';
+
+          html += '<h2>設定</h2><div class="card"><div class="row">';
+          html += '<label for="f-pin" style="font-size:13px;color:var(--muted)">先生用PIN</label>';
+          html += '<input type="text" id="f-pin" inputmode="numeric" maxlength="8" placeholder="新しいPIN" style="width:110px">';
+          html += '<button class="btn-quiet btn-sm" data-action="setpin"' + (busy ? " disabled" : "") + ">変更する</button>";
+          html += '</div><div class="note">予約データは「予約システム」スプレッドシートにも保存されています。</div></div>';
+
+          html += '<footer class="app"><span></span><span></span></footer>';
+
+          if (pending && (pending.kind === "tdel" || pending.kind === "tcancel")) {
+            var s3 = null;
+            slots.forEach(function (x) { if (x.id === pending.slotId) s3 = x; });
+            if (s3) {
+              var when3 = fmtDateW(s3.date) + " " + s3.start + "〜" + endTime(s3.start, s3.min);
+              html += '<div class="confirmbar"><div class="inner">';
+              if (pending.kind === "tdel") {
+                html += '<div class="msg">' + when3 + " の枠を削除しますか?</div>";
+                html += '<div class="row"><button class="btn-danger" data-action="dotdel"' + (busy ? " disabled" : "") + '>削除する</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+              } else {
+                html += '<div class="msg">' + esc(s3.studentName) + "さんの " + when3 + " の予約を解除しますか?</div>";
+                html += '<div class="row"><button class="btn-danger" data-action="dotcancel"' + (busy ? " disabled" : "") + '>解除する</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+              }
+              html += "</div></div>";
+            }
+          }
+          app.innerHTML = html;
+        }
+
+        function renderPin() {
+          var html = "";
+          html += '<h1 style="margin-top:22px">先生モード</h1>';
+          html += '<div class="card" style="margin-top:14px"><div class="row">';
+          html += '<label for="pinin" style="font-weight:700">PIN</label>';
+          html += '<input type="password" id="pinin" inputmode="numeric" maxlength="8" style="width:110px" autocomplete="off">';
+          html += '<button class="btn-primary btn-sm" data-action="checkpin"' + (busy ? " disabled" : "") + ">" + (busy ? "確認中…" : "入る") + "</button>";
+          html += '<button class="btn-quiet btn-sm" data-action="exitteacher">もどる</button>';
+          html += "</div></div>";
+          app.innerHTML = html;
+          var el = document.getElementById("pinin");
+          if (el) el.focus();
+        }
+
+        function mode() { return ssGet("sw_mode") || "student"; }
+        function render() {
+          var m = mode();
+          if (m === "teacher" && A) renderTeacher();
+          else if (m === "pin" || (m === "teacher" && !A)) renderPin();
+          else renderStudent();
+        }
+
+        /* ---------- 通信つきアクション ---------- */
+        function studentAction(body, okMsg) {
+          if (busy) return;
+          busy = true; render();
+          apiPost(body).then(function (res) {
+            busy = false; pending = null;
+            if (res.error) {
+              toast(res.error);
+              if (res.refresh) return loadState();
+              render();
+              return;
+            }
+            S = res.state;
+            render();
+            if (okMsg) toast(okMsg);
+          }).catch(function () {
+            busy = false;
+            toast("通信に失敗しました。電波の良いところでもう一度お試しください");
+            render();
+          });
+        }
+
+        function adminAction(op, extra, okMsg) {
+          if (busy) return;
+          busy = true; render();
+          var body = { action: "admin", pin: ssGet("sw_pin") || "", op: op };
+          Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+          apiPost(body).then(function (res) {
+            busy = false; pending = null;
+            if (res.error) {
+              toast(res.error);
+              if (res.badPin) { ssDel("sw_pin"); A = null; ssSet("sw_mode", "pin"); }
+              render();
+              return;
+            }
+            A = res.admin;
+            render();
+            if (okMsg) toast(okMsg);
+          }).catch(function () {
+            busy = false;
+            toast("通信に失敗しました。もう一度お試しください");
+            render();
+          });
+        }
+
+        /* ---------- イベント ---------- */
+        app.addEventListener("click", function (ev) {
+          var btn = ev.target.closest("[data-action]");
+          if (!btn || btn.disabled) return;
+          var act = btn.getAttribute("data-action");
+          var id = btn.getAttribute("data-id");
+
+          switch (act) {
+            case "teacher":
+              ssSet("sw_mode", "pin"); render(); break;
+            case "exitteacher":
+              ssSet("sw_mode", "student"); pending = null; render(); break;
+            case "checkpin":
+              var pin = (document.getElementById("pinin") || {}).value || "";
+              ssSet("sw_pin", pin);
+              busy = true; render();
+              apiPost({ action: "admin", pin: pin, op: "state" }).then(function (res) {
+                busy = false;
+                if (res.error) { ssDel("sw_pin"); toast(res.error); render(); return; }
+                A = res.admin;
+                ssSet("sw_mode", "teacher");
+                render();
+              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
+              break;
+            case "closebar":
+              pending = null; render(); break;
+            case "calprev":
+              calM--; if (calM < 0) { calM = 11; calY--; }
+              pending = null; render(); break;
+            case "calnext":
+              calM++; if (calM > 11) { calM = 0; calY++; }
+              pending = null; render(); break;
+            case "calday":
+              selDate = btn.getAttribute("data-date");
+              selManual = true; pending = null; render(); break;
+
+            case "askbook":
+              pending = { kind: "book", slotId: id }; render(); break;
+            case "dobook":
+              studentAction({ action: "book", slotId: pending.slotId, sid: myId() }, "予約しました ✓");
+              break;
+            case "askcancel":
+              pending = { kind: "cancel", slotId: id }; render(); break;
+            case "docancel":
+              studentAction({ action: "cancel", slotId: pending.slotId, sid: myId() }, "予約を取り消しました");
+              break;
+
+            case "addslot":
+              var date = (document.getElementById("f-date") || {}).value;
+              var start = (document.getElementById("f-start") || {}).value;
+              var min = +((document.getElementById("f-min") || {}).value || 60);
+              var rep = +((document.getElementById("f-rep") || {}).value || 1);
+              if (!date || !start) { toast("日付と時間を入れてください"); return; }
+              adminAction("addSlots", { date: date, start: start, min: min, repeat: rep }, "枠を追加しました");
+              break;
+            case "delslot":
+              pending = { kind: "tdel", slotId: id }; render(); break;
+            case "dotdel":
+              adminAction("deleteSlot", { slotId: pending.slotId }, "枠を削除しました");
+              break;
+            case "unbook":
+              pending = { kind: "tcancel", slotId: id }; render(); break;
+            case "dotcancel":
+              adminAction("unbook", { slotId: pending.slotId }, "予約を解除しました");
+              break;
+            case "toggledone":
+              adminAction("toggleDone", { slotId: id });
+              break;
+            case "addstudent":
+              var nm = ((document.getElementById("f-newstudent") || {}).value || "").trim();
+              if (!nm) { toast("名前を入れてください"); return; }
+              adminAction("addStudent", { name: nm }, nm + "さんを追加しました");
+              break;
+            case "hidestudent":
+              adminAction("hideStudent", { studentId: id }, "生徒を外しました");
+              break;
+            case "setpin":
+              var np = ((document.getElementById("f-pin") || {}).value || "").trim();
+              if (np.length < 4) { toast("PINは4けた以上にしてください"); return; }
+              ssSet("sw_pin", np);
+              adminAction("setPin", { newPin: np }, "PINを変更しました");
+              break;
+            case "copyweek":
+              var t0 = A.today;
+              var p0 = t0.split("-");
+              var lim = new Date(+p0[0], +p0[1] - 1, +p0[2] + 7);
+              var limS = lim.getFullYear() + "-" + pad(lim.getMonth() + 1) + "-" + pad(lim.getDate());
+              var wk = A.slots.filter(function (x) {
+                return x.date >= t0 && x.date < limS && x.status === "booked";
+              }).sort(function (a, b) {
+                return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
+              });
+              if (wk.length === 0) { toast("今後7日の予約はありません"); return; }
+              var ls = ["【今週の授業予定】"];
+              wk.forEach(function (x) {
+                ls.push(fmtDateW(x.date) + " " + x.start + "〜" + endTime(x.start, x.min) + " " + x.studentName + "さん");
+              });
+              copyText(ls.join("\n"), "コピーしました。LINEに貼り付けできます");
+              break;
+          }
+        });
+
+        app.addEventListener("change", function (ev) {
+          var el = ev.target.closest("[data-change]");
+          if (!el) return;
+          if (el.getAttribute("data-change") === "pickme") {
+            lsSet("sw_sid", el.value);
+            pending = null;
+            busy = true; render();
+            loadState().catch(function () {
+              toast("通信に失敗しました");
+            }).then(function () { busy = false; render(); });
+          }
+        });
+
+        function copyText(text, okMsg) {
+          function fallback() {
+            var ta = document.createElement("textarea");
+            ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            var ok = false;
+            try { ok = document.execCommand("copy"); } catch (e) {}
+            document.body.removeChild(ta);
+            toast(ok ? okMsg : "コピーできませんでした");
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
+          } else fallback();
+        }
+
+        /* ---------- 起動 ---------- */
+        if (API.indexOf("http") !== 0) {
+          app.innerHTML = '<div class="loading">予約システムは準備中です。<br>もうしばらくお待ちください。</div>';
+        } else {
+          loadState().catch(function (e) {
+            app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
