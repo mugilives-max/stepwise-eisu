@@ -636,11 +636,16 @@
           html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1;min-width:120px"><input type="email" id="f-newemail" placeholder="メール(任意)" style="flex:1;min-width:150px"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
           html += '<div class="note">生徒には「リンクをコピー」した<strong>本人専用のリンク</strong>をLINEで送ってください。生徒はそのリンクからだけ予約できます。リンクが他人に知られた場合は「再発行」してください(古いリンクは無効になります)。メールを登録した生徒には承認と同時にカレンダー招待も届きます。「料金」で30分あたりの単価(標準1,500円=90分4,500円)か月謝を設定できます。</div></div>';
 
-          html += '<h2>設定</h2><div class="card"><div class="row">';
-          html += '<label for="f-pin" style="font-size:13px;color:var(--muted)">先生用PIN</label>';
-          html += '<input type="text" id="f-pin" inputmode="numeric" maxlength="8" placeholder="新しいPIN" style="width:110px">';
-          html += '<button class="btn-quiet btn-sm" data-action="setpin"' + (busy ? " disabled" : "") + ">変更する</button>";
-          html += '</div><div class="note">予約データは「予約システム」スプレッドシートにも保存されています。</div></div>';
+          html += '<h2>設定</h2><div class="card">';
+          if (A.account) {
+            html += '<div class="row between" style="margin-bottom:10px"><span style="font-size:13.5px">アカウント: <strong>' + esc(A.account) + '</strong></span>';
+            html += '<button class="btn-quiet btn-sm" data-action="logout">ログアウト</button></div>';
+            html += '<div class="formgrid">';
+            html += '<label for="f-curpass">現在のパスワード</label><input type="password" id="f-curpass" autocomplete="current-password">';
+            html += '<label for="f-newpass">新しいパスワード</label><input type="password" id="f-newpass" autocomplete="new-password" placeholder="8文字以上">';
+            html += '</div><div class="row" style="margin-top:10px"><button class="btn-quiet btn-sm" data-action="changepass"' + (busy ? " disabled" : "") + ">パスワードを変更</button></div>";
+          }
+          html += '<div class="note">予約データは「ステップワイズ予約システム」スプレッドシートにも保存されています。パスワードを忘れた場合は、そのconfigシートで passHash / passSalt / teacherEmail の行を削除すると初期設定からやり直せます。</div></div>';
 
           html += '<footer class="app"><span></span><span></span></footer>';
 
@@ -663,17 +668,36 @@
           app.innerHTML = html;
         }
 
-        function renderPin() {
+        var authM = null; // 'pin'(未設定=初期設定画面) | 'account'(ログイン画面)
+        function admToken() { return lsGet("sw_admt") || ""; }
+
+        function renderAuth() {
           var html = "";
           html += '<h1 style="margin-top:22px">先生モード</h1>';
-          html += '<div class="card" style="margin-top:14px"><div class="row">';
-          html += '<label for="pinin" style="font-weight:700">PIN</label>';
-          html += '<input type="password" id="pinin" inputmode="numeric" maxlength="8" style="width:110px" autocomplete="off">';
-          html += '<button class="btn-primary btn-sm" data-action="checkpin"' + (busy ? " disabled" : "") + ">" + (busy ? "確認中…" : "入る") + "</button>";
-          html += '<button class="btn-quiet btn-sm" data-action="exitteacher">もどる</button>';
-          html += "</div></div>";
+          if (authM === null) {
+            html += '<div class="loading"><div class="spinner"></div>確認しています…</div>';
+          } else if (authM === "pin") {
+            html += '<p class="sub">はじめに先生アカウントを作成します(次回からメールとパスワードでログイン)</p>';
+            html += '<div class="card" style="margin-top:14px"><div class="formgrid">';
+            html += '<label for="a-pin">現在のPIN</label><input type="password" id="a-pin" inputmode="numeric" maxlength="8" autocomplete="off" style="width:110px">';
+            html += '<label for="a-email">メールアドレス</label><input type="email" id="a-email" autocomplete="username" placeholder="you@example.com">';
+            html += '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="new-password" placeholder="8文字以上">';
+            html += '<label for="a-pass2">もう一度</label><input type="password" id="a-pass2" autocomplete="new-password">';
+            html += '</div><div class="row" style="margin-top:12px">';
+            html += '<button class="btn-primary" data-action="dosetup"' + (busy ? " disabled" : "") + ">" + (busy ? "作成しています…" : "アカウントを作成") + "</button>";
+            html += '<button class="btn-quiet btn-sm" data-action="exitteacher">もどる</button>';
+            html += '</div><div class="note">パスワードを忘れた場合は、スプレッドシート「ステップワイズ予約システム」のconfigシートで passHash / passSalt / teacherEmail の行を削除すると、この初期設定からやり直せます。</div></div>';
+          } else {
+            html += '<div class="card" style="margin-top:14px"><div class="formgrid">';
+            html += '<label for="a-email">メールアドレス</label><input type="email" id="a-email" autocomplete="username">';
+            html += '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="current-password">';
+            html += '</div><div class="row" style="margin-top:12px">';
+            html += '<button class="btn-primary" data-action="dologin"' + (busy ? " disabled" : "") + ">" + (busy ? "ログインしています…" : "ログイン") + "</button>";
+            html += '<button class="btn-quiet btn-sm" data-action="exitteacher">もどる</button>';
+            html += "</div></div>";
+          }
           app.innerHTML = html;
-          var el = document.getElementById("pinin");
+          var el = document.getElementById("a-email");
           if (el) el.focus();
         }
 
@@ -681,8 +705,16 @@
         function render() {
           var m = mode();
           if (m === "teacher" && A) renderTeacher();
-          else if (m === "pin" || (m === "teacher" && !A)) renderPin();
+          else if (m === "auth" || (m === "teacher" && !A)) renderAuth();
           else renderStudent();
+        }
+
+        function afterAuth(res) {
+          if (res.token) lsSet("sw_admt", res.token);
+          A = res.admin;
+          ssSet("sw_mode", "teacher");
+          selDate = null; selManual = false;
+          render();
         }
 
         /* ---------- 通信つきアクション ---------- */
@@ -711,17 +743,21 @@
         function adminAction(op, extra, okMsg) {
           if (busy) return;
           busy = true; render();
-          var body = { action: "admin", pin: ssGet("sw_pin") || "", op: op };
+          var body = { action: "admin", token: admToken(), op: op };
           Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
           apiPost(body).then(function (res) {
             busy = false; pending = null;
             if (res.error) {
               toast(res.error);
-              if (res.badPin) { ssDel("sw_pin"); A = null; ssSet("sw_mode", "pin"); }
+              if (res.badAuth) {
+                try { localStorage.removeItem("sw_admt"); } catch (e) {}
+                A = null; authM = "account"; ssSet("sw_mode", "auth");
+              }
               render();
               return;
             }
-            A = res.admin;
+            if (res.token) lsSet("sw_admt", res.token);
+            if (res.admin) A = res.admin;
             render();
             if (okMsg) toast(okMsg);
           }).catch(function () {
@@ -740,7 +776,23 @@
 
           switch (act) {
             case "teacher":
-              ssSet("sw_mode", "pin"); render(); break;
+              ssSet("sw_mode", "auth"); authM = null; render();
+              apiGet({ action: "authmode", t: Date.now() }).then(function (res) {
+                authM = res.mode === "account" ? "account" : "pin";
+                if (authM === "account" && admToken()) {
+                  // 保存済みトークンで自動ログインを試す
+                  busy = true; render();
+                  apiPost({ action: "admin", token: admToken(), op: "state" }).then(function (r2) {
+                    busy = false;
+                    if (r2.ok) { afterAuth(r2); return; }
+                    try { localStorage.removeItem("sw_admt"); } catch (e) {}
+                    render();
+                  }).catch(function () { busy = false; render(); });
+                } else {
+                  render();
+                }
+              }).catch(function () { authM = "account"; render(); });
+              break;
             case "exitteacher":
               ssSet("sw_mode", "student"); pending = null;
               selDate = null; selManual = false;
@@ -748,17 +800,29 @@
               loadState().catch(function () { toast("通信に失敗しました"); })
                 .then(function () { busy = false; render(); });
               break;
-            case "checkpin":
-              var pin = (document.getElementById("pinin") || {}).value || "";
-              ssSet("sw_pin", pin);
+            case "dosetup":
+              var spin = (document.getElementById("a-pin") || {}).value || "";
+              var sem = ((document.getElementById("a-email") || {}).value || "").trim();
+              var sp1 = (document.getElementById("a-pass") || {}).value || "";
+              var sp2 = (document.getElementById("a-pass2") || {}).value || "";
+              if (sp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
+              if (sp1 !== sp2) { toast("パスワードが一致しません"); return; }
               busy = true; render();
-              apiPost({ action: "admin", pin: pin, op: "state" }).then(function (res) {
+              apiPost({ action: "admin", op: "setupAccount", pin: spin, email: sem, password: sp1 }).then(function (res) {
                 busy = false;
-                if (res.error) { ssDel("sw_pin"); toast(res.error); render(); return; }
-                A = res.admin;
-                ssSet("sw_mode", "teacher");
-                selDate = null; selManual = false;
-                render();
+                if (res.error) { toast(res.error); render(); return; }
+                afterAuth(res);
+                toast("アカウントを作成しました");
+              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
+              break;
+            case "dologin":
+              var lem = ((document.getElementById("a-email") || {}).value || "").trim();
+              var lpw = (document.getElementById("a-pass") || {}).value || "";
+              busy = true; render();
+              apiPost({ action: "admin", op: "login", email: lem, password: lpw }).then(function (res) {
+                busy = false;
+                if (res.error) { toast(res.error); render(); return; }
+                afterAuth(res);
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "closebar":
@@ -874,11 +938,21 @@
             case "hidestudent":
               adminAction("hideStudent", { studentId: id }, "生徒を外しました");
               break;
-            case "setpin":
-              var np = ((document.getElementById("f-pin") || {}).value || "").trim();
-              if (np.length < 4) { toast("PINは4けた以上にしてください"); return; }
-              ssSet("sw_pin", np);
-              adminAction("setPin", { newPin: np }, "PINを変更しました");
+            case "changepass":
+              var cpw = (document.getElementById("f-curpass") || {}).value || "";
+              var npw = (document.getElementById("f-newpass") || {}).value || "";
+              if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
+              adminAction("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました");
+              break;
+            case "logout":
+              apiPost({ action: "admin", token: admToken(), op: "logout" }).catch(function () {});
+              try { localStorage.removeItem("sw_admt"); } catch (e) {}
+              A = null; authM = "account";
+              ssSet("sw_mode", "student");
+              pending = null; selDate = null; selManual = false;
+              busy = true; render();
+              loadState().catch(function () {}).then(function () { busy = false; render(); });
+              toast("ログアウトしました");
               break;
             case "copyweek":
               var t0 = A.today;

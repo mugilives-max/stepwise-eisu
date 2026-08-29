@@ -43,6 +43,7 @@ function doGet(e) {
   try {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
+    if (p.action === 'authmode') return json_({ mode: authMode_() });
     return json_({ ok: true, service: 'stepwise-yoyaku' });
   } catch (err) {
     return json_({ error: String(err) });
@@ -181,8 +182,99 @@ function pinOk_(input) {
   return /^\d+$/.test(input) && String(Number(input)) === stored;
 }
 
+/* ---- 先生アカウント認証 ---- */
+
+function authMode_() {
+  return getConfig_('passHash') ? 'account' : 'pin';
+}
+
+function hashPass_(password, salt) {
+  var raw = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, salt + ':' + password, Utilities.Charset.UTF_8);
+  var out = '';
+  for (var i = 0; i < raw.length; i++) {
+    var v = (raw[i] + 256) % 256;
+    out += ('0' + v.toString(16)).slice(-2);
+  }
+  return out;
+}
+
+function issueToken_() {
+  var t = newCode_() + newCode_();
+  setConfig_('adminToken', t);
+  setConfig_('adminTokenExp', String(Date.now() + 30 * 24 * 3600 * 1000));
+  return t;
+}
+
+function tokenOk_(token) {
+  var t = getConfig_('adminToken');
+  var exp = Number(getConfig_('adminTokenExp') || 0);
+  return !!token && !!t && String(token) === t && Date.now() < exp;
+}
+
+function authOk_(req) {
+  if (authMode_() === 'account') return tokenOk_(req.token);
+  return pinOk_(req.pin);
+}
+
+function adminSetupAccount_(req) {
+  if (authMode_() === 'account') return { error: 'すでにアカウント設定済みです' };
+  if (!pinOk_(req.pin)) return { error: 'PINがちがいます' };
+  var email = normEmail_(req.email);
+  if (!email) return { error: 'メールアドレスの形式がただしくありません' };
+  var pass = String(req.password || '');
+  if (pass.length < 8) return { error: 'パスワードは8文字以上にしてください' };
+  var salt = newCode_() + newCode_();
+  setConfig_('teacherEmail', email);
+  setConfig_('passSalt', salt);
+  setConfig_('passHash', hashPass_(pass, salt));
+  var token = issueToken_();
+  addLog_('先生アカウントを設定しました');
+  return { ok: true, token: token, admin: adminState_() };
+}
+
+function adminLogin_(req) {
+  if (authMode_() !== 'account') return { error: '先に初期設定をしてください', needSetup: true };
+  var lockUntil = Number(getConfig_('lockUntil') || 0);
+  if (Date.now() < lockUntil) {
+    return { error: '試行回数が多すぎます。10分ほどしてからお試しください' };
+  }
+  var email = normEmail_(req.email);
+  var pass = String(req.password || '');
+  var ok = email !== '' && email === getConfig_('teacherEmail') &&
+    hashPass_(pass, getConfig_('passSalt')) === getConfig_('passHash');
+  if (!ok) {
+    var fails = Number(getConfig_('failCount') || 0) + 1;
+    if (fails >= 5) {
+      setConfig_('lockUntil', String(Date.now() + 10 * 60000));
+      setConfig_('failCount', '0');
+    } else {
+      setConfig_('failCount', String(fails));
+    }
+    return { error: 'メールアドレスまたはパスワードがちがいます' };
+  }
+  setConfig_('failCount', '0');
+  var token = issueToken_();
+  return { ok: true, token: token, admin: adminState_() };
+}
+
+function adminChangePass_(req) {
+  if (hashPass_(String(req.current || ''), getConfig_('passSalt')) !== getConfig_('passHash')) {
+    return { error: '現在のパスワードがちがいます' };
+  }
+  var pass = String(req.newPass || '');
+  if (pass.length < 8) return { error: '新しいパスワードは8文字以上にしてください' };
+  var salt = newCode_() + newCode_();
+  setConfig_('passSalt', salt);
+  setConfig_('passHash', hashPass_(pass, salt));
+  var token = issueToken_();
+  return { ok: true, token: token, admin: adminState_() };
+}
+
 function admin_(req) {
-  if (!pinOk_(req.pin)) return { error: 'PINがちがいます', badPin: true };
+  if (req.op === 'login') return adminLogin_(req);
+  if (req.op === 'setupAccount') return adminSetupAccount_(req);
+  if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
   switch (req.op) {
     case 'state':       return { ok: true, admin: adminState_() };
     case 'offer':       return adminOffer_(req);
@@ -194,10 +286,10 @@ function admin_(req) {
     case 'setFee':      return adminSetFee_(req);
     case 'newCode':     return adminNewCode_(req);
     case 'hideStudent': return adminHideStudent_(req);
-    case 'setPin':
-      if (!req.newPin || String(req.newPin).length < 4) return { error: 'PINは4けた以上にしてください' };
-      setConfig_('pin', String(req.newPin));
-      return { ok: true, admin: adminState_() };
+    case 'changePass':  return adminChangePass_(req);
+    case 'logout':
+      setConfig_('adminToken', '');
+      return { ok: true };
     default: return { error: 'unknown op' };
   }
 }
@@ -225,7 +317,10 @@ function adminState_() {
   var log = readRows_('log').slice(-30).reverse().map(function (l) {
     return { time: fmtLogTime_(l.time), message: l.message };
   });
-  return { slots: slots, students: students, log: log, today: todayStr_() };
+  return {
+    slots: slots, students: students, log: log, today: todayStr_(),
+    account: getConfig_('teacherEmail')
+  };
 }
 
 function adminOffer_(req) {
