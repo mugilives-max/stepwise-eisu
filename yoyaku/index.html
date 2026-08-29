@@ -637,7 +637,11 @@
             case "teacher":
               ssSet("sw_mode", "pin"); render(); break;
             case "exitteacher":
-              ssSet("sw_mode", "student"); pending = null; render(); break;
+              ssSet("sw_mode", "student"); pending = null;
+              busy = true; render();
+              loadState().catch(function () { toast("通信に失敗しました"); })
+                .then(function () { busy = false; render(); });
+              break;
             case "checkpin":
               var pin = (document.getElementById("pinin") || {}).value || "";
               ssSet("sw_pin", pin);
