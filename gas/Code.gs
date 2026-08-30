@@ -19,7 +19,7 @@ function setup() {
   var ss = SpreadsheetApp.getActive();
   ensureSheet_(ss, 'config', ['key', 'value']);
   ensureSheet_(ss, 'students', ['id', 'name', 'active', 'email', 'code', 'rate30', 'monthly']);
-  ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl']);
+  ensureSheet_(ss, 'slots', ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl', 'subject']);
   ensureSheet_(ss, 'blocked', ['id', 'studentId', 'date', 'note']);
   ensureSheet_(ss, 'log', ['time', 'message']);
   if (!getConfig_('pin')) setConfig_('pin', '0000');
@@ -60,6 +60,7 @@ function doPost(e) {
     ensureCodeHeader_();
     ensureFeeHeaders_();
     ensureBlockedSheet_();
+    ensureSubjectHeader_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
@@ -99,6 +100,7 @@ function studentState_(code) {
       var st = s.status === 'offered' ? 'offer' : 'mine';
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
+        subject: String(s.subject || ''),
         meet: st === 'mine' ? String(s.meetUrl || '') : ''
       };
     });
@@ -212,6 +214,7 @@ function accept_(slotId, code) {
   notify_('【確定】' + student.name + 'さん',
     student.name + 'さんが案内を承認し、授業が確定しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min) +
+    (r.slot.subject ? '(' + r.slot.subject + ')' : '') +
     (cal.meetUrl ? '\nMeet: ' + cal.meetUrl : ''));
   return { ok: true, state: studentState_(code) };
 }
@@ -387,6 +390,7 @@ function adminState_() {
       status: s.status, studentId: String(s.studentId || ''),
       studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
+      subject: String(s.subject || ''),
       meetUrl: String(s.meetUrl || '')
     };
   });
@@ -444,6 +448,7 @@ function adminOffer_(req) {
       };
     }
   }
+  var subject = String(req.subject || '').slice(0, 20);
   var sh = sheet_('slots');
   var existing = readRows_('slots');
   var added = 0;
@@ -452,26 +457,26 @@ function adminOffer_(req) {
     var d = addDays_(req.date, w * 7);
     var dup = existing.some(function (s) { return s.date === d && s.start === req.start; });
     if (dup) continue;
-    sh.appendRow([uid_(), d, req.start, Number(req.min) || 60, 'offered', student.id, '', '', '']);
+    sh.appendRow([uid_(), d, req.start, Number(req.min) || 60, 'offered', student.id, '', '', '', subject]);
     dates.push(fmtDateJa_(d));
     added++;
   }
   if (added > 0) {
-    addLog_('先生が' + student.name + 'さんに' + added + '件案内(' + fmtDateJa_(req.date) + ' ' + req.start + (repeat > 1 ? ' から毎週' : '') + ')');
-    offerMailToStudent_(student, dates, req.start, Number(req.min) || 60);
+    addLog_('先生が' + student.name + 'さんに' + added + '件案内(' + fmtDateJa_(req.date) + ' ' + req.start + (repeat > 1 ? ' から毎週' : '') + (subject ? '・' + subject : '') + ')');
+    offerMailToStudent_(student, dates, req.start, Number(req.min) || 60, subject);
   }
   return { ok: true, added: added, admin: adminState_() };
 }
 
 // メール登録済みの生徒には案内の連絡を送る(専用リンク付き)
-function offerMailToStudent_(student, dates, start, min) {
+function offerMailToStudent_(student, dates, start, min, subject) {
   var email = normEmail_(student.email);
   if (!email) return;
   try {
     var link = SITE_URL + '?k=' + String(student.code || '');
     MailApp.sendEmail(email,
       '[ステップワイズ] 授業のご案内が届いています',
-      student.name + 'さん\n\n先生から授業のご案内が届いています。\n\n' +
+      student.name + 'さん\n\n先生から授業のご案内が届いています。' + (subject ? '(' + subject + ')' : '') + '\n\n' +
       dates.map(function (d) { return '・' + d + ' ' + start + '〜' + endTime_(start, min); }).join('\n') +
       '\n\n下のあなた専用リンクをひらいて、承認するか、都合が悪いかを選んでください。\n' + link);
   } catch (err) {
@@ -658,7 +663,7 @@ function createCalEvent_(slot, student) {
       opts.sendInvites = true;
     }
     var ev = CalendarApp.getDefaultCalendar()
-      .createEvent(CAL_TITLE_PREFIX + student.name + 'さん 授業', start, end, opts);
+      .createEvent(CAL_TITLE_PREFIX + student.name + 'さん ' + (slot.subject || '授業'), start, end, opts);
     ev.addPopupReminder(60);
     var meetUrl = '';
     try {
@@ -700,6 +705,13 @@ function ensureMeetHeader_() {
   var sh = sheet_('slots');
   if (sh && sh.getRange(1, 9).getValue() !== 'meetUrl') {
     sh.getRange(1, 9).setValue('meetUrl');
+  }
+}
+
+function ensureSubjectHeader_() {
+  var sh = sheet_('slots');
+  if (sh && sh.getRange(1, 10).getValue() !== 'subject') {
+    sh.getRange(1, 10).setValue('subject');
   }
 }
 
@@ -756,8 +768,8 @@ function findSlotRow_(slotId) {
 
 function writeSlotRow_(r) {
   var s = r.slot;
-  sheet_('slots').getRange(r.rowIndex, 1, 1, 9)
-    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '']]);
+  sheet_('slots').getRange(r.rowIndex, 1, 1, 10)
+    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '', s.subject || '']]);
 }
 
 function findStudent_(sid) {

@@ -245,7 +245,7 @@
           var st = s.start.replace(":", "");
           var en = endTime(s.start, s.min).replace(":", "");
           var u = "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-            "&text=" + encodeURIComponent("塾の授業(ステップワイズ)") +
+            "&text=" + encodeURIComponent("塾の授業" + (s.subject ? "(" + s.subject + ")" : "(ステップワイズ)")) +
             "&dates=" + d + "T" + st + "00/" + d + "T" + en + "00&ctz=Asia/Tokyo";
           if (s.meet) u += "&details=" + encodeURIComponent("Meetで参加: " + s.meet);
           return u;
@@ -394,7 +394,7 @@
             html += '<div class="card">';
             offers.forEach(function (s) {
               html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-              html += '<span class="who"></span>';
+              html += '<span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
               html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">承認する</button>';
               html += '<button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">都合が悪い</button>';
               html += "</div>";
@@ -410,7 +410,7 @@
             html += '<div class="card">';
             mine.forEach(function (s) {
               html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-              html += '<span class="who"></span>';
+              html += '<span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
               if (s.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meetに参加</a>';
               html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(s) + '">カレンダーに追加</a>';
               html += '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取り消す</button>';
@@ -474,7 +474,7 @@
             } else {
               html += '<div class="chips">';
               ds2.forEach(function (s) {
-                var label = s.start + "〜" + endTime(s.start, s.min);
+                var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
                 if (s.st === "mine") {
                   html += '<span class="chip mine">✓ ' + label + "</span>";
                 } else if (s.st === "offer") {
@@ -522,13 +522,14 @@
           html += '<div class="row between" style="margin-top:22px"><div><h1 style="margin:0">先生モード</h1></div><button class="btn-quiet btn-sm" data-action="exitteacher">生徒画面へ</button></div>';
 
           function teacherRow(s, withDate) {
+            var subjT = s.subject ? ' <span style="font-weight:400;font-size:12px;color:var(--muted)">' + esc(s.subject) + "</span>" : "";
             var h = '<div class="slotline"><span class="time">' + (withDate ? fmtDateW(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
             if (s.status === "booked") {
-              h += '<span class="who"><span class="name">' + esc(s.studentName) + '</span> <span class="tag booked">確定</span></span>';
+              h += '<span class="who"><span class="name">' + esc(s.studentName) + "</span>" + subjT + ' <span class="tag booked">確定</span></span>';
               if (s.meetUrl) h += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meetUrl) + '">Meet</a>';
               h += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(s.id) + '">予約解除</button>';
             } else if (s.status === "offered") {
-              h += '<span class="who"><span class="name">' + esc(s.studentName) + '</span> <span class="tag offer">承認待ち</span></span>';
+              h += '<span class="who"><span class="name">' + esc(s.studentName) + "</span>" + subjT + ' <span class="tag offer">承認待ち</span></span>';
               h += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">取り下げ</button>';
             } else {
               h += '<span class="who"><span class="tag open">空き</span></span>';
@@ -594,6 +595,11 @@
           html += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>';
           A.students.filter(function (x) { return x.active; }).forEach(function (x) {
             html += '<option value="' + esc(x.id) + '">' + esc(x.name) + "</option>";
+          });
+          html += "</select>";
+          html += '<label for="f-subject">科目</label><select id="f-subject"><option value="">(科目なし)</option>';
+          ["英語", "数学", "英数", "国語", "理科", "社会"].forEach(function (sub) {
+            html += '<option value="' + sub + '">' + sub + "</option>";
           });
           html += "</select>";
           var formDate = (selDate && selDate >= today) ? selDate : today;
@@ -843,7 +849,7 @@
           if (!offerDraft || busy) return;
           busy = true; render();
           var body = { action: "admin", token: admToken(), op: "offer", force: !!force };
-          ["studentId", "date", "start", "min", "repeat"].forEach(function (k2) { body[k2] = offerDraft[k2]; });
+          ["studentId", "date", "start", "min", "repeat", "subject"].forEach(function (k2) { body[k2] = offerDraft[k2]; });
           apiPost(body).then(function (res) {
             busy = false;
             if (res.error) {
@@ -990,7 +996,8 @@
               var rep = +((document.getElementById("f-rep") || {}).value || 1);
               if (!stid) { toast("生徒をえらんでください"); return; }
               if (!date || !start) { toast("日付と時間を入れてください"); return; }
-              offerDraft = { studentId: stid, date: date, start: start, min: min, repeat: rep };
+              var subj = (document.getElementById("f-subject") || {}).value || "";
+              offerDraft = { studentId: stid, date: date, start: start, min: min, repeat: rep, subject: subj };
               sendOffer(false);
               break;
             case "doforce":
@@ -1071,7 +1078,7 @@
               var lines2 = ["【" + (+mk2.slice(5, 7)) + "月分 授業料のご案内】" + stu.name + "さん", ""];
               lessons.forEach(function (x) {
                 totalMin += Number(x.min) || 0;
-                lines2.push("・" + fmtDateW(x.date) + " " + x.start + "〜" + endTime(x.start, x.min) + "(" + x.min + "分)");
+                lines2.push("・" + fmtDateW(x.date) + " " + x.start + "〜" + endTime(x.start, x.min) + "(" + x.min + "分" + (x.subject ? "・" + x.subject : "") + ")");
               });
               lines2.push("");
               if (stu.monthly > 0) {
@@ -1152,6 +1159,21 @@
           }
         });
 
+
+        // 案内フォームで生徒を選ぶと、その生徒の前回の科目を自動セット
+        app.addEventListener("change", function (ev) {
+          if (!ev.target || ev.target.id !== "f-student") return;
+          var sel = document.getElementById("f-subject");
+          if (!sel || !A) return;
+          var sid5 = ev.target.value;
+          var latest = "", latestDate = "";
+          (A.slots || []).forEach(function (s) {
+            if (s.studentId === sid5 && s.subject && s.date >= latestDate) {
+              latestDate = s.date; latest = s.subject;
+            }
+          });
+          sel.value = latest || "";
+        });
 
         function copyText(text, okMsg) {
           function fallback() {
