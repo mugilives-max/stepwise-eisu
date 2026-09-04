@@ -211,7 +211,7 @@ function accept_(slotId, code) {
   r.slot.meetUrl = cal.meetUrl;
   writeSlotRow_(r);
   addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を承認');
-  notify_('【確定】' + student.name + 'さん',
+  if (!isTestStudent_(student)) notify_('【確定】' + student.name + 'さん',
     student.name + 'さんが案内を承認し、授業が確定しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min) +
     (r.slot.subject ? '(' + r.slot.subject + ')' : '') +
@@ -230,7 +230,7 @@ function decline_(slotId, code) {
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   sheet_('slots').deleteRow(r.rowIndex);
   addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を「都合が悪い」');
-  notify_('【都合が悪い】' + student.name + 'さん',
+  if (!isTestStudent_(student)) notify_('【都合が悪い】' + student.name + 'さん',
     student.name + 'さんが案内「' + when + '」を都合が悪いと回答しました。\n別の時間を案内してください。');
   return { ok: true, state: studentState_(code) };
 }
@@ -252,7 +252,7 @@ function cancel_(slotId, code) {
   r.slot.meetUrl = '';
   writeSlotRow_(r);
   addLog_(name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を取消');
-  notify_('【取消】' + name + 'さん',
+  if (!isTestStudent_(student)) notify_('【取消】' + name + 'さん',
     name + 'さんが予約を取り消しました。\n' +
     fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min));
   return { ok: true, state: studentState_(code) };
@@ -470,6 +470,7 @@ function adminOffer_(req) {
 
 // メール登録済みの生徒には案内の連絡を送る(専用リンク付き)
 function offerMailToStudent_(student, dates, start, min, subject) {
+  if (isTestStudent_(student)) return;
   var email = normEmail_(student.email);
   if (!email) return;
   try {
@@ -650,7 +651,13 @@ function adminHideStudent_(req) {
 
 /* ================= カレンダー・通知 ================= */
 
+// 名前が【テスト】で始まる生徒はテスト用: カレンダー・Meet・メールの実動作を行わない
+function isTestStudent_(student) {
+  return String((student && student.name) || '').indexOf('【テスト】') === 0;
+}
+
 function createCalEvent_(slot, student) {
+  if (isTestStudent_(student)) return { eventId: '', meetUrl: '' };
   if (getConfig_('calendarSync') !== 'on') return { eventId: '', meetUrl: '' };
   try {
     var start = dateTimeOf_(slot.date, slot.start);

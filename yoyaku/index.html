@@ -732,7 +732,7 @@
             });
           }
           html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1;min-width:120px"><input type="email" id="f-newemail" placeholder="メール(任意)" style="flex:1;min-width:150px"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
-          html += '<div class="note">生徒には「リンクをコピー」した<strong>本人専用のリンク</strong>をLINEで送ってください。生徒はそのリンクからだけ予約できます。リンクが他人に知られた場合は「再発行」してください(古いリンクは無効になります)。メールを登録した生徒には承認と同時にカレンダー招待も届きます。「料金」で30分あたりの単価(標準1,500円=90分4,500円)か月謝を設定できます。</div></div>';
+          html += '<div class="note">「リンクをコピー」は<strong>今のリンクをコピーするだけ</strong>(何度押しても同じリンク。無効化はされません)。リンクが他人に知られたときだけ「再発行」を使ってください(確認のうえ、古いリンクを無効化して新しいリンクをコピーします)。メールを登録した生徒には承認と同時にカレンダー招待も届きます。「料金」で30分あたりの単価(標準1,500円=90分4,500円)か月謝を設定できます。名前を<strong>【テスト】</strong>で始めるとテスト用の生徒になり、カレンダー登録や通知メールが行われません。</div></div>';
 
           html += '<h2>設定</h2><div class="card">';
           if (A.account) {
@@ -747,6 +747,14 @@
 
           html += '<footer class="app"><span></span><span></span></footer>';
 
+          if (pending && pending.kind === "relink") {
+            var rlName = "";
+            A.students.forEach(function (x) { if (x.id === pending.sid) rlName = x.name; });
+            html += '<div class="confirmbar"><div class="inner">';
+            html += '<div class="msg">' + esc(rlName) + "さんの専用リンクを再発行しますか?いま配っているリンクは使えなくなります。</div>";
+            html += '<div class="row"><button class="btn-danger" data-action="dorelink"' + (busy ? " disabled" : "") + '>再発行して新リンクをコピー</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+            html += "</div></div>";
+          }
           if (pending && pending.kind === "ngconfirm" && offerDraft) {
             html += '<div class="confirmbar"><div class="inner">';
             html += '<div class="msg">' + esc(offerDraft.msg || "") + "</div>";
@@ -1118,7 +1126,30 @@
                 st4.name + "さんの専用リンクをコピーしました。LINEで送ってください");
               break;
             case "newlink":
-              adminAction("newCode", { studentId: id }, "リンクを再発行しました(古いリンクは使えなくなります)");
+              pending = { kind: "relink", sid: id }; render(); break;
+            case "dorelink":
+              var rsid = pending.sid;
+              busy = true; render();
+              apiPost({ action: "admin", token: admToken(), op: "newCode", studentId: rsid }).then(function (res) {
+                busy = false; pending = null;
+                if (res.error) {
+                  toast(res.error);
+                  if (res.badAuth) {
+                    try { localStorage.removeItem("sw_admt"); } catch (e) {}
+                    A = null; authM = "account"; ssSet("sw_mode", "auth");
+                  }
+                  render();
+                  return;
+                }
+                A = res.admin;
+                render();
+                var st8 = null;
+                A.students.forEach(function (x) { if (x.id === rsid) st8 = x; });
+                if (st8 && st8.code) {
+                  copyText(location.origin + location.pathname + "?k=" + st8.code,
+                    "再発行し、新しいリンクをコピーしました(前のリンクは無効です)");
+                }
+              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "hidestudent":
               adminAction("hideStudent", { studentId: id }, "生徒を外しました");
