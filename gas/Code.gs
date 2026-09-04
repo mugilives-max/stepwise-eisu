@@ -375,6 +375,14 @@ function admin_(req) {
     case 'delBlock':    return adminDelBlock_(req);
     case 'hideStudent': return adminHideStudent_(req);
     case 'changePass':  return adminChangePass_(req);
+    case 'kanriDashboard':   return { ok: true, data: kanriDashboard_() };
+    case 'kanriStudent':     return kanriStudentOp_(req);
+    case 'kanriSaveProfile': return kanriSaveProfile_(req);
+    case 'kanriAddGrade':    return kanriAddGrade_(req);
+    case 'kanriAddPayment':  return kanriAddPayment_(req);
+    case 'kanriSetPaid':     return kanriSetPaid_(req);
+    case 'kanriAddMeeting':  return kanriAddMeeting_(req);
+    case 'kanriDeleteRow':   return kanriDeleteRow_(req);
     case 'logout':
       setConfig_('adminToken', '');
       return { ok: true };
@@ -824,6 +832,262 @@ function setConfig_(key, value) {
 
 function addLog_(message) {
   sheet_('log').appendRow([new Date(), message]);
+}
+
+/* ================= 管理画面(塾管理台帳) ================= */
+
+var LEDGER_ID = '1dH5_iT5xHY07OZNYO91XcZJEYd0cGWduW87U6c-zo-U';
+var LEDGER_COLS = {
+  '生徒台帳': ['生徒ID', '氏名', 'ふりがな', '学年', '学校', '保護者名', '保護者連絡先', 'メール', '入塾日', '状態', '科目', '単価(30分)', '月謝', '備考'],
+  '成績推移': ['日付', '生徒ID', '氏名', 'テスト名', '科目', '点数', '満点', '偏差値', '順位', '備考'],
+  '入金管理': ['年月', '生徒ID', '氏名', '請求額', '請求日', '入金日', '入金方法', '状態', '備考'],
+  '面談記録': ['日付', '生徒ID', '氏名', '相手', '方法', '内容', '次のアクション']
+};
+
+function ledger_() { return SpreadsheetApp.openById(LEDGER_ID); }
+
+function ledgerSheet_(name) {
+  var ss = ledger_();
+  var sh = ss.getSheetByName(name);
+  if (!sh) { sh = ss.insertSheet(name); sh.appendRow(LEDGER_COLS[name]); }
+  return sh;
+}
+
+// 台帳シートを {列名: 値} の配列で読む(_row にシート上の行番号)。日付セルは yyyy-MM-dd に正規化
+function ledgerRows_(name) {
+  var sh = ledger_().getSheetByName(name);
+  if (!sh) return [];
+  var v = sh.getDataRange().getValues();
+  if (v.length < 2) return [];
+  var h = v[0];
+  var out = [];
+  for (var i = 1; i < v.length; i++) {
+    var o = { _row: i + 1 };
+    var empty = true;
+    for (var j = 0; j < h.length; j++) {
+      var val = v[i][j];
+      if (val instanceof Date) val = Utilities.formatDate(val, TZ, 'yyyy-MM-dd');
+      if (val !== '' && val !== null) empty = false;
+      o[String(h[j])] = val;
+    }
+    if (!empty) out.push(o);
+  }
+  return out;
+}
+
+function ledgerAppend_(name, obj) {
+  var sh = ledgerSheet_(name);
+  var cols = LEDGER_COLS[name];
+  var row = cols.map(function (c) { return obj[c] === undefined || obj[c] === null ? '' : obj[c]; });
+  sh.appendRow(row);
+  var r = sh.getLastRow();
+  // 数字だけの値(生徒ID・年月・電話番号)が数値化されないよう文字列書式にする
+  cols.forEach(function (c, idx) {
+    if (c === '生徒ID' || c === '年月' || c === '保護者連絡先') sh.getRange(r, idx + 1).setNumberFormat('@');
+  });
+  return r;
+}
+
+function systemStudent_(studentId) {
+  var rows = readRows_('students');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(studentId)) return rows[i];
+  }
+  return null;
+}
+
+function studentFee_(studentId, minutes) {
+  var st = systemStudent_(studentId);
+  var monthly = st ? Number(st.monthly || 0) : 0;
+  var rate30 = st ? Number(st.rate30 || 0) : 0;
+  if (monthly > 0) return { amount: monthly, mode: 'monthly' };
+  return { amount: Math.round(minutes / 30 * rate30), mode: 'time', rate30: rate30 };
+}
+
+function slotSort_(a, b) {
+  return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
+}
+
+function kanriDashboard_() {
+  var today = todayStr_();
+  var weekEnd = addDays_(today, 7);
+  var month = today.slice(0, 7);
+  var slots = readRows_('slots');
+  var students = readRows_('students').filter(function (s) {
+    return !(String(s.active) === 'false' || s.active === false);
+  });
+  var nameOf = {};
+  students.forEach(function (s) { nameOf[String(s.id)] = s.name; });
+  var slim = function (s) {
+    return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''),
+      studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId),
+      meetUrl: String(s.meetUrl || '') };
+  };
+  var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
+  var lessonsWeek = slots.filter(function (s) { return s.date > today && s.date < weekEnd && s.status === 'booked'; }).map(slim).sort(slotSort_);
+  var pending = slots.filter(function (s) { return s.date >= today && s.status === 'offered'; }).map(slim).sort(slotSort_);
+  var payments = ledgerRows_('入金管理');
+  var unpaid = payments.filter(function (p) { return String(p['状態'] || '') !== '入金済' && Number(p['請求額'] || 0) > 0; })
+    .map(function (p) { return { row: p._row, ym: String(p['年月']), studentId: String(p['生徒ID']), name: p['氏名'], amount: Number(p['請求額']), billDate: p['請求日'] || '' }; });
+  var meetings = ledgerRows_('面談記録').sort(function (a, b) { return a['日付'] < b['日付'] ? 1 : -1; }).slice(0, 5)
+    .map(function (m) { return { date: m['日付'], studentId: String(m['生徒ID']), name: m['氏名'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; });
+  var profiles = {};
+  ledgerRows_('生徒台帳').forEach(function (p) { profiles[String(p['生徒ID'])] = p; });
+  var stuCards = students.map(function (s) {
+    var id = String(s.id);
+    var mine = slots.filter(function (x) { return String(x.studentId) === id; });
+    var doneMonth = mine.filter(function (x) { return x.status === 'booked' && x.date.slice(0, 7) === month && (String(x.done) === 'true' || x.done === true); });
+    var minutes = 0; doneMonth.forEach(function (x) { minutes += Number(x.min) || 0; });
+    var next = mine.filter(function (x) { return x.status === 'booked' && x.date >= today; }).sort(slotSort_)[0];
+    var pr = profiles[id] || {};
+    return { id: id, name: s.name, grade: pr['学年'] || '', school: pr['学校'] || '', status: pr['状態'] || '在籍',
+      doneThisMonth: doneMonth.length, minutesThisMonth: minutes, feeThisMonth: studentFee_(id, minutes).amount,
+      next: next ? { date: next.date, start: next.start } : null,
+      unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
+  });
+  return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
+    unpaid: unpaid, meetings: meetings, students: stuCards };
+}
+
+function kanriStudentOp_(req) {
+  var d = kanriStudent_(req.studentId);
+  if (d.error) return d;
+  return { ok: true, data: d };
+}
+
+function kanriStudent_(studentId) {
+  var id = String(studentId || '');
+  var sys = systemStudent_(id);
+  if (!sys) return { error: '生徒が見つかりません' };
+  var today = todayStr_();
+  var month = today.slice(0, 7);
+  var profile = null;
+  ledgerRows_('生徒台帳').forEach(function (p) { if (String(p['生徒ID']) === id) profile = p; });
+  if (profile) delete profile._row;
+  var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
+    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), meetUrl: String(s.meetUrl || '') }; })
+    .sort(function (a, b) { return -slotSort_(a, b); });
+  var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
+  var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });
+  var grades = ledgerRows_('成績推移').filter(function (g) { return String(g['生徒ID']) === id; })
+    .map(function (g) { return { row: g._row, date: g['日付'], test: g['テスト名'], subject: g['科目'], score: Number(g['点数']),
+      max: Number(g['満点'] || 0) || null, dev: g['偏差値'] === '' ? null : Number(g['偏差値']), rank: g['順位'], note: g['備考'] }; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  var payments = ledgerRows_('入金管理').filter(function (p) { return String(p['生徒ID']) === id; })
+    .map(function (p) { return { row: p._row, ym: String(p['年月']), amount: Number(p['請求額'] || 0), billDate: p['請求日'] || '',
+      paidDate: p['入金日'] || '', method: p['入金方法'] || '', status: p['状態'] || '', note: p['備考'] || '' }; })
+    .sort(function (a, b) { return a.ym < b.ym ? 1 : -1; });
+  var meetings = ledgerRows_('面談記録').filter(function (m) { return String(m['生徒ID']) === id; })
+    .map(function (m) { return { row: m._row, date: m['日付'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; })
+    .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  var fee = studentFee_(id, minutes);
+  return {
+    id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
+    code: String(sys.code || ''), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
+    month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
+      billed: payments.some(function (p) { return p.ym === month; }) }
+  };
+}
+
+function kanriSaveProfile_(req) {
+  var id = String(req.studentId || '');
+  var sys = systemStudent_(id);
+  if (!sys) return { error: '生徒が見つかりません' };
+  var pr = req.profile || {};
+  var cols = LEDGER_COLS['生徒台帳'];
+  var sh = ledgerSheet_('生徒台帳');
+  var target = null;
+  ledgerRows_('生徒台帳').forEach(function (r) { if (String(r['生徒ID']) === id) target = r; });
+  var obj = {};
+  cols.forEach(function (c) { obj[c] = (target && target[c] !== undefined) ? target[c] : ''; });
+  ['ふりがな', '学年', '学校', '保護者名', '保護者連絡先', 'メール', '入塾日', '状態', '科目', '備考'].forEach(function (c) {
+    if (pr[c] !== undefined) obj[c] = String(pr[c]).slice(0, 200);
+  });
+  obj['生徒ID'] = id;
+  obj['氏名'] = sys.name;
+  obj['単価(30分)'] = Number(sys.rate30 || 0) || '';
+  obj['月謝'] = Number(sys.monthly || 0) || '';
+  if (target) {
+    var rng = sh.getRange(target._row, 1, 1, cols.length);
+    rng.setValues([cols.map(function (c) { return obj[c]; })]);
+    sh.getRange(target._row, 1).setNumberFormat('@');
+    sh.getRange(target._row, 7).setNumberFormat('@');
+  } else {
+    ledgerAppend_('生徒台帳', obj);
+  }
+  return kanriStudentOp_({ studentId: id });
+}
+
+function kanriAddGrade_(req) {
+  var id = String(req.studentId || '');
+  var sys = systemStudent_(id);
+  if (!sys) return { error: '生徒が見つかりません' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(req.date || ''))) return { error: '日付をえらんでください' };
+  if (req.score === '' || req.score === undefined || isNaN(Number(req.score))) return { error: '点数を入れてください' };
+  ledgerAppend_('成績推移', { '日付': req.date, '生徒ID': id, '氏名': sys.name, 'テスト名': String(req.test || '').slice(0, 50),
+    '科目': String(req.subject || ''), '点数': Number(req.score), '満点': req.max ? Number(req.max) : '',
+    '偏差値': req.dev ? Number(req.dev) : '', '順位': String(req.rank || ''), '備考': String(req.note || '').slice(0, 200) });
+  return kanriStudentOp_({ studentId: id });
+}
+
+function kanriAddPayment_(req) {
+  var id = String(req.studentId || '');
+  var sys = systemStudent_(id);
+  if (!sys) return { error: '生徒が見つかりません' };
+  if (!/^\d{4}-\d{2}$/.test(String(req.ym || ''))) return { error: '年月の形式は YYYY-MM です' };
+  var amount = Number(req.amount);
+  if (isNaN(amount) || amount <= 0) return { error: '請求額を入れてください' };
+  var paid = String(req.paidDate || '');
+  ledgerAppend_('入金管理', { '年月': String(req.ym), '生徒ID': id, '氏名': sys.name, '請求額': amount,
+    '請求日': String(req.billDate || todayStr_()), '入金日': paid, '入金方法': String(req.method || ''),
+    '状態': paid ? '入金済' : '未入金', '備考': String(req.note || '').slice(0, 200) });
+  return kanriStudentOp_({ studentId: id });
+}
+
+function kanriSetPaid_(req) {
+  var sh = ledgerSheet_('入金管理');
+  var row = Number(req.row);
+  var cols = LEDGER_COLS['入金管理'];
+  var vals = sh.getRange(row, 1, 1, cols.length).getValues()[0];
+  if (String(vals[1]) !== String(req.studentId)) return { error: '行が一致しません。画面を更新してください' };
+  var paid = req.unpaid ? '' : String(req.paidDate || todayStr_());
+  sh.getRange(row, 6, 1, 3).setValues([[paid, req.unpaid ? '' : String(req.method || ''), paid ? '入金済' : '未入金']]);
+  return kanriStudentOp_({ studentId: String(req.studentId) });
+}
+
+function kanriAddMeeting_(req) {
+  var id = String(req.studentId || '');
+  var sys = systemStudent_(id);
+  if (!sys) return { error: '生徒が見つかりません' };
+  if (!String(req.content || '').trim()) return { error: '内容を入れてください' };
+  ledgerAppend_('面談記録', { '日付': String(req.date || todayStr_()), '生徒ID': id, '氏名': sys.name, '相手': String(req.who || ''),
+    '方法': String(req.method || ''), '内容': String(req.content || '').slice(0, 2000), '次のアクション': String(req.next || '').slice(0, 500) });
+  return kanriStudentOp_({ studentId: id });
+}
+
+function kanriDeleteRow_(req) {
+  var name = String(req.sheet || '');
+  if (!LEDGER_COLS[name] || name === '生徒台帳') return { error: 'このシートの行は削除できません' };
+  var sh = ledgerSheet_(name);
+  var row = Number(req.row);
+  var cols = LEDGER_COLS[name];
+  var vals = sh.getRange(row, 1, 1, cols.length).getValues()[0];
+  var idCol = cols.indexOf('生徒ID');
+  if (String(vals[idCol]) !== String(req.studentId)) return { error: '行が一致しません。画面を更新してください' };
+  sh.deleteRow(row);
+  return kanriStudentOp_({ studentId: String(req.studentId) });
+}
+
+// エディタから実行する動作確認用(Webからは呼べない)
+function kanriSelfTest() {
+  var d = kanriDashboard_();
+  Logger.log('dashboard students=' + d.students.length + ' today=' + d.lessonsToday.length + ' unpaid=' + d.unpaid.length);
+  if (d.students.length) {
+    var s = kanriStudent_(d.students[0].id);
+    Logger.log('student ' + s.name + ' lessons=' + s.lessons.length + ' grades=' + s.grades.length + ' fee=' + s.thisMonth.fee);
+  }
 }
 
 /* ================= 日付ヘルパー ================= */

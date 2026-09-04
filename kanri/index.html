@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#0717a8" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <title>ステップワイズ 管理</title>
+    <style>
+      :root {
+        --ink: #19212a; --muted: #64717f; --line: #dbe3ea; --paper: #fbfcfd; --soft: #eef4fb;
+        --primary: #0717a8; --primary-dark: #07106f; --coral: #d86f8d; --coral-soft: #fbeef2;
+        --amber: #a86f12; --amber-soft: #fdf3e3; --green: #2e8b57; --green-soft: #e6f4ec;
+        --danger: #c0392b; --danger-soft: #fbe9e7; --taken: #eef1f4; --white: #fff;
+        --shadow: 0 10px 30px rgba(31,48,64,.08);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body { background: var(--paper); color: var(--ink); font-family: "Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif; font-size: 15px; line-height: 1.65; padding-bottom: 60px; }
+      a { color: var(--primary); }
+      .top { position: sticky; top: 0; z-index: 10; background: rgba(251,252,253,.95); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
+      .top .in { max-width: 860px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      .brand { font-weight: 700; font-size: 15px; line-height: 1.2; }
+      .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+      nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+      nav a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 6px 10px; border-radius: 8px; }
+      nav a.on { background: var(--soft); color: var(--primary); font-weight: 700; }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+      h1 { font-size: 21px; margin: 22px 0 4px; }
+      h2 { font-size: 14.5px; font-weight: 700; margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; }
+      h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+      h2 .cnt { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0; }
+      .card { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+      .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+      .grid2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+      .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .row.between { justify-content: space-between; }
+      .line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+      .line:last-child { border-bottom: none; }
+      .line .t { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 112px; }
+      .line .w { flex: 1; min-width: 100px; }
+      .line .w .nm { font-weight: 700; }
+      .mono { font-variant-numeric: tabular-nums; }
+      .muted { color: var(--muted); }
+      .small { font-size: 12.5px; }
+      .tag { font-size: 11.5px; border-radius: 6px; padding: 1px 7px; font-weight: 700; white-space: nowrap; }
+      .tag.blue { background: var(--soft); color: var(--primary); }
+      .tag.amber { background: var(--amber-soft); color: var(--amber); }
+      .tag.coral { background: var(--coral-soft); color: var(--coral); }
+      .tag.green { background: var(--green-soft); color: var(--green); }
+      .tag.gray { background: var(--taken); color: var(--muted); }
+      .tag.red { background: var(--danger-soft); color: var(--danger); }
+      button { font: inherit; cursor: pointer; border: none; border-radius: 10px; padding: 8px 13px; font-weight: 600; }
+      button:disabled { opacity: .55; cursor: default; }
+      .btn-primary { background: var(--primary); color: #fff; }
+      .btn-ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+      .btn-quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+      .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+      .btn-sm { padding: 4px 10px; font-size: 12.5px; border-radius: 8px; }
+      a.btn-sm { text-decoration: none; display: inline-block; }
+      input, select, textarea { font: inherit; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; max-width: 100%; }
+      textarea { width: 100%; min-height: 70px; resize: vertical; }
+      input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+      .form { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; }
+      .form label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+      .form .full { grid-column: 1 / -1; }
+      .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+      .kv dt { color: var(--muted); font-size: 12.5px; margin: 0; }
+      .kv dd { margin: 0; }
+      .scard { display: block; text-decoration: none; color: inherit; }
+      .scard:hover { border-color: var(--primary); }
+      .scard .nm { font-weight: 700; font-size: 16px; }
+      .stat { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+      .stat small { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+      .empty { color: var(--muted); font-size: 13.5px; padding: 6px 2px; }
+      .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+      .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+      .head h1 { margin: 0; }
+      .chart { width: 100%; height: auto; display: block; }
+      .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+      .legend span { display: inline-flex; align-items: center; gap: 5px; }
+      .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+      .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+      .seg button { border-radius: 0; background: transparent; color: var(--muted); padding: 4px 10px; font-size: 12.5px; }
+      .seg button.on { background: var(--soft); color: var(--primary); }
+      table.tb { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+      table.tb th, table.tb td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
+      table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .tbwrap { overflow-x: auto; }
+      #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px; z-index: 30; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 9px 18px; font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 90vw; }
+      #toast.show { opacity: 1; }
+      .loading { text-align: center; color: var(--muted); padding: 60px 0; }
+      .spinner { width: 28px; height: 28px; margin: 0 auto 12px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } #toast { transition: none; } }
+      details.add { margin-top: 10px; }
+      details.add summary { cursor: pointer; color: var(--primary); font-weight: 600; font-size: 13.5px; list-style: none; }
+      details.add summary::before { content: "＋ "; }
+      details.add[open] summary::before { content: "－ "; }
+      details.add .card { margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="top"><div class="in">
+      <span class="brand">ステップワイズ 管理<small>英数教室・個別指導部</small></span>
+      <nav id="nav"></nav>
+    </div></div>
+    <div class="wrap" id="app"><div class="loading"><div class="spinner"></div>読み込んでいます…</div></div>
+    <div id="toast" role="status"></div>
+
+    <script>
+      (function () {
+        "use strict";
+        var API = "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec";
+        var YOYAKU = "../yoyaku/";
+        var app = document.getElementById("app");
+        var nav = document.getElementById("nav");
+        var WD = ["日","月","火","水","木","金","土"];
+        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "社会": "#b8466f" };
+        var FALLBACK_COLORS = ["#6b7280", "#4b5563"];
+        var D = null;      // ダッシュボード
+        var cur = null;    // 表示中の生徒カルテ
+        var busy = false;
+        var authM = null;  // null=未確認 / 'login' / 'ok'
+        var gradeMode = "score";
+        var editProfile = false;
+
+        function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+        function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+        function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+        function token() { return lsGet("sw_admt") || ""; }
+        function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+        function pad(n) { return String(n).length < 2 ? "0" + n : String(n); }
+        function wdOf(ds) { var p = ds.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]).getDay(); }
+        function fmtD(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return (+p[1]) + "/" + (+p[2]) + "(" + WD[wdOf(ds)] + ")"; }
+        function fmtDY(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return p[0] + "/" + (+p[1]) + "/" + (+p[2]); }
+        function endTime(start, min) { var p = start.split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
+        function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
+        function today() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+        function thisYm() { return today().slice(0, 7); }
+        var toastTimer = null;
+        function toast(m) { var t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800); }
+        function val(id) { var el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
+
+        function post(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
+        function admin(op, extra) {
+          var body = { action: "admin", token: token(), op: op };
+          Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+          return post(body).then(function (res) {
+            if (res && res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); throw new Error("ログインし直してください"); }
+            if (res && res.error) throw new Error(res.error);
+            return res;
+          });
+        }
+
+        /* ---------- ルーティング ---------- */
+        function route() {
+          var h = location.hash || "#home";
+          if (h.indexOf("#s=") === 0) return { page: "student", id: decodeURIComponent(h.slice(3)) };
+          if (h === "#students") return { page: "students" };
+          return { page: "home" };
+        }
+        window.addEventListener("hashchange", function () { editProfile = false; load(); });
+
+        function renderNav() {
+          var r = route();
+          if (authM !== "ok") { nav.innerHTML = ""; return; }
+          nav.innerHTML =
+            '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
+            '<a href="#students" class="' + (r.page !== "home" ? "on" : "") + '">生徒</a>' +
+            '<a href="' + YOYAKU + '" target="_blank" rel="noopener">予約ページ ↗</a>' +
+            '<a href="#" data-action="logout">ログアウト</a>';
+        }
+
+        /* ---------- 読み込み ---------- */
+        function load() {
+          if (!token()) { authM = "login"; render(); return; }
+          var r = route();
+          busy = true; renderLoading();
+          var p = r.page === "student"
+            ? admin("kanriStudent", { studentId: r.id }).then(function (res) { cur = res.data; })
+            : admin("kanriDashboard").then(function (res) { D = res.data; });
+          p.then(function () { authM = "ok"; busy = false; render(); })
+           .catch(function (e) { busy = false; if (authM !== "login") { toast(e.message); render(); } });
+        }
+        function renderLoading() { renderNav(); app.innerHTML = '<div class="loading"><div class="spinner"></div>読み込んでいます…</div>'; }
+
+        /* ---------- ログイン ---------- */
+        function renderLogin() {
+          renderNav();
+          app.innerHTML =
+            '<h1 style="margin-top:28px">管理画面</h1><p class="sub">先生用のログインが必要です(予約ページの先生モードと同じアカウント)</p>' +
+            '<div class="card" style="margin-top:14px;max-width:420px"><div class="form">' +
+            '<label for="a-email">メール</label><input type="email" id="a-email" autocomplete="username">' +
+            '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="current-password">' +
+            '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="login"' + (busy ? " disabled" : "") + ">" + (busy ? "ログイン中…" : "ログイン") + "</button></div></div>";
+          var el = document.getElementById("a-email"); if (el) el.focus();
+        }
+
+        /* ---------- ホーム(ダッシュボード) ---------- */
+        function lessonLine(s, withDate) {
+          var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
+          h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(s.subject) + "</span>" : "") + "</span>";
+          if (s.status === "offered") h += '<span class="tag amber">承認待ち</span>';
+          else if (s.done) h += '<span class="tag gray">実施済</span>';
+          if (s.meetUrl) h += '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(s.meetUrl) + '">Meet</a>';
+          return h + "</div>";
+        }
+        function renderHome() {
+          renderNav();
+          var d = D;
+          var html = '<div class="head"><div><h1>今日 ' + fmtD(d.today) + '</h1><p class="sub">ステップワイズ個別指導の運営ダッシュボード</p></div>' +
+            '<div class="row"><a class="btn-primary btn-sm" href="' + YOYAKU + '" target="_blank" rel="noopener">授業を案内する ↗</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+
+          html += '<div class="grid2" style="margin-top:14px">';
+          html += '<div class="card"><h2 style="margin-top:0">今日の授業 <span class="cnt">' + d.lessonsToday.length + '件</span></h2>';
+          html += d.lessonsToday.length ? d.lessonsToday.map(function (s) { return lessonLine(s, false); }).join("") : '<div class="empty">今日の授業はありません</div>';
+          html += '</div>';
+          html += '<div class="card"><h2 style="margin-top:0">今週(明日から7日) <span class="cnt">' + d.lessonsWeek.length + '件</span></h2>';
+          html += d.lessonsWeek.length ? d.lessonsWeek.map(function (s) { return lessonLine(s, true); }).join("") : '<div class="empty">予定はありません</div>';
+          html += '</div></div>';
+
+          html += '<div class="grid2" style="margin-top:12px">';
+          html += '<div class="card"><h2 style="margin-top:0">承認待ちの案内 <span class="cnt">' + d.pending.length + '件</span></h2>';
+          html += d.pending.length ? d.pending.map(function (s) { return lessonLine(s, true); }).join("") : '<div class="empty">返事待ちの案内はありません</div>';
+          html += '</div>';
+          html += '<div class="card"><h2 style="margin-top:0">未入金 <span class="cnt">' + d.unpaid.length + '件' + (d.unpaid.length ? "・" + yen(d.unpaid.reduce(function (a, u) { return a + u.amount; }, 0)) : "") + '</span></h2>';
+          if (d.unpaid.length) {
+            d.unpaid.forEach(function (u) {
+              html += '<div class="line"><span class="t">' + esc(u.ym) + '</span><span class="w"><a class="nm" href="#s=' + esc(u.studentId) + '" style="text-decoration:none;color:inherit">' + esc(u.name) + '</a></span><span class="mono">' + yen(u.amount) + '</span><button class="btn-quiet btn-sm" data-action="paid" data-row="' + u.row + '" data-sid="' + esc(u.studentId) + '">入金済にする</button></div>';
+            });
+          } else html += '<div class="empty">未入金はありません</div>';
+          html += '</div></div>';
+
+          html += '<h2>生徒 <span class="cnt">' + d.students.length + '人</span></h2><div class="grid">';
+          d.students.forEach(function (s) {
+            html += '<a class="card scard" href="#s=' + esc(s.id) + '"><div class="row between"><span class="nm">' + esc(s.name) + '</span>' + (s.unpaid ? '<span class="tag red">未入金 ' + s.unpaid + '</span>' : "") + '</div>';
+            html += '<div class="muted small">' + esc([s.grade, s.school].filter(Boolean).join("・") || "学年・学校 未登録") + '</div>';
+            html += '<div class="row between" style="margin-top:8px"><span class="small">今月 <strong class="mono">' + s.doneThisMonth + '回</strong> <span class="muted">' + yen(s.feeThisMonth) + '</span></span>';
+            html += '<span class="small muted">次回 ' + (s.next ? fmtD(s.next.date) + " " + s.next.start : "未定") + '</span></div></a>';
+          });
+          html += '</div>';
+
+          html += '<h2>最近の面談・連絡</h2>';
+          if (d.meetings.length) {
+            html += '<div class="card">';
+            d.meetings.forEach(function (m) {
+              html += '<div class="line"><span class="t">' + fmtD(m.date) + '</span><span class="w"><a class="nm" href="#s=' + esc(m.studentId) + '" style="text-decoration:none;color:inherit">' + esc(m.name) + '</a> <span class="muted small">' + esc(m.who) + (m.method ? "・" + esc(m.method) : "") + '</span><div class="small">' + esc(m.content) + '</div>' + (m.next ? '<div class="small" style="color:var(--amber)">→ ' + esc(m.next) + '</div>' : "") + '</span></div>';
+            });
+            html += '</div>';
+          } else html += '<div class="empty">記録はまだありません。生徒のカルテから登録できます。</div>';
+          app.innerHTML = html;
+        }
+
+        function renderStudents() {
+          renderNav();
+          var html = '<h1>生徒一覧</h1><p class="sub">タップするとカルテを開きます</p><div class="grid" style="margin-top:14px">';
+          D.students.forEach(function (s) {
+            html += '<a class="card scard" href="#s=' + esc(s.id) + '"><div class="row between"><span class="nm">' + esc(s.name) + '</span><span class="tag ' + (s.status === "在籍" ? "green" : "gray") + '">' + esc(s.status) + '</span></div>';
+            html += '<div class="muted small">' + esc([s.grade, s.school].filter(Boolean).join("・") || "学年・学校 未登録") + '</div>';
+            html += '<div class="small" style="margin-top:8px">今月 ' + s.doneThisMonth + '回・' + yen(s.feeThisMonth) + (s.unpaid ? ' <span class="tag red">未入金</span>' : "") + '</div></a>';
+          });
+          html += '</div><p class="note">生徒の追加・専用リンク・料金設定は予約ページの先生モード(生徒の管理)で行います。</p>';
+          app.innerHTML = html;
+        }
+
+        /* ---------- 成績グラフ(SVG) ---------- */
+        function colorFor(subject, idx) { return SUBJECT_COLOR[subject] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length]; }
+        function gradeChart(grades, mode) {
+          var pts = grades.filter(function (g) { return mode === "dev" ? (g.dev !== null && !isNaN(g.dev)) : !isNaN(g.score); });
+          if (pts.length < 2) return '<div class="empty">記録が2件以上たまるとグラフが表示されます</div>';
+          var dates = []; pts.forEach(function (g) { if (dates.indexOf(g.date) < 0) dates.push(g.date); }); dates.sort();
+          var subjects = []; pts.forEach(function (g) { var s = g.subject || "その他"; if (subjects.indexOf(s) < 0) subjects.push(s); });
+          var W = 640, H = 260, L = 44, R = 90, T = 16, B = 40;
+          var iw = W - L - R, ih = H - T - B;
+          var vals = pts.map(function (g) { return mode === "dev" ? g.dev : g.score; });
+          var ymax = Math.max.apply(null, vals.concat(mode === "dev" ? [70] : pts.map(function (g) { return g.max || 100; })));
+          var ymin = mode === "dev" ? Math.min(30, Math.min.apply(null, vals)) : 0;
+          ymax = Math.ceil(ymax / 10) * 10; ymin = Math.floor(ymin / 10) * 10;
+          var xOf = function (d) { var i = dates.indexOf(d); return dates.length === 1 ? L + iw / 2 : L + i * iw / (dates.length - 1); };
+          var yOf = function (v) { return T + ih - (v - ymin) / (ymax - ymin || 1) * ih; };
+          var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="成績推移">';
+          var steps = 4;
+          for (var i = 0; i <= steps; i++) {
+            var v = ymin + (ymax - ymin) * i / steps; var y = yOf(v);
+            svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '" stroke="#e5e9ee" stroke-width="1"/>';
+            svg += '<text x="' + (L - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#64717f">' + Math.round(v) + '</text>';
+          }
+          var lblEvery = Math.ceil(dates.length / 6);
+          dates.forEach(function (d, i) { if (i % lblEvery === 0 || i === dates.length - 1) svg += '<text x="' + xOf(d) + '" y="' + (H - 14) + '" text-anchor="middle" font-size="11" fill="#64717f">' + fmtDY(d).slice(5) + '</text>'; });
+          subjects.forEach(function (sub, si) {
+            var col = colorFor(sub, si);
+            var mine = pts.filter(function (g) { return (g.subject || "その他") === sub; });
+            var path = mine.map(function (g, i) { return (i ? "L" : "M") + xOf(g.date).toFixed(1) + " " + yOf(mode === "dev" ? g.dev : g.score).toFixed(1); }).join(" ");
+            svg += '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+            mine.forEach(function (g) {
+              var v = mode === "dev" ? g.dev : g.score;
+              svg += '<circle cx="' + xOf(g.date) + '" cy="' + yOf(v) + '" r="4.5" fill="' + col + '" stroke="#fff" stroke-width="2"><title>' + esc(fmtDY(g.date) + " " + (g.test || "") + " " + sub + " " + v + (mode === "dev" ? "" : (g.max ? "/" + g.max : ""))) + '</title></circle>';
+            });
+            var last = mine[mine.length - 1];
+            svg += '<text x="' + (xOf(last.date) + 8) + '" y="' + (yOf(mode === "dev" ? last.dev : last.score) + 4) + '" font-size="11.5" font-weight="700" fill="#19212a">' + esc(sub) + ' ' + (mode === "dev" ? last.dev : last.score) + '</text>';
+          });
+          svg += '</svg>';
+          if (subjects.length >= 2) {
+            svg += '<div class="legend">' + subjects.map(function (s, i) { return '<span><i style="background:' + colorFor(s, i) + '"></i>' + esc(s) + '</span>'; }).join("") + '</div>';
+          }
+          return svg;
+        }
+
+        /* ---------- 生徒カルテ ---------- */
+        function renderStudent() {
+          renderNav();
+          var s = cur;
+          var p = s.profile || {};
+          var html = '<div class="head"><div><a href="#students" class="small">← 生徒一覧</a><h1>' + esc(s.name) + '</h1>' +
+            '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span></p></div>' +
+            '<div class="row"><a class="btn-quiet btn-sm" href="' + YOYAKU + '?k=' + esc(s.code) + '" target="_blank" rel="noopener">生徒画面を見る ↗</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+
+          // 基本情報
+          html += '<h2>基本情報 <button class="btn-quiet btn-sm" data-action="editprofile" style="margin-left:auto">' + (editProfile ? "閉じる" : "編集") + '</button></h2>';
+          if (editProfile) {
+            html += '<div class="card"><div class="form">';
+            [["ふりがな", "text"], ["学年", "text"], ["学校", "text"], ["保護者名", "text"], ["保護者連絡先", "text"], ["メール", "email"], ["入塾日", "date"], ["科目", "text"]].forEach(function (f) {
+              html += '<label>' + f[0] + '</label><input type="' + f[1] + '" data-pf="' + f[0] + '" value="' + esc(p[f[0]] || "") + '">';
+            });
+            html += '<label>状態</label><select data-pf="状態">' + ["在籍", "休会", "退塾", "体験"].map(function (o) { return '<option' + ((p["状態"] || "在籍") === o ? " selected" : "") + '>' + o + '</option>'; }).join("") + '</select>';
+            html += '<label>備考</label><textarea data-pf="備考">' + esc(p["備考"] || "") + '</textarea>';
+            html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="saveprofile"' + (busy ? " disabled" : "") + '>保存</button></div></div>';
+          } else {
+            var tel = String(p["保護者連絡先"] || "");
+            var telHtml = tel ? (/^[\d\-+() ]+$/.test(tel) ? '<a href="tel:' + esc(tel.replace(/[^\d+]/g, "")) + '">' + esc(tel) + '</a>' : esc(tel)) : '<span class="muted">未登録</span>';
+            html += '<div class="card"><dl class="kv">' +
+              '<dt>ふりがな</dt><dd>' + (esc(p["ふりがな"]) || '<span class="muted">—</span>') + '</dd>' +
+              '<dt>保護者</dt><dd>' + (esc(p["保護者名"]) || '<span class="muted">未登録</span>') + '</dd>' +
+              '<dt>連絡先</dt><dd>' + telHtml + '</dd>' +
+              '<dt>メール</dt><dd>' + (p["メール"] ? '<a href="mailto:' + esc(p["メール"]) + '">' + esc(p["メール"]) + '</a>' : (s.email ? esc(s.email) + ' <span class="muted small">(予約システム)</span>' : '<span class="muted">未登録</span>')) + '</dd>' +
+              '<dt>入塾日</dt><dd>' + (p["入塾日"] ? fmtDY(p["入塾日"]) : '<span class="muted">—</span>') + '</dd>' +
+              '<dt>科目</dt><dd>' + (esc(p["科目"]) || '<span class="muted">—</span>') + '</dd>' +
+              '<dt>料金</dt><dd>' + (s.monthly > 0 ? '月謝 ' + yen(s.monthly) : '30分 ' + yen(s.rate30) + ' <span class="muted small">(90分 ' + yen(s.rate30 * 3) + ')</span>') + '</dd>' +
+              (p["備考"] ? '<dt>備考</dt><dd>' + esc(p["備考"]).replace(/\n/g, "<br>") + '</dd>' : "") +
+              '</dl></div>';
+          }
+
+          // 今月
+          var tm = s.thisMonth;
+          html += '<h2>今月の授業と請求 <span class="cnt">' + esc(s.month) + '</span></h2><div class="grid2">';
+          html += '<div class="card"><div class="muted small">実施済み</div><div class="stat">' + tm.count + '<small>回 / ' + tm.minutes + '分</small></div></div>';
+          html += '<div class="card"><div class="muted small">' + (tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + yen(tm.fee) + '</div>' +
+            (tm.billed ? '<div class="small muted">今月分は請求記録済み</div>' : '<div class="row" style="margin-top:6px"><button class="btn-ghost btn-sm" data-action="billmonth"' + (busy || !tm.fee ? " disabled" : "") + '>今月分を請求に記録</button></div>') + '</div>';
+          html += '</div><p class="note">「実施済み」は予約ページの先生モードで「実施にする」を押した授業の集計です。請求文面のコピーも先生モードから行えます。</p>';
+
+          // 成績
+          html += '<h2>成績推移 <span class="cnt">' + s.grades.length + '件</span>' + (s.grades.some(function (g) { return g.dev !== null; }) ? '<span class="seg" style="margin-left:auto"><button class="' + (gradeMode === "score" ? "on" : "") + '" data-action="gmode" data-m="score">点数</button><button class="' + (gradeMode === "dev" ? "on" : "") + '" data-action="gmode" data-m="dev">偏差値</button></span>' : "") + '</h2>';
+          html += '<div class="card">' + gradeChart(s.grades, gradeMode);
+          if (s.grades.length) {
+            html += '<div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th>日付</th><th>テスト</th><th>科目</th><th>点数</th><th>偏差値</th><th>順位</th><th></th></tr>';
+            s.grades.slice().reverse().forEach(function (g) {
+              html += '<tr><td>' + fmtDY(g.date) + '</td><td>' + esc(g.test) + '</td><td>' + esc(g.subject) + '</td><td>' + g.score + (g.max ? '<span class="muted">/' + g.max + '</span>' : "") + '</td><td>' + (g.dev === null ? "—" : g.dev) + '</td><td>' + esc(g.rank || "—") + '</td><td><button class="btn-quiet btn-sm" data-action="delrow" data-sheet="成績推移" data-row="' + g.row + '">削除</button></td></tr>';
+            });
+            html += '</table></div>';
+          }
+          html += '<details class="add"><summary>成績を記録</summary><div class="card"><div class="form">' +
+            '<label>日付</label><input type="date" id="g-date" value="' + today() + '">' +
+            '<label>テスト名</label><input type="text" id="g-test" placeholder="定期テスト・北辰・模試など">' +
+            '<label>科目</label><select id="g-subject">' + ["英語", "数学", "国語", "理科", "社会", "その他"].map(function (o) { return "<option>" + o + "</option>"; }).join("") + '</select>' +
+            '<label>点数</label><div class="row"><input type="number" id="g-score" style="width:90px"> <span class="muted">/</span> <input type="number" id="g-max" placeholder="満点" value="100" style="width:90px"></div>' +
+            '<label>偏差値</label><input type="number" id="g-dev" step="0.1" style="width:110px" placeholder="任意">' +
+            '<label>順位</label><input type="text" id="g-rank" style="width:140px" placeholder="例: 12/180">' +
+            '<label>備考</label><input type="text" id="g-note">' +
+            '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addgrade"' + (busy ? " disabled" : "") + '>記録する</button></div></div></details></div>';
+
+          // 授業履歴
+          html += '<h2>授業履歴 <span class="cnt">直近' + Math.min(20, s.lessons.length) + '件</span></h2><div class="card">';
+          if (s.lessons.length) {
+            s.lessons.slice(0, 20).forEach(function (l) {
+              html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
+              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>');
+              html += '</div>';
+            });
+          } else html += '<div class="empty">授業はまだありません</div>';
+          html += '</div>';
+
+          // 入金
+          html += '<h2>入金管理 <span class="cnt">' + s.payments.filter(function (x) { return x.status !== "入金済"; }).length + '件 未入金</span></h2><div class="card">';
+          if (s.payments.length) {
+            s.payments.forEach(function (x) {
+              var paid = x.status === "入金済";
+              html += '<div class="line"><span class="t">' + esc(x.ym) + '</span><span class="w"><strong class="mono">' + yen(x.amount) + '</strong> ' + (paid ? '<span class="tag green">入金済</span> <span class="muted small">' + fmtDY(x.paidDate) + (x.method ? "・" + esc(x.method) : "") + '</span>' : '<span class="tag red">未入金</span>') + (x.note ? '<div class="small muted">' + esc(x.note) + '</div>' : "") + '</span>';
+              html += paid ? '<button class="btn-quiet btn-sm" data-action="unpaid" data-row="' + x.row + '">未入金に戻す</button>' : '<button class="btn-ghost btn-sm" data-action="paid" data-row="' + x.row + '" data-sid="' + esc(s.id) + '">入金済にする</button>';
+              html += '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="入金管理" data-row="' + x.row + '">削除</button></div>';
+            });
+          } else html += '<div class="empty">請求・入金の記録はまだありません</div>';
+          html += '<details class="add"><summary>請求を記録</summary><div class="card"><div class="form">' +
+            '<label>年月</label><input type="month" id="p-ym" value="' + thisYm() + '">' +
+            '<label>請求額</label><input type="number" id="p-amount" value="' + (tm.fee || "") + '" style="width:140px">' +
+            '<label>請求日</label><input type="date" id="p-bill" value="' + today() + '">' +
+            '<label>入金日</label><input type="date" id="p-paid"> ' +
+            '<label>入金方法</label><select id="p-method"><option value="">—</option><option>振込</option><option>現金</option><option>PayPay</option><option>その他</option></select>' +
+            '<label>備考</label><input type="text" id="p-note">' +
+            '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addpayment"' + (busy ? " disabled" : "") + '>記録する</button></div><div class="note">入金日を入れると「入金済」として記録されます。</div></div></details></div>';
+
+          // 面談
+          html += '<h2>面談・連絡の記録 <span class="cnt">' + s.meetings.length + '件</span></h2><div class="card">';
+          if (s.meetings.length) {
+            s.meetings.forEach(function (m) {
+              html += '<div class="line"><span class="t">' + fmtDY(m.date) + '</span><span class="w"><span class="muted small">' + esc(m.who) + (m.method ? "・" + esc(m.method) : "") + '</span><div>' + esc(m.content).replace(/\n/g, "<br>") + '</div>' + (m.next ? '<div class="small" style="color:var(--amber)">→ ' + esc(m.next) + '</div>' : "") + '</span><button class="btn-quiet btn-sm" data-action="delrow" data-sheet="面談記録" data-row="' + m.row + '">削除</button></div>';
+            });
+          } else html += '<div class="empty">記録はまだありません</div>';
+          html += '<details class="add"><summary>面談・連絡を記録</summary><div class="card"><div class="form">' +
+            '<label>日付</label><input type="date" id="m-date" value="' + today() + '">' +
+            '<label>相手</label><select id="m-who"><option>保護者</option><option>生徒</option><option>生徒・保護者</option></select>' +
+            '<label>方法</label><select id="m-method"><option>LINE</option><option>電話</option><option>対面</option><option>メール</option><option>授業内</option></select>' +
+            '<label class="full">内容</label><textarea id="m-content" class="full" placeholder="話した内容・決まったこと"></textarea>' +
+            '<label>次のアクション</label><input type="text" id="m-next" placeholder="例: 来週までに志望校を確認">' +
+            '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addmeeting"' + (busy ? " disabled" : "") + '>記録する</button></div></div></details></div>';
+
+          app.innerHTML = html;
+        }
+
+        function render() {
+          if (authM === "login") { renderLogin(); return; }
+          var r = route();
+          if (r.page === "student" && cur) renderStudent();
+          else if (r.page === "students" && D) renderStudents();
+          else if (D) renderHome();
+          else renderLoading();
+        }
+
+        /* ---------- 操作 ---------- */
+        function act(op, extra, okMsg) {
+          if (busy) return;
+          busy = true; render();
+          admin(op, extra).then(function (res) {
+            busy = false;
+            if (res.data && res.data.lessons) cur = res.data;
+            if (okMsg) toast(okMsg);
+            if (route().page !== "student") load(); else render();
+          }).catch(function (e) { busy = false; toast(e.message); render(); });
+        }
+
+        document.addEventListener("click", function (ev) {
+          var btn = ev.target.closest("[data-action]");
+          if (!btn || btn.disabled) return;
+          var a = btn.getAttribute("data-action");
+          var sid = cur ? cur.id : (btn.getAttribute("data-sid") || "");
+          switch (a) {
+            case "login":
+              ev.preventDefault();
+              busy = true; render();
+              post({ action: "admin", op: "login", email: val("a-email"), password: (document.getElementById("a-pass") || {}).value || "" }).then(function (res) {
+                busy = false;
+                if (res.error) { toast(res.error); render(); return; }
+                lsSet("sw_admt", res.token); authM = "ok"; load();
+              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
+              break;
+            case "logout":
+              ev.preventDefault();
+              post({ action: "admin", token: token(), op: "logout" }).catch(function () {});
+              lsDel("sw_admt"); authM = "login"; D = null; cur = null; render(); break;
+            case "reload": editProfile = false; load(); break;
+            case "editprofile": editProfile = !editProfile; render(); break;
+            case "saveprofile":
+              var pr = {};
+              document.querySelectorAll("[data-pf]").forEach(function (el) { pr[el.getAttribute("data-pf")] = String(el.value || "").trim(); });
+              editProfile = false;
+              act("kanriSaveProfile", { studentId: sid, profile: pr }, "基本情報を保存しました");
+              break;
+            case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
+            case "addgrade":
+              act("kanriAddGrade", { studentId: sid, date: val("g-date"), test: val("g-test"), subject: val("g-subject"), score: val("g-score"), max: val("g-max"), dev: val("g-dev"), rank: val("g-rank"), note: val("g-note") }, "成績を記録しました");
+              break;
+            case "addpayment":
+              act("kanriAddPayment", { studentId: sid, ym: val("p-ym"), amount: val("p-amount"), billDate: val("p-bill"), paidDate: val("p-paid"), method: val("p-method"), note: val("p-note") }, "請求を記録しました");
+              break;
+            case "billmonth":
+              act("kanriAddPayment", { studentId: sid, ym: cur.month, amount: cur.thisMonth.fee, billDate: today(), note: cur.thisMonth.count + "回・" + cur.thisMonth.minutes + "分" }, "今月分を請求に記録しました");
+              break;
+            case "paid":
+              act("kanriSetPaid", { studentId: sid, row: +btn.getAttribute("data-row"), paidDate: today() }, "入金済にしました");
+              break;
+            case "unpaid":
+              act("kanriSetPaid", { studentId: sid, row: +btn.getAttribute("data-row"), unpaid: true }, "未入金に戻しました");
+              break;
+            case "addmeeting":
+              act("kanriAddMeeting", { studentId: sid, date: val("m-date"), who: val("m-who"), method: val("m-method"), content: val("m-content"), next: val("m-next") }, "記録しました");
+              break;
+            case "delrow":
+              if (!confirm("この記録を削除しますか?")) return;
+              act("kanriDeleteRow", { studentId: sid, sheet: btn.getAttribute("data-sheet"), row: +btn.getAttribute("data-row") }, "削除しました");
+              break;
+          }
+        });
+
+        load();
+      })();
+    </script>
+  </body>
+</html>
