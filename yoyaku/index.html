@@ -224,6 +224,7 @@
         function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
         function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
         function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+        function sameId(a, b) { return String(a) === String(b); }
         function esc(s) {
           return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
             return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -489,7 +490,7 @@
 
           if (pending) {
             var s = null;
-            for (var i = 0; i < slots.length; i++) if (slots[i].id === pending.slotId) s = slots[i];
+            for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
             if (s) {
               var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
               html += '<div class="confirmbar"><div class="inner">';
@@ -623,7 +624,7 @@
           html += "</div>";
           var ngGroups = [];
           A.students.forEach(function (st7) {
-            var own = (A.blocked || []).filter(function (b) { return b.studentId === st7.id; });
+            var own = (A.blocked || []).filter(function (b) { return sameId(b.studentId, st7.id); });
             groupBlocked(own).forEach(function (g) { g.name = st7.name; ngGroups.push(g); });
           });
           ngGroups.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
@@ -673,7 +674,7 @@
                 }).forEach(function (sid2, i) {
                   var ent = months[mk][sid2];
                   var st5 = null;
-                  A.students.forEach(function (x) { if (x.id === sid2) st5 = x; });
+                  A.students.forEach(function (x) { if (sameId(x.id, sid2)) st5 = x; });
                   var feeText;
                   if (st5 && st5.monthly > 0) {
                     feeText = st5.monthly.toLocaleString() + "円(月謝)";
@@ -709,11 +710,11 @@
               html += s.monthly > 0 ? "月謝" + s.monthly.toLocaleString() + "円" : "30分" + (s.rate30 || 0).toLocaleString() + "円";
               if (s.email) html += " ・ " + esc(s.email);
               html += "</span></span>";
-              if (editEmailId === s.id) {
+              if (sameId(editEmailId, s.id)) {
                 html += '<input type="email" id="f-email-' + esc(s.id) + '" value="' + esc(s.email || "") + '" placeholder="生徒のメール" style="width:180px">';
                 html += '<button class="btn-primary btn-sm" data-action="saveemail" data-id="' + esc(s.id) + '"' + (busy ? " disabled" : "") + ">保存</button>";
                 html += '<button class="btn-quiet btn-sm" data-action="cancelemail">やめる</button>';
-              } else if (editFeeId === s.id) {
+              } else if (sameId(editFeeId, s.id)) {
                 html += '<label style="font-size:12px;color:var(--muted)">30分あたり</label>';
                 html += '<input type="number" id="f-rate-' + esc(s.id) + '" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円';
                 html += '<label style="font-size:12px;color:var(--muted)">月謝(任意)</label>';
@@ -749,7 +750,7 @@
 
           if (pending && pending.kind === "relink") {
             var rlName = "";
-            A.students.forEach(function (x) { if (x.id === pending.sid) rlName = x.name; });
+            A.students.forEach(function (x) { if (sameId(x.id, pending.sid)) rlName = x.name; });
             html += '<div class="confirmbar"><div class="inner">';
             html += '<div class="msg">' + esc(rlName) + "さんの専用リンクを再発行しますか?いま配っているリンクは使えなくなります。</div>";
             html += '<div class="row"><button class="btn-danger" data-action="dorelink"' + (busy ? " disabled" : "") + '>再発行して新リンクをコピー</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
@@ -763,7 +764,7 @@
           }
           if (pending && (pending.kind === "tdel" || pending.kind === "tcancel")) {
             var s3 = null;
-            slots.forEach(function (x) { if (x.id === pending.slotId) s3 = x; });
+            slots.forEach(function (x) { if (sameId(x.id, pending.slotId)) s3 = x; });
             if (s3) {
               var when3 = fmtDateW(s3.date) + " " + s3.start + "〜" + endTime(s3.start, s3.min);
               html += '<div class="confirmbar"><div class="inner">';
@@ -1076,10 +1077,10 @@
               var mk2 = btn.getAttribute("data-month");
               var sid3 = id;
               var stu = null;
-              A.students.forEach(function (x) { if (x.id === sid3) stu = x; });
+              A.students.forEach(function (x) { if (sameId(x.id, sid3)) stu = x; });
               if (!stu) { toast("生徒が見つかりません"); return; }
               var lessons = A.slots.filter(function (x) {
-                return x.studentId === sid3 && x.status === "booked" && x.done && x.date.slice(0, 7) === mk2;
+                return sameId(x.studentId, sid3) && x.status === "booked" && x.done && x.date.slice(0, 7) === mk2;
               }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
               if (lessons.length === 0) { toast("実施済みの授業がありません"); return; }
               var totalMin = 0;
@@ -1098,7 +1099,7 @@
               break;
             case "viewstudent":
               var st6 = null;
-              A.students.forEach(function (x) { if (x.id === id) st6 = x; });
+              A.students.forEach(function (x) { if (sameId(x.id, id)) st6 = x; });
               if (!st6 || !st6.code) { toast("リンクがまだ発行されていません"); return; }
               previewK = st6.code;
               ssSet("sw_mode", "student");
@@ -1120,7 +1121,7 @@
               break;
             case "copylink":
               var st4 = null;
-              A.students.forEach(function (x) { if (x.id === id) st4 = x; });
+              A.students.forEach(function (x) { if (sameId(x.id, id)) st4 = x; });
               if (!st4 || !st4.code) { toast("リンクがまだ発行されていません"); return; }
               copyText(location.origin + location.pathname + "?k=" + st4.code,
                 st4.name + "さんの専用リンクをコピーしました。LINEで送ってください");
@@ -1144,7 +1145,7 @@
                 A = res.admin;
                 render();
                 var st8 = null;
-                A.students.forEach(function (x) { if (x.id === rsid) st8 = x; });
+                A.students.forEach(function (x) { if (sameId(x.id, rsid)) st8 = x; });
                 if (st8 && st8.code) {
                   copyText(location.origin + location.pathname + "?k=" + st8.code,
                     "再発行し、新しいリンクをコピーしました(前のリンクは無効です)");
@@ -1199,7 +1200,7 @@
           var sid5 = ev.target.value;
           var latest = "", latestDate = "";
           (A.slots || []).forEach(function (s) {
-            if (s.studentId === sid5 && s.subject && s.date >= latestDate) {
+            if (sameId(s.studentId, sid5) && s.subject && s.date >= latestDate) {
               latestDate = s.date; latest = s.subject;
             }
           });

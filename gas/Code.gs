@@ -873,5 +873,8 @@ function fmtLogTime_(v) {
 }
 
 function uid_() {
-  return Utilities.getUuid().slice(0, 8);
+  // 全桁が数字だとシート上で数値化されてしまうため、必ず英字を含める
+  var s = Utilities.getUuid().replace(/-/g, '').slice(0, 8);
+  if (/^[0-9]+$/.test(s)) s = 'a' + s.slice(1);
+  return s;
 }
