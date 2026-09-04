@@ -804,10 +804,8 @@
 
         function mode() { return ssGet("sw_mode") || "student"; }
         function render() {
-          var m = mode();
-          if (m === "teacher" && A) renderTeacher();
-          else if (m === "auth" || (m === "teacher" && !A)) renderAuth();
-          else renderStudent();
+          // 先生モードは管理画面(/kanri/)へ移動したため、このページは常に生徒画面
+          renderStudent();
         }
 
         function afterAuth(res) {
@@ -1162,8 +1160,7 @@
           var qs = new URLSearchParams(location.search);
           var qk = qs.get("k");
           var qp = qs.get("preview"); // 管理画面から「生徒画面を見る」(先生ログイン時のみ・本人キーは保存しない)
-          var qt = qs.get("teacher");  // 管理画面から先生モードへ(「先生用」ボタンは廃止)
-          if (qt) history.replaceState(null, "", location.pathname);
+          if (qs.get("teacher")) history.replaceState(null, "", location.pathname); // 旧リンク互換(先生機能は管理画面へ移動済み)
           if (qk) {
             lsSet("sw_k", qk);
             history.replaceState(null, "", location.pathname);
@@ -1176,7 +1173,7 @@
           app.innerHTML = '<div class="loading">予約システムは準備中です。<br>もうしばらくお待ちください。</div>';
         } else {
           loadState().then(function () {
-            if (qt || (mode() === "teacher" && !A)) enterTeacher();
+            // 先生機能は管理画面(/kanri/)に移動。このページは生徒専用
           }).catch(function (e) {
             app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
           });

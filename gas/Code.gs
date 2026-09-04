@@ -454,7 +454,7 @@ function kanriWrap_(req, res, studentId) {
 }
 
 function admin_(req) {
-  LITE_ = req.from === 'kanri';
+  LITE_ = req.from === 'kanri' && req.view !== 'lessons'; // 授業ページは予約ページ用の全データ(admin)をそのまま使う
   if (req.op === 'login') return adminLogin_(req);
   if (req.op === 'setupAccount') return adminSetupAccount_(req);
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
@@ -500,7 +500,8 @@ function adminState_() {
       studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
       subject: String(s.subject || ''),
-      meetUrl: String(s.meetUrl || '')
+      meetUrl: String(s.meetUrl || ''),
+      req: parseReq_(s.req)
     };
   });
   var students = readRows_('students').map(function (s) {
