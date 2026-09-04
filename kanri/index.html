@@ -127,6 +127,7 @@
         var authM = null;  // null=未確認 / 'login' / 'ok'
         var gradeMode = "score";
         var editProfile = false;
+        var editEmail = false, editFee = false;
 
         function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -144,6 +145,17 @@
         var toastTimer = null;
         function toast(m) { var t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800); }
         function val(id) { var el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
+        function copyText(text, okMsg) {
+          function fallback() {
+            var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+            document.body.removeChild(ta); toast(ok ? okMsg : "コピーできませんでした");
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
+          else fallback();
+        }
+        function studentLink(code) { return new URL(YOYAKU + "?k=" + code, location.href).href; }
 
         function post(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
         function admin(op, extra) {
@@ -163,7 +175,7 @@
           if (h === "#students") return { page: "students" };
           return { page: "home" };
         }
-        window.addEventListener("hashchange", function () { editProfile = false; load(); });
+        window.addEventListener("hashchange", function () { editProfile = false; editEmail = false; editFee = false; load(); });
 
         function renderNav() {
           var r = route();
@@ -263,7 +275,17 @@
             html += '<div class="muted small">' + esc([s.grade, s.school].filter(Boolean).join("・") || "学年・学校 未登録") + '</div>';
             html += '<div class="small" style="margin-top:8px">今月 ' + s.doneThisMonth + '回・' + yen(s.feeThisMonth) + (s.unpaid ? ' <span class="tag red">未入金</span>' : "") + '</div></a>';
           });
-          html += '</div><p class="note">生徒の追加・専用リンク・料金設定は予約ページの先生モード(生徒の管理)で行います。</p>';
+          html += '</div>';
+          html += '<h2>生徒を追加</h2><div class="card"><div class="row"><input type="text" id="n-name" placeholder="生徒の名前" style="flex:1;min-width:140px"><input type="email" id="n-email" placeholder="メール(任意)" style="flex:1;min-width:160px"><button class="btn-primary" data-action="addstudent"' + (busy ? " disabled" : "") + '>追加</button></div>' +
+            '<div class="note">追加すると専用リンク(予約ページのURL)が発行されます。カルテの「予約ページの設定」からコピーしてLINEで送ってください。名前が【テスト】で始まる生徒はカレンダー・Meet・メールが動かないテスト用になります。</div></div>';
+          var ina = D.inactive || [];
+          if (ina.length) {
+            html += '<h2>予約ページから外した生徒 <span class="cnt">' + ina.length + '人</span></h2><div class="card">';
+            ina.forEach(function (s) {
+              html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(s.id) + '" style="text-decoration:none;color:inherit">' + esc(s.name) + '</a></span><span class="tag gray">停止中</span></div>';
+            });
+            html += '<div class="note">記録は残っています。カルテの「予約ページの設定」から戻せます。</div></div>';
+          }
           app.innerHTML = html;
         }
 
@@ -316,8 +338,8 @@
           var s = cur;
           var p = s.profile || {};
           var html = '<div class="head"><div><a href="#students" class="small">← 生徒一覧</a><h1>' + esc(s.name) + '</h1>' +
-            '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span></p></div>' +
-            '<div class="row"><a class="btn-quiet btn-sm" href="' + YOYAKU + '?k=' + esc(s.code) + '" target="_blank" rel="noopener">生徒画面を見る ↗</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+            '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
+            '<div class="row">' + (s.code ? '<a class="btn-quiet btn-sm" href="' + YOYAKU + '?preview=' + esc(s.code) + '" target="_blank" rel="noopener">生徒画面を見る ↗</a>' : "") + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           // 基本情報
           html += '<h2>基本情報 <button class="btn-quiet btn-sm" data-action="editprofile" style="margin-left:auto">' + (editProfile ? "閉じる" : "編集") + '</button></h2>';
@@ -336,13 +358,30 @@
               '<dt>ふりがな</dt><dd>' + (esc(p["ふりがな"]) || '<span class="muted">—</span>') + '</dd>' +
               '<dt>保護者</dt><dd>' + (esc(p["保護者名"]) || '<span class="muted">未登録</span>') + '</dd>' +
               '<dt>連絡先</dt><dd>' + telHtml + '</dd>' +
-              '<dt>メール</dt><dd>' + (p["メール"] ? '<a href="mailto:' + esc(p["メール"]) + '">' + esc(p["メール"]) + '</a>' : (s.email ? esc(s.email) + ' <span class="muted small">(予約システム)</span>' : '<span class="muted">未登録</span>')) + '</dd>' +
+              '<dt>メール</dt><dd>' + (p["メール"] ? '<a href="mailto:' + esc(p["メール"]) + '">' + esc(p["メール"]) + '</a>' : '<span class="muted">未登録</span>') + '</dd>' +
               '<dt>入塾日</dt><dd>' + (p["入塾日"] ? fmtDY(p["入塾日"]) : '<span class="muted">—</span>') + '</dd>' +
               '<dt>科目</dt><dd>' + (esc(p["科目"]) || '<span class="muted">—</span>') + '</dd>' +
-              '<dt>料金</dt><dd>' + (s.monthly > 0 ? '月謝 ' + yen(s.monthly) : '30分 ' + yen(s.rate30) + ' <span class="muted small">(90分 ' + yen(s.rate30 * 3) + ')</span>') + '</dd>' +
               (p["備考"] ? '<dt>備考</dt><dd>' + esc(p["備考"]).replace(/\n/g, "<br>") + '</dd>' : "") +
               '</dl></div>';
           }
+
+          // 予約ページの設定(予約システムのstudentsシート)
+          html += '<h2>予約ページの設定</h2><div class="card">';
+          html += '<div class="line"><span class="t">専用リンク</span><span class="w small">' + (s.code ? '<span class="muted">' + esc(studentLink(s.code)) + '</span>' : '<span class="muted">未発行</span>') + '</span>' +
+            (s.code ? '<button class="btn-ghost btn-sm" data-action="copylink">リンクをコピー</button>' : "") + '<button class="btn-quiet btn-sm" data-action="relink"' + (busy ? " disabled" : "") + '>再発行</button></div>';
+          if (editEmail) {
+            html += '<div class="line"><span class="t">通知メール</span><span class="w"><input type="email" id="e-email" value="' + esc(s.email) + '" placeholder="生徒・保護者のメール" style="width:min(100%,260px)"></span><button class="btn-primary btn-sm" data-action="saveemail"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editemail">やめる</button></div>';
+          } else {
+            html += '<div class="line"><span class="t">通知メール</span><span class="w">' + (s.email ? esc(s.email) : '<span class="muted">未登録(案内・確定の通知メールなし)</span>') + '</span><button class="btn-quiet btn-sm" data-action="editemail">変更</button></div>';
+          }
+          if (editFee) {
+            html += '<div class="line"><span class="t">料金</span><span class="w row"><label class="small muted">30分あたり</label><input type="number" id="e-rate" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円 <label class="small muted">月謝(任意)</label><input type="number" id="e-monthly" value="' + (s.monthly || "") + '" min="0" step="500" placeholder="0" style="width:100px">円</span><button class="btn-primary btn-sm" data-action="savefee"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editfee">やめる</button></div>';
+          } else {
+            html += '<div class="line"><span class="t">料金</span><span class="w">' + (s.monthly > 0 ? '月謝 ' + yen(s.monthly) + ' <span class="muted small">(固定)</span>' : '30分 ' + yen(s.rate30) + ' <span class="muted small">(90分 ' + yen(s.rate30 * 3) + ')</span>') + '</span><button class="btn-quiet btn-sm" data-action="editfee">変更</button></div>';
+          }
+          html += '<div class="line"><span class="t">予約ページ</span><span class="w">' + (s.active === false ? '<span class="tag red">停止中</span> <span class="small muted">案内の相手に出ず、専用リンクも使えません</span>' : '<span class="tag green">表示中</span>') + '</span>' +
+            (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
+          html += '<div class="note">「リンクをコピー」は今のリンクをコピーするだけです(何度押しても同じ)。リンクが他人に知られたときだけ「再発行」してください。前のリンクは使えなくなります。</div></div>';
 
           // 今月
           var tm = s.thisMonth;
@@ -435,9 +474,9 @@
           busy = true; render();
           admin(op, extra).then(function (res) {
             busy = false;
-            if (res.data && res.data.lessons) cur = res.data;
             if (okMsg) toast(okMsg);
-            if (route().page !== "student") load(); else render();
+            if (route().page === "student" && res.data && res.data.lessons) { cur = res.data; render(); }
+            else load();
           }).catch(function (e) { busy = false; toast(e.message); render(); });
         }
 
@@ -486,6 +525,47 @@
               break;
             case "addmeeting":
               act("kanriAddMeeting", { studentId: sid, date: val("m-date"), who: val("m-who"), method: val("m-method"), content: val("m-content"), next: val("m-next") }, "記録しました");
+              break;
+            case "addstudent":
+              var nn = val("n-name"), ne = val("n-email");
+              if (!nn) { toast("名前を入れてください"); return; }
+              busy = true; render();
+              admin("addStudent", { name: nn, email: ne }).then(function (res) {
+                busy = false; toast(nn + "さんを追加しました");
+                var added = null;
+                ((res.admin && res.admin.students) || []).forEach(function (x) { if (x.name === nn && x.active !== false) added = x; });
+                if (added) location.hash = "#s=" + encodeURIComponent(added.id); else load();
+              }).catch(function (e) { busy = false; toast(e.message); render(); });
+              break;
+            case "copylink":
+              if (!cur.code) { toast("リンクがまだ発行されていません"); return; }
+              copyText(studentLink(cur.code), cur.name + "さんの専用リンクをコピーしました。LINEで送ってください");
+              break;
+            case "relink":
+              if (!confirm(cur.name + "さんの専用リンクを再発行しますか?\nいま配っているリンクは使えなくなります。")) return;
+              busy = true; render();
+              admin("newCode", { studentId: sid }).then(function (res) {
+                busy = false;
+                var nc = "";
+                ((res.admin && res.admin.students) || []).forEach(function (x) { if (String(x.id) === String(sid)) nc = x.code; });
+                if (nc) { cur.code = nc; copyText(studentLink(nc), "再発行し、新しいリンクをコピーしました(前のリンクは無効です)"); }
+                load();
+              }).catch(function (e) { busy = false; toast(e.message); render(); });
+              break;
+            case "editemail": editEmail = !editEmail; editFee = false; render(); break;
+            case "editfee": editFee = !editFee; editEmail = false; render(); break;
+            case "saveemail":
+              var em2 = val("e-email"); editEmail = false;
+              act("setEmail", { studentId: sid, email: em2 }, em2 ? "メールを登録しました" : "メールを削除しました");
+              break;
+            case "savefee":
+              var rv = +(val("e-rate") || 0), mv = +(val("e-monthly") || 0); editFee = false;
+              act("setFee", { studentId: sid, rate30: rv, monthly: mv }, "料金を設定しました");
+              break;
+            case "setactive":
+              var on = btn.getAttribute("data-on") === "1";
+              if (!on && !confirm(cur.name + "さんを予約ページから外しますか?\n(記録は残ります。あとで戻せます)")) return;
+              act("kanriSetActive", { studentId: sid, active: on }, on ? "予約ページに戻しました" : "予約ページから外しました");
               break;
             case "delrow":
               if (!confirm("この記録を削除しますか?")) return;

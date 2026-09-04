@@ -239,8 +239,6 @@
           var t = (+p[0]) * 60 + (+p[1]) + (+min);
           return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60);
         }
-        var editEmailId = null; // 先生モードでメール編集中の生徒id
-        var editFeeId = null;   // 先生モードで料金編集中の生徒id
         function gcalUrl(s) {
           var d = s.date.replace(/-/g, "");
           var st = s.start.replace(":", "");
@@ -699,41 +697,8 @@
             html += '</div><div class="note">「実施にする」を押すと月ごとの回数に集計されます。</div>';
           }
 
-          html += '<h2>生徒の管理</h2><div class="card">';
-          var act = A.students.filter(function (s) { return s.active; });
-          if (act.length === 0) {
-            html += '<div class="empty">まだ生徒が登録されていません。</div>';
-          } else {
-            act.forEach(function (s) {
-              html += '<div class="studentline"><span class="nm">' + esc(s.name);
-              html += ' <span style="font-weight:400;font-size:11.5px;color:var(--muted)">';
-              html += s.monthly > 0 ? "月謝" + s.monthly.toLocaleString() + "円" : "30分" + (s.rate30 || 0).toLocaleString() + "円";
-              if (s.email) html += " ・ " + esc(s.email);
-              html += "</span></span>";
-              if (sameId(editEmailId, s.id)) {
-                html += '<input type="email" id="f-email-' + esc(s.id) + '" value="' + esc(s.email || "") + '" placeholder="生徒のメール" style="width:180px">';
-                html += '<button class="btn-primary btn-sm" data-action="saveemail" data-id="' + esc(s.id) + '"' + (busy ? " disabled" : "") + ">保存</button>";
-                html += '<button class="btn-quiet btn-sm" data-action="cancelemail">やめる</button>';
-              } else if (sameId(editFeeId, s.id)) {
-                html += '<label style="font-size:12px;color:var(--muted)">30分あたり</label>';
-                html += '<input type="number" id="f-rate-' + esc(s.id) + '" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円';
-                html += '<label style="font-size:12px;color:var(--muted)">月謝(任意)</label>';
-                html += '<input type="number" id="f-monthly-' + esc(s.id) + '" value="' + (s.monthly || "") + '" min="0" step="500" placeholder="0" style="width:90px">円';
-                html += '<button class="btn-primary btn-sm" data-action="savefee" data-id="' + esc(s.id) + '"' + (busy ? " disabled" : "") + ">保存</button>";
-                html += '<button class="btn-quiet btn-sm" data-action="cancelfee">やめる</button>';
-              } else {
-                html += '<button class="btn-ghost btn-sm" data-action="viewstudent" data-id="' + esc(s.id) + '">画面を見る</button>';
-                html += '<button class="btn-ghost btn-sm" data-action="copylink" data-id="' + esc(s.id) + '">リンクをコピー</button>';
-                html += '<button class="btn-quiet btn-sm" data-action="newlink" data-id="' + esc(s.id) + '">再発行</button>';
-                html += '<button class="btn-quiet btn-sm" data-action="editemail" data-id="' + esc(s.id) + '">メール</button>';
-                html += '<button class="btn-quiet btn-sm" data-action="editfee" data-id="' + esc(s.id) + '">料金</button>';
-                html += '<button class="btn-quiet btn-sm" data-action="hidestudent" data-id="' + esc(s.id) + '">外す</button>';
-              }
-              html += "</div>";
-            });
-          }
-          html += '<div class="row" style="margin-top:12px"><input type="text" id="f-newstudent" placeholder="生徒の名前" style="flex:1;min-width:120px"><input type="email" id="f-newemail" placeholder="メール(任意)" style="flex:1;min-width:150px"><button class="btn-primary btn-sm" data-action="addstudent"' + (busy ? " disabled" : "") + ">追加</button></div>";
-          html += '<div class="note">「リンクをコピー」は<strong>今のリンクをコピーするだけ</strong>(何度押しても同じリンク。無効化はされません)。リンクが他人に知られたときだけ「再発行」を使ってください(確認のうえ、古いリンクを無効化して新しいリンクをコピーします)。メールを登録した生徒には承認と同時にカレンダー招待も届きます。「料金」で30分あたりの単価(標準1,500円=90分4,500円)か月謝を設定できます。名前を<strong>【テスト】</strong>で始めるとテスト用の生徒になり、カレンダー登録や通知メールが行われません。</div></div>';
+          html += '<h2>生徒の管理</h2><div class="card"><div class="row between"><span style="font-size:13.5px">生徒の追加・専用リンク・メール・料金の設定は<strong>管理画面</strong>で行います。</span>';
+          html += '<a class="btn-primary btn-sm" href="../kanri/#students" style="text-decoration:none;display:inline-block">管理画面を開く ↗</a></div></div>';
 
           html += '<h2>設定</h2><div class="card">';
           if (A.account) {
@@ -748,14 +713,6 @@
 
           html += '<footer class="app"><span></span><span></span></footer>';
 
-          if (pending && pending.kind === "relink") {
-            var rlName = "";
-            A.students.forEach(function (x) { if (sameId(x.id, pending.sid)) rlName = x.name; });
-            html += '<div class="confirmbar"><div class="inner">';
-            html += '<div class="msg">' + esc(rlName) + "さんの専用リンクを再発行しますか?いま配っているリンクは使えなくなります。</div>";
-            html += '<div class="row"><button class="btn-danger" data-action="dorelink"' + (busy ? " disabled" : "") + '>再発行して新リンクをコピー</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-            html += "</div></div>";
-          }
           if (pending && pending.kind === "ngconfirm" && offerDraft) {
             html += '<div class="confirmbar"><div class="inner">';
             html += '<div class="msg">' + esc(offerDraft.msg || "") + "</div>";
@@ -1048,31 +1005,6 @@
             case "toggledone":
               adminAction("toggleDone", { slotId: id });
               break;
-            case "addstudent":
-              var nm = ((document.getElementById("f-newstudent") || {}).value || "").trim();
-              var em = ((document.getElementById("f-newemail") || {}).value || "").trim();
-              if (!nm) { toast("名前を入れてください"); return; }
-              adminAction("addStudent", { name: nm, email: em }, nm + "さんを追加しました");
-              break;
-            case "editemail":
-              editEmailId = id; editFeeId = null; render(); break;
-            case "cancelemail":
-              editEmailId = null; render(); break;
-            case "saveemail":
-              var ev2 = ((document.getElementById("f-email-" + id) || {}).value || "").trim();
-              editEmailId = null;
-              adminAction("setEmail", { studentId: id, email: ev2 }, ev2 ? "メールを登録しました" : "メールを削除しました");
-              break;
-            case "editfee":
-              editFeeId = id; editEmailId = null; render(); break;
-            case "cancelfee":
-              editFeeId = null; render(); break;
-            case "savefee":
-              var rv = +((document.getElementById("f-rate-" + id) || {}).value || 0);
-              var mv = +((document.getElementById("f-monthly-" + id) || {}).value || 0);
-              editFeeId = null;
-              adminAction("setFee", { studentId: id, rate30: rv, monthly: mv }, "料金を設定しました");
-              break;
             case "copybill":
               var mk2 = btn.getAttribute("data-month");
               var sid3 = id;
@@ -1118,42 +1050,6 @@
                 if (res.ok) { A = res.admin; render(); return; }
                 A = null; authM = "account"; ssSet("sw_mode", "auth"); render();
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
-              break;
-            case "copylink":
-              var st4 = null;
-              A.students.forEach(function (x) { if (sameId(x.id, id)) st4 = x; });
-              if (!st4 || !st4.code) { toast("リンクがまだ発行されていません"); return; }
-              copyText(location.origin + location.pathname + "?k=" + st4.code,
-                st4.name + "さんの専用リンクをコピーしました。LINEで送ってください");
-              break;
-            case "newlink":
-              pending = { kind: "relink", sid: id }; render(); break;
-            case "dorelink":
-              var rsid = pending.sid;
-              busy = true; render();
-              apiPost({ action: "admin", token: admToken(), op: "newCode", studentId: rsid }).then(function (res) {
-                busy = false; pending = null;
-                if (res.error) {
-                  toast(res.error);
-                  if (res.badAuth) {
-                    try { localStorage.removeItem("sw_admt"); } catch (e) {}
-                    A = null; authM = "account"; ssSet("sw_mode", "auth");
-                  }
-                  render();
-                  return;
-                }
-                A = res.admin;
-                render();
-                var st8 = null;
-                A.students.forEach(function (x) { if (sameId(x.id, rsid)) st8 = x; });
-                if (st8 && st8.code) {
-                  copyText(location.origin + location.pathname + "?k=" + st8.code,
-                    "再発行し、新しいリンクをコピーしました(前のリンクは無効です)");
-                }
-              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
-              break;
-            case "hidestudent":
-              adminAction("hideStudent", { studentId: id }, "生徒を外しました");
               break;
             case "changepass":
               var cpw = (document.getElementById("f-curpass") || {}).value || "";
@@ -1224,9 +1120,14 @@
 
         /* ---------- 起動 ---------- */
         try {
-          var qk = new URLSearchParams(location.search).get("k");
+          var qs = new URLSearchParams(location.search);
+          var qk = qs.get("k");
+          var qp = qs.get("preview"); // 管理画面から「生徒画面を見る」(先生ログイン時のみ・本人キーは保存しない)
           if (qk) {
             lsSet("sw_k", qk);
+            history.replaceState(null, "", location.pathname);
+          } else if (qp) {
+            if (lsGet("sw_admt")) { previewK = qp; ssSet("sw_mode", "student"); }
             history.replaceState(null, "", location.pathname);
           }
         } catch (e) {}

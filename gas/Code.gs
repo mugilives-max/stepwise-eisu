@@ -383,6 +383,7 @@ function admin_(req) {
     case 'kanriSetPaid':     return kanriSetPaid_(req);
     case 'kanriAddMeeting':  return kanriAddMeeting_(req);
     case 'kanriDeleteRow':   return kanriDeleteRow_(req);
+    case 'kanriSetActive':   return kanriSetActive_(req);
     case 'logout':
       setConfig_('adminToken', '');
       return { ok: true };
@@ -913,9 +914,11 @@ function kanriDashboard_() {
   var weekEnd = addDays_(today, 7);
   var month = today.slice(0, 7);
   var slots = readRows_('slots');
-  var students = readRows_('students').filter(function (s) {
-    return !(String(s.active) === 'false' || s.active === false);
-  });
+  var allStudents = readRows_('students');
+  var isActive = function (s) { return !(String(s.active) === 'false' || s.active === false); };
+  var students = allStudents.filter(isActive);
+  var inactive = allStudents.filter(function (s) { return !isActive(s); })
+    .map(function (s) { return { id: String(s.id), name: s.name }; });
   var nameOf = {};
   students.forEach(function (s) { nameOf[String(s.id)] = s.name; });
   var slim = function (s) {
@@ -947,7 +950,26 @@ function kanriDashboard_() {
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
   return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
-    unpaid: unpaid, meetings: meetings, students: stuCards };
+    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive };
+}
+
+// 予約ページに表示する/しない(studentsシート active 列)。データは消さない
+function kanriSetActive_(req) {
+  var rows = readRows_('students');
+  var on = req.active === true || String(req.active) === 'true';
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.studentId)) {
+      if (on) {
+        var dup = rows.some(function (s, j) {
+          return j !== i && s.name === rows[i].name && !(String(s.active) === 'false' || s.active === false);
+        });
+        if (dup) return { error: '同じ名前の生徒がすでに在籍中です' };
+      }
+      sheet_('students').getRange(i + 2, 3).setValue(on);
+      return { ok: true };
+    }
+  }
+  return { error: '生徒が見つかりません' };
 }
 
 function kanriStudentOp_(req) {
@@ -985,7 +1007,7 @@ function kanriStudent_(studentId) {
   var fee = studentFee_(id, minutes);
   return {
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
-    code: String(sys.code || ''), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
+    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
     month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
       billed: payments.some(function (p) { return p.ym === month; }) }
   };
