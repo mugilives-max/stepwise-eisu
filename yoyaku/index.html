@@ -88,7 +88,7 @@
       .calwd.sat { color: var(--primary); }
       .calday {
         position: relative; display: flex; flex-direction: column; align-items: center;
-        justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px;
+        justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px; max-width: 100%; overflow: hidden;
         border-radius: 9px; border: 1px solid transparent; background: transparent;
         font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink);
       }
@@ -106,6 +106,10 @@
       .calmark { font-size: 10px; line-height: 1; color: var(--coral); font-weight: 700; }
       .calday.sel .calmark { color: var(--white); }
       .calmarks { display: flex; align-items: center; gap: 2px; min-height: 7px; }
+      .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .callbl.of { color: #a8721c; }
+      .callbl.more { color: var(--muted); font-weight: 500; }
+      .calday.sel .callbl { color: var(--white); }
       .callegend {
         display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
         font-size: 11.5px; color: var(--muted);
@@ -336,12 +340,17 @@
                 if (it.booked) marks += '<span class="caldot op"></span>';
                 if (it.offered) marks += '<span class="caldot of"></span>';
               } else {
-                if (it.mine) { marks += '<span class="calmark">✓</span>'; cls += " mine"; }
-                if (it.offer) marks += '<span class="caldot of"></span>';
+                if (it.mine) cls += " mine";
+                if (it.offer && !it.mine) marks += '<span class="caldot of"></span>';
               }
               if (it.ng) marks += '<span class="calmark" style="color:var(--muted)">×</span>';
             }
             marks += "</span>";
+            if (kind !== "teacher" && it && !past && it.labels && it.labels.length) {
+              var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+              lb.slice(0, 2).forEach(function (l) { marks += '<span class="callbl' + (l.st === "offer" ? " of" : "") + '">' + esc(l.text) + "</span>"; });
+              if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
+            }
             var clickable = !past && (it || kind === "teacher");
             if (!clickable) {
               h += '<span class="' + cls + ' off">' + d + marks + "</span>";
@@ -355,8 +364,8 @@
             h += '<span><span class="caldot of"></span> 承認待ちの案内</span>';
             h += '<span><span class="calmark" style="color:var(--muted)">×</span> 都合が悪い生徒あり</span>';
           } else {
-            h += '<span><span class="caldot of"></span> 先生からの案内</span>';
-            h += '<span><span class="calmark">✓</span> あなたの授業</span>';
+            h += '<span><span class="callbl" style="display:inline">科目</span> あなたの授業(確定)</span>';
+            h += '<span><span class="callbl of" style="display:inline">科目</span> 先生からの案内(未承認)</span>';
             h += '<span><span class="calmark" style="color:var(--muted)">×</span> 都合が悪い日</span>';
           }
           h += "</div></div>";
@@ -494,8 +503,9 @@
           }
           var info = {};
           slots.forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0 });
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, labels: [] });
             it[s.st]++;
+            it.labels.push({ text: s.subject || "授業", st: s.st, start: s.start });
           });
           blocked.forEach(function (b) {
             var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0 });
