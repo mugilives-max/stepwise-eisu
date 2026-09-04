@@ -12,6 +12,7 @@
 var TZ = 'Asia/Tokyo';
 var CAL_TITLE_PREFIX = '【塾】';
 var SITE_URL = 'https://www.stepwise-education.jp/yoyaku/';
+var CANCEL_DEADLINE_H = 24; // 授業の何時間前まで生徒が取消を依頼できるか
 
 /* ================= 初期セットアップ ================= */
 
@@ -62,7 +63,8 @@ function doPost(e) {
     switch (req.action) {
       case 'accept':  res = accept_(req.slotId, req.k); break;
       case 'decline': res = decline_(req.slotId, req.k); break;
-      case 'cancel':  res = cancel_(req.slotId, req.k); break;
+      case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
+      case 'cancelReq': res = cancelReq_(req); break;
       case 'block':   res = block_(req); break;
       case 'unblock': res = unblock_(req); break;
       case 'admin':  res = admin_(req); break;
@@ -89,24 +91,30 @@ function studentState_(code) {
   if (!me) return { me: null, slots: [], today: todayStr_() };
   var today = todayStr_();
   // 本人の予定・案内のみ返す(他の生徒の予定は一切送らない)
-  var slots = readRows_('slots')
-    .filter(function (s) {
-      return s.date >= today && String(s.studentId) === String(me.id);
-    })
+  var all = readRows_('slots').filter(function (s) { return String(s.studentId) === String(me.id); });
+  var slots = all
+    .filter(function (s) { return s.date >= today; })
     .map(function (s) {
       var st = s.status === 'offered' ? 'offer' : 'mine';
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
         subject: String(s.subject || ''),
-        meet: st === 'mine' ? String(s.meetUrl || '') : ''
+        meet: st === 'mine' ? String(s.meetUrl || '') : '',
+        req: st === 'mine' ? parseReq_(s.req) : null,
+        hours: Math.round(hoursUntil_(s.date, s.start) * 10) / 10
       };
     });
+  // 実施済みの履歴(直近120日)。教科ごとの回数表示に使う
+  var since = addDays_(today, -120);
+  var history = all
+    .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked' && (String(s.done) === 'true' || s.done === true); })
+    .map(function (s) { return { date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || '') }; });
   var blocked = readRows_('blocked')
     .filter(function (b) {
       return String(b.studentId) === String(me.id) && b.date >= today;
     })
     .map(function (b) { return { id: b.id, date: b.date, note: String(b.note || '') }; });
-  return { me: { name: me.name }, slots: slots, blocked: blocked, today: today };
+  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -255,6 +263,86 @@ function cancel_(slotId, code) {
   return { ok: true, state: studentState_(code) };
 }
 
+/* ================= 取消依頼(生徒→先生) ================= */
+
+function ensureReqHeader_() {
+  var sh = sheet_('slots');
+  if (sh && sh.getRange(1, 11).getValue() !== 'req') sh.getRange(1, 11).setValue('req');
+}
+
+// slots.req 列: JSON文字列 {"kind":"cancel","reason":"...","at":"yyyy-MM-dd HH:mm"}
+function parseReq_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  try { var o = JSON.parse(s); return o && o.kind ? o : null; } catch (e) { return null; }
+}
+
+function hoursUntil_(date, start) {
+  var d = new Date(String(date) + 'T' + String(start || '00:00') + ':00+09:00');
+  return (d.getTime() - Date.now()) / 36e5;
+}
+
+function mailStudent_(student, subject, body) {
+  if (!student || isTestStudent_(student)) return;
+  var email = normEmail_(student.email);
+  if (!email) return;
+  try { MailApp.sendEmail(email, '[ステップワイズ] ' + subject, body); }
+  catch (err) { addLog_('生徒へのメール送信に失敗: ' + err); }
+}
+
+function cancelReq_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var r = findSlotRow_(req.slotId);
+  if (!r || r.slot.status !== 'booked' || String(r.slot.studentId) !== String(student.id)) {
+    return { error: 'この予定は見つかりません', refresh: true };
+  }
+  var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
+  var name = student.name;
+  if (req.withdraw) {
+    sheet_('slots').getRange(r.rowIndex, 11).setValue('');
+    addLog_(name + 'さんが ' + when + ' の取消依頼を取り下げ');
+    if (!isTestStudent_(student)) notify_('【取消依頼の取り下げ】' + name + 'さん', name + 'さんが ' + when + ' の取消依頼を取り下げました。予定どおり行います。');
+    return { ok: true, state: studentState_(req.k) };
+  }
+  if (hoursUntil_(r.slot.date, r.slot.start) < CANCEL_DEADLINE_H) {
+    return { error: '授業の' + CANCEL_DEADLINE_H + '時間前を過ぎているため、ここからは依頼できません。先生にLINEで連絡してください', refresh: true };
+  }
+  var reason = String(req.reason || '').trim().slice(0, 200);
+  var obj = { kind: 'cancel', reason: reason, at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') };
+  var cell = sheet_('slots').getRange(r.rowIndex, 11);
+  cell.setNumberFormat('@');
+  cell.setValue(JSON.stringify(obj));
+  addLog_(name + 'さんが ' + when + ' の取消を依頼' + (reason ? '(' + reason + ')' : ''));
+  if (!isTestStudent_(student)) notify_('【取消依頼】' + name + 'さん',
+    name + 'さんから ' + when + ' の授業の取消依頼が届きました。\n' +
+    (reason ? '理由: ' + reason + '\n' : '') +
+    '\n管理画面で「取消を承認」または「予定どおり行う」を選んでください。\nhttps://www.stepwise-education.jp/kanri/');
+  return { ok: true, state: studentState_(req.k) };
+}
+
+// 先生が取消依頼に回答(approve: true=取消する / false=予定どおり行う)
+function adminResolveCancel_(req) {
+  var r = findSlotRow_(req.slotId);
+  if (!r || r.slot.status !== 'booked') return { error: '予定が見つかりません' };
+  var student = systemStudent_(r.slot.studentId);
+  var name = student ? student.name : '(不明)';
+  var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
+  if (req.approve === true || String(req.approve) === 'true') {
+    deleteCalEvent_(r.slot);
+    sheet_('slots').deleteRow(r.rowIndex);
+    addLog_('先生が ' + name + 'さんの ' + when + ' の取消を承認');
+    mailStudent_(student, when + ' の授業は取消になりました',
+      name + 'さん\n\n' + when + ' の授業の取消依頼を承認しました。この授業は行いません。\n次の予定は先生から案内します。\n' + SITE_URL + '?k=' + String(student ? student.code : ''));
+  } else {
+    sheet_('slots').getRange(r.rowIndex, 11).setValue('');
+    addLog_('先生が ' + name + 'さんの ' + when + ' を予定どおり実施に(取消依頼を取り下げ)');
+    mailStudent_(student, when + ' の授業は予定どおり行います',
+      name + 'さん\n\n' + when + ' の授業の取消依頼を確認しましたが、この授業は予定どおり行います。\n事情がある場合は先生にLINEで相談してください。\n' + SITE_URL + '?k=' + String(student ? student.code : ''));
+  }
+  return { ok: true };
+}
+
 /* ================= 先生向け(PIN必須) ================= */
 
 function pinOk_(input) {
@@ -384,6 +472,7 @@ function admin_(req) {
     case 'delBlock':    return adminDelBlock_(req);
     case 'hideStudent': return adminHideStudent_(req);
     case 'changePass':  return adminChangePass_(req);
+    case 'resolveCancel':    return kanriWrap_(req, adminResolveCancel_(req), req.studentId);
     case 'kanriDashboard':   return { ok: true, data: kanriDashboard_() };
     case 'kanriStudent':     return kanriStudentOp_(req);
     case 'kanriSaveProfile': return kanriSaveProfile_(req);
@@ -789,14 +878,15 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk')) return;
+  if (cache.get('schemaOk2')) return;
+  ensureReqHeader_();
   ensureEmailHeader_();
   ensureMeetHeader_();
   ensureCodeHeader_();
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk', '1', 21600);
+  cache.put('schemaOk2', '1', 21600);
 }
 
 function readRows_(name) {
@@ -970,8 +1060,9 @@ function kanriDashboard_() {
     return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''),
       studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId),
-      meetUrl: String(s.meetUrl || '') };
+      meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req) };
   };
+  var cancelReqs = slots.filter(function (s) { return s.status === 'booked' && s.date >= today && parseReq_(s.req); }).map(slim).sort(slotSort_);
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var lessonsWeek = slots.filter(function (s) { return s.date > today && s.date < weekEnd && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var pending = slots.filter(function (s) { return s.date >= today && s.status === 'offered'; }).map(slim).sort(slotSort_);
@@ -995,7 +1086,7 @@ function kanriDashboard_() {
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
   return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
-    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive };
+    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs };
 }
 
 // 予約ページに表示する/しない(studentsシート active 列)。データは消さない
@@ -1036,7 +1127,7 @@ function kanriStudent_(studentId) {
   if (profile) delete profile._row;
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
     .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
-      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), meetUrl: String(s.meetUrl || '') }; })
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req) }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });

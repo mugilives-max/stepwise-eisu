@@ -116,6 +116,7 @@
         "use strict";
         var API = "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec";
         var YOYAKU = "../yoyaku/";
+        var YOYAKU_T = YOYAKU + "?teacher=1"; // 先生モード(当面。授業の案内を管理画面へ移すまで)
         var app = document.getElementById("app");
         var nav = document.getElementById("nav");
         var WD = ["日","月","火","水","木","金","土"];
@@ -199,7 +200,7 @@
           nav.innerHTML =
             '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
             '<a href="#students" class="' + (r.page !== "home" ? "on" : "") + '">生徒</a>' +
-            '<a href="' + YOYAKU + '" target="_blank" rel="noopener">予約ページ ↗</a>' +
+            '<a href="' + YOYAKU_T + '" target="_blank" rel="noopener">予定ページ(先生) ↗</a>' +
             '<a href="#" data-action="logout">ログアウト</a>' +
             (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
         }
@@ -253,6 +254,7 @@
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(s.subject) + "</span>" : "") + "</span>";
           if (s.status === "offered") h += '<span class="tag amber">承認待ち</span>';
+          else if (s.req) h += '<span class="tag red">取消依頼中</span>';
           else if (s.done) h += '<span class="tag gray">実施済</span>';
           if (s.meetUrl) h += '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(s.meetUrl) + '">Meet</a>';
           return h + "</div>";
@@ -261,7 +263,20 @@
           renderNav();
           var d = D;
           var html = '<div class="head"><div><h1>今日 ' + fmtD(d.today) + '</h1><p class="sub">ステップワイズ個別指導の運営ダッシュボード</p></div>' +
-            '<div class="row"><a class="btn-primary btn-sm" href="' + YOYAKU + '" target="_blank" rel="noopener">授業を案内する ↗</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+            '<div class="row"><a class="btn-primary btn-sm" href="' + YOYAKU_T + '" target="_blank" rel="noopener">授業を案内する ↗</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+
+          var cr = d.cancelReqs || [];
+          if (cr.length) {
+            html += '<h2 style="margin-top:16px">取消依頼 <span class="cnt">' + cr.length + '件・返事が必要です</span></h2><div class="card" style="border-color:var(--danger)">';
+            cr.forEach(function (s) {
+              html += '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span>';
+              html += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + '</a>' + (s.subject ? ' <span class="muted small">' + esc(s.subject) + '</span>' : '') +
+                '<div class="small">' + (s.req && s.req.reason ? '理由: ' + esc(s.req.reason) : '<span class="muted">理由なし</span>') + (s.req && s.req.at ? ' <span class="muted">(' + esc(s.req.at) + ')</span>' : '') + '</div></span>';
+              html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>取消を承認</button>';
+              html += '<button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>予定どおり行う</button></div>';
+            });
+            html += '<div class="note">承認するとカレンダーから削除され、生徒にメールで伝わります(メール登録時)。「予定どおり行う」は依頼を取り下げて生徒に伝えます。いずれもLINEでのひと言があると丁寧です。</div></div>';
+          }
 
           html += '<div class="grid2" style="margin-top:14px">';
           html += '<div class="card"><h2 style="margin-top:0">今日の授業 <span class="cnt">' + d.lessonsToday.length + '件</span></h2>';
@@ -452,7 +467,7 @@
           if (s.lessons.length) {
             s.lessons.slice(0, 20).forEach(function (l) {
               html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
-              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>');
+              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
               html += '</div>';
             });
           } else html += '<div class="empty">授業はまだありません</div>';
@@ -542,7 +557,7 @@
           var btn = ev.target.closest("[data-action]");
           if (!btn || btn.disabled) return;
           var a = btn.getAttribute("data-action");
-          var sid = cur ? cur.id : (btn.getAttribute("data-sid") || "");
+          var sid = btn.getAttribute("data-sid") || (route().page === "student" && cur ? cur.id : "");
           switch (a) {
             case "login":
               ev.preventDefault();
@@ -652,6 +667,17 @@
               var on = btn.getAttribute("data-on") === "1";
               if (!on && !confirm(cur.name + "さんを予約ページから外しますか?\n(記録は残ります。あとで戻せます)")) return;
               act("kanriSetActive", { studentId: sid, active: on }, on ? "予約ページに戻しました" : "予約ページから外しました", function () { cur.active = on; });
+              break;
+            case "cancelok":
+            case "cancelkeep":
+              var csl = btn.getAttribute("data-id"), approve = a === "cancelok";
+              if (approve && !confirm("この授業を取消にしますか?\nカレンダーの予定も削除されます。")) return;
+              act("resolveCancel", { slotId: csl, approve: approve, studentId: sid }, approve ? "取消にしました" : "予定どおり行うことにしました", function () {
+                if (!D) return;
+                D.cancelReqs = (D.cancelReqs || []).filter(function (x) { return String(x.id) !== String(csl); });
+                var strip = function (list) { return approve ? list.filter(function (x) { return String(x.id) !== String(csl); }) : list.map(function (x) { if (String(x.id) === String(csl)) x.req = null; return x; }); };
+                D.lessonsToday = strip(D.lessonsToday); D.lessonsWeek = strip(D.lessonsWeek);
+              });
               break;
             case "delrow":
               if (!confirm("この記録を削除しますか?")) return;
