@@ -898,15 +898,8 @@
           });
         }
 
-        /* ---------- イベント ---------- */
-        app.addEventListener("click", function (ev) {
-          var btn = ev.target.closest("[data-action]");
-          if (!btn || btn.disabled) return;
-          var act = btn.getAttribute("data-action");
-          var id = btn.getAttribute("data-id");
-
-          switch (act) {
-            case "teacher":
+        // 先生モードへ入る(?teacher=1 からの自動遷移と、セッションに先生モードが残っていた場合の復帰に共用)
+        function enterTeacher() {
               previewK = null;
               ssSet("sw_mode", "auth"); authM = null; render();
               apiGet({ action: "authmode", t: Date.now() }).then(function (res) {
@@ -924,7 +917,17 @@
                   render();
                 }
               }).catch(function () { authM = "account"; render(); });
-              break;
+        }
+
+        /* ---------- イベント ---------- */
+        app.addEventListener("click", function (ev) {
+          var btn = ev.target.closest("[data-action]");
+          if (!btn || btn.disabled) return;
+          var act = btn.getAttribute("data-action");
+          var id = btn.getAttribute("data-id");
+
+          switch (act) {
+            case "teacher": enterTeacher(); break;
             case "exitteacher":
               ssSet("sw_mode", "student"); pending = null;
               selDate = null; selManual = false;
@@ -1173,7 +1176,7 @@
           app.innerHTML = '<div class="loading">予約システムは準備中です。<br>もうしばらくお待ちください。</div>';
         } else {
           loadState().then(function () {
-            if (qt) { var tb = document.createElement("button"); tb.setAttribute("data-action", "teacher"); tb.hidden = true; document.body.appendChild(tb); tb.click(); tb.remove(); }
+            if (qt || (mode() === "teacher" && !A)) enterTeacher();
           }).catch(function (e) {
             app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
           });
