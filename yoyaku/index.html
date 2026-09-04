@@ -445,6 +445,20 @@
             html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。先生が確認してから取消になります。直前の変更はLINEで直接連絡してください。</div>';
           }
 
+          html += "<h2>授業の希望日程</h2>";
+          var wishes = S.wishes || [];
+          if (wishes.length > 0) {
+            html += '<div class="card">';
+            wishes.forEach(function (wv) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(wv.date) + " " + wv.start + "〜" + wv.end + "</span>";
+              html += '<span class="who">' + (wv.note ? esc(wv.note) : "") + ' <span style="font-size:11.5px;color:var(--muted)">先生の返事待ち</span></span>';
+              html += '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(wv.id) + '">取消</button></div>';
+            });
+            html += "</div>";
+          }
+          html += '<div class="row" style="margin-top:10px"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><span style="color:var(--muted)">〜</span><input type="time" id="f-wend" value="19:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
+          html += '<div class="note">授業をしてほしい日と時間帯を先生に伝えられます。先生が確認して「案内」を送るので、承認すると確定です(希望を送っただけでは確定しません)。</div>';
+
           html += "<h2>都合が悪い日</h2>";
           var blocked = S.blocked || [];
           if (blocked.length > 0) {
@@ -1017,6 +1031,18 @@
             case "tdelblock":
               var tids = btn.getAttribute("data-ids");
               adminAction("delBlock", tids ? { blockIds: tids.split(",") } : { blockId: id }, "削除しました");
+              break;
+            case "addwish":
+              var wd = (document.getElementById("f-wdate") || {}).value;
+              var ws = (document.getElementById("f-wstart") || {}).value;
+              var we = (document.getElementById("f-wend") || {}).value;
+              var wn = ((document.getElementById("f-wnote") || {}).value || "").trim();
+              if (!wd) { toast("日付をえらんでください"); return; }
+              if (!ws || !we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
+              studentAction({ action: "wish", k: myKey(), date: wd, start: ws, end: we, note: wn }, "希望を先生に送りました");
+              break;
+            case "delwish":
+              studentAction({ action: "unwish", k: myKey(), wishId: id }, "希望を取り消しました");
               break;
             case "addblock":
               var bd = (document.getElementById("f-bdate") || {}).value;

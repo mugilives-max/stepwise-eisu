@@ -222,6 +222,31 @@
         }
         function rangeLabel(g) { return g.start === g.end ? fmtD(g.start) : fmtD(g.start) + "〜" + fmtD(g.end); }
         function slotCmp(a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); }
+        function minutesBetween(s, e) { var a = s.split(":"), b = e.split(":"); return (+b[0]) * 60 + (+b[1]) - (+a[0]) * 60 - (+a[1]); }
+        function fitMin(m) { var opts = [120, 90, 60, 45, 30]; for (var i = 0; i < opts.length; i++) if (m >= opts[i]) return opts[i]; return 60; }
+        function wishRow(x, showName) {
+          var h = '<div class="line"><span class="t">' + fmtD(x.date) + ' ' + x.start + '〜' + x.end + '</span><span class="w">' +
+            (showName ? '<a class="nm" href="#s=' + esc(x.studentId) + '" style="text-decoration:none;color:inherit">' + esc(x.studentName) + '</a> ' : '') +
+            (x.note ? '<span class="small">' + esc(x.note) + '</span>' : '<span class="small muted">メモなし</span>') + (x.createdAt ? ' <span class="small muted">(' + esc(x.createdAt) + ')</span>' : '') + '</span>';
+          h += '<button class="btn-ghost btn-sm" data-action="usewish" data-id="' + esc(x.id) + '" data-sid="' + esc(x.studentId) + '" data-date="' + esc(x.date) + '" data-start="' + esc(x.start) + '" data-end="' + esc(x.end) + '">この希望で案内</button>';
+          h += '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(x.id) + '" data-sid="' + esc(x.studentId) + '">削除</button></div>';
+          return h;
+        }
+        // 案内フォーム(授業ページ・カルテ共用)。fixedStudent を渡すと生徒は固定
+        function offerForm(today, students, fixedStudent) {
+          var d = offerDraft || {};
+          var h = '<div class="card"><div class="form">';
+          if (fixedStudent) h += '<input type="hidden" id="f-student" value="' + esc(fixedStudent.id) + '">';
+          else h += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>' + students.map(function (x) { return '<option value="' + esc(x.id) + '"' + (sameId(d.studentId, x.id) ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>';
+          h += '<label for="f-subject">科目</label><select id="f-subject"><option value="">(科目なし)</option>' + ["英語", "数学", "英数", "国語", "理科", "社会"].map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
+          h += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + (d.date || today) + '">';
+          h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" step="300">';
+          h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
+          h += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
+          h += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>' + (d.wishId ? '<span class="small muted">希望日程から入力中(案内すると希望は消えます)</span>' : '') + '</div>';
+          h += '<div class="note">案内は生徒の予定ページに表示されます(メール登録済みなら通知メールも)。生徒が承認すると確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
+          return h;
+        }
 
         /* ---------- ルーティング ---------- */
         function route() {
@@ -233,7 +258,7 @@
           return { page: "home" };
         }
         window.addEventListener("hashchange", function () {
-          editProfile = false; editEmail = false; editFee = false;
+          editProfile = false; editEmail = false; editFee = false; offerDraft = null; selManual = false;
           if (skipLoad) { skipLoad = false; render(); return; }
           load();
         });
@@ -323,6 +348,14 @@
               html += '<button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>予定どおり行う</button></div>';
             });
             html += '<div class="note">承認するとカレンダーから削除され、生徒にメールで伝わります(メール登録時)。「予定どおり行う」は依頼を取り下げて生徒に伝えます。いずれもLINEでのひと言があると丁寧です。</div></div>';
+          }
+
+          var wh = d.wishes || [];
+          if (wh.length) {
+            html += '<h2 style="margin-top:16px">生徒からの希望日程 <span class="cnt">' + wh.length + '件</span></h2><div class="card">';
+            wh.slice(0, 5).forEach(function (x) { html += '<div class="line"><span class="t">' + fmtD(x.date) + ' ' + x.start + '〜' + x.end + '</span><span class="w"><a class="nm" href="#s=' + esc(x.studentId) + '" style="text-decoration:none;color:inherit">' + esc(x.studentName) + '</a>' + (x.note ? ' <span class="small muted">' + esc(x.note) + '</span>' : '') + '</span><a class="btn-ghost btn-sm" href="#lessons">授業ページで案内</a></div>'; });
+            if (wh.length > 5) html += '<div class="note">ほか ' + (wh.length - 5) + ' 件は授業ページで</div>';
+            html += '</div>';
           }
 
           html += '<div class="grid2" style="margin-top:14px">';
@@ -509,15 +542,46 @@
             '<label>備考</label><input type="text" id="g-note">' +
             '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addgrade"' + (busy ? " disabled" : "") + '>記録する</button></div></div></details></div>';
 
-          // 授業履歴
-          html += '<h2>授業履歴 <span class="cnt">直近' + Math.min(20, s.lessons.length) + '件</span></h2><div class="card">';
-          if (s.lessons.length) {
-            s.lessons.slice(0, 20).forEach(function (l) {
-              html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
-              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
+          // 今後の予定(確定・承認待ち)と案内
+          var tdy = s.today || today();
+          var upcoming = (s.lessons || []).filter(function (l) { return l.date >= tdy && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
+          html += '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2><div class="card">';
+          if (upcoming.length) {
+            upcoming.forEach(function (l) {
+              html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
+              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
+              html += '</span>';
+              if (l.status === "booked") {
+                if (l.req) html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取消を承認</button><button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">予定どおり</button>';
+                if (l.meetUrl) html += '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>';
+                if (l.date <= tdy) html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
+                html += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '" data-when="' + fmtD(l.date) + ' ' + l.start + '" data-name="' + esc(s.name) + '">解除</button>';
+              } else html += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取り下げ</button>';
               html += '</div>';
             });
-          } else html += '<div class="empty">授業はまだありません</div>';
+          } else html += '<div class="empty">今後の予定はありません</div>';
+          html += '</div>';
+          var sw = s.wishes || [];
+          if (sw.length) {
+            html += '<h2>' + esc(s.name) + 'さんの希望日程 <span class="cnt">' + sw.length + '件</span></h2><div class="card">' + sw.map(function (x) { return wishRow(x, false); }).join("") + '</div>';
+          }
+          if (s.active !== false) {
+            if (offerDraft && !sameId(offerDraft.studentId, s.id)) offerDraft = null;
+            if (!offerDraft) offerDraft = { studentId: s.id, date: tdy, subject: (function () { var ls = "", ld = ""; (s.lessons || []).forEach(function (l) { if (l.subject && l.date >= ld) { ld = l.date; ls = l.subject; } }); return ls; })() };
+            html += '<h2>' + esc(s.name) + 'さんに授業を案内する</h2>' + offerForm(tdy, [], { id: s.id });
+          }
+
+          // 授業履歴(実施済み・過去)
+          var pastL = (s.lessons || []).filter(function (l) { return l.date < tdy; });
+          html += '<h2>授業履歴 <span class="cnt">直近' + Math.min(20, pastL.length) + '件</span></h2><div class="card">';
+          if (pastL.length) {
+            pastL.slice(0, 20).forEach(function (l) {
+              html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
+              html += l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag amber">未記録</span>';
+              if (l.status === "booked") html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
+              html += '</div>';
+            });
+          } else html += '<div class="empty">過去の授業はまだありません</div>';
           html += '</div>';
 
           // 入金
@@ -625,16 +689,14 @@
             selDate = dates.length ? dates[0] : today;
             var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
-          var formDate = (offerDraft && offerDraft.date) || ((selDate && selDate >= today) ? selDate : today);
-          html += '<h2>授業を案内する</h2><div class="card"><div class="form">';
-          html += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '"' + (offerDraft && sameId(offerDraft.studentId, x.id) ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>';
-          html += '<label for="f-subject">科目</label><select id="f-subject"><option value="">(科目なし)</option>' + ["英語", "数学", "英数", "国語", "理科", "社会"].map(function (s) { return '<option' + (offerDraft && offerDraft.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
-          html += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + formDate + '">';
-          html += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + ((offerDraft && offerDraft.start) || "17:00") + '" step="300">';
-          html += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === ((offerDraft && +offerDraft.min) || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
-          html += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
-          html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button></div>';
-          html += '<div class="note">案内は生徒の予定ページに表示されます(メール登録済みなら通知メールも)。生徒を選ぶと前回の科目が入ります。カレンダーの日をタップすると日付が入ります。</div></div>';
+          if (!offerDraft) offerDraft = { date: (selDate && selDate >= today) ? selDate : today };
+          else if (!offerDraft.date) offerDraft.date = today;
+          html += '<h2>授業を案内する</h2>' + offerForm(today, active, null);
+
+          // 生徒からの希望日程
+          var wl = A.wishes || [];
+          html += '<h2>生徒からの希望日程 <span class="cnt">' + wl.length + '件</span></h2>';
+          html += wl.length ? '<div class="card">' + wl.map(function (x) { return wishRow(x, true); }).join("") + '<div class="note">「この希望で案内」を押すと上のフォームに入ります。案内を送ると希望は消えます。</div></div>' : '<div class="empty">希望はありません(生徒は予定ページから送れます)</div>';
 
           // 承認待ち
           var offered = upcoming.filter(function (s) { return s.status === "offered"; });
@@ -737,8 +799,8 @@
         function sendOffer(force) {
           if (!offerDraft || busy) return;
           busy = true; syncMsg = "送信中…"; render();
-          var body = { action: "admin", token: token(), op: "offer", from: "kanri", view: "lessons", force: !!force };
-          ["studentId", "date", "start", "min", "repeat", "subject"].forEach(function (k2) { body[k2] = offerDraft[k2]; });
+          var body = { action: "admin", token: token(), op: "offer", from: "kanri", view: viewOf(), force: !!force };
+          ["studentId", "date", "start", "min", "repeat", "subject", "wishId"].forEach(function (k2) { if (offerDraft[k2]) body[k2] = offerDraft[k2]; });
           post(body).then(function (res) {
             busy = false; syncMsg = "";
             if (res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); return; }
@@ -747,7 +809,7 @@
               toast(res.error); render(); return;
             }
             var d = offerDraft; offerDraft = null;
-            if (res.admin) { A = res.admin; cachePut("lessons", A); }
+            if (!applyResult(res, route())) load(true);
             selDate = d.date; selManual = true;
             render(); toast("案内を送りました");
           }).catch(function () { busy = false; syncMsg = ""; toast("通信に失敗しました"); render(); });
@@ -926,22 +988,38 @@
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } render(); break;
             case "calday":
               selDate = btn.getAttribute("data-date"); selManual = true;
-              offerDraft = { studentId: val("f-student"), subject: val("f-subject"), start: val("f-start"), min: val("f-min"), date: selDate };
+              offerDraft = { studentId: val("f-student"), subject: val("f-subject"), start: val("f-start"), min: val("f-min"), date: selDate, wishId: offerDraft && offerDraft.wishId };
               render(); break;
             case "offerslot":
               var stid = val("f-student"), odate = val("f-date"), ostart = val("f-start");
               if (!stid) { toast("生徒をえらんでください"); return; }
               if (!odate || !ostart) { toast("日付と時間を入れてください"); return; }
-              offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject") };
+              offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject"), wishId: offerDraft && offerDraft.wishId };
               sendOffer(false); break;
+            case "usewish":
+              var uw = { studentId: btn.getAttribute("data-sid"), date: btn.getAttribute("data-date"), start: btn.getAttribute("data-start"), min: fitMin(minutesBetween(btn.getAttribute("data-start"), btn.getAttribute("data-end"))), wishId: btn.getAttribute("data-id") };
+              var srcSlots = route().page === "student" ? (cur.lessons || []).map(function (l) { return { studentId: cur.id, date: l.date, subject: l.subject }; }) : (A ? A.slots : []);
+              var lsub = "", ld = "";
+              srcSlots.forEach(function (s) { if (sameId(s.studentId, uw.studentId) && s.subject && s.date >= ld) { ld = s.date; lsub = s.subject; } });
+              uw.subject = lsub;
+              offerDraft = uw; selDate = uw.date; selManual = true;
+              render();
+              var fe = document.getElementById("f-date"); if (fe) fe.scrollIntoView({ behavior: "smooth", block: "center" });
+              toast("希望日程をフォームに入れました。内容を確認して案内してください");
+              break;
+            case "delwish":
+              if (!confirm("この希望日程を削除しますか?")) return;
+              if (route().page === "student") act("delWish", { wishId: btn.getAttribute("data-id"), studentId: sid }, "削除しました", function () { cur.wishes = (cur.wishes || []).filter(function (x) { return String(x.id) !== btn.getAttribute("data-id"); }); });
+              else actA("delWish", { wishId: btn.getAttribute("data-id") }, "削除しました");
+              break;
             case "delslot":
               if (!confirm("この案内を取り下げますか?")) return;
-              actA("deleteSlot", { slotId: btn.getAttribute("data-id") }, "取り下げました"); break;
+              (route().page === "student" ? act : actA)("deleteSlot", { slotId: btn.getAttribute("data-id"), studentId: sid }, "取り下げました"); break;
             case "unbook":
               if (!confirm(btn.getAttribute("data-name") + "さんの " + btn.getAttribute("data-when") + " の授業を解除しますか?\nカレンダーの予定も削除されます。生徒への連絡は別途お願いします。")) return;
-              actA("unbook", { slotId: btn.getAttribute("data-id") }, "解除しました"); break;
+              (route().page === "student" ? act : actA)("unbook", { slotId: btn.getAttribute("data-id"), studentId: sid }, "解除しました"); break;
             case "toggledone":
-              actA("toggleDone", { slotId: btn.getAttribute("data-id") }); break;
+              (route().page === "student" ? act : actA)("toggleDone", { slotId: btn.getAttribute("data-id"), studentId: sid }); break;
             case "taddblock":
               var bs = val("b-student"), bd = val("b-date"), bd2 = val("b-date2");
               if (!bs) { toast("生徒をえらんでください"); return; }

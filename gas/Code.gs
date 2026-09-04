@@ -65,6 +65,8 @@ function doPost(e) {
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
       case 'cancelReq': res = cancelReq_(req); break;
+      case 'wish':    res = wish_(req); break;
+      case 'unwish':  res = unwish_(req); break;
       case 'block':   res = block_(req); break;
       case 'unblock': res = unblock_(req); break;
       case 'admin':  res = admin_(req); break;
@@ -114,7 +116,9 @@ function studentState_(code) {
       return String(b.studentId) === String(me.id) && b.date >= today;
     })
     .map(function (b) { return { id: b.id, date: b.date, note: String(b.note || '') }; });
-  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  var wishes = wishRows_().filter(function (x) { return String(x.studentId) === String(me.id) && x.date >= today; })
+    .map(function (x) { return { id: x.id, date: x.date, start: x.start, end: x.end, note: x.note }; });
+  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -343,6 +347,80 @@ function adminResolveCancel_(req) {
   return { ok: true };
 }
 
+/* ================= 希望日程(生徒→先生) ================= */
+
+function ensureWishesSheet_() {
+  var ss = ss_();
+  if (!ss.getSheetByName('wishes')) {
+    var sh = ss.insertSheet('wishes');
+    sh.appendRow(['id', 'studentId', 'date', 'start', 'end', 'note', 'createdAt']);
+  }
+}
+
+// wishes を正規化して返す(date yyyy-MM-dd / start,end HH:mm)
+function wishRows_() {
+  if (!ss_().getSheetByName('wishes')) return [];
+  return readRows_('wishes').map(function (x) {
+    return { id: x.id, studentId: String(x.studentId || ''), date: x.date, start: x.start,
+      end: normTime_(x.end), note: String(x.note || ''), createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '' };
+  }).filter(function (x) { return x.id && x.date; });
+}
+
+function wish_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var date = String(req.date || ''), start = normTime_(req.start), end = normTime_(req.end);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < todayStr_()) return { error: '今日以降の日付をえらんでください' };
+  if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || start >= end) return { error: '時間帯は「開始 < 終了」で入れてください' };
+  var mine = wishRows_().filter(function (x) { return x.studentId === String(student.id) && x.date >= todayStr_(); });
+  if (mine.length >= 20) return { error: '希望は20件までです。不要なものを取り消してください' };
+  if (mine.some(function (x) { return x.date === date && x.start === start && x.end === end; })) return { error: '同じ希望がすでにあります' };
+  var note = String(req.note || '').trim().slice(0, 100);
+  var sh = sheet_('wishes');
+  sh.appendRow([uid_(), String(student.id), date, start, end, note, new Date()]);
+  var rr = sh.getLastRow();
+  sh.getRange(rr, 2).setNumberFormat('@'); sh.getRange(rr, 4, 1, 2).setNumberFormat('@');
+  var when = fmtDateJa_(date) + ' ' + start + '〜' + end;
+  addLog_(student.name + 'さんが希望日程を登録: ' + when + (note ? '(' + note + ')' : ''));
+  if (!isTestStudent_(student)) notify_('【希望日程】' + student.name + 'さん',
+    student.name + 'さんから授業の希望日程が届きました。\n' + when + (note ? '\nメモ: ' + note : '') +
+    '\n\n管理画面の「授業」ページから、この希望で案内できます。\nhttps://www.stepwise-education.jp/kanri/#lessons');
+  return { ok: true, state: studentState_(req.k) };
+}
+
+function unwish_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var rows = readRows_('wishes');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].id) === String(req.wishId) && String(rows[i].studentId) === String(student.id)) {
+      sheet_('wishes').deleteRow(i + 2);
+      addLog_(student.name + 'さんが希望日程を取消: ' + fmtDateJa_(rows[i].date) + ' ' + rows[i].start);
+      return { ok: true, state: studentState_(req.k) };
+    }
+  }
+  return { error: 'この希望は見つかりません', refresh: true };
+}
+
+// 先生側: 希望を削除(案内した/対応済み)
+function delWish_(wishId) {
+  var rows = readRows_('wishes');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].id) === String(wishId)) { sheet_('wishes').deleteRow(i + 2); return true; }
+  }
+  return false;
+}
+
+// 管理画面向け: 今日以降の希望(生徒名付き)
+function wishesForAdmin_() {
+  var today = todayStr_();
+  var names = {};
+  readRows_('students').forEach(function (s) { names[String(s.id)] = s.name; });
+  return wishRows_().filter(function (x) { return x.date >= today; })
+    .map(function (x) { x.studentName = names[x.studentId] || '(不明)'; return x; })
+    .sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
+}
+
 /* ================= 先生向け(PIN必須) ================= */
 
 function pinOk_(input) {
@@ -447,6 +525,7 @@ var LITE_ = false; // true のとき adminState_ を省略(管理画面からの
 // 管理画面(from:'kanri')からの書き込みは、更新後のカルテ(またはホーム)をそのまま返す
 function kanriWrap_(req, res, studentId) {
   if (!res || res.error || req.from !== 'kanri') return res;
+  if (req.view === 'lessons') return res; // 授業ページは admin 全データをそのまま使う
   if (req.view === 'home') return { ok: true, id: String(studentId || ''), dash: kanriDashboard_() };
   var d = kanriStudent_(String(studentId || req.studentId || ''));
   if (d.error) return d;
@@ -460,10 +539,15 @@ function admin_(req) {
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
   switch (req.op) {
     case 'state':       return { ok: true, admin: adminState_() };
-    case 'offer':       return adminOffer_(req);
-    case 'deleteSlot':  return adminDeleteSlot_(req);
-    case 'unbook':      return adminUnbook_(req);
-    case 'toggleDone':  return adminToggleDone_(req);
+    case 'offer': {
+      var ro = adminOffer_(req);
+      if (ro && ro.ok && req.wishId) { delWish_(req.wishId); if (ro.admin) ro.admin.wishes = wishesForAdmin_(); }
+      return kanriWrap_(req, ro, req.studentId);
+    }
+    case 'deleteSlot':  return kanriWrap_(req, adminDeleteSlot_(req), req.studentId);
+    case 'unbook':      return kanriWrap_(req, adminUnbook_(req), req.studentId);
+    case 'toggleDone':  return kanriWrap_(req, adminToggleDone_(req), req.studentId);
+    case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
     case 'setEmail':    return kanriWrap_(req, adminSetEmail_(req));
     case 'setFee':      return kanriWrap_(req, adminSetFee_(req));
@@ -525,7 +609,7 @@ function adminState_() {
       };
     });
   return {
-    slots: slots, students: students, log: log, blocked: blocked, today: todayStr_(),
+    slots: slots, students: students, log: log, blocked: blocked, wishes: wishesForAdmin_(), today: todayStr_(),
     account: getConfig_('teacherEmail')
   };
 }
@@ -879,15 +963,16 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk2')) return;
+  if (cache.get('schemaOk3')) return;
   ensureReqHeader_();
+  ensureWishesSheet_();
   ensureEmailHeader_();
   ensureMeetHeader_();
   ensureCodeHeader_();
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk2', '1', 21600);
+  cache.put('schemaOk3', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1087,7 +1172,7 @@ function kanriDashboard_() {
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
   return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
-    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs };
+    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_() };
 }
 
 // 予約ページに表示する/しない(studentsシート active 列)。データは消さない
@@ -1147,6 +1232,7 @@ function kanriStudent_(studentId) {
   return {
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
+    today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
     month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
       billed: payments.some(function (p) { return p.ym === month; }) }
   };
