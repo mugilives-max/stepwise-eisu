@@ -159,14 +159,26 @@
 
         function post(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
         function admin(op, extra) {
-          var body = { action: "admin", token: token(), op: op };
+          var body = { action: "admin", token: token(), op: op, from: "kanri", view: route().page === "student" ? "student" : "home" };
           Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+          var t0 = Date.now();
           return post(body).then(function (res) {
+            try { console.log("[kanri] " + op + " " + (Date.now() - t0) + "ms (server " + (res && res.ms) + "ms)"); } catch (e) {}
             if (res && res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); throw new Error("ログインし直してください"); }
             if (res && res.error) throw new Error(res.error);
             return res;
           });
         }
+
+        /* ---------- 端末内キャッシュ(前回の内容を先に表示し、裏で最新に差し替える) ---------- */
+        var CK = "sw_kanri_c";
+        function cacheAll() { try { return JSON.parse(lsGet(CK) || "{}") || {}; } catch (e) { return {}; } }
+        function cacheGet(key) { var c = cacheAll()[key]; return c && c.data ? c.data : null; }
+        function cachePut(key, data) { var c = cacheAll(); c[key] = { at: Date.now(), data: data }; lsSet(CK, JSON.stringify(c)); }
+        function cacheClear() { lsDel(CK); }
+        function keyOf(r) { return r.page === "student" ? "s:" + r.id : "home"; }
+        var syncMsg = "";   // 右上に出す「更新中…」「保存中…」
+        var skipLoad = false; // addstudent 後に hash を変えるとき、再取得しない
 
         /* ---------- ルーティング ---------- */
         function route() {
@@ -175,7 +187,11 @@
           if (h === "#students") return { page: "students" };
           return { page: "home" };
         }
-        window.addEventListener("hashchange", function () { editProfile = false; editEmail = false; editFee = false; load(); });
+        window.addEventListener("hashchange", function () {
+          editProfile = false; editEmail = false; editFee = false;
+          if (skipLoad) { skipLoad = false; render(); return; }
+          load();
+        });
 
         function renderNav() {
           var r = route();
@@ -184,19 +200,39 @@
             '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
             '<a href="#students" class="' + (r.page !== "home" ? "on" : "") + '">生徒</a>' +
             '<a href="' + YOYAKU + '" target="_blank" rel="noopener">予約ページ ↗</a>' +
-            '<a href="#" data-action="logout">ログアウト</a>';
+            '<a href="#" data-action="logout">ログアウト</a>' +
+            (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
         }
 
         /* ---------- 読み込み ---------- */
-        function load() {
+        var loadSeq = 0;
+        function load(force) {
           if (!token()) { authM = "login"; render(); return; }
           var r = route();
-          busy = true; renderLoading();
+          var key = keyOf(r);
+          var cached = force ? null : cacheGet(key);
+          var seq = ++loadSeq;
+          if (cached) {
+            // まず前回の内容を表示し、裏で最新を取りにいく
+            if (r.page === "student") cur = cached; else D = cached;
+            authM = "ok"; busy = false; syncMsg = "更新中…"; render();
+          } else {
+            busy = true; renderLoading();
+          }
           var p = r.page === "student"
-            ? admin("kanriStudent", { studentId: r.id }).then(function (res) { cur = res.data; })
-            : admin("kanriDashboard").then(function (res) { D = res.data; });
-          p.then(function () { authM = "ok"; busy = false; render(); })
-           .catch(function (e) { busy = false; if (authM !== "login") { toast(e.message); render(); } });
+            ? admin("kanriStudent", { studentId: r.id }).then(function (res) { return res.data; })
+            : admin("kanriDashboard").then(function (res) { return res.data; });
+          p.then(function (data) {
+            if (seq !== loadSeq) return; // 別の画面に移っていたら捨てる
+            cachePut(key, data);
+            var editing = editProfile || editEmail || editFee;
+            if (r.page === "student") { if (!editing || !cached) cur = data; } else D = data;
+            authM = "ok"; busy = false; syncMsg = ""; render();
+          }).catch(function (e) {
+            if (seq !== loadSeq) return;
+            busy = false; syncMsg = "";
+            if (authM !== "login") { toast(e.message); render(); }
+          });
         }
         function renderLoading() { renderNav(); app.innerHTML = '<div class="loading"><div class="spinner"></div>読み込んでいます…</div>'; }
 
@@ -397,7 +433,7 @@
           if (s.grades.length) {
             html += '<div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th>日付</th><th>テスト</th><th>科目</th><th>点数</th><th>偏差値</th><th>順位</th><th></th></tr>';
             s.grades.slice().reverse().forEach(function (g) {
-              html += '<tr><td>' + fmtDY(g.date) + '</td><td>' + esc(g.test) + '</td><td>' + esc(g.subject) + '</td><td>' + g.score + (g.max ? '<span class="muted">/' + g.max + '</span>' : "") + '</td><td>' + (g.dev === null ? "—" : g.dev) + '</td><td>' + esc(g.rank || "—") + '</td><td><button class="btn-quiet btn-sm" data-action="delrow" data-sheet="成績推移" data-row="' + g.row + '">削除</button></td></tr>';
+              html += '<tr><td>' + fmtDY(g.date) + '</td><td>' + esc(g.test) + '</td><td>' + esc(g.subject) + '</td><td>' + g.score + (g.max ? '<span class="muted">/' + g.max + '</span>' : "") + '</td><td>' + (g.dev === null ? "—" : g.dev) + '</td><td>' + esc(g.rank || "—") + '</td><td>' + (g.row ? '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="成績推移" data-row="' + g.row + '">削除</button>' : '<span class="small muted">保存中</span>') + '</td></tr>';
             });
             html += '</table></div>';
           }
@@ -428,8 +464,11 @@
             s.payments.forEach(function (x) {
               var paid = x.status === "入金済";
               html += '<div class="line"><span class="t">' + esc(x.ym) + '</span><span class="w"><strong class="mono">' + yen(x.amount) + '</strong> ' + (paid ? '<span class="tag green">入金済</span> <span class="muted small">' + fmtDY(x.paidDate) + (x.method ? "・" + esc(x.method) : "") + '</span>' : '<span class="tag red">未入金</span>') + (x.note ? '<div class="small muted">' + esc(x.note) + '</div>' : "") + '</span>';
-              html += paid ? '<button class="btn-quiet btn-sm" data-action="unpaid" data-row="' + x.row + '">未入金に戻す</button>' : '<button class="btn-ghost btn-sm" data-action="paid" data-row="' + x.row + '" data-sid="' + esc(s.id) + '">入金済にする</button>';
-              html += '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="入金管理" data-row="' + x.row + '">削除</button></div>';
+              if (x.row) {
+                html += paid ? '<button class="btn-quiet btn-sm" data-action="unpaid" data-row="' + x.row + '">未入金に戻す</button>' : '<button class="btn-ghost btn-sm" data-action="paid" data-row="' + x.row + '" data-sid="' + esc(s.id) + '">入金済にする</button>';
+                html += '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="入金管理" data-row="' + x.row + '">削除</button>';
+              } else html += '<span class="small muted">保存中</span>';
+              html += '</div>';
             });
           } else html += '<div class="empty">請求・入金の記録はまだありません</div>';
           html += '<details class="add"><summary>請求を記録</summary><div class="card"><div class="form">' +
@@ -445,7 +484,7 @@
           html += '<h2>面談・連絡の記録 <span class="cnt">' + s.meetings.length + '件</span></h2><div class="card">';
           if (s.meetings.length) {
             s.meetings.forEach(function (m) {
-              html += '<div class="line"><span class="t">' + fmtDY(m.date) + '</span><span class="w"><span class="muted small">' + esc(m.who) + (m.method ? "・" + esc(m.method) : "") + '</span><div>' + esc(m.content).replace(/\n/g, "<br>") + '</div>' + (m.next ? '<div class="small" style="color:var(--amber)">→ ' + esc(m.next) + '</div>' : "") + '</span><button class="btn-quiet btn-sm" data-action="delrow" data-sheet="面談記録" data-row="' + m.row + '">削除</button></div>';
+              html += '<div class="line"><span class="t">' + fmtDY(m.date) + '</span><span class="w"><span class="muted small">' + esc(m.who) + (m.method ? "・" + esc(m.method) : "") + '</span><div>' + esc(m.content).replace(/\n/g, "<br>") + '</div>' + (m.next ? '<div class="small" style="color:var(--amber)">→ ' + esc(m.next) + '</div>' : "") + '</span>' + (m.row ? '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="面談記録" data-row="' + m.row + '">削除</button>' : '<span class="small muted">保存中</span>') + '</div>';
             });
           } else html += '<div class="empty">記録はまだありません</div>';
           html += '<details class="add"><summary>面談・連絡を記録</summary><div class="card"><div class="form">' +
@@ -469,16 +508,35 @@
         }
 
         /* ---------- 操作 ---------- */
-        function act(op, extra, okMsg) {
+        // 書き込み: optimistic(画面を先に書き換える関数)があれば即反映し、裏で保存。サーバーの返した最新データで置き換える
+        function act(op, extra, okMsg, optimistic) {
           if (busy) return;
-          busy = true; render();
+          var r = route();
+          if (optimistic) { try { optimistic(); } catch (e) {} }
+          busy = true; syncMsg = "保存中…"; render();
           admin(op, extra).then(function (res) {
-            busy = false;
+            busy = false; syncMsg = "";
             if (okMsg) toast(okMsg);
-            if (route().page === "student" && res.data && res.data.lessons) { cur = res.data; render(); }
-            else load();
-          }).catch(function (e) { busy = false; toast(e.message); render(); });
+            if (!applyResult(res, r)) load(true); else render();
+          }).catch(function (e) { busy = false; syncMsg = ""; toast(e.message); load(true); });
         }
+        // サーバーが返した最新データを画面に反映。反映できたら true
+        function applyResult(res, r) {
+          var now = route();
+          if (res.dash) { D = res.dash; cachePut("home", D); return now.page !== "student"; }
+          if (res.data && res.data.lessons) {
+            cachePut("s:" + res.data.id, res.data);
+            if (now.page === "student" && String(now.id) === String(res.data.id)) { cur = res.data; return true; }
+          }
+          return false;
+        }
+        function addPaymentLocal(pm) {
+          cur.payments.unshift({ row: null, ym: pm.ym, amount: +pm.amount, billDate: pm.billDate || today(), paidDate: pm.paidDate || "", method: pm.method || "", status: pm.paidDate ? "入金済" : "未入金", note: pm.note || "" });
+          cur.payments.sort(function (a, b) { return a.ym < b.ym ? 1 : -1; });
+          if (pm.ym === cur.month) cur.thisMonth.billed = true;
+        }
+        function findRow(list, row) { for (var i = 0; i < list.length; i++) if (list[i].row === row) return list[i]; return null; }
+        function removeRow(list, row) { return list.filter(function (x) { return x.row !== row; }); }
 
         document.addEventListener("click", function (ev) {
           var btn = ev.target.closest("[data-action]");
@@ -498,44 +556,69 @@
             case "logout":
               ev.preventDefault();
               post({ action: "admin", token: token(), op: "logout" }).catch(function () {});
-              lsDel("sw_admt"); authM = "login"; D = null; cur = null; render(); break;
-            case "reload": editProfile = false; load(); break;
+              lsDel("sw_admt"); cacheClear(); authM = "login"; D = null; cur = null; render(); break;
+            case "reload": editProfile = false; load(true); break;
             case "editprofile": editProfile = !editProfile; render(); break;
             case "saveprofile":
               var pr = {};
               document.querySelectorAll("[data-pf]").forEach(function (el) { pr[el.getAttribute("data-pf")] = String(el.value || "").trim(); });
               editProfile = false;
-              act("kanriSaveProfile", { studentId: sid, profile: pr }, "基本情報を保存しました");
+              act("kanriSaveProfile", { studentId: sid, profile: pr }, "基本情報を保存しました", function () {
+                cur.profile = Object.assign({}, cur.profile || {}, pr);
+              });
               break;
             case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
             case "addgrade":
-              act("kanriAddGrade", { studentId: sid, date: val("g-date"), test: val("g-test"), subject: val("g-subject"), score: val("g-score"), max: val("g-max"), dev: val("g-dev"), rank: val("g-rank"), note: val("g-note") }, "成績を記録しました");
+              var gr = { date: val("g-date"), test: val("g-test"), subject: val("g-subject"), score: val("g-score"), max: val("g-max"), dev: val("g-dev"), rank: val("g-rank"), note: val("g-note") };
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(gr.date)) { toast("日付をえらんでください"); return; }
+              if (gr.score === "" || isNaN(+gr.score)) { toast("点数を入れてください"); return; }
+              act("kanriAddGrade", Object.assign({ studentId: sid }, gr), "成績を記録しました", function () {
+                cur.grades.push({ row: null, date: gr.date, test: gr.test, subject: gr.subject, score: +gr.score, max: +gr.max || null, dev: gr.dev === "" ? null : +gr.dev, rank: gr.rank, note: gr.note });
+                cur.grades.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+              });
               break;
             case "addpayment":
-              act("kanriAddPayment", { studentId: sid, ym: val("p-ym"), amount: val("p-amount"), billDate: val("p-bill"), paidDate: val("p-paid"), method: val("p-method"), note: val("p-note") }, "請求を記録しました");
+              var pm = { ym: val("p-ym"), amount: val("p-amount"), billDate: val("p-bill"), paidDate: val("p-paid"), method: val("p-method"), note: val("p-note") };
+              if (!/^\d{4}-\d{2}$/.test(pm.ym)) { toast("年月をえらんでください"); return; }
+              if (!(+pm.amount > 0)) { toast("請求額を入れてください"); return; }
+              act("kanriAddPayment", Object.assign({ studentId: sid }, pm), "請求を記録しました", function () { addPaymentLocal(pm); });
               break;
             case "billmonth":
-              act("kanriAddPayment", { studentId: sid, ym: cur.month, amount: cur.thisMonth.fee, billDate: today(), note: cur.thisMonth.count + "回・" + cur.thisMonth.minutes + "分" }, "今月分を請求に記録しました");
+              var bm = { ym: cur.month, amount: cur.thisMonth.fee, billDate: today(), paidDate: "", method: "", note: cur.thisMonth.count + "回・" + cur.thisMonth.minutes + "分" };
+              act("kanriAddPayment", Object.assign({ studentId: sid }, bm), "今月分を請求に記録しました", function () { addPaymentLocal(bm); });
               break;
             case "paid":
-              act("kanriSetPaid", { studentId: sid, row: +btn.getAttribute("data-row"), paidDate: today() }, "入金済にしました");
+              var prow = +btn.getAttribute("data-row");
+              act("kanriSetPaid", { studentId: sid, row: prow, paidDate: today() }, "入金済にしました", function () {
+                if (route().page === "student") { var pp = findRow(cur.payments, prow); if (pp) { pp.status = "入金済"; pp.paidDate = today(); pp.method = ""; } }
+                else { D.unpaid = removeRow(D.unpaid, prow); D.students.forEach(function (s) { if (String(s.id) === String(sid) && s.unpaid > 0) s.unpaid--; }); }
+              });
               break;
             case "unpaid":
-              act("kanriSetPaid", { studentId: sid, row: +btn.getAttribute("data-row"), unpaid: true }, "未入金に戻しました");
+              var urow = +btn.getAttribute("data-row");
+              act("kanriSetPaid", { studentId: sid, row: urow, unpaid: true }, "未入金に戻しました", function () {
+                var up = findRow(cur.payments, urow); if (up) { up.status = "未入金"; up.paidDate = ""; up.method = ""; }
+              });
               break;
             case "addmeeting":
-              act("kanriAddMeeting", { studentId: sid, date: val("m-date"), who: val("m-who"), method: val("m-method"), content: val("m-content"), next: val("m-next") }, "記録しました");
+              var mt = { date: val("m-date") || today(), who: val("m-who"), method: val("m-method"), content: val("m-content"), next: val("m-next") };
+              if (!mt.content) { toast("内容を入れてください"); return; }
+              act("kanriAddMeeting", Object.assign({ studentId: sid }, mt), "記録しました", function () {
+                cur.meetings.unshift({ row: null, date: mt.date, who: mt.who, method: mt.method, content: mt.content, next: mt.next });
+                cur.meetings.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+              });
               break;
             case "addstudent":
               var nn = val("n-name"), ne = val("n-email");
               if (!nn) { toast("名前を入れてください"); return; }
-              busy = true; render();
+              busy = true; syncMsg = "追加中…"; render();
               admin("addStudent", { name: nn, email: ne }).then(function (res) {
-                busy = false; toast(nn + "さんを追加しました");
-                var added = null;
-                ((res.admin && res.admin.students) || []).forEach(function (x) { if (x.name === nn && x.active !== false) added = x; });
-                if (added) location.hash = "#s=" + encodeURIComponent(added.id); else load();
-              }).catch(function (e) { busy = false; toast(e.message); render(); });
+                busy = false; syncMsg = ""; toast(nn + "さんを追加しました");
+                if (res.data && res.data.lessons) {
+                  cur = res.data; cachePut("s:" + res.data.id, res.data); skipLoad = true;
+                  location.hash = "#s=" + encodeURIComponent(res.data.id);
+                } else load(true);
+              }).catch(function (e) { busy = false; syncMsg = ""; toast(e.message); render(); });
               break;
             case "copylink":
               if (!cur.code) { toast("リンクがまだ発行されていません"); return; }
@@ -543,33 +626,41 @@
               break;
             case "relink":
               if (!confirm(cur.name + "さんの専用リンクを再発行しますか?\nいま配っているリンクは使えなくなります。")) return;
-              busy = true; render();
+              busy = true; syncMsg = "再発行中…"; render();
               admin("newCode", { studentId: sid }).then(function (res) {
-                busy = false;
-                var nc = "";
-                ((res.admin && res.admin.students) || []).forEach(function (x) { if (String(x.id) === String(sid)) nc = x.code; });
-                if (nc) { cur.code = nc; copyText(studentLink(nc), "再発行し、新しいリンクをコピーしました(前のリンクは無効です)"); }
-                load();
-              }).catch(function (e) { busy = false; toast(e.message); render(); });
+                busy = false; syncMsg = "";
+                var nc = res.data && res.data.code;
+                if (nc) copyText(studentLink(nc), "再発行し、新しいリンクをコピーしました(前のリンクは無効です)");
+                if (!applyResult(res, route())) load(true); else render();
+              }).catch(function (e) { busy = false; syncMsg = ""; toast(e.message); render(); });
               break;
             case "editemail": editEmail = !editEmail; editFee = false; render(); break;
             case "editfee": editFee = !editFee; editEmail = false; render(); break;
             case "saveemail":
               var em2 = val("e-email"); editEmail = false;
-              act("setEmail", { studentId: sid, email: em2 }, em2 ? "メールを登録しました" : "メールを削除しました");
+              act("setEmail", { studentId: sid, email: em2 }, em2 ? "メールを登録しました" : "メールを削除しました", function () { cur.email = em2; });
               break;
             case "savefee":
               var rv = +(val("e-rate") || 0), mv = +(val("e-monthly") || 0); editFee = false;
-              act("setFee", { studentId: sid, rate30: rv, monthly: mv }, "料金を設定しました");
+              act("setFee", { studentId: sid, rate30: rv, monthly: mv }, "料金を設定しました", function () {
+                cur.rate30 = rv; cur.monthly = mv;
+                cur.thisMonth.mode = mv > 0 ? "monthly" : "time";
+                cur.thisMonth.fee = mv > 0 ? mv : Math.round(cur.thisMonth.minutes / 30 * rv);
+              });
               break;
             case "setactive":
               var on = btn.getAttribute("data-on") === "1";
               if (!on && !confirm(cur.name + "さんを予約ページから外しますか?\n(記録は残ります。あとで戻せます)")) return;
-              act("kanriSetActive", { studentId: sid, active: on }, on ? "予約ページに戻しました" : "予約ページから外しました");
+              act("kanriSetActive", { studentId: sid, active: on }, on ? "予約ページに戻しました" : "予約ページから外しました", function () { cur.active = on; });
               break;
             case "delrow":
               if (!confirm("この記録を削除しますか?")) return;
-              act("kanriDeleteRow", { studentId: sid, sheet: btn.getAttribute("data-sheet"), row: +btn.getAttribute("data-row") }, "削除しました");
+              var dsh = btn.getAttribute("data-sheet"), drow = +btn.getAttribute("data-row");
+              act("kanriDeleteRow", { studentId: sid, sheet: dsh, row: drow }, "削除しました", function () {
+                if (dsh === "成績推移") cur.grades = removeRow(cur.grades, drow);
+                else if (dsh === "入金管理") { cur.payments = removeRow(cur.payments, drow); cur.thisMonth.billed = cur.payments.some(function (p) { return p.ym === cur.month; }); }
+                else if (dsh === "面談記録") cur.meetings = removeRow(cur.meetings, drow);
+              });
               break;
           }
         });

@@ -52,15 +52,11 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  var t0 = Date.now();
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    ensureEmailHeader_();
-    ensureMeetHeader_();
-    ensureCodeHeader_();
-    ensureFeeHeaders_();
-    ensureBlockedSheet_();
-    ensureSubjectHeader_();
+    ensureSchema_();
     var req = JSON.parse(e.postData.contents);
     var res;
     switch (req.action) {
@@ -72,6 +68,7 @@ function doPost(e) {
       case 'admin':  res = admin_(req); break;
       default:       res = { error: 'unknown action' };
     }
+    if (res && typeof res === 'object') res.ms = Date.now() - t0; // 処理時間(ミリ秒)。フロントのconsoleに出る
     return json_(res);
   } catch (err) {
     return json_({ error: String(err) });
@@ -357,7 +354,19 @@ function adminChangePass_(req) {
   return { ok: true, token: token, admin: adminState_() };
 }
 
+var LITE_ = false; // true のとき adminState_ を省略(管理画面からの呼び出し)
+
+// 管理画面(from:'kanri')からの書き込みは、更新後のカルテ(またはホーム)をそのまま返す
+function kanriWrap_(req, res, studentId) {
+  if (!res || res.error || req.from !== 'kanri') return res;
+  if (req.view === 'home') return { ok: true, id: String(studentId || ''), dash: kanriDashboard_() };
+  var d = kanriStudent_(String(studentId || req.studentId || ''));
+  if (d.error) return d;
+  return { ok: true, id: String(studentId || req.studentId || ''), data: d };
+}
+
 function admin_(req) {
+  LITE_ = req.from === 'kanri';
   if (req.op === 'login') return adminLogin_(req);
   if (req.op === 'setupAccount') return adminSetupAccount_(req);
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
@@ -367,10 +376,10 @@ function admin_(req) {
     case 'deleteSlot':  return adminDeleteSlot_(req);
     case 'unbook':      return adminUnbook_(req);
     case 'toggleDone':  return adminToggleDone_(req);
-    case 'addStudent':  return adminAddStudent_(req);
-    case 'setEmail':    return adminSetEmail_(req);
-    case 'setFee':      return adminSetFee_(req);
-    case 'newCode':     return adminNewCode_(req);
+    case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
+    case 'setEmail':    return kanriWrap_(req, adminSetEmail_(req));
+    case 'setFee':      return kanriWrap_(req, adminSetFee_(req));
+    case 'newCode':     return kanriWrap_(req, adminNewCode_(req));
     case 'addBlock':    return adminAddBlock_(req);
     case 'delBlock':    return adminDelBlock_(req);
     case 'hideStudent': return adminHideStudent_(req);
@@ -383,7 +392,7 @@ function admin_(req) {
     case 'kanriSetPaid':     return kanriSetPaid_(req);
     case 'kanriAddMeeting':  return kanriAddMeeting_(req);
     case 'kanriDeleteRow':   return kanriDeleteRow_(req);
-    case 'kanriSetActive':   return kanriSetActive_(req);
+    case 'kanriSetActive':   return kanriWrap_(req, kanriSetActive_(req));
     case 'logout':
       setConfig_('adminToken', '');
       return { ok: true };
@@ -392,6 +401,8 @@ function admin_(req) {
 }
 
 function adminState_() {
+  memoClear_();
+  if (LITE_) return null; // 管理画面からの呼び出しでは予約ページ用の全データは作らない
   backfillCodes_();
   var slots = readRows_('slots').map(function (s) {
     return {
@@ -532,8 +543,9 @@ function adminAddStudent_(req) {
     return s.name === name && !(String(s.active) === 'false' || s.active === false);
   });
   if (dup) return { error: '同じ名前の生徒がいます' };
-  sheet_('students').appendRow([uid_(), name, true, normEmail_(req.email), newCode_(), 1500, '']);
-  return { ok: true, admin: adminState_() };
+  var id = uid_();
+  sheet_('students').appendRow([id, name, true, normEmail_(req.email), newCode_(), 1500, '']);
+  return { ok: true, id: id, admin: adminState_() };
 }
 
 function adminSetFee_(req) {
@@ -753,13 +765,42 @@ function notify_(subject, body) {
 
 /* ================= シート操作ヘルパー ================= */
 
+/* ===== 1リクエスト内のメモ化(高速化) =====
+   同じシートを何度も読まない。書き込みは sheet_()/ledgerSheet_() 経由なので、そこでキャッシュを捨てる。
+   最終的な読み返し(adminState_/kanriDashboard_/kanriStudent_)の先頭でも全部捨てるので、書き込み後は必ず最新が返る */
+var MEMO_ = { ss: null, rows: {}, ledger: null, lrows: {} };
+function memoClear_() { MEMO_.rows = {}; MEMO_.lrows = {}; }
+function ss_() { if (!MEMO_.ss) MEMO_.ss = SpreadsheetApp.getActive(); return MEMO_.ss; }
+
+// 書き込み用にシートを取る(そのシートのキャッシュは捨てる)
 function sheet_(name) {
-  return SpreadsheetApp.getActive().getSheetByName(name);
+  delete MEMO_.rows[name];
+  return ss_().getSheetByName(name);
+}
+
+function sheetValues_(name) {
+  if (!MEMO_.rows[name]) {
+    var sh = ss_().getSheetByName(name);
+    MEMO_.rows[name] = sh ? sh.getDataRange().getValues() : [[]];
+  }
+  return MEMO_.rows[name];
+}
+
+// スキーマ確認(列見出しの追加など)は重いので1日1回だけ
+function ensureSchema_() {
+  var cache = CacheService.getScriptCache();
+  if (cache.get('schemaOk')) return;
+  ensureEmailHeader_();
+  ensureMeetHeader_();
+  ensureCodeHeader_();
+  ensureFeeHeaders_();
+  ensureBlockedSheet_();
+  ensureSubjectHeader_();
+  cache.put('schemaOk', '1', 21600);
 }
 
 function readRows_(name) {
-  var sh = sheet_(name);
-  var values = sh.getDataRange().getValues();
+  var values = sheetValues_(name);
   var headers = values[0];
   var out = [];
   for (var i = 1; i < values.length; i++) {
@@ -845,9 +886,10 @@ var LEDGER_COLS = {
   '面談記録': ['日付', '生徒ID', '氏名', '相手', '方法', '内容', '次のアクション']
 };
 
-function ledger_() { return SpreadsheetApp.openById(LEDGER_ID); }
+function ledger_() { if (!MEMO_.ledger) MEMO_.ledger = SpreadsheetApp.openById(LEDGER_ID); return MEMO_.ledger; }
 
 function ledgerSheet_(name) {
+  delete MEMO_.lrows[name]; // 書き込み前提なのでキャッシュを捨てる
   var ss = ledger_();
   var sh = ss.getSheetByName(name);
   if (!sh) { sh = ss.insertSheet(name); sh.appendRow(LEDGER_COLS[name]); }
@@ -856,9 +898,11 @@ function ledgerSheet_(name) {
 
 // 台帳シートを {列名: 値} の配列で読む(_row にシート上の行番号)。日付セルは yyyy-MM-dd に正規化
 function ledgerRows_(name) {
-  var sh = ledger_().getSheetByName(name);
-  if (!sh) return [];
-  var v = sh.getDataRange().getValues();
+  if (!MEMO_.lrows[name]) {
+    var sh = ledger_().getSheetByName(name);
+    MEMO_.lrows[name] = sh ? sh.getDataRange().getValues() : [];
+  }
+  var v = MEMO_.lrows[name];
   if (v.length < 2) return [];
   var h = v[0];
   var out = [];
@@ -910,6 +954,7 @@ function slotSort_(a, b) {
 }
 
 function kanriDashboard_() {
+  memoClear_();
   var today = todayStr_();
   var weekEnd = addDays_(today, 7);
   var month = today.slice(0, 7);
@@ -973,12 +1018,14 @@ function kanriSetActive_(req) {
 }
 
 function kanriStudentOp_(req) {
+  if (req.view === 'home') return { ok: true, dash: kanriDashboard_() };
   var d = kanriStudent_(req.studentId);
   if (d.error) return d;
   return { ok: true, data: d };
 }
 
 function kanriStudent_(studentId) {
+  memoClear_();
   var id = String(studentId || '');
   var sys = systemStudent_(id);
   if (!sys) return { error: '生徒が見つかりません' };
@@ -1019,9 +1066,9 @@ function kanriSaveProfile_(req) {
   if (!sys) return { error: '生徒が見つかりません' };
   var pr = req.profile || {};
   var cols = LEDGER_COLS['生徒台帳'];
-  var sh = ledgerSheet_('生徒台帳');
   var target = null;
   ledgerRows_('生徒台帳').forEach(function (r) { if (String(r['生徒ID']) === id) target = r; });
+  var sh = ledgerSheet_('生徒台帳');
   var obj = {};
   cols.forEach(function (c) { obj[c] = (target && target[c] !== undefined) ? target[c] : ''; });
   ['ふりがな', '学年', '学校', '保護者名', '保護者連絡先', 'メール', '入塾日', '状態', '科目', '備考'].forEach(function (c) {
@@ -1039,7 +1086,7 @@ function kanriSaveProfile_(req) {
   } else {
     ledgerAppend_('生徒台帳', obj);
   }
-  return kanriStudentOp_({ studentId: id });
+  return kanriStudentOp_({ studentId: id, view: req.view });
 }
 
 function kanriAddGrade_(req) {
@@ -1051,7 +1098,7 @@ function kanriAddGrade_(req) {
   ledgerAppend_('成績推移', { '日付': req.date, '生徒ID': id, '氏名': sys.name, 'テスト名': String(req.test || '').slice(0, 50),
     '科目': String(req.subject || ''), '点数': Number(req.score), '満点': req.max ? Number(req.max) : '',
     '偏差値': req.dev ? Number(req.dev) : '', '順位': String(req.rank || ''), '備考': String(req.note || '').slice(0, 200) });
-  return kanriStudentOp_({ studentId: id });
+  return kanriStudentOp_({ studentId: id, view: req.view });
 }
 
 function kanriAddPayment_(req) {
@@ -1065,7 +1112,7 @@ function kanriAddPayment_(req) {
   ledgerAppend_('入金管理', { '年月': String(req.ym), '生徒ID': id, '氏名': sys.name, '請求額': amount,
     '請求日': String(req.billDate || todayStr_()), '入金日': paid, '入金方法': String(req.method || ''),
     '状態': paid ? '入金済' : '未入金', '備考': String(req.note || '').slice(0, 200) });
-  return kanriStudentOp_({ studentId: id });
+  return kanriStudentOp_({ studentId: id, view: req.view });
 }
 
 function kanriSetPaid_(req) {
@@ -1076,7 +1123,7 @@ function kanriSetPaid_(req) {
   if (String(vals[1]) !== String(req.studentId)) return { error: '行が一致しません。画面を更新してください' };
   var paid = req.unpaid ? '' : String(req.paidDate || todayStr_());
   sh.getRange(row, 6, 1, 3).setValues([[paid, req.unpaid ? '' : String(req.method || ''), paid ? '入金済' : '未入金']]);
-  return kanriStudentOp_({ studentId: String(req.studentId) });
+  return kanriStudentOp_({ studentId: String(req.studentId), view: req.view });
 }
 
 function kanriAddMeeting_(req) {
@@ -1086,7 +1133,7 @@ function kanriAddMeeting_(req) {
   if (!String(req.content || '').trim()) return { error: '内容を入れてください' };
   ledgerAppend_('面談記録', { '日付': String(req.date || todayStr_()), '生徒ID': id, '氏名': sys.name, '相手': String(req.who || ''),
     '方法': String(req.method || ''), '内容': String(req.content || '').slice(0, 2000), '次のアクション': String(req.next || '').slice(0, 500) });
-  return kanriStudentOp_({ studentId: id });
+  return kanriStudentOp_({ studentId: id, view: req.view });
 }
 
 function kanriDeleteRow_(req) {
@@ -1099,7 +1146,7 @@ function kanriDeleteRow_(req) {
   var idCol = cols.indexOf('生徒ID');
   if (String(vals[idCol]) !== String(req.studentId)) return { error: '行が一致しません。画面を更新してください' };
   sh.deleteRow(row);
-  return kanriStudentOp_({ studentId: String(req.studentId) });
+  return kanriStudentOp_({ studentId: String(req.studentId), view: req.view });
 }
 
 // エディタから実行する動作確認用(Webからは呼べない)
