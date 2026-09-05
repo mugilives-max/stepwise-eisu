@@ -366,7 +366,7 @@
             it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start });
           });
           blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; });
-          var hintMap = { ng: "授業できない日をタップして選んでください", wish: "授業を希望する日をタップして選んでください(複数可)", event: "予定の日をタップして選んでください(複数可)" };
+          var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "希望する日をタップ(複数可)。時間は画面下で", event: "予定の日をタップ(複数可)。内容は画面下で" };
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : "") + '</h2>';
           html += renderCal(info, today);
           if (!selMode) {
@@ -386,6 +386,12 @@
               });
               dayNg.forEach(function (b) { html += '<span class="chip ng">× 授業できない' + (b.note ? " " + esc(b.note) : "") + '</span>'; });
               html += '</div>';
+            }
+            if (selDate >= today) {
+              html += '<div class="row" style="margin-top:10px;gap:6px"><span class="small muted">この日に:</span>' +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>' +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button>' +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">' + (dayNg.length ? "授業できない日を解除" : "授業できない日にする") + '</button></div>';
             }
             html += '</div>';
           }
@@ -669,6 +675,10 @@
               if (panel === p) { panel = ""; selMode = ""; selDays = {}; render(); break; }
               panel = p; selMode = p; selDays = {}; pending = null; render();
               var calEl0 = document.querySelector(".cal"); if (calEl0) calEl0.scrollIntoView({ behavior: "smooth", block: "start" });
+              break;
+            case "dayact":
+              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; render();
+              var calEl2 = document.querySelector(".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "selstart":
               selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();
