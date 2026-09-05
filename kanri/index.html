@@ -252,6 +252,17 @@
           h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
           h += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
           h += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>' + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
+          if (d.studentId && A && A.plans) {
+            var ymNow = today.slice(0, 7), pRows = A.plans.filter(function (x) { return sameId(x.studentId, d.studentId); });
+            var mRows = pRows.filter(function (x) { return x.ym === ymNow; }), useRows = mRows.length ? mRows : pRows.filter(function (x) { return x.ym === "default"; });
+            if (useRows.length) {
+              var parts = useRows.map(function (x) {
+                var have = (A.slots || []).filter(function (s) { return sameId(s.studentId, d.studentId) && s.status === "booked" && s.date.slice(0, 7) === ymNow && (s.subject || "その他") === x.subject; }).length;
+                return esc(x.subject) + ' ' + have + '/' + x.count + '回' + (have < x.count ? '(あと' + (x.count - have) + ')' : '');
+              });
+              h += '<div class="small" style="margin-top:8px;color:var(--primary)">今月の計画: ' + parts.join("、") + '</div>';
+            }
+          }
           h += '<div class="note">案内は生徒の予定ページに表示されます(メール登録済みなら通知メールも)。生徒が承認すると確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
           return h;
         }
@@ -447,7 +458,7 @@
           d.students.forEach(function (s) {
             html += '<a class="card scard" href="#s=' + esc(s.id) + '"><div class="row between"><span class="nm">' + esc(s.name) + '</span>' + (s.unpaid ? '<span class="tag red">未入金 ' + s.unpaid + '</span>' : "") + '</div>';
             html += '<div class="muted small">' + esc([s.grade, s.school].filter(Boolean).join("・") || "学年・学校 未登録") + '</div>';
-            html += '<div class="row between" style="margin-top:8px"><span class="small">今月 <strong class="mono">' + s.doneThisMonth + '回</strong> <span class="muted">' + yen(s.feeThisMonth) + '</span></span>';
+            html += '<div class="row between" style="margin-top:8px"><span class="small">今月 <strong class="mono">' + (s.plannedThisMonth ? s.bookedThisMonth + '<span class="muted">/' + s.plannedThisMonth + '</span>回' : s.doneThisMonth + '回') + '</strong> <span class="muted">' + yen(s.feeThisMonth) + '</span>' + (s.plannedThisMonth && s.bookedThisMonth < s.plannedThisMonth ? ' <span class="tag red">あと' + (s.plannedThisMonth - s.bookedThisMonth) + '</span>' : "") + '</span>';
             html += '<span class="small muted">次回 ' + (s.next ? fmtD(s.next.date) + " " + s.next.start : "未定") + '</span></div></a>';
           });
           html += '</div>';
@@ -585,7 +596,34 @@
           html += '<div class="card"><div class="muted small">実施済み</div><div class="stat">' + tm.count + '<small>回 / ' + tm.minutes + '分</small></div></div>';
           html += '<div class="card"><div class="muted small">' + (tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + yen(tm.fee) + '</div>' +
             (tm.billed ? '<div class="small muted">今月分は請求記録済み</div>' : '<div class="row" style="margin-top:6px"><button class="btn-ghost btn-sm" data-action="billmonth"' + (busy || !tm.fee ? " disabled" : "") + '>今月分を請求に記録</button></div>') + '</div>';
-          html += '</div><p class="note">「実施済み」は予約ページの先生モードで「実施にする」を押した授業の集計です。請求文面のコピーも先生モードから行えます。</p>';
+          html += '</div><p class="note">「実施済み」は授業ページで「実施にする」を押した授業の集計です。請求文面のコピーも授業ページから行えます。</p>';
+
+          // 月の授業回数(計画)
+          var pl = s.plan || { current: {}, monthRows: [], defaultRows: [] };
+          var monthLessons = (s.lessons || []).filter(function (l) { return l.status === "booked" && l.date.slice(0, 7) === s.month; });
+          var offeredLessons = (s.lessons || []).filter(function (l) { return l.status === "offered" && l.date.slice(0, 7) === s.month; });
+          var subjSet = {}; Object.keys(pl.current).forEach(function (x) { subjSet[x] = 1; }); monthLessons.forEach(function (l) { subjSet[l.subject || "その他"] = 1; });
+          html += '<h2>月の授業回数(計画) <span class="cnt">' + esc(s.month) + (pl.fromDefault ? "・毎月の既定を適用" : "") + '</span></h2><div class="card">';
+          var subjKeys = Object.keys(subjSet);
+          if (subjKeys.length) {
+            html += '<div class="tbwrap"><table class="tb"><tr><th>科目</th><th>計画</th><th>確定</th><th>実施済</th><th>承認待ち</th><th>残り</th></tr>';
+            subjKeys.forEach(function (sub) {
+              var goal = pl.current[sub] || 0;
+              var bk = monthLessons.filter(function (l) { return (l.subject || "その他") === sub; }), dn = bk.filter(function (l) { return l.done; }).length;
+              var of = offeredLessons.filter(function (l) { return (l.subject || "その他") === sub; }).length;
+              var remain = goal ? Math.max(0, goal - bk.length) : null;
+              html += '<tr><td>' + esc(sub) + '</td><td>' + (goal || '<span class="muted">—</span>') + '</td><td>' + bk.length + '</td><td>' + dn + '</td><td>' + (of || '<span class="muted">0</span>') + '</td><td>' + (remain === null ? '<span class="muted">—</span>' : (remain ? '<strong style="color:var(--danger)">' + remain + '</strong>' : '<span class="tag green">達成</span>')) + '</td></tr>';
+            });
+            html += '</table></div>';
+          } else html += '<div class="empty">計画も授業もまだありません</div>';
+          html += '<div class="form" style="margin-top:10px"><label>科目</label><select id="pl-subject">' + ["英語", "数学", "英数", "国語", "理科", "社会"].map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select>' +
+            '<label>回数</label><input type="number" id="pl-count" min="0" max="31" value="4" style="width:90px">' +
+            '<label>適用</label><select id="pl-scope"><option value="default">毎月の既定(ずっと)</option><option value="' + esc(s.month) + '">' + esc(s.month) + ' のみ</option></select></div>';
+          html += '<div class="row" style="margin-top:10px"><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>保存</button><span class="small muted">回数 0 で削除。月のみの設定があればその月は既定より優先されます。</span></div>';
+          if (pl.defaultRows.length || pl.monthRows.length) {
+            html += '<div class="small muted" style="margin-top:8px">既定: ' + (pl.defaultRows.length ? pl.defaultRows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") : "なし") + (pl.monthRows.length ? '　／　' + esc(s.month) + ': ' + pl.monthRows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") : "") + '</div>';
+          }
+          html += '</div>';
 
           // 成績
           html += '<h2>成績推移 <span class="cnt">' + s.grades.length + '件</span>' + (s.grades.some(function (g) { return g.dev !== null; }) ? '<span class="seg" style="margin-left:auto"><button class="' + (gradeMode === "score" ? "on" : "") + '" data-action="gmode" data-m="score">点数</button><button class="' + (gradeMode === "dev" ? "on" : "") + '" data-action="gmode" data-m="dev">偏差値</button></span>' : "") + '</h2>';
@@ -1160,6 +1198,9 @@
               var cpw = (document.getElementById("f-curpass") || {}).value || "", npw = (document.getElementById("f-newpass") || {}).value || "";
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
               actA("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました"); break;
+            case "plansave":
+              act("planSet", { studentId: sid, ym: val("pl-scope"), subject: val("pl-subject"), count: +(val("pl-count") || 0) }, "計画を保存しました");
+              break;
             case "delrow":
               if (!confirm("この記録を削除しますか?")) return;
               var dsh = btn.getAttribute("data-sheet"), drow = +btn.getAttribute("data-row");
@@ -1178,6 +1219,8 @@
           var latest = "", latestDate = "";
           (A.slots || []).forEach(function (s) { if (sameId(s.studentId, ev.target.value) && s.subject && s.date >= latestDate) { latestDate = s.date; latest = s.subject; } });
           sel.value = latest || "";
+          offerDraft = { studentId: ev.target.value, subject: sel.value, date: val("f-date"), start: val("f-start"), min: val("f-min"), wishId: offerDraft && offerDraft.wishId, window: offerDraft && offerDraft.window };
+          render();
         });
 
         load();

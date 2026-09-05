@@ -130,7 +130,8 @@ function studentState_(code) {
   var evSince = addDays_(today, -60);
   var events = eventRows_().filter(function (x) { return x.studentId === String(me.id) && x.dateTo >= evSince; })
     .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title }; });
-  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, events: events, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  var planInfo = planFor_(me.id, today.slice(0, 7));
+  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, events: events, plan: planInfo.plan, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -511,6 +512,60 @@ function delWish_(wishId) {
 }
 
 // 管理画面向け: 今日以降の希望(生徒名付き)
+/* ================= 月の授業回数(計画): 生徒 × 月(または既定) × 科目 → 回数 ================= */
+
+function ensurePlansSheet_() {
+  var ss = ss_();
+  if (!ss.getSheetByName('plans')) {
+    var sh = ss.insertSheet('plans');
+    sh.appendRow(['id', 'studentId', 'ym', 'subject', 'count']);
+  }
+}
+
+// plans を正規化して返す。ym は 'YYYY-MM' または 'default'(毎月の既定)
+function planRows_() {
+  if (!ss_().getSheetByName('plans')) return [];
+  return readRows_('plans').map(function (x) {
+    var ym = x.ym instanceof Date ? Utilities.formatDate(x.ym, TZ, 'yyyy-MM') : String(x.ym || '');
+    return { id: x.id, studentId: String(x.studentId || ''), ym: ym, subject: String(x.subject || ''), count: Number(x.count) || 0 };
+  }).filter(function (x) { return x.id && x.subject; });
+}
+
+// その月の計画(科目→回数)。月の指定が無ければ既定を使う
+function planFor_(studentId, ym, rows) {
+  rows = rows || planRows_();
+  var mine = rows.filter(function (x) { return x.studentId === String(studentId); });
+  var month = mine.filter(function (x) { return x.ym === ym; });
+  var src = month.length ? month : mine.filter(function (x) { return x.ym === 'default'; });
+  var out = {};
+  src.forEach(function (x) { if (x.count > 0) out[x.subject] = x.count; });
+  return { plan: out, fromDefault: !month.length && src.length > 0 };
+}
+
+function planSet_(req) {
+  var id = String(req.studentId || '');
+  if (!systemStudent_(id)) return { error: '生徒が見つかりません' };
+  var ym = String(req.ym || '');
+  if (ym !== 'default' && !/^\d{4}-\d{2}$/.test(ym)) return { error: '月の形式は YYYY-MM です' };
+  var subject = String(req.subject || '').trim().slice(0, 20);
+  if (!subject) return { error: '科目をえらんでください' };
+  var count = Math.max(0, Math.min(31, Math.floor(Number(req.count) || 0)));
+  var rows = readRows_('plans');
+  var sh = sheet_('plans');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    var rowYm = rows[i].ym instanceof Date ? Utilities.formatDate(rows[i].ym, TZ, 'yyyy-MM') : String(rows[i].ym || '');
+    if (String(rows[i].studentId) === id && rowYm === ym && String(rows[i].subject) === subject) {
+      if (count === 0) sh.deleteRow(i + 2); else sh.getRange(i + 2, 5).setValue(count);
+      return { ok: true };
+    }
+  }
+  if (count > 0) {
+    sh.appendRow([uid_(), id, ym, subject, count]);
+    sh.getRange(sh.getLastRow(), 2, 1, 2).setNumberFormat('@');
+  }
+  return { ok: true };
+}
+
 /* ================= 保護者ページ(パスワードは当面、先生のログインパスワードと共通) ================= */
 
 function ensureParentHeaders_() {
@@ -881,6 +936,7 @@ function admin_(req) {
     case 'toggleDone':  return kanriWrap_(req, adminToggleDone_(req), req.studentId);
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
+    case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
     case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
     case 'setEmail':    return kanriWrap_(req, adminSetEmail_(req));
     case 'setFee':      return kanriWrap_(req, adminSetFee_(req));
@@ -942,7 +998,7 @@ function adminState_() {
       };
     });
   return {
-    slots: slots, students: students, log: log, blocked: blocked, wishes: wishesForAdmin_(), events: eventsForAdmin_(0), today: todayStr_(),
+    slots: slots, students: students, log: log, blocked: blocked, wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
     account: getConfig_('teacherEmail')
   };
 }
@@ -1296,7 +1352,8 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk6')) return;
+  if (cache.get('schemaOk7')) return;
+  ensurePlansSheet_();
   ensureParentHeaders_();
   ensureEventsSheet_();
   ensureReqHeader_();
@@ -1308,7 +1365,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk6', '1', 21600);
+  cache.put('schemaOk7', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1500,6 +1557,7 @@ function kanriDashboard_() {
     .map(function (m) { return { date: m['日付'], studentId: String(m['生徒ID']), name: m['氏名'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; });
   var profiles = {};
   ledgerRows_('生徒台帳').forEach(function (p) { profiles[String(p['生徒ID'])] = p; });
+  var planRowsAll = planRows_();
   var stuCards = students.map(function (s) {
     var id = String(s.id);
     var mine = slots.filter(function (x) { return String(x.studentId) === id; });
@@ -1509,6 +1567,8 @@ function kanriDashboard_() {
     var pr = profiles[id] || {};
     return { id: id, name: s.name, grade: pr['学年'] || '', school: pr['学校'] || '', status: pr['状態'] || '在籍',
       doneThisMonth: doneMonth.length, minutesThisMonth: minutes, feeThisMonth: studentFee_(id, minutes).amount,
+      bookedThisMonth: mine.filter(function (x) { return x.status === 'booked' && x.date.slice(0, 7) === month; }).length,
+      plannedThisMonth: (function () { var p = planFor_(id, month, planRowsAll).plan, n = 0; Object.keys(p).forEach(function (k) { n += p[k]; }); return n; })(),
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
@@ -1576,6 +1636,8 @@ function kanriStudent_(studentId) {
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
+    plan: (function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
+      monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }) }; })(),
     events: eventsForAdmin_(60).filter(function (x) { return x.studentId === id; }),
     month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
       billed: payments.some(function (p) { return p.ym === month; }) }
