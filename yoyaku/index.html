@@ -55,8 +55,13 @@
       .calday.today { border-color: var(--muted); }
       .calday.mine:not(.sel) { background: var(--coral-soft); }
       .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
-      .calday.ngsel { background: var(--danger-soft); border: 1px dashed var(--danger); }
-      .calday.ngsel .calmark { color: var(--danger); }
+      .calday.selday { border: 1px dashed var(--danger); background: var(--danger-soft); }
+      .calday.selday.wish { border-color: var(--green); background: var(--green-soft); }
+      .calday.selday.event { border-color: var(--coral); background: var(--coral-soft); }
+      .calday.selday .calmark { color: var(--danger); }
+      .selbar { border-top: 3px solid var(--danger); }
+      .selbar.wish { border-top-color: var(--green); }
+      .selbar.event { border-top-color: var(--coral); }
       .caldot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
       .caldot.of { background: #d99a2b; }
       .calday.sel .caldot { background: var(--white); }
@@ -164,7 +169,7 @@
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
         var panel = "";          // "" | "wish" | "event" | "ng"
         var wishKind = "want";   // want=この日時 / ok=この時間帯のどこかで
-        var ngMode = false, ngSel = {};
+        var selMode = "", selDays = {}; // 予定表で日付を選択中のモード("" | "ng" | "wish" | "event") と選んだ日付
         var previewK = null;     // 先生のプレビュー
         var parentStep = "";     // "" | "pass" | "data"
         var P = null;            // 保護者向けデータ
@@ -202,6 +207,15 @@
           return groups;
         }
         function rangeLabel(g) { return g.start === g.end ? fmtDateW(g.start) : fmtDateW(g.start) + "〜" + fmtDateW(g.end); }
+        // 日付の配列を連続する期間にまとめる → [{date, dateTo}]
+        function groupDays(dates) {
+          var out = [], cur = null;
+          dates.slice().sort().forEach(function (d) {
+            if (cur && d === addDaysStr(cur.dateTo, 1)) cur.dateTo = d;
+            else { cur = { date: d, dateTo: d }; out.push(cur); }
+          });
+          return out;
+        }
         function sameId(a, b) { return String(a) === String(b); }
         function slotCmp(a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); }
         var toastTimer = null;
@@ -262,7 +276,7 @@
               if (it.offer && !it.mine) marks += '<span class="caldot of"></span>';
               if (it.ng) marks += '<span class="calmark">×</span>';
             }
-            if (ngMode && ngSel[ds] && !past) { cls += " ngsel"; if (!(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
+            if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
             marks += "</span>";
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
@@ -273,7 +287,7 @@
               });
               if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
             }
-            var clickable = (!past && (it || ngMode)) || (past && hasItems);
+            var clickable = (!past && (it || selMode)) || (past && hasItems);
             if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";
             else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
@@ -352,9 +366,10 @@
             it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start });
           });
           blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; });
-          html += '<h2>予定表' + (ngMode ? ' <span style="font-size:12.5px;color:var(--danger);font-weight:600">授業できない日をタップして選んでください</span>' : "") + '</h2>';
+          var hintMap = { ng: "授業できない日をタップして選んでください", wish: "授業を希望する日をタップして選んでください(複数可)", event: "予定の日をタップして選んでください(複数可)" };
+          html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : "") + '</h2>';
           html += renderCal(info, today);
-          if (!ngMode) {
+          if (!selMode) {
             var ds2 = (byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
             var dayNg = blocked.filter(function (b) { return b.date === selDate; });
             html += '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
@@ -423,7 +438,7 @@
           html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業の希望</button>';
           html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
           html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
-          html += '</div>';
+          html += '</div><div class="note">ボタンを押すと予定表で日付をタップして選べます。日付を選んだら、画面下の内容を確認して送ってください。</div>';
           if (panel === "wish") html += renderWishPanel(today);
           if (panel === "event") html += renderEventPanel(today, events);
           if (panel === "ng") html += renderNgPanel(today, blocked);
@@ -445,26 +460,35 @@
             html += '</div>';
           }
 
-          // 保護者の方へ
-          html += '<h2>保護者の方へ</h2>';
-          if (parentStep === "pass") {
-            html += '<div class="card"><div class="row"><input type="password" id="f-ppass" placeholder="保護者用パスワード" autocomplete="off" style="flex:1;min-width:160px"><button class="btn-primary btn-sm" data-action="parentlogin"' + (busy ? " disabled" : "") + '>' + (busy ? "確認中…" : "開く") + '</button><button class="btn-quiet btn-sm" data-action="parentcancel">やめる</button></div>';
-            html += '<div class="note">授業料・お支払い状況・成績推移など、保護者向けの情報です。パスワードは先生から保護者の方にお伝えしています。</div></div>';
-          } else {
-            html += '<div class="card"><div class="row between"><span class="small">授業料・お支払い状況・成績推移(保護者用パスワードが必要です)</span><button class="btn-ghost btn-sm" data-action="parentopen">開く</button></div></div>';
-          }
+          // 保護者ページ
+          html += '<h2>保護者ページ</h2>';
+          html += '<div class="card"><div class="row"><input type="password" id="f-ppass" placeholder="パスワード" autocomplete="off" style="flex:1;min-width:160px"><button class="btn-primary btn-sm" data-action="parentopen"' + (busy ? " disabled" : "") + '>' + (busy ? "確認中…" : "開く") + '</button></div></div>';
 
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
 
           // 下部バー
-          if (ngMode) {
-            var ngByDate = {};
-            blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
-            var selDates = Object.keys(ngSel).filter(function (d) { return ngSel[d]; }).sort();
-            var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
-            html += '<div class="confirmbar"><div class="inner"><div class="msg">授業できない日を選択中: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
-            html += '<div class="small muted" style="margin-bottom:8px">' + (selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し。×が付いている日をタップすると解除)") + '</div>';
-            html += '<div class="row"><input type="text" id="f-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="ngapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="ngcancel">やめる</button></div></div></div>';
+          if (selMode) {
+            var selDates = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
+            var selTxt = selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し)";
+            html += '<div class="confirmbar selbar ' + selMode + '"><div class="inner">';
+            if (selMode === "ng") {
+              var ngByDate = {};
+              blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
+              var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
+              html += '<div class="msg">授業できない日: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
+              html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。×が付いている日をタップすると解除") + '</div>';
+              html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+            } else if (selMode === "wish") {
+              html += '<div class="msg">授業の希望: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
+              html += '<div class="row" style="margin-bottom:8px"><span class="seg"><button data-action="wkind" data-k="want" class="' + (wishKind === "want" ? "on" : "") + '">この日時に授業をしたい</button><button data-action="wkind" data-k="ok" class="' + (wishKind === "ok" ? "on" : "") + '">この時間帯のどこかで</button></span></div>';
+              if (wishKind === "want") html += '<div class="row"><input type="time" id="b-wstart" value="17:00" step="900"><select id="b-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "希望を送る") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+              else html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "時間帯を送る") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+            } else if (selMode === "event") {
+              var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
+              html += '<div class="msg">予定を共有: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
+              html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-eblock"> 授業できない日にもする</label><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "先生に共有") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+            }
+            html += '</div></div>';
           } else if (pending) {
             var s = null;
             for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
@@ -500,6 +524,8 @@
         function renderWishPanel(today) {
           var wishes = S.wishes || [];
           var h = '<div class="panel card">';
+          h += '<div class="row" style="margin-bottom:8px"><button class="btn-primary btn-sm" data-action="selstart" data-m="wish">予定表で日を選ぶ</button><span class="small muted">授業をしてほしい日をタップ。時間は画面下で入力します。</span></div>';
+          h += '<details><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">日付を入力して送る</summary><div style="margin-top:8px">';
           h += '<div class="row" style="margin-bottom:8px"><span class="seg"><button data-action="wkind" data-k="want" class="' + (wishKind === "want" ? "on" : "") + '">この日時に授業をしたい</button><button data-action="wkind" data-k="ok" class="' + (wishKind === "ok" ? "on" : "") + '">この時間帯のどこかで</button></span></div>';
           if (wishKind === "want") {
             h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><select id="f-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
@@ -508,6 +534,7 @@
             h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="f-wend" value="18:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>時間帯を送る</button></div>';
             h += '<div class="note">「この時間帯なら授業ができる」という空き時間です。先生がこの中から授業の時間を決めて案内します(時間帯すべてが授業になるわけではありません)。</div>';
           }
+          h += '</div></details>';
           if (wishes.length) {
             h += '<div style="margin-top:10px">';
             wishes.forEach(function (wv) {
@@ -521,9 +548,10 @@
 
         function renderEventPanel(today, events) {
           var h = '<div class="panel card">';
+          h += '<div class="row" style="margin-bottom:8px"><button class="btn-primary btn-sm" data-action="selstart" data-m="event">予定表で日を選ぶ</button><span class="small muted">大会・見学・テスト期間など。連続する日は1つの予定になります。</span></div>';
+          h += '<details><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">日付を入力して送る</summary><div style="margin-top:8px">';
           h += '<div class="row"><input type="date" id="f-edate" min="' + today + '"><span class="muted">〜</span><input type="date" id="f-edate2" min="' + today + '"><input type="text" id="f-etitle" placeholder="内容(例: 大会、高校見学、修学旅行)" maxlength="40" style="flex:1;min-width:160px"></div>';
-          h += '<div class="row" style="margin-top:8px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="f-eblock"> この期間は授業できない日にもする</label><button class="btn-primary btn-sm" data-action="addevent"' + (busy ? " disabled" : "") + '>先生に共有</button></div>';
-          h += '<div class="note">部活の大会、学校見学、テスト期間など、先生に知らせておきたい予定です。予定表に表示され、先生にも伝わります。1日だけなら左の日付のみでOK。</div>';
+          h += '<div class="row" style="margin-top:8px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="f-eblock"> この期間は授業できない日にもする</label><button class="btn-primary btn-sm" data-action="addevent"' + (busy ? " disabled" : "") + '>先生に共有</button></div></div></details>';
           var up = events.filter(function (e) { return e.dateTo >= today; });
           if (up.length) {
             h += '<div style="margin-top:10px">';
@@ -535,7 +563,7 @@
 
         function renderNgPanel(today, blocked) {
           var h = '<div class="panel card">';
-          h += '<div class="row"><button class="btn-primary btn-sm" data-action="ngmode">予定表で日を選んで登録</button><span class="small muted">部活の大会や学校行事など、授業ができない日を先生に伝えます。その日には案内が来なくなります。</span></div>';
+          h += '<div class="row"><button class="btn-primary btn-sm" data-action="selstart" data-m="ng">予定表で日を選ぶ</button><span class="small muted">授業ができない日を先生に伝えます。その日には案内が来なくなります。</span></div>';
           h += '<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">期間でまとめて登録する(旅行など連日のとき)</summary>';
           h += '<div class="row" style="margin-top:8px"><input type="date" id="f-bdate" min="' + today + '"><span class="muted">〜</span><input type="date" id="f-bdate2" min="' + today + '"><input type="text" id="f-bnote" placeholder="メモ(任意。例: 修学旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + '>登録</button></div></details>';
           if (blocked.length) {
@@ -578,12 +606,11 @@
 
         function renderParent() {
           var d = P;
-          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者の方へ</strong> ' + esc(d.name) + 'さんの学習と授業料のご案内</span><button class="btn-sm" data-action="parentclose">生徒のページに戻る</button></div>';
+          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="parentclose">生徒のページに戻る</button></div>';
           var tm = d.thisMonth || {};
           html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2><div class="row" style="align-items:stretch">';
           html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
           html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + yen(tm.fee) + '</div><div class="small muted">' + (tm.mode === "monthly" ? "月額固定" : "30分 " + yen(d.rate30) + " × 実施時間") + '</div></div></div>';
-          html += '<div class="note">金額は実施済みの授業から自動計算しています。請求のご案内は先生から別途お送りします。</div>';
 
           html += '<h2>お支払い状況</h2>';
           var pays = d.payments || [];
@@ -610,7 +637,6 @@
             months.forEach(function (m) { html += '<tr><td>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月</td><td>' + m.count + '回</td><td>' + m.minutes + '分</td></tr>'; });
             html += '</table></div>';
           }
-          html += '<div class="note" style="margin-top:14px">ご不明な点は先生までLINEでお気軽にどうぞ。このページは保護者用パスワードを知っている方のみ表示できます(このブラウザでは、閉じるまで再入力なしで開けます)。</div>';
           html += '<footer class="app"><span></span><span></span></footer>';
           app.innerHTML = html;
         }
@@ -636,11 +662,44 @@
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
             case "calday":
-              if (ngMode) { var nd = btn.getAttribute("data-date"); ngSel[nd] = !ngSel[nd]; render(); break; }
+              if (selMode) { var nd = btn.getAttribute("data-date"); selDays[nd] = !selDays[nd]; render(); break; }
               selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
             case "panel":
-              var p = btn.getAttribute("data-p"); panel = panel === p ? "" : p; render();
-              if (panel) { var pe = document.querySelector(".panel"); if (pe) pe.scrollIntoView({ behavior: "smooth", block: "center" }); }
+              var p = btn.getAttribute("data-p");
+              if (panel === p) { panel = ""; selMode = ""; selDays = {}; render(); break; }
+              panel = p; selMode = p; selDays = {}; pending = null; render();
+              var calEl0 = document.querySelector(".cal"); if (calEl0) calEl0.scrollIntoView({ behavior: "smooth", block: "start" });
+              break;
+            case "selstart":
+              selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();
+              var calEl1 = document.querySelector(".cal"); if (calEl1) calEl1.scrollIntoView({ behavior: "smooth", block: "start" });
+              break;
+            case "selcancel": selMode = ""; selDays = {}; render(); break;
+            case "selapply":
+              var chosen = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
+              if (!chosen.length) { toast("日付をえらんでください"); return; }
+              if (selMode === "ng") {
+                var ngBy2 = {}; (S.blocked || []).forEach(function (b) { (ngBy2[b.date] = ngBy2[b.date] || []).push(b.id); });
+                var addD2 = chosen.filter(function (d) { return !ngBy2[d]; }), remIds2 = [];
+                chosen.forEach(function (d) { if (ngBy2[d]) remIds2 = remIds2.concat(ngBy2[d]); });
+                var ngNote2 = val("b-ngnote");
+                selMode = ""; selDays = {};
+                studentAction({ action: "blockSet", k: myKey(), add: addD2, removeIds: remIds2, note: ngNote2 }, "登録しました");
+              } else if (selMode === "wish") {
+                var bws = val("b-wstart"), bwn = val("b-wnote");
+                if (!bws) { toast("開始時刻を入れてください"); return; }
+                var body = { action: "wishMany", k: myKey(), kind: wishKind, dates: chosen, start: bws, note: bwn };
+                if (wishKind === "want") body.min = +(val("b-wmin") || 90);
+                else { var bwe = val("b-wend"); if (!bwe || bws >= bwe) { toast("時間帯は「開始 < 終了」で入れてください"); return; } body.end = bwe; }
+                selMode = ""; selDays = {};
+                studentAction(body, "希望を先生に送りました(" + chosen.length + "日)");
+              } else if (selMode === "event") {
+                var bet = val("b-etitle"), beb = !!(document.getElementById("b-eblock") || {}).checked;
+                if (!bet) { toast("予定の内容を入れてください"); return; }
+                var ranges = groupDays(chosen);
+                selMode = ""; selDays = {};
+                studentAction({ action: "eventAddMany", k: myKey(), ranges: ranges, title: bet, alsoBlock: beb }, "先生に共有しました");
+              }
               break;
             case "askaccept": pending = { kind: "accept", slotId: id }; render(); break;
             case "doaccept": studentAction({ action: "accept", slotId: pending.slotId, k: myKey() }, "授業が確定しました ✓"); break;
@@ -667,20 +726,6 @@
               if (!et) { toast("予定の内容を入れてください"); return; }
               studentAction({ action: "eventAdd", k: myKey(), date: ed, dateTo: ed2 || ed, title: et, alsoBlock: eb }, "先生に共有しました"); break;
             case "delevent": studentAction({ action: "eventDel", k: myKey(), eventId: id }, "予定を取り消しました"); break;
-            case "ngmode":
-              ngMode = true; ngSel = {}; pending = null; render();
-              var calEl = document.querySelector(".cal"); if (calEl) calEl.scrollIntoView({ behavior: "smooth", block: "start" });
-              break;
-            case "ngcancel": ngMode = false; ngSel = {}; render(); break;
-            case "ngapply":
-              var ngBy = {}; (S.blocked || []).forEach(function (b) { (ngBy[b.date] = ngBy[b.date] || []).push(b.id); });
-              var sel = Object.keys(ngSel).filter(function (d) { return ngSel[d]; });
-              var addD = sel.filter(function (d) { return !ngBy[d]; }), remIds = [];
-              sel.forEach(function (d) { if (ngBy[d]) remIds = remIds.concat(ngBy[d]); });
-              if (!addD.length && !remIds.length) { toast("日付をえらんでください"); return; }
-              var ngNote = val("f-ngnote");
-              ngMode = false; ngSel = {};
-              studentAction({ action: "blockSet", k: myKey(), add: addD, removeIds: remIds, note: ngNote }, "登録しました"); break;
             case "addblock":
               var bd = val("f-bdate"), bdto = val("f-bdate2"), bn = val("f-bnote");
               if (!bd) { toast("日付をえらんでください"); return; }
@@ -690,11 +735,8 @@
               studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "解除しました"); break;
             case "parentopen":
               var saved = ssGet("sw_pt");
-              if (saved) loadParent(saved); else { parentStep = "pass"; render(); var pp = document.getElementById("f-ppass"); if (pp) pp.focus(); }
-              break;
-            case "parentcancel": parentStep = ""; render(); break;
-            case "parentlogin":
               var ppass = (document.getElementById("f-ppass") || {}).value || "";
+              if (saved && !ppass) { loadParent(saved); return; }
               if (!ppass) { toast("パスワードを入れてください"); return; }
               busy = true; render();
               apiPost({ action: "parentLogin", k: myKey(), pass: ppass }).then(function (res) {

@@ -67,6 +67,8 @@ function doPost(e) {
       case 'cancelReq': res = cancelReq_(req); break;
       case 'wish':    res = wish_(req); break;
       case 'unwish':  res = unwish_(req); break;
+      case 'wishMany': res = wishMany_(req); break;
+      case 'eventAddMany': res = eventAddMany_(req); break;
       case 'eventAdd': res = eventAdd_(req); break;
       case 'parentLogin': res = parentLogin_(req); break;
       case 'parentData':  res = parentData_(req); break;
@@ -445,6 +447,45 @@ function wish_(req) {
   return { ok: true, state: studentState_(req.k) };
 }
 
+// 予定表で選んだ複数日に同じ内容の希望をまとめて登録
+function wishMany_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var kind = String(req.kind || '') === 'want' ? 'want' : 'ok';
+  var today = todayStr_();
+  var seen = {};
+  var dates = (req.dates || []).map(String).filter(function (d) { if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < today || seen[d]) return false; seen[d] = true; return true; }).sort();
+  if (!dates.length) return { error: '日付をえらんでください' };
+  var start = normTime_(req.start), end;
+  if (!/^\d{2}:\d{2}$/.test(start)) return { error: '開始時刻を入れてください' };
+  if (kind === 'want') {
+    var mins = Number(req.min) || 0;
+    if ([30, 45, 60, 90, 120].indexOf(mins) < 0) return { error: '長さをえらんでください' };
+    end = endTime_(start, mins);
+  } else {
+    end = normTime_(req.end);
+    if (!/^\d{2}:\d{2}$/.test(end) || start >= end) return { error: '時間帯は「開始 < 終了」で入れてください' };
+  }
+  var mine = wishRows_().filter(function (x) { return x.studentId === String(student.id) && x.date >= today; });
+  if (mine.length + dates.length > 20) return { error: '希望は合計20件までです。不要なものを取り消してください' };
+  var note = String(req.note || '').trim().slice(0, 100);
+  var sh = sheet_('wishes');
+  var added = [];
+  dates.forEach(function (d) {
+    if (mine.some(function (x) { return x.date === d && x.start === start && x.end === end && x.kind === kind; })) return;
+    sh.appendRow([uid_(), String(student.id), d, start, end, note, new Date(), kind]);
+    var rr = sh.getLastRow();
+    sh.getRange(rr, 2).setNumberFormat('@'); sh.getRange(rr, 4, 1, 2).setNumberFormat('@');
+    added.push(d);
+  });
+  if (!added.length) return { error: '同じ希望がすでにあります' };
+  var label = (kind === 'want' ? '希望日時' : '授業できる時間帯') + ': ' + added.map(fmtDateJa_).join('、') + ' ' + start + '〜' + end + (note ? '(' + note + ')' : '');
+  addLog_(student.name + 'さんが' + label + 'を登録');
+  if (!isTestStudent_(student)) notify_('【' + (kind === 'want' ? '希望日時' : '授業できる時間帯') + '】' + student.name + 'さん(' + added.length + '日)',
+    student.name + 'さんから' + label + (kind === 'want' ? '(この日時を希望)' : '(この時間帯のどこかで)') + '\n\n管理画面の「授業」ページから案内できます。\nhttps://www.stepwise-education.jp/kanri/#lessons');
+  return { ok: true, state: studentState_(req.k) };
+}
+
 function unwish_(req) {
   var student = findStudentByCode_(req.k);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
@@ -558,6 +599,36 @@ function eventAdd_(req) {
   addLog_(student.name + 'さんが予定を共有: ' + when + ' ' + title + (blocked ? '(授業できない日にも登録)' : ''));
   if (!isTestStudent_(student)) notify_('【共有予定】' + student.name + 'さん',
     student.name + 'さんから予定の共有がありました。\n' + when + ' ' + title + (blocked ? '\n(この期間は授業できない日としても登録されました)' : '') +
+    '\n\n管理画面: https://www.stepwise-education.jp/kanri/');
+  return { ok: true, state: studentState_(req.k) };
+}
+
+// 予定表で選んだ日(連続する日は1つの期間)をまとめて共有
+function eventAddMany_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var title = String(req.title || '').trim().slice(0, 40);
+  if (!title) return { error: '予定の内容を入れてください(例: 大会、高校見学)' };
+  var today = todayStr_();
+  var ranges = (req.ranges || []).filter(function (x) {
+    return x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.date)) && /^\d{4}-\d{2}-\d{2}$/.test(String(x.dateTo)) && String(x.dateTo) >= String(x.date) && String(x.dateTo) >= today;
+  }).slice(0, 20);
+  if (!ranges.length) return { error: '日付をえらんでください' };
+  var mine = eventRows_().filter(function (x) { return x.studentId === String(student.id) && x.dateTo >= today; });
+  if (mine.length + ranges.length > 30) return { error: '予定は30件までです。古いものを取り消してください' };
+  var also = req.alsoBlock === true || String(req.alsoBlock) === 'true';
+  var sh = sheet_('events');
+  var texts = [], blocked = 0;
+  ranges.forEach(function (x) {
+    var d = String(x.date), d2 = String(x.dateTo);
+    sh.appendRow([uid_(), String(student.id), d, d2, title, new Date()]);
+    sh.getRange(sh.getLastRow(), 2).setNumberFormat('@');
+    if (also) blocked += addBlockRange_(student.id, d, d2, title);
+    texts.push(rangeText_(d, d2));
+  });
+  addLog_(student.name + 'さんが予定を共有: ' + texts.join('、') + ' ' + title + (blocked ? '(授業できない日にも登録)' : ''));
+  if (!isTestStudent_(student)) notify_('【共有予定】' + student.name + 'さん',
+    student.name + 'さんから予定の共有がありました。\n' + texts.join('、') + ' ' + title + (blocked ? '\n(この期間は授業できない日としても登録されました)' : '') +
     '\n\n管理画面: https://www.stepwise-education.jp/kanri/');
   return { ok: true, state: studentState_(req.k) };
 }
