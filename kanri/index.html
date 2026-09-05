@@ -418,6 +418,31 @@
           } else html += '<div class="empty">未入金はありません</div>';
           html += '</div></div>';
 
+          // 全体の予定表(管理者用)
+          var hs = d.slots || [];
+          var hinfo = {};
+          var hit = function (dd) { return hinfo[dd] || (hinfo[dd] = { booked: 0, offered: 0, req: 0, ng: 0, wish: 0, ev: 0 }); };
+          hs.forEach(function (s) { var it = hit(s.date); if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else it.offered++; });
+          (d.blocked || []).forEach(function (b) { hit(b.date).ng++; });
+          (d.wishes || []).forEach(function (x) { hit(x.date).wish++; });
+          (d.allEvents || []).forEach(function (e) { var dd = e.date; for (var ei = 0; ei < 61 && dd <= e.dateTo; ei++) { hit(dd).ev++; dd = addDaysStr(dd, 1); } });
+          if (!selDate || selDate < d.today) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
+          html += '<h2>全体の予定表 <a class="btn-quiet btn-sm" href="#lessons" style="margin-left:auto">授業を案内する・変更する</a></h2>';
+          html += renderCal(hinfo, d.today);
+          var hday = hs.filter(function (s) { return s.date === selDate; });
+          html += '<h2>' + fmtD(selDate) + 'の予定 <span class="cnt">' + hday.length + '件</span></h2>';
+          html += hday.length ? '<div class="card">' + hday.map(function (s) { return lessonLine(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません</div>';
+          var hEv = (d.allEvents || []).filter(function (e) { return e.date <= selDate && selDate <= e.dateTo; });
+          var hNg = (d.blocked || []).filter(function (b) { return b.date === selDate; });
+          var hWish = (d.wishes || []).filter(function (x) { return x.date === selDate; });
+          if (hEv.length || hNg.length || hWish.length) {
+            html += '<div class="card" style="margin-top:10px">';
+            hEv.forEach(function (e) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> <span class="tag coral">共有予定</span> ' + esc(e.title) + (e.date !== e.dateTo ? ' <span class="small muted">(' + evRange(e) + ')</span>' : '') + '</span></div>'; });
+            hNg.forEach(function (b) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(b.studentId) + '" style="text-decoration:none;color:inherit">' + esc(b.studentName) + '</a> <span class="tag gray">授業できない</span> <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
+            hWish.forEach(function (x) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(x.studentId) + '" style="text-decoration:none;color:inherit">' + esc(x.studentName) + '</a> <span class="tag ' + (x.kind === "want" ? "blue" : "green") + '">' + (x.kind === "want" ? "この日時を希望" : "この時間帯のどこかで") + '</span> ' + esc(x.start) + '〜' + esc(x.end) + (x.note ? ' <span class="small muted">' + esc(x.note) + '</span>' : '') + '</span><a class="btn-ghost btn-sm" href="#lessons">授業ページで案内</a></div>'; });
+            html += '</div>';
+          }
+
           html += '<h2>生徒 <span class="cnt">' + d.students.length + '人</span></h2><div class="grid">';
           d.students.forEach(function (s) {
             html += '<a class="card scard" href="#s=' + esc(s.id) + '"><div class="row between"><span class="nm">' + esc(s.name) + '</span>' + (s.unpaid ? '<span class="tag red">未入金 ' + s.unpaid + '</span>' : "") + '</div>';

@@ -1350,6 +1350,11 @@ function kanriDashboard_() {
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var lessonsWeek = slots.filter(function (s) { return s.date > today && s.date < weekEnd && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var pending = slots.filter(function (s) { return s.date >= today && s.status === 'offered'; }).map(slim).sort(slotSort_);
+  // ホームの全体予定表用: 今後70日の確定・承認待ちと、生徒の授業できない日
+  var horizon = addDays_(today, 70);
+  var upcomingAll = slots.filter(function (s) { return s.date >= today && s.date < horizon && (s.status === 'booked' || s.status === 'offered'); }).map(slim).sort(slotSort_);
+  var blockedUp = readRows_('blocked').filter(function (b) { return b.date >= today && b.date < horizon; })
+    .map(function (b) { return { id: b.id, date: b.date, studentId: String(b.studentId || ''), studentName: nameOf[String(b.studentId)] || studentName_(b.studentId), note: String(b.note || '') }; });
   var payments = ledgerRows_('入金管理');
   var unpaid = payments.filter(function (p) { return String(p['状態'] || '') !== '入金済' && Number(p['請求額'] || 0) > 0; })
     .map(function (p) { return { row: p._row, ym: String(p['年月']), studentId: String(p['生徒ID']), name: p['氏名'], amount: Number(p['請求額']), billDate: p['請求日'] || '' }; });
@@ -1371,7 +1376,8 @@ function kanriDashboard_() {
   });
   return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
-    events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }) };
+    events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
+    slots: upcomingAll, blocked: blockedUp, allEvents: eventsForAdmin_(0) };
 }
 
 // 予約ページに表示する/しない(studentsシート active 列)。データは消さない
