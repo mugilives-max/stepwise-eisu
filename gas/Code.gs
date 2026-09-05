@@ -133,7 +133,7 @@ function studentState_(code) {
     .map(function (x) { return { id: x.id, date: x.date, start: x.start, end: x.end, note: x.note, kind: x.kind }; });
   var evSince = addDays_(today, -60);
   var events = eventRows_().filter(function (x) { return x.studentId === String(me.id) && x.dateTo >= evSince; })
-    .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title }; });
+    .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title, kind: x.kind }; });
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
   var tasks = tasksFor_(me.id, 45);
