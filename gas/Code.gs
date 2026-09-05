@@ -440,9 +440,14 @@ function wishesForAdmin_() {
 
 /* ================= 先生向け(PIN必須) ================= */
 
+// 全角数字→半角(日本語入力で「００００」と入る対策)
+function halfDigits_(s) {
+  return String(s == null ? '' : s).replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).trim();
+}
+
 function pinOk_(input) {
   var stored = String(getConfig_('pin'));
-  input = String(input == null ? '' : input).trim();
+  input = halfDigits_(input);
   if (input !== '' && input === stored) return true;
   // 「0000」のような数字PINがシート上で数値化(先頭ゼロ欠落)した場合の救済
   return /^\d+$/.test(input) && String(Number(input)) === stored;
@@ -559,7 +564,7 @@ function adminResetConfirm_(req) {
   var fails = Number(getConfig_('resetFails') || 0);
   if (fails >= 5) { setConfig_('resetCode', ''); return { error: '入力回数が多すぎます。もう一度コードを送ってください' }; }
   var email = normEmail_(req.email);
-  var code = String(req.code || '').trim();
+  var code = halfDigits_(req.code);
   var salt = getConfig_('passSalt') || '';
   if (email !== getConfig_('teacherEmail') || hashPass_(code, salt) !== stored) {
     setConfig_('resetFails', String(fails + 1));

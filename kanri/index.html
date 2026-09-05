@@ -168,6 +168,7 @@
         var toastTimer = null;
         function toast(m) { var t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800); }
         function val(id) { var el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
+        function halfDigits(s) { return String(s || "").replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).trim(); }
         function copyText(text, okMsg) {
           function fallback() {
             var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
@@ -326,7 +327,7 @@
           if (authMode === "pin") {
             html += '<p class="sub">先生アカウントの初期設定(または再設定)を行います。初期PINは 0000 です。</p>' +
               '<div class="card" style="margin-top:14px;max-width:460px"><div class="form">' +
-              '<label for="a-pin">PIN</label><input type="password" id="a-pin" inputmode="numeric" autocomplete="off" placeholder="0000">' +
+              '<label for="a-pin">PIN</label><input type="text" id="a-pin" name="setup-pin-code" inputmode="numeric" autocomplete="off" placeholder="0000" style="width:120px">' +
               '<label for="a-email">メール</label><input type="email" id="a-email" autocomplete="username" placeholder="ログインに使うメールアドレス">' +
               '<label for="a-pass">新しいパスワード</label><input type="password" id="a-pass" autocomplete="new-password" placeholder="8文字以上">' +
               '<label for="a-pass2">もう一度</label><input type="password" id="a-pass2" autocomplete="new-password">' +
@@ -933,7 +934,7 @@
               if (rp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
               if (rp1 !== rp2) { toast("パスワードが一致しません"); return; }
               busy = true; render();
-              post({ action: "admin", op: "resetConfirm", email: val("r-email"), code: val("r-code"), newPass: rp1 }).then(function (res) {
+              post({ action: "admin", op: "resetConfirm", email: val("r-email"), code: halfDigits(val("r-code")), newPass: rp1 }).then(function (res) {
                 busy = false;
                 if (res.error) { toast(res.error); render(); return; }
                 lsSet("sw_admt", res.token); authM = "ok"; resetStep = ""; toast("パスワードを再設定しました"); load(true);
@@ -945,7 +946,7 @@
               if (sp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
               if (sp1 !== sp2) { toast("パスワードが一致しません"); return; }
               busy = true; render();
-              post({ action: "admin", op: "setupAccount", pin: val("a-pin"), email: val("a-email"), password: sp1 }).then(function (res) {
+              post({ action: "admin", op: "setupAccount", pin: halfDigits(val("a-pin")), email: val("a-email"), password: sp1 }).then(function (res) {
                 busy = false;
                 if (res.error) { toast(res.error); render(); return; }
                 lsSet("sw_admt", res.token); authM = "ok"; authMode = "account"; toast("アカウントを設定しました"); load(true);
