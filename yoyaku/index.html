@@ -109,6 +109,10 @@
       .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .callbl.of { color: #a8721c; }
       .callbl.more { color: var(--muted); font-weight: 500; }
+      .callbl.dn { color: var(--muted); }
+      .callbl.tm { font-weight: 600; opacity: .85; }
+      .chip.done { background: var(--taken); border-color: var(--line); color: var(--muted); font-weight: 600; }
+      .chip.past { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 600; }
       .calday.sel .callbl { color: var(--white); }
       .callegend {
         display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
@@ -335,6 +339,7 @@
             if (ds === selDate) cls += " sel";
             var past = ds < today;
             var marks = '<span class="calmarks">';
+            var hasLessons = !!(it && it.labels && it.labels.length);
             if (it && !past) {
               if (kind === "teacher") {
                 if (it.booked) marks += '<span class="caldot op"></span>';
@@ -346,14 +351,17 @@
               if (it.ng) marks += '<span class="calmark" style="color:var(--muted)">×</span>';
             }
             marks += "</span>";
-            if (kind !== "teacher" && it && !past && it.labels && it.labels.length) {
+            if (kind !== "teacher" && hasLessons) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
-              lb.slice(0, 2).forEach(function (l) { marks += '<span class="callbl' + (l.st === "offer" ? " of" : "") + '">' + esc(l.text) + "</span>"; });
+              lb.slice(0, 2).forEach(function (l) {
+                var lc = l.st === "offer" ? " of" : (l.st === "done" || l.st === "past") ? " dn" : "";
+                marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
+              });
               if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
             }
-            var clickable = !past && (it || kind === "teacher");
+            var clickable = (!past && (it || kind === "teacher")) || (past && hasLessons);
             if (!clickable) {
-              h += '<span class="' + cls + ' off">' + d + marks + "</span>";
+              h += '<span class="' + cls + (past && hasLessons ? "" : " off") + '">' + d + marks + "</span>";
             } else {
               h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
             }
@@ -366,6 +374,7 @@
           } else {
             h += '<span><span class="callbl" style="display:inline">科目</span> あなたの授業(確定)</span>';
             h += '<span><span class="callbl of" style="display:inline">科目</span> 先生からの案内(未承認)</span>';
+            h += '<span><span class="callbl dn" style="display:inline">科目</span> 実施済み</span>';
             h += '<span><span class="calmark" style="color:var(--muted)">×</span> 都合が悪い日</span>';
           }
           h += "</div></div>";
@@ -399,8 +408,9 @@
           // 今月の授業(教科ごとの回数)
           (function () {
             var ym = today.slice(0, 7);
-            var doneM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
-            var planM = slots.filter(function (s) { return s.st === "mine" && s.date.slice(0, 7) === ym; });
+            var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
+            var doneM = histM.filter(function (h) { return h.done; });
+            var planM = slots.filter(function (s) { return s.st === "mine" && s.date.slice(0, 7) === ym; }).concat(histM.filter(function (h) { return !h.done; }));
             var bySub = {}, order = [];
             doneM.concat(planM).forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
             doneM.forEach(function (x) { bySub[x.subject || "その他"].done++; });
@@ -484,9 +494,14 @@
           html += '<div class="note">1日だけなら左の日付のみでOK。旅行や大会など連日の場合は「〜」の右に最終日を入れてください。登録すると先生に伝わり、その期間への案内を避けてもらえます。</div>';
 
           html += "<h2>予定表</h2>";
+          var hist = (S.history || []).map(function (h) { return { id: h.id, date: h.date, start: h.start, min: h.min, subject: h.subject, st: h.done ? "done" : "past" }; });
           var byDate = {}, dates = [];
           slots.forEach(function (s) {
             if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); }
+            byDate[s.date].push(s);
+          });
+          hist.forEach(function (s) {
+            if (!byDate[s.date]) byDate[s.date] = [];
             byDate[s.date].push(s);
           });
           function hasVisible(d) {
@@ -502,9 +517,9 @@
             calY = +sp[0]; calM = +sp[1] - 1;
           }
           var info = {};
-          slots.forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, labels: [] });
-            it[s.st]++;
+          slots.concat(hist).forEach(function (s) {
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, labels: [] });
+            if (s.st === "done" || s.st === "past") it.past++; else it[s.st]++;
             it.labels.push({ text: s.subject || "授業", st: s.st, start: s.start });
           });
           blocked.forEach(function (b) {
@@ -513,7 +528,7 @@
           });
           html += renderCal(info, today, "student");
 
-          if (slots.length === 0) {
+          if (slots.length === 0 && hist.length === 0) {
             html += '<div class="empty">いま予定はありません。先生から案内が届くとここに表示されます。</div>';
           } else {
             var dwd = wdOf(selDate);
@@ -527,6 +542,10 @@
                 var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
                 if (s.st === "mine") {
                   html += '<span class="chip mine">✓ ' + label + "</span>";
+                } else if (s.st === "done") {
+                  html += '<span class="chip done">実施済 ' + label + "</span>";
+                } else if (s.st === "past") {
+                  html += '<span class="chip past">' + label + "</span>";
                 } else if (s.st === "offer") {
                   html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
                 }

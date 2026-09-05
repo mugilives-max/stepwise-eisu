@@ -106,11 +106,12 @@ function studentState_(code) {
         hours: Math.round(hoursUntil_(s.date, s.start) * 10) / 10
       };
     });
-  // 実施済みの履歴(直近120日)。教科ごとの回数表示に使う
+  // 過去の授業(直近120日、確定分)。カレンダーの表示と教科ごとの回数に使う。done=実施済み
   var since = addDays_(today, -120);
   var history = all
-    .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked' && (String(s.done) === 'true' || s.done === true); })
-    .map(function (s) { return { date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || '') }; });
+    .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked'; })
+    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''),
+      done: String(s.done) === 'true' || s.done === true }; });
   var blocked = readRows_('blocked')
     .filter(function (b) {
       return String(b.studentId) === String(me.id) && b.date >= today;
