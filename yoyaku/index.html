@@ -143,6 +143,10 @@
       @keyframes spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } #toast { transition: none; } }
       footer.app { margin-top: 44px; padding: 16px 0 24px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12.5px; }
+      .tabs { position: sticky; top: 0; z-index: 10; background: rgba(251, 252, 253, 0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); display: flex; gap: 4px; padding: 6px clamp(16px, 4vw, 40px); overflow-x: auto; }
+      .tabs:empty { display: none; }
+      .tabs a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 7px 12px; border-radius: 8px; white-space: nowrap; }
+      .tabs a.on { background: var(--soft); color: var(--primary); font-weight: 700; }
     </style>
   </head>
   <body>
@@ -150,6 +154,7 @@
       <span class="brand">ステップワイズ個別指導<small>英数教室・個別指導部</small></span>
       <a href="../">トップページへ</a>
     </header>
+    <nav class="tabs" id="tabs" aria-label="ページ切替"></nav>
     <div class="wrap" id="app">
       <div class="loading"><div class="spinner"></div>読み込んでいます…</div>
     </div>
@@ -176,6 +181,15 @@
         var parentStep = "";     // "" | "pass" | "data"
         var P = null;            // 保護者向けデータ
         var gradeMode = "score";
+        var G = null, gLoading = false; // 成績(成績タブで初回に取得)
+        var tabs = document.getElementById("tabs");
+        function route() { var h = location.hash || "#home"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function renderTabs() {
+          if (!S || !S.me) { tabs.innerHTML = ""; return; }
+          var p = route();
+          tabs.innerHTML = [["#home", "home", "予定"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#parent", "parent", "保護者"]]
+            .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '">' + t[2] + "</a>"; }).join("");
+        }
 
         /* ---------- ユーティリティ ---------- */
         function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -313,8 +327,19 @@
 
         /* ---------- 画面: 生徒のマイページ ---------- */
         function renderStudent() {
+          renderTabs();
           if (!S || !S.me) { renderGuard(); return; }
-          if (parentStep === "data" && P) { renderParent(); return; }
+          var page = route();
+          if (page !== "home") {
+            var hh = "";
+            if (previewK) hh += '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー)</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
+            if (page === "grades") hh += renderGradesPage();
+            else if (page === "history") hh += renderHistoryPage();
+            else hh += renderParentPage();
+            hh += '<footer class="app"><span></span><span></span></footer>';
+            app.innerHTML = hh;
+            return;
+          }
           var today = S.today;
           var now = new Date();
           var nowStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
@@ -333,7 +358,7 @@
           }
 
           // 見出し + 今月の授業
-          html += '<h1>' + esc(S.me.name) + 'さんのページ</h1><p class="sub">授業の予定表と、先生とのやりとり</p>';
+          html += '<h1>' + esc(S.me.name) + 'さんの予定</h1><p class="sub">授業の予定表と、先生とのやりとり</p>';
           (function () {
             var ym = today.slice(0, 7);
             var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
@@ -451,26 +476,7 @@
           if (panel === "event") html += renderEventPanel(today, events);
           if (panel === "ng") html += renderNgPanel(today, blocked);
 
-          // これまでの授業
-          var done = (S.history || []).filter(function (h) { return h.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-          html += '<h2>これまでの授業 <span class="cnt">直近' + done.length + '回</span></h2>';
-          if (!done.length) html += '<div class="empty">実施済みの授業はまだありません</div>';
-          else {
-            var months = {}, mk = [];
-            done.forEach(function (h) { var m = h.date.slice(0, 7); if (!months[m]) { months[m] = []; mk.push(m); } months[m].push(h); });
-            html += '<div class="card">';
-            mk.forEach(function (m, i) {
-              var list = months[m], mins = 0; list.forEach(function (h) { mins += Number(h.min) || 0; });
-              html += '<details class="month"' + (i === 0 ? " open" : "") + '><summary>' + (+m.slice(0, 4)) + "年" + (+m.slice(5, 7)) + "月 <span class=\"small muted\">" + list.length + "回・" + mins + "分</span></summary>";
-              list.forEach(function (h) { html += '<div class="slotline"><span class="time">' + fmtDateW(h.date) + " " + h.start + '</span><span class="who">' + (h.subject ? esc(h.subject) : '<span class="muted">科目なし</span>') + ' <span class="small muted">' + h.min + '分</span></span></div>'; });
-              html += '</details>';
-            });
-            html += '</div>';
-          }
-
-          // 保護者ページ
-          html += '<h2>保護者ページ</h2>';
-          html += '<div class="card"><div class="row"><input type="password" id="f-ppass" placeholder="パスワード" autocomplete="off" style="flex:1;min-width:160px"><button class="btn-primary btn-sm" data-action="parentopen"' + (busy ? " disabled" : "") + '>' + (busy ? "確認中…" : "開く") + '</button></div></div>';
+          html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者」タブにあります。</div>';
 
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
 
@@ -582,7 +588,57 @@
           return h + '</div>';
         }
 
-        /* ---------- 画面: 保護者の方へ ---------- */
+        /* ---------- 画面: 成績 / 授業の記録 ---------- */
+        function renderGradesPage() {
+          var h = '<h1>' + esc(S.me.name) + 'さんの成績</h1><p class="sub">先生が記録したテストの結果</p>';
+          if (G === null) {
+            if (!gLoading) {
+              gLoading = true;
+              apiPost({ action: "grades", k: myKey() }).then(function (res) { gLoading = false; G = res.grades || []; if (res.error) toast(res.error); render(); })
+                .catch(function () { gLoading = false; G = []; toast("通信に失敗しました"); render(); });
+            }
+            return h + '<div class="loading"><div class="spinner"></div>読み込んでいます…</div>';
+          }
+          var grades = G;
+          h += '<h2>成績推移 <span class="cnt">' + grades.length + '件</span>' + (grades.some(function (g) { return g.dev !== null; }) ? '<span class="seg" style="margin-left:auto"><button data-action="gmode" data-m="score" class="' + (gradeMode === "score" ? "on" : "") + '">点数</button><button data-action="gmode" data-m="dev" class="' + (gradeMode === "dev" ? "on" : "") + '">偏差値</button></span>' : "") + '</h2>';
+          h += '<div class="card">' + gradeChart(grades, gradeMode);
+          if (grades.length) {
+            h += '<div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th>日付</th><th>テスト</th><th>科目</th><th>点数</th><th>偏差値</th><th>順位</th></tr>';
+            grades.slice().reverse().forEach(function (g) { h += '<tr><td>' + fmtDY(g.date) + '</td><td>' + esc(g.test) + '</td><td>' + esc(g.subject) + '</td><td>' + g.score + (g.max ? '<span class="muted">/' + g.max + '</span>' : "") + '</td><td>' + (g.dev === null ? "—" : g.dev) + '</td><td>' + esc(g.rank || "—") + '</td></tr>'; });
+            h += '</table></div>';
+          } else h += '<div class="empty" style="margin-top:8px">まだ記録がありません。テストの結果を先生に伝えると、ここに積み上がっていきます。</div>';
+          h += '</div>';
+          return h;
+        }
+
+        function renderHistoryPage() {
+          var h = '<h1>' + esc(S.me.name) + 'さんの授業の記録</h1><p class="sub">実施済みの授業(直近120日)</p>';
+          var done = (S.history || []).filter(function (x) { return x.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+          var bySub = {}, order = [];
+          done.forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = 0; order.push(k); } bySub[k]++; });
+          if (done.length) h += '<div class="card" style="margin-top:12px;padding:10px 14px"><div class="row" style="gap:8px 18px"><span><strong>合計</strong> ' + done.length + '回</span>' + order.map(function (k) { return '<span>' + esc(k) + ' ' + bySub[k] + '回</span>'; }).join("") + '</div></div>';
+          h += '<h2>月ごと</h2>';
+          if (!done.length) return h + '<div class="empty">実施済みの授業はまだありません</div>';
+          var months = {}, mk = [];
+          done.forEach(function (x) { var m = x.date.slice(0, 7); if (!months[m]) { months[m] = []; mk.push(m); } months[m].push(x); });
+          h += '<div class="card">';
+          mk.forEach(function (m, i) {
+            var list = months[m], mins = 0; list.forEach(function (x) { mins += Number(x.min) || 0; });
+            h += '<details class="month"' + (i === 0 ? " open" : "") + '><summary>' + (+m.slice(0, 4)) + "年" + (+m.slice(5, 7)) + "月 <span class=\"small muted\">" + list.length + "回・" + mins + "分</span></summary>";
+            list.forEach(function (x) { h += '<div class="slotline"><span class="time">' + fmtDateW(x.date) + " " + x.start + '</span><span class="who">' + (x.subject ? esc(x.subject) : '<span class="muted">科目なし</span>') + ' <span class="small muted">' + x.min + '分</span></span></div>'; });
+            h += '</details>';
+          });
+          return h + '</div>';
+        }
+
+        /* ---------- 画面: 保護者ページ ---------- */
+        function renderParentPage() {
+          if (parentStep === "data" && P) return renderParent();
+          var h = '<h1>保護者ページ</h1><p class="sub">' + esc(S.me.name) + 'さんの授業料とお支払い状況</p>';
+          h += '<div class="card" style="margin-top:12px"><div class="row"><input type="password" id="f-ppass" placeholder="パスワード" autocomplete="off" style="flex:1;min-width:160px"><button class="btn-primary btn-sm" data-action="parentopen"' + (busy ? " disabled" : "") + '>' + (busy ? "確認中…" : "開く") + '</button></div></div>';
+          return h;
+        }
+
         function colorFor(subject, idx) { return SUBJECT_COLOR[subject] || ["#6b7280", "#4b5563"][idx % 2]; }
         function gradeChart(grades, mode) {
           var pts = grades.filter(function (g) { return mode === "dev" ? (g.dev !== null && !isNaN(g.dev)) : !isNaN(g.score); });
@@ -614,7 +670,7 @@
 
         function renderParent() {
           var d = P;
-          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="parentclose">生徒のページに戻る</button></div>';
+          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="parentclose">閉じる</button></div>';
           var tm = d.thisMonth || {};
           html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2><div class="row" style="align-items:stretch">';
           html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
@@ -629,15 +685,7 @@
             html += '</table></div>';
           }
 
-          var grades = d.grades || [];
-          html += '<h2>成績推移 <span class="cnt">' + grades.length + '件</span>' + (grades.some(function (g) { return g.dev !== null; }) ? '<span class="seg" style="margin-left:auto"><button data-action="gmode" data-m="score" class="' + (gradeMode === "score" ? "on" : "") + '">点数</button><button data-action="gmode" data-m="dev" class="' + (gradeMode === "dev" ? "on" : "") + '">偏差値</button></span>' : "") + '</h2>';
-          html += '<div class="card">' + gradeChart(grades, gradeMode);
-          if (grades.length) {
-            html += '<div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th>日付</th><th>テスト</th><th>科目</th><th>点数</th><th>偏差値</th><th>順位</th></tr>';
-            grades.slice().reverse().forEach(function (g) { html += '<tr><td>' + fmtDY(g.date) + '</td><td>' + esc(g.test) + '</td><td>' + esc(g.subject) + '</td><td>' + g.score + (g.max ? '<span class="muted">/' + g.max + '</span>' : "") + '</td><td>' + (g.dev === null ? "—" : g.dev) + '</td><td>' + esc(g.rank || "—") + '</td></tr>'; });
-            html += '</table></div>';
-          }
-          html += '</div>';
+          html += '<div class="note">テストの結果は「成績」タブで見られます。</div>';
 
           var months = d.months || [];
           if (months.length) {
@@ -645,8 +693,7 @@
             months.forEach(function (m) { html += '<tr><td>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月</td><td>' + m.count + '回</td><td>' + m.minutes + '分</td></tr>'; });
             html += '</table></div>';
           }
-          html += '<footer class="app"><span></span><span></span></footer>';
-          app.innerHTML = html;
+          return html;
         }
 
         function render() { renderStudent(); }
@@ -758,6 +805,7 @@
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "parentclose": parentStep = ""; P = null; render(); window.scrollTo(0, 0); break;
+            case "gohome": location.hash = "#home"; break;
             case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
           }
         });
@@ -770,6 +818,7 @@
           else if (qp) { if (lsGet("sw_admt")) previewK = qp; history.replaceState(null, "", location.pathname); }
           else if (qs.toString()) history.replaceState(null, "", location.pathname);
         } catch (e) {}
+        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; render(); window.scrollTo(0, 0); });
         loadState().catch(function () {
           app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
         });

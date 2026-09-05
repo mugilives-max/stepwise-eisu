@@ -70,6 +70,7 @@ function doPost(e) {
       case 'wishMany': res = wishMany_(req); break;
       case 'eventAddMany': res = eventAddMany_(req); break;
       case 'eventAdd': res = eventAdd_(req); break;
+      case 'grades':  res = studentGrades_(req); break;
       case 'parentLogin': res = parentLogin_(req); break;
       case 'parentData':  res = parentData_(req); break;
       case 'eventDel': res = eventDel_(req); break;
@@ -518,6 +519,18 @@ function ensureParentHeaders_() {
     sh.getRange(1, 8).setValue('parentToken');
     sh.getRange(1, 9).setValue('parentExp');
   }
+}
+
+// 生徒本人の成績推移(台帳の成績推移シート)。生徒も見られる
+function studentGrades_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var id = String(student.id);
+  var grades = ledgerRows_('成績推移').filter(function (x) { return String(x['生徒ID']) === id; })
+    .map(function (x) { return { date: x['日付'], test: x['テスト名'], subject: x['科目'], score: Number(x['点数']),
+      max: Number(x['満点'] || 0) || null, dev: x['偏差値'] === '' ? null : Number(x['偏差値']), rank: x['順位'] }; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  return { ok: true, grades: grades };
 }
 
 function parentLogin_(req) {
