@@ -740,6 +740,19 @@
           } else html += '<div class="empty">過去の授業はまだありません</div>';
           html += '</div>';
 
+          // 宿題・持ち物
+          var tks = s.tasks || [];
+          var tOpen = tks.filter(function (t) { return !t.done; }), tDone = tks.filter(function (t) { return t.done; });
+          var nextLesson = (s.lessons || []).filter(function (l) { return l.status === "booked" && l.date >= (s.today || today()); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; })[0];
+          html += '<h2>宿題・持ち物 <span class="cnt">未完了 ' + tOpen.length + '件</span></h2><div class="card">';
+          if (!tOpen.length) html += '<div class="empty">未完了の宿題・持ち物はありません</div>';
+          tOpen.concat(tDone.slice(0, 10)).forEach(function (t) {
+            html += '<div class="line' + (t.done ? ' muted' : '') + '"><span class="t">' + (t.due ? fmtD(t.due) : '<span class="muted">期限なし</span>') + '</span><span class="w"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + (t.done ? '<s>' + esc(t.title) + '</s> <span class="small muted">完了 ' + esc(t.doneAt) + '</span>' : esc(t.title)) + (t.createdBy === "student" ? ' <span class="small muted">(生徒が登録)</span>' : '') + '</span>';
+            html += '<button class="btn-quiet btn-sm" data-action="taskdone" data-id="' + esc(t.id) + '" data-done="' + (t.done ? "0" : "1") + '">' + (t.done ? "未完了に戻す" : "完了にする") + '</button><button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '">削除</button></div>';
+          });
+          html += '<div class="row" style="margin-top:10px"><select id="tk-type"><option>宿題</option><option>持ち物</option><option>メモ</option></select><input type="text" id="tk-title" placeholder="内容(例: ワークp.12〜15 / 次回は英単語帳を持参)" maxlength="80" style="flex:1;min-width:200px"><input type="date" id="tk-due" value="' + (nextLesson ? nextLesson.date : "") + '"><button class="btn-primary btn-sm" data-action="taskadd"' + (busy ? " disabled" : "") + '>出す</button></div>';
+          html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。期限は次の授業日が初期値です。</div></div>';
+
           // 入金
           html += '<h2>入金管理 <span class="cnt">' + s.payments.filter(function (x) { return x.status !== "入金済"; }).length + '件 未入金</span></h2><div class="card">';
           if (s.payments.length) {
@@ -1275,6 +1288,18 @@
               if (!pm2 || !pm2.rows.length) { toast("計画がありません"); return; }
               var ptext = "【" + (+pym.slice(5)) + "月の授業回数のご確認】" + cur.name + "さん\n" + pm2.rows.map(function (x) { return "・" + x.subject + " " + x.count + "回"; }).join("\n") + "\n合計 " + pm2.total + "回の予定です。\n\nよろしければ、マイページの「保護者」タブから承認をお願いします(LINEでのお返事でも結構です)。\n" + studentLink(cur.code || "");
               copyText(ptext, "保護者への連絡文をコピーしました。LINEに貼り付けできます");
+              break;
+            case "taskadd":
+              var tkt = val("tk-title");
+              if (!tkt) { toast("内容を入れてください"); return; }
+              act("taskAdd", { studentId: sid, type: val("tk-type"), title: tkt, due: val("tk-due") }, "登録しました");
+              break;
+            case "taskdone":
+              act("taskDone", { studentId: sid, taskId: btn.getAttribute("data-id"), done: btn.getAttribute("data-done") === "1" }, "更新しました");
+              break;
+            case "taskdel":
+              if (!confirm("この宿題・持ち物を削除しますか?")) return;
+              act("taskDel", { studentId: sid, taskId: btn.getAttribute("data-id") }, "削除しました");
               break;
             case "plansave":
               act("planSet", { studentId: sid, ym: val("pl-scope"), subject: val("pl-subject"), count: +(val("pl-count") || 0) }, "計画を保存しました");

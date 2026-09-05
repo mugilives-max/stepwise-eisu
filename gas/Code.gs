@@ -70,6 +70,9 @@ function doPost(e) {
       case 'wishMany': res = wishMany_(req); break;
       case 'eventAddMany': res = eventAddMany_(req); break;
       case 'eventAdd': res = eventAdd_(req); break;
+      case 'taskAdd':  res = taskAdd_(req); break;
+      case 'taskDone': res = taskDone_(req); break;
+      case 'taskDel':  res = taskDel_(req); break;
       case 'grades':  res = studentGrades_(req); break;
       case 'parentLogin': res = parentLogin_(req); break;
       case 'parentData':  res = parentData_(req); break;
@@ -133,7 +136,8 @@ function studentState_(code) {
     .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title }; });
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
-  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, events: events, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  var tasks = tasksFor_(me.id, 45);
+  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -747,11 +751,104 @@ function ensureEventsSheet_() {
   }
 }
 
+function ensureEventKindCol_() {
+  var sh = sheet_('events');
+  if (sh && sh.getRange(1, 7).getValue() !== 'kind') sh.getRange(1, 7).setValue('kind');
+}
+
+/* ================= 宿題・持ち物(tasks): 先生も生徒も登録、生徒がチェック ================= */
+function ensureTasksSheet_() {
+  var ss = ss_();
+  if (!ss.getSheetByName('tasks')) {
+    var sh = ss.insertSheet('tasks');
+    sh.appendRow(['id', 'studentId', 'type', 'title', 'due', 'createdAt', 'createdBy', 'doneAt']);
+  }
+}
+function taskRows_() {
+  if (!ss_().getSheetByName('tasks')) return [];
+  return readRows_('tasks').map(function (x) {
+    return { id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), title: String(x.title || ''),
+      due: normDate_(x.due) || '', createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '', createdBy: String(x.createdBy || ''),
+      done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' };
+  }).filter(function (x) { return x.id && x.title; });
+}
+function tasksFor_(studentId, sinceDays) {
+  var since = addDays_(todayStr_(), -(sinceDays || 45));
+  return taskRows_().filter(function (t) { return t.studentId === String(studentId) && (!t.done || (t.due || todayStr_()) >= since); })
+    .sort(function (a, b) { return (a.due || '9999') < (b.due || '9999') ? -1 : 1; });
+}
+function taskAddCore_(studentId, type, title, due, by) {
+  type = ['宿題', '持ち物', 'メモ'].indexOf(type) >= 0 ? type : '宿題';
+  title = String(title || '').trim().slice(0, 80);
+  if (!title) return { error: '内容を入れてください' };
+  due = /^\d{4}-\d{2}-\d{2}$/.test(String(due || '')) ? String(due) : '';
+  var sh = sheet_('tasks');
+  sh.appendRow([uid_(), String(studentId), type, title, due, new Date(), by, '']);
+  sh.getRange(sh.getLastRow(), 2).setNumberFormat('@');
+  return { ok: true };
+}
+function taskAdd_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var res = taskAddCore_(student.id, req.type, req.title, req.due, 'student');
+  if (res.error) return res;
+  return { ok: true, state: studentState_(req.k) };
+}
+function taskDone_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var rows = readRows_('tasks');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(student.id)) {
+      sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : '');
+      return { ok: true, state: studentState_(req.k) };
+    }
+  }
+  return { error: '見つかりません', refresh: true };
+}
+function taskDel_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var rows = readRows_('tasks');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(student.id)) {
+      if (String(rows[i].createdBy) !== 'student') return { error: '先生が出した宿題・持ち物は消せません。済んだらチェックしてください' };
+      sheet_('tasks').deleteRow(i + 2);
+      return { ok: true, state: studentState_(req.k) };
+    }
+  }
+  return { error: '見つかりません', refresh: true };
+}
+// 先生(管理画面)
+function adminTaskAdd_(req) {
+  var id = String(req.studentId || '');
+  var st = systemStudent_(id);
+  if (!st) return { error: '生徒が見つかりません' };
+  var res = taskAddCore_(id, req.type, req.title, req.due, 'teacher');
+  if (res.error) return res;
+  addLog_('先生が ' + st.name + 'さんに' + (req.type || '宿題') + 'を登録: ' + String(req.title || '').slice(0, 30));
+  return { ok: true };
+}
+function adminTaskDel_(req) {
+  var rows = readRows_('tasks');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].id) === String(req.taskId)) { sheet_('tasks').deleteRow(i + 2); return { ok: true }; }
+  }
+  return { error: '見つかりません' };
+}
+function adminTaskDone_(req) {
+  var rows = readRows_('tasks');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(req.taskId)) { sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; }
+  }
+  return { error: '見つかりません' };
+}
+
 function eventRows_() {
   if (!ss_().getSheetByName('events')) return [];
   return readRows_('events').map(function (x) {
     return { id: x.id, studentId: String(x.studentId || ''), date: x.date, dateTo: normDate_(x.dateTo) || x.date,
-      title: String(x.title || ''), createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '' };
+      title: String(x.title || ''), createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '', kind: String(x.kind || '') === 'test' ? 'test' : 'event' };
   }).filter(function (x) { return x.id && x.date; });
 }
 
@@ -767,7 +864,8 @@ function eventAdd_(req) {
   var mine = eventRows_().filter(function (x) { return x.studentId === String(student.id) && x.dateTo >= todayStr_(); });
   if (mine.length >= 30) return { error: '予定は30件までです。古いものを取り消してください' };
   var sh = sheet_('events');
-  sh.appendRow([uid_(), String(student.id), date, dateTo, title, new Date()]);
+  var kind = String(req.kind || '') === 'test' ? 'test' : 'event';
+  sh.appendRow([uid_(), String(student.id), date, dateTo, title, new Date(), kind]);
   sh.getRange(sh.getLastRow(), 2).setNumberFormat('@');
   var blocked = 0;
   if (req.alsoBlock === true || String(req.alsoBlock) === 'true') blocked = addBlockRange_(student.id, date, dateTo, title);
@@ -797,7 +895,7 @@ function eventAddMany_(req) {
   var texts = [], blocked = 0;
   ranges.forEach(function (x) {
     var d = String(x.date), d2 = String(x.dateTo);
-    sh.appendRow([uid_(), String(student.id), d, d2, title, new Date()]);
+    sh.appendRow([uid_(), String(student.id), d, d2, title, new Date(), String(req.kind || '') === 'test' ? 'test' : 'event']);
     sh.getRange(sh.getLastRow(), 2).setNumberFormat('@');
     if (also) blocked += addBlockRange_(student.id, d, d2, title);
     texts.push(rangeText_(d, d2));
@@ -1045,6 +1143,9 @@ function admin_(req) {
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
+    case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);
+    case 'taskDel':     return kanriWrap_(req, adminTaskDel_(req), req.studentId);
+    case 'taskDone':    return kanriWrap_(req, adminTaskDone_(req), req.studentId);
     case 'planPropose': return kanriWrap_(req, planPropose_(req), req.studentId);
     case 'planApproveTeacher': return kanriWrap_(req, planApproveTeacher_(req), req.studentId);
     case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
@@ -1462,7 +1563,9 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk8')) return;
+  if (cache.get('schemaOk9')) return;
+  ensureTasksSheet_();
+  ensureEventKindCol_();
   ensurePlansSheet_();
   ensurePlanStatusCols_();
   ensureParentHeaders_();
@@ -1476,7 +1579,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk8', '1', 21600);
+  cache.put('schemaOk9', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1753,6 +1856,7 @@ function kanriStudent_(studentId) {
       monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
       months: [planMonthInfo_(id, month, rows), planMonthInfo_(id, nextYm_(month), rows)] }; })(),
     events: eventsForAdmin_(60).filter(function (x) { return x.studentId === id; }),
+    tasks: tasksFor_(id, 60),
     month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
       billed: payments.some(function (p) { return p.ym === month; }) }
   };
