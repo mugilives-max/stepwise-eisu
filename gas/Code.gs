@@ -695,7 +695,22 @@ function studentGrades_(req) {
     .map(function (x) { return { date: x['日付'], test: x['テスト名'], subject: x['科目'], score: Number(x['点数']),
       max: Number(x['満点'] || 0) || null, dev: x['偏差値'] === '' ? null : Number(x['偏差値']), rank: x['順位'] }; })
     .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-  return { ok: true, grades: grades };
+  return { ok: true, grades: grades, exams: examsFor_(id, false) };
+}
+
+// 模試(台帳の「模試」シート)。1行=1回分。withUrl=false なら成績票のリンクは返さない(生徒向け)
+var EXAM_SUBJECTS_ = ['国語', '数学', '社会', '理科', '英語'];
+function numOrNull_(v) { if (v === '' || v === null || v === undefined) return null; var n = Number(v); return isNaN(n) ? null : n; }
+function examsFor_(id, withUrl) {
+  return ledgerRows_('模試').filter(function (e) { return String(e['生徒ID']) === id; }).map(function (e) {
+    var sub = {};
+    EXAM_SUBJECTS_.forEach(function (s) { sub[s] = { score: numOrNull_(e[s]), dev: numOrNull_(e[s + '偏差値']) }; });
+    return { row: e._row, date: e['日付'], name: String(e['模試名'] || ''), round: String(e['回'] || ''), grade: String(e['学年'] || ''), subjects: sub,
+      total3: { score: numOrNull_(e['3教科']), dev: numOrNull_(e['3教科偏差値']) }, total5: { score: numOrNull_(e['5教科']), dev: numOrNull_(e['5教科偏差値']) },
+      rank3: String(e['3教科順位'] || ''), rank5: String(e['5教科順位'] || ''), n: String(e['受験者数'] || ''),
+      judge: String(e['志望校判定'] || '').split(/\s*\/\s*|\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean),
+      url: withUrl ? String(e['資料URL'] || '') : '', note: String(e['備考'] || '') };
+  }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
 }
 
 function parentLogin_(req) {
@@ -1161,6 +1176,7 @@ function admin_(req) {
     case 'kanriStudent':     return kanriStudentOp_(req);
     case 'kanriSaveProfile': return kanriSaveProfile_(req);
     case 'kanriAddGrade':    return kanriAddGrade_(req);
+    case 'kanriAddExam':     return kanriAddExam_(req);
     case 'kanriAddPayment':  return kanriAddPayment_(req);
     case 'kanriSetPaid':     return kanriSetPaid_(req);
     case 'kanriAddMeeting':  return kanriAddMeeting_(req);
@@ -1665,6 +1681,8 @@ var LEDGER_ID = '1dH5_iT5xHY07OZNYO91XcZJEYd0cGWduW87U6c-zo-U';
 var LEDGER_COLS = {
   '生徒台帳': ['生徒ID', '氏名', 'ふりがな', '学年', '学校', '保護者名', '保護者連絡先', 'メール', '入塾日', '状態', '科目', '単価(30分)', '月謝', '備考'],
   '成績推移': ['日付', '生徒ID', '氏名', 'テスト名', '科目', '点数', '満点', '偏差値', '順位', '備考'],
+  '模試': ['日付', '生徒ID', '氏名', '模試名', '回', '学年', '国語', '国語偏差値', '数学', '数学偏差値', '社会', '社会偏差値', '理科', '理科偏差値', '英語', '英語偏差値',
+           '3教科', '3教科偏差値', '5教科', '5教科偏差値', '3教科順位', '5教科順位', '受験者数', '志望校判定', '資料URL', '備考'],
   '入金管理': ['年月', '生徒ID', '氏名', '請求額', '請求日', '入金日', '入金方法', '状態', '備考'],
   '面談記録': ['日付', '生徒ID', '氏名', '相手', '方法', '内容', '次のアクション']
 };
@@ -1849,7 +1867,7 @@ function kanriStudent_(studentId) {
   var fee = studentFee_(id, minutes);
   return {
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
-    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
+    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
     blocked: readRows_('blocked').filter(function (b) { return String(b.studentId) === id && b.date >= today; }).map(function (b) { return { id: b.id, date: b.date, note: String(b.note || '') }; }),
     plan: (function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
@@ -1900,6 +1918,26 @@ function kanriAddGrade_(req) {
   ledgerAppend_('成績推移', { '日付': req.date, '生徒ID': id, '氏名': sys.name, 'テスト名': String(req.test || '').slice(0, 50),
     '科目': String(req.subject || ''), '点数': Number(req.score), '満点': req.max ? Number(req.max) : '',
     '偏差値': req.dev ? Number(req.dev) : '', '順位': String(req.rank || ''), '備考': String(req.note || '').slice(0, 200) });
+  return kanriStudentOp_({ studentId: id, view: req.view });
+}
+
+// 模試の結果を1回分登録。scores = { 国語:{score,dev}, ..., '3教科':{...}, '5教科':{...} }
+function kanriAddExam_(req) {
+  var id = String(req.studentId || '');
+  var sys = systemStudent_(id);
+  if (!sys) return { error: '生徒が見つかりません' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(req.date || ''))) return { error: '日付をえらんでください' };
+  if (!String(req.name || '').trim()) return { error: '模試名を入れてください' };
+  var num = function (v) { return v === '' || v === undefined || v === null || isNaN(Number(v)) ? '' : Number(v); };
+  var sc = req.scores || {};
+  var o = { '日付': req.date, '生徒ID': id, '氏名': sys.name, '模試名': String(req.name).trim().slice(0, 40), '回': String(req.round || '').slice(0, 30), '学年': String(req.grade || '').slice(0, 10) };
+  EXAM_SUBJECTS_.forEach(function (s) { var x = sc[s] || {}; o[s] = num(x.score); o[s + '偏差値'] = num(x.dev); });
+  var t3 = sc['3教科'] || {}, t5 = sc['5教科'] || {};
+  o['3教科'] = num(t3.score); o['3教科偏差値'] = num(t3.dev); o['5教科'] = num(t5.score); o['5教科偏差値'] = num(t5.dev);
+  o['3教科順位'] = String(req.rank3 || '').slice(0, 30); o['5教科順位'] = String(req.rank5 || '').slice(0, 30); o['受験者数'] = String(req.n || '').slice(0, 20);
+  o['志望校判定'] = String(req.judge || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean).join(' / ').slice(0, 600);
+  o['資料URL'] = String(req.url || '').slice(0, 300); o['備考'] = String(req.note || '').slice(0, 200);
+  ledgerAppend_('模試', o);
   return kanriStudentOp_({ studentId: id, view: req.view });
 }
 

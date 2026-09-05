@@ -90,6 +90,11 @@
       table.tb th, table.tb td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
+      table.extb td b { font-weight: 700; }
+      table.extb tr.exsub td { padding-top: 0; border-bottom: 1px solid var(--line); }
+      table.extb tr.exsub td .tag { display: inline-block; margin: 2px 4px 2px 0; }
+      table.extb tr:has(+ tr.exsub) td { border-bottom: none; padding-bottom: 2px; }
+      table.extb td.nw { white-space: nowrap; }
       #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px; z-index: 30; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 9px 18px; font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 90vw; }
       #toast.show { opacity: 1; }
       .loading { text-align: center; color: var(--muted); padding: 60px 0; }
@@ -146,13 +151,13 @@
         var app = document.getElementById("app");
         var nav = document.getElementById("nav");
         var WD = ["日","月","火","水","木","金","土"];
-        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "社会": "#b8466f" };
+        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
         var FALLBACK_COLORS = ["#6b7280", "#4b5563"];
         var D = null;      // ダッシュボード
         var cur = null;    // 表示中の生徒カルテ
         var busy = false;
         var authM = null;  // null=未確認 / 'login' / 'ok'
-        var gradeMode = "score";
+        var gradeMode = "score", examMode = "dev";
         var editProfile = false;
         var editEmail = false, editFee = false;
 
@@ -503,6 +508,32 @@
           app.innerHTML = html;
         }
 
+        var EXAM_SUBJ = ["国語", "数学", "社会", "理科", "英語"];
+        function examPoints(exams, mode) {
+          var pts = [];
+          exams.forEach(function (e) {
+            var label = (e.name || "") + (e.round ? " " + e.round : "");
+            EXAM_SUBJ.forEach(function (k) { var v = e.subjects && e.subjects[k]; if (!v) return; if (mode === "dev" ? v.dev !== null : v.score !== null) pts.push({ date: e.date, test: label, subject: k, score: v.score === null ? NaN : v.score, dev: v.dev, max: 100 }); });
+            if (mode === "dev" && e.total5 && e.total5.dev !== null) pts.push({ date: e.date, test: label, subject: "5教科", score: NaN, dev: e.total5.dev, max: null });
+          });
+          return pts;
+        }
+        function judgeCls(j) { return /安全圏/.test(j) ? "blue" : /合格圏/.test(j) ? "green" : /努力圏/.test(j) ? "amber" : "gray"; }
+        function examTable(exams, admin) {
+          if (!exams.length) return '<div class="empty" style="margin-top:8px">まだ模試の記録がありません</div>';
+          var cell = function (v) { if (!v || (v.score === null && v.dev === null)) return "<td>—</td>"; return "<td>" + (v.score === null ? "" : "<b>" + v.score + "</b>") + (v.dev === null ? "" : '<div class="small muted">' + v.dev + "</div>") + "</td>"; };
+          var cols = 1 + EXAM_SUBJ.length + 3 + (admin ? 1 : 0);
+          var h = '<div class="tbwrap" style="margin-top:10px"><table class="tb extb"><tr><th>模試</th>' + EXAM_SUBJ.map(function (k) { return '<th title="' + k + '">' + k.charAt(0) + "</th>"; }).join("") + '<th>3教科</th><th>5教科</th><th>順位</th>' + (admin ? "<th></th>" : "") + '</tr>';
+          exams.slice().reverse().forEach(function (e) {
+            h += '<tr><td><b>' + esc(e.name) + '</b>' + (e.round ? " " + esc(e.round) : "") + '<div class="small muted">' + fmtDY(e.date) + (e.grade ? "・" + esc(e.grade) : "") + '</div></td>' + EXAM_SUBJ.map(function (k) { return cell(e.subjects && e.subjects[k]); }).join("") + cell(e.total3) + cell(e.total5);
+            h += '<td>' + (e.rank5 ? '<span class="small">5教科</span> ' + esc(e.rank5) : "—") + (e.rank3 ? '<div class="small muted">3教科 ' + esc(e.rank3) + '</div>' : "") + '</td>';
+            if (admin) h += '<td class="nw">' + (e.url ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(e.url) + '">成績票</a> ' : "") + (e.row ? '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="模試" data-row="' + e.row + '">削除</button>' : '<span class="small muted">保存中</span>') + '</td>';
+            h += '</tr>';
+            if ((e.judge && e.judge.length) || e.note) h += '<tr class="exsub"><td colspan="' + cols + '">' + (e.judge || []).map(function (j) { return '<span class="tag ' + judgeCls(j) + '">' + esc(j) + '</span> '; }).join("") + (e.note ? '<span class="small muted">' + esc(e.note) + '</span>' : "") + '</td></tr>';
+          });
+          return h + '</table></div><div class="small muted" style="margin-top:6px">上段: 点数、下段: 偏差値。志望校判定はその回の成績票のもの。</div>';
+        }
+
         /* ---------- 成績グラフ(SVG) ---------- */
         function colorFor(subject, idx) { return SUBJECT_COLOR[subject] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length]; }
         function gradeChart(grades, mode) {
@@ -693,6 +724,27 @@
             '<label>順位</label><input type="text" id="g-rank" style="width:140px" placeholder="例: 12/180">' +
             '<label>備考</label><input type="text" id="g-note">' +
             '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addgrade"' + (busy ? " disabled" : "") + '>記録する</button></div></div></details></div>';
+
+          // 模試(北辰など)
+          var exams = s.exams || [];
+          html += '<h2>模試 <span class="cnt">' + exams.length + '件</span><span class="seg" style="margin-left:auto"><button class="' + (examMode === "dev" ? "on" : "") + '" data-action="exmode" data-m="dev">偏差値</button><button class="' + (examMode === "score" ? "on" : "") + '" data-action="exmode" data-m="score">点数</button></span></h2>';
+          html += '<div class="card">' + gradeChart(examPoints(exams, examMode), examMode) + examTable(exams, true);
+          var EXS = ["国語", "数学", "社会", "理科", "英語", "3教科", "5教科"];
+          html += '<details class="add"><summary>模試の結果を登録</summary><div class="card"><div class="form">' +
+            '<label>模試名</label><input type="text" id="ex-name" value="北辰テスト" maxlength="40">' +
+            '<label>回</label><input type="text" id="ex-round" placeholder="例: 中3 第3回" maxlength="30">' +
+            '<label>日付</label><input type="date" id="ex-date" value="' + today() + '">' +
+            '<label>学年</label><input type="text" id="ex-grade" placeholder="例: 中3" maxlength="10" style="width:100px">' +
+            '</div><div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th></th>' + EXS.map(function (k) { return "<th>" + k + "</th>"; }).join("") + '</tr>' +
+            '<tr><th>点数</th>' + EXS.map(function (k, i) { return '<td><input type="number" id="ex-s' + i + '" style="width:64px" inputmode="numeric"></td>'; }).join("") + '</tr>' +
+            '<tr><th>偏差値</th>' + EXS.map(function (k, i) { return '<td><input type="number" id="ex-d' + i + '" step="0.1" style="width:64px" inputmode="decimal"></td>'; }).join("") + '</tr></table></div>' +
+            '<div class="form" style="margin-top:10px">' +
+            '<label>順位(5教科)</label><input type="text" id="ex-r5" placeholder="例: 12,516位/39,625人" maxlength="30">' +
+            '<label>順位(3教科)</label><input type="text" id="ex-r3" placeholder="任意" maxlength="30">' +
+            '<label>志望校判定</label><textarea id="ex-judge" rows="3" placeholder="1行に1校。例: 越谷北 普通 要検討(D) 10%未満"></textarea>' +
+            '<label>成績票リンク</label><input type="url" id="ex-url" placeholder="DriveのPDFリンク(先生だけに表示)">' +
+            '<label>備考</label><input type="text" id="ex-note" maxlength="200">' +
+            '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addexam"' + (busy ? " disabled" : "") + '>記録する</button><span class="small muted">空欄の科目は「—」になります</span></div></div></details></div>';
 
           // 今後の予定(確定・承認待ち)と案内
           var tdy = s.today || today();
@@ -1101,6 +1153,22 @@
               });
               break;
             case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
+            case "exmode": examMode = btn.getAttribute("data-m"); render(); break;
+            case "addexam":
+              var EXK = ["国語", "数学", "社会", "理科", "英語", "3教科", "5教科"];
+              var ex = { name: val("ex-name"), round: val("ex-round"), date: val("ex-date"), grade: val("ex-grade"), rank3: val("ex-r3"), rank5: val("ex-r5"), judge: val("ex-judge"), url: val("ex-url"), note: val("ex-note"), scores: {} };
+              EXK.forEach(function (k, i) { ex.scores[k] = { score: val("ex-s" + i), dev: val("ex-d" + i) }; });
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(ex.date)) { toast("日付をえらんでください"); return; }
+              if (!ex.name) { toast("模試名を入れてください"); return; }
+              act("kanriAddExam", Object.assign({ studentId: sid }, ex), "模試の結果を記録しました", function () {
+                var n2 = function (v) { return v === "" || isNaN(+v) ? null : +v; };
+                var subj = {}; EXAM_SUBJ.forEach(function (k) { subj[k] = { score: n2(ex.scores[k].score), dev: n2(ex.scores[k].dev) }; });
+                cur.exams = (cur.exams || []).concat([{ row: null, date: ex.date, name: ex.name, round: ex.round, grade: ex.grade, subjects: subj,
+                  total3: { score: n2(ex.scores["3教科"].score), dev: n2(ex.scores["3教科"].dev) }, total5: { score: n2(ex.scores["5教科"].score), dev: n2(ex.scores["5教科"].dev) },
+                  rank3: ex.rank3, rank5: ex.rank5, n: "", judge: ex.judge.split(/\n/).map(function (x) { return x.trim(); }).filter(Boolean), url: ex.url, note: ex.note }])
+                  .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+              });
+              break;
             case "addgrade":
               var gr = { date: val("g-date"), test: val("g-test"), subject: val("g-subject"), score: val("g-score"), max: val("g-max"), dev: val("g-dev"), rank: val("g-rank"), note: val("g-note") };
               if (!/^\d{4}-\d{2}-\d{2}$/.test(gr.date)) { toast("日付をえらんでください"); return; }
@@ -1311,6 +1379,7 @@
                 if (dsh === "成績推移") cur.grades = removeRow(cur.grades, drow);
                 else if (dsh === "入金管理") { cur.payments = removeRow(cur.payments, drow); cur.thisMonth.billed = cur.payments.some(function (p) { return p.ym === cur.month; }); }
                 else if (dsh === "面談記録") cur.meetings = removeRow(cur.meetings, drow);
+                else if (dsh === "模試") cur.exams = removeRow(cur.exams || [], drow);
               });
               break;
           }
