@@ -115,6 +115,10 @@
       .calday.sel .calmark { color: var(--white); }
       .calmarks { display: flex; align-items: center; gap: 2px; min-height: 7px; }
       .callegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+      .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .callbl.tm { font-weight: 600; opacity: .85; }
+      .callbl.of { color: var(--amber); } .callbl.dn { color: var(--muted); } .callbl.ev { color: var(--coral); font-weight: 600; } .callbl.more { color: var(--muted); font-weight: 500; }
+      .calday.sel .callbl { color: var(--white); }
       .callegend span { display: inline-flex; align-items: center; gap: 4px; }
       .loglist { font-size: 13px; color: var(--muted); }
       .loglist div { padding: 4px 0; border-bottom: 1px dashed var(--line); }
@@ -548,6 +552,35 @@
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
             '<div class="row">' + (s.code ? '<a class="btn-quiet btn-sm" href="' + YOYAKU + '?preview=' + esc(s.code) + '" target="_blank" rel="noopener">生徒画面を見る ↗</a>' : "") + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
+          // この生徒の予定表
+          (function () {
+            var tdy = s.today || today();
+            var info = {};
+            var it0 = function (dd) { return info[dd] || (info[dd] = { booked: 0, offered: 0, req: 0, ng: 0, wish: 0, ev: 0, labels: [] }); };
+            (s.lessons || []).forEach(function (l) {
+              if (l.status !== "booked" && l.status !== "offered") return;
+              var it = it0(l.date);
+              if (l.status === "booked") { it.booked++; if (l.req) it.req++; } else it.offered++;
+              it.labels.push({ start: l.start, text: l.subject || "授業", st: l.status === "offered" ? "offer" : (l.done ? "done" : "mine") });
+            });
+            (s.blocked || []).forEach(function (b) { it0(b.date).ng++; });
+            (s.wishes || []).forEach(function (x) { it0(x.date).wish++; });
+            (s.events || []).forEach(function (e) { var dd = e.date; for (var i = 0; i < 61 && dd <= e.dateTo; i++) { var it = it0(dd); it.ev++; it.labels.push({ start: "99:99", text: e.title, st: "event" }); dd = addDaysStr(dd, 1); } });
+            if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
+            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + renderCal(info, tdy);
+            var dayL = (s.lessons || []).filter(function (l) { return l.date === selDate && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+            var dayE = (s.events || []).filter(function (e) { return e.date <= selDate && selDate <= e.dateTo; });
+            var dayN = (s.blocked || []).filter(function (b) { return b.date === selDate; });
+            var dayW = (s.wishes || []).filter(function (x) { return x.date === selDate; });
+            html += '<div class="card" style="margin-top:10px"><div class="row between"><strong>' + fmtD(selDate) + '</strong>' + (selDate >= tdy && s.active !== false ? '<button class="btn-ghost btn-sm" data-action="dayoffer" data-date="' + selDate + '">この日に案内する</button>' : "") + '</div>';
+            if (!dayL.length && !dayE.length && !dayN.length && !dayW.length) html += '<div class="empty">この日の予定はありません</div>';
+            dayL.forEach(function (l) { html += '<div class="line"><span class="t">' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' ' + (l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : l.req ? '<span class="tag red">取消依頼中</span>' : l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>') + '</span>' + (l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : "") + '</div>'; });
+            dayE.forEach(function (e) { html += '<div class="line"><span class="w"><span class="tag coral">共有予定</span> ' + esc(e.title) + (e.date !== e.dateTo ? ' <span class="small muted">(' + evRange(e) + ')</span>' : "") + '</span></div>'; });
+            dayN.forEach(function (b) { html += '<div class="line"><span class="w"><span class="tag gray">授業できない</span> <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
+            dayW.forEach(function (x) { html += wishRow(x, false); });
+            html += '</div>';
+          })();
+
           // 基本情報
           html += '<h2>基本情報 <button class="btn-quiet btn-sm" data-action="editprofile" style="margin-left:auto">' + (editProfile ? "閉じる" : "編集") + '</button></h2>';
           if (editProfile) {
@@ -758,6 +791,15 @@
               if (it.ng) marks += '<span class="calmark">×</span>';
             }
             marks += "</span>";
+            if (it && it.labels && it.labels.length) {
+              var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+              lb.slice(0, 2).forEach(function (l) {
+                if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + '</span>'; return; }
+                var lc = l.st === "offer" ? " of" : l.st === "done" ? " dn" : "";
+                marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + '</span>';
+              });
+              if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + '</span>';
+            }
             h += '<button class="' + cls + (ds < today && !it ? " off" : "") + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
           h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="caldot ev"></span> 共有予定(大会など)</span><span><span class="calmark">×</span> 授業できない生徒あり</span></div></div>';
@@ -1198,6 +1240,12 @@
               var cpw = (document.getElementById("f-curpass") || {}).value || "", npw = (document.getElementById("f-newpass") || {}).value || "";
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
               actA("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました"); break;
+            case "dayoffer":
+              offerDraft = Object.assign({}, offerDraft || {}, { studentId: cur.id, date: btn.getAttribute("data-date") });
+              render();
+              var fd = document.getElementById("f-date"); if (fd) fd.scrollIntoView({ behavior: "smooth", block: "center" });
+              toast(fmtD(btn.getAttribute("data-date")) + " を案内フォームに入れました");
+              break;
             case "plansave":
               act("planSet", { studentId: sid, ym: val("pl-scope"), subject: val("pl-subject"), count: +(val("pl-count") || 0) }, "計画を保存しました");
               break;
