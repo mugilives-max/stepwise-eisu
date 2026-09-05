@@ -264,7 +264,10 @@
                 var have = (A.slots || []).filter(function (s) { return sameId(s.studentId, d.studentId) && s.status === "booked" && s.date.slice(0, 7) === ymNow && (s.subject || "その他") === x.subject; }).length;
                 return esc(x.subject) + ' ' + have + '/' + x.count + '回' + (have < x.count ? '(あと' + (x.count - have) + ')' : '');
               });
-              h += '<div class="small" style="margin-top:8px;color:var(--primary)">今月の計画: ' + parts.join("、") + '</div>';
+              var stRows = mRows.length ? mRows : [];
+              var stAll = stRows.length ? (stRows.some(function (x) { return x.status === "declined"; }) ? "declined" : stRows.every(function (x) { return x.status === "approved"; }) ? "approved" : stRows.some(function (x) { return x.status === "proposed"; }) ? "proposed" : "draft") : "none";
+              var stTxt = stAll === "approved" ? '<span class="tag green">保護者承認済み</span>' : stAll === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : '<span class="tag red">保護者の承諾が未記録</span>';
+              h += '<div class="small" style="margin-top:8px;color:var(--primary)">今月の計画: ' + parts.join("、") + ' ' + stTxt + (stAll !== "approved" ? '<span class="muted">(承諾前の授業は請求できません。カルテの「保護者に提案」から)</span>' : '') + '</div>';
             }
           }
           h += '<div class="note">案内は生徒の予定ページに表示されます(メール登録済みなら通知メールも)。生徒が承認すると確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
@@ -462,7 +465,7 @@
           d.students.forEach(function (s) {
             html += '<a class="card scard" href="#s=' + esc(s.id) + '"><div class="row between"><span class="nm">' + esc(s.name) + '</span>' + (s.unpaid ? '<span class="tag red">未入金 ' + s.unpaid + '</span>' : "") + '</div>';
             html += '<div class="muted small">' + esc([s.grade, s.school].filter(Boolean).join("・") || "学年・学校 未登録") + '</div>';
-            html += '<div class="row between" style="margin-top:8px"><span class="small">今月 <strong class="mono">' + (s.plannedThisMonth ? s.bookedThisMonth + '<span class="muted">/' + s.plannedThisMonth + '</span>回' : s.doneThisMonth + '回') + '</strong> <span class="muted">' + yen(s.feeThisMonth) + '</span>' + (s.plannedThisMonth && s.bookedThisMonth < s.plannedThisMonth ? ' <span class="tag red">あと' + (s.plannedThisMonth - s.bookedThisMonth) + '</span>' : "") + '</span>';
+            html += '<div class="row between" style="margin-top:8px"><span class="small">今月 <strong class="mono">' + (s.plannedThisMonth ? s.bookedThisMonth + '<span class="muted">/' + s.plannedThisMonth + '</span>回' : s.doneThisMonth + '回') + '</strong> <span class="muted">' + yen(s.feeThisMonth) + '</span>' + (s.plannedThisMonth && s.bookedThisMonth < s.plannedThisMonth ? ' <span class="tag red">あと' + (s.plannedThisMonth - s.bookedThisMonth) + '</span>' : "") + (s.planStatus === "proposed" ? ' <span class="tag amber">承認待ち</span>' : s.planStatus === "approved" ? ' <span class="tag green">承認済</span>' : s.plannedThisMonth ? ' <span class="tag gray">未提案</span>' : "") + '</span>';
             html += '<span class="small muted">次回 ' + (s.next ? fmtD(s.next.date) + " " + s.next.start : "未定") + '</span></div></a>';
           });
           html += '</div>';
@@ -631,31 +634,44 @@
             (tm.billed ? '<div class="small muted">今月分は請求記録済み</div>' : '<div class="row" style="margin-top:6px"><button class="btn-ghost btn-sm" data-action="billmonth"' + (busy || !tm.fee ? " disabled" : "") + '>今月分を請求に記録</button></div>') + '</div>';
           html += '</div><p class="note">「実施済み」は授業ページで「実施にする」を押した授業の集計です。請求文面のコピーも授業ページから行えます。</p>';
 
-          // 月の授業回数(計画)
-          var pl = s.plan || { current: {}, monthRows: [], defaultRows: [] };
+          // 月の授業回数(計画)と保護者の承認
+          var pl = s.plan || { current: {}, monthRows: [], defaultRows: [], months: [] };
           var monthLessons = (s.lessons || []).filter(function (l) { return l.status === "booked" && l.date.slice(0, 7) === s.month; });
           var offeredLessons = (s.lessons || []).filter(function (l) { return l.status === "offered" && l.date.slice(0, 7) === s.month; });
           var subjSet = {}; Object.keys(pl.current).forEach(function (x) { subjSet[x] = 1; }); monthLessons.forEach(function (l) { subjSet[l.subject || "その他"] = 1; });
-          html += '<h2>月の授業回数(計画) <span class="cnt">' + esc(s.month) + (pl.fromDefault ? "・毎月の既定を適用" : "") + '</span></h2><div class="card">';
+          html += '<h2>月の授業回数(計画)と保護者の承認</h2><div class="card">';
+          html += '<div class="note" style="margin-top:0;margin-bottom:8px">授業回数は保護者の事前承諾が必要です。①科目と回数を登録 → ②「保護者に提案」 → ③保護者がマイページの保護者タブで承認(LINE・電話で承諾を得た場合は「承諾を記録」)。承認済みの回数を超える案内には警告が出ます。</div>';
+          (pl.months || []).forEach(function (m) {
+            var stTag = m.status === "approved" ? '<span class="tag green">保護者承認済み</span>' : m.status === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : m.status === "declined" ? '<span class="tag red">見送り</span>' : m.rows.length ? '<span class="tag gray">未提案</span>' : '<span class="tag gray">計画なし</span>';
+            html += '<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row between"><span><strong>' + esc(m.ym) + '</strong> ' + stTag + (m.fromDefault ? ' <span class="small muted">(既定を適用)</span>' : "") + '</span>';
+            html += '<span class="small muted">' + (m.status === "approved" ? '承認: ' + esc(m.approvedAt) + '(' + esc(m.approvedVia) + ')' : m.status === "proposed" ? '提案: ' + esc(m.proposedAt) : m.status === "declined" ? (m.memo ? '理由: ' + esc(m.memo) : '') : '') + '</span></div>';
+            html += '<div class="small" style="margin:4px 0">' + (m.rows.length ? m.rows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") + '(合計 ' + m.total + '回)' : '<span class="muted">科目と回数が未登録</span>') + '</div>';
+            if (m.rows.length && s.active !== false) {
+              html += '<div class="row" style="gap:6px">';
+              if (m.status !== "approved") html += '<button class="btn-primary btn-sm" data-action="planpropose" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>' + (m.status === "proposed" ? "再提案(承認をやり直す)" : "保護者に提案") + '</button>';
+              html += '<button class="btn-quiet btn-sm" data-action="plancopy" data-ym="' + esc(m.ym) + '">連絡文をコピー</button>';
+              if (m.status !== "approved") html += '<span class="row" style="gap:4px"><select id="pl-via-' + esc(m.ym) + '"><option>LINE</option><option>電話</option><option>対面</option><option>メール</option></select><button class="btn-ghost btn-sm" data-action="planapprove" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>承諾を記録</button></span>';
+              html += '</div>';
+            }
+            html += '</div>';
+          });
           var subjKeys = Object.keys(subjSet);
           if (subjKeys.length) {
-            html += '<div class="tbwrap"><table class="tb"><tr><th>科目</th><th>計画</th><th>確定</th><th>実施済</th><th>承認待ち</th><th>残り</th></tr>';
+            html += '<div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th>科目(今月)</th><th>計画</th><th>確定</th><th>実施済</th><th>承認待ち</th><th>残り</th></tr>';
             subjKeys.forEach(function (sub) {
               var goal = pl.current[sub] || 0;
               var bk = monthLessons.filter(function (l) { return (l.subject || "その他") === sub; }), dn = bk.filter(function (l) { return l.done; }).length;
               var of = offeredLessons.filter(function (l) { return (l.subject || "その他") === sub; }).length;
               var remain = goal ? Math.max(0, goal - bk.length) : null;
-              html += '<tr><td>' + esc(sub) + '</td><td>' + (goal || '<span class="muted">—</span>') + '</td><td>' + bk.length + '</td><td>' + dn + '</td><td>' + (of || '<span class="muted">0</span>') + '</td><td>' + (remain === null ? '<span class="muted">—</span>' : (remain ? '<strong style="color:var(--danger)">' + remain + '</strong>' : '<span class="tag green">達成</span>')) + '</td></tr>';
+              html += '<tr><td>' + esc(sub) + '</td><td>' + (goal || '<span class="muted">—</span>') + '</td><td>' + (bk.length > goal && goal ? '<strong style="color:var(--danger)">' + bk.length + '</strong>' : bk.length) + '</td><td>' + dn + '</td><td>' + (of || '<span class="muted">0</span>') + '</td><td>' + (remain === null ? '<span class="muted">—</span>' : (remain ? '<strong style="color:var(--danger)">' + remain + '</strong>' : '<span class="tag green">達成</span>')) + '</td></tr>';
             });
             html += '</table></div>';
-          } else html += '<div class="empty">計画も授業もまだありません</div>';
+          }
           html += '<div class="form" style="margin-top:10px"><label>科目</label><select id="pl-subject">' + ["英語", "数学", "英数", "国語", "理科", "社会"].map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select>' +
             '<label>回数</label><input type="number" id="pl-count" min="0" max="31" value="4" style="width:90px">' +
-            '<label>適用</label><select id="pl-scope"><option value="default">毎月の既定(ずっと)</option><option value="' + esc(s.month) + '">' + esc(s.month) + ' のみ</option></select></div>';
-          html += '<div class="row" style="margin-top:10px"><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>保存</button><span class="small muted">回数 0 で削除。月のみの設定があればその月は既定より優先されます。</span></div>';
-          if (pl.defaultRows.length || pl.monthRows.length) {
-            html += '<div class="small muted" style="margin-top:8px">既定: ' + (pl.defaultRows.length ? pl.defaultRows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") : "なし") + (pl.monthRows.length ? '　／　' + esc(s.month) + ': ' + pl.monthRows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") : "") + '</div>';
-          }
+            '<label>適用</label><select id="pl-scope"><option value="default">毎月の既定(ずっと)</option><option value="' + esc(s.month) + '">' + esc(s.month) + ' のみ</option>' + (pl.months && pl.months[1] ? '<option value="' + esc(pl.months[1].ym) + '">' + esc(pl.months[1].ym) + ' のみ</option>' : '') + '</select></div>';
+          html += '<div class="row" style="margin-top:10px"><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>回数を保存</button><span class="small muted">回数 0 で削除。月の回数を変えると、その月は承認のやり直しになります。</span></div>';
+          if (pl.defaultRows.length) html += '<div class="small muted" style="margin-top:8px">毎月の既定: ' + pl.defaultRows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") + '</div>';
           html += '</div>';
 
           // 成績
@@ -1245,6 +1261,26 @@
               render();
               var fd = document.getElementById("f-date"); if (fd) fd.scrollIntoView({ behavior: "smooth", block: "center" });
               toast(fmtD(btn.getAttribute("data-date")) + " を案内フォームに入れました");
+              break;
+            case "planpropose":
+              act("planPropose", { studentId: sid, ym: btn.getAttribute("data-ym") }, "保護者に提案しました(承認待ち)");
+              break;
+            case "planapprove":
+              var pvia = val("pl-via-" + btn.getAttribute("data-ym")) || "LINE";
+              if (!confirm(btn.getAttribute("data-ym") + " の授業回数について、" + pvia + "で保護者の承諾を得たものとして記録しますか?")) return;
+              act("planApproveTeacher", { studentId: sid, ym: btn.getAttribute("data-ym"), via: pvia }, "承諾を記録しました");
+              break;
+            case "plancopy":
+              var pym = btn.getAttribute("data-ym"), pm2 = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === pym; })[0];
+              if (!pm2 || !pm2.rows.length) { toast("計画がありません"); return; }
+              var ptext = "【" + (+pym.slice(5)) + "月の授業回数のご確認】" + cur.name + "さん
+" + pm2.rows.map(function (x) { return "・" + x.subject + " " + x.count + "回"; }).join("
+") + "
+合計 " + pm2.total + "回の予定です。
+
+よろしければ、マイページの「保護者」タブから承認をお願いします(LINEでのお返事でも結構です)。
+" + studentLink(cur.code || "");
+              copyText(ptext, "保護者への連絡文をコピーしました。LINEに貼り付けできます");
               break;
             case "plansave":
               act("planSet", { studentId: sid, ym: val("pl-scope"), subject: val("pl-subject"), count: +(val("pl-count") || 0) }, "計画を保存しました");

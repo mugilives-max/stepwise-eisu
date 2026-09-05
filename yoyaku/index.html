@@ -378,7 +378,8 @@
               if (goal) remainTotal += Math.max(0, goal - have);
               html += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + have + (goal ? '<span class="muted">/' + goal + '</span>' : "") + '回</span><span class="small muted">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>';
             });
-            html += '</div>' + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。「先生に伝える」から希望日を送れます。</div>' : "") + '</div>';
+            var stTag = S.planStatus === "approved" ? '<span class="tag green">保護者承認済み</span>' : S.planStatus === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : "";
+            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。「先生に伝える」から希望日を送れます。</div>' : "") + '</div>';
           })();
 
           // 予定表(最上部)
@@ -692,6 +693,20 @@
             html += '</table></div>';
           }
 
+          var pms = d.planMonths || [];
+          html += '<h2>授業回数の承認</h2>';
+          if (!pms.length) html += '<div class="empty">承認をお願いする予定はいまありません</div>';
+          else {
+            html += '<div class="card">';
+            pms.forEach(function (m) {
+              html += '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row between"><strong>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月の授業回数</strong>' + (m.status === "approved" ? '<span class="tag green">承認済み ' + esc(m.approvedAt) + '</span>' : m.status === "declined" ? '<span class="tag red">見送り</span>' : '<span class="tag amber">ご確認ください</span>') + '</div>';
+              html += '<div style="margin:4px 0">' + m.rows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") + '<span class="small muted">(合計 ' + m.total + '回)</span></div>';
+              if (m.status === "proposed") html += '<div class="row" style="margin-top:6px"><button class="btn-primary btn-sm" data-action="planok" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>この回数で承認する</button><input type="text" id="pl-memo-' + esc(m.ym) + '" placeholder="見送る場合の理由や相談(任意)" maxlength="100" style="flex:1;min-width:160px"><button class="btn-quiet btn-sm" data-action="planng" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>見送る・相談する</button></div>';
+              else if (m.status === "declined" && m.memo) html += '<div class="small muted">' + esc(m.memo) + '</div>';
+              html += '</div>';
+            });
+            html += '<div class="note">承認いただいた回数をもとに授業を予定し、授業料をご請求します。回数の変更を先生が行った場合は、あらためて承認をお願いします。</div></div>';
+          }
           html += '<div class="note">テストの結果は「成績」タブで見られます。</div>';
 
           var months = d.months || [];
@@ -812,6 +827,17 @@
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "parentclose": parentStep = ""; P = null; render(); window.scrollTo(0, 0); break;
+            case "planok":
+            case "planng":
+              var pym = btn.getAttribute("data-ym"), approve = act === "planok", pmemo = val("pl-memo-" + pym);
+              if (!approve && !confirm("この月の回数を見送り(相談)として先生に伝えますか?")) return;
+              busy = true; render();
+              apiPost({ action: "parentPlanDecide", k: myKey(), ptoken: ssGet("sw_pt") || "", ym: pym, approve: approve, memo: pmemo }).then(function (res) {
+                busy = false;
+                if (res.error) { toast(res.error); render(); return; }
+                P = res.data; render(); toast(approve ? "承認しました。ありがとうございます" : "先生に伝えました");
+              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
+              break;
             case "gohome": location.hash = "#home"; break;
             case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
           }
