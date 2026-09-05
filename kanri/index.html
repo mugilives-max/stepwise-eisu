@@ -901,8 +901,10 @@
           switch (a) {
             case "login":
               ev.preventDefault();
-              busy = true; render();
-              post({ action: "admin", op: "login", email: val("a-email"), password: (document.getElementById("a-pass") || {}).value || "" }).then(function (res) {
+              var lEmail = val("a-email"), lPass = (document.getElementById("a-pass") || {}).value || "";
+              if (!lEmail || !lPass) { toast("メールとパスワードを入れてください"); return; }
+              busy = true; render(); // render() で入力欄が作り直されるので、値は必ずこの前に読む
+              post({ action: "admin", op: "login", email: lEmail, password: lPass }).then(function (res) {
                 busy = false;
                 if (res.error) { toast(res.error); render(); return; }
                 lsSet("sw_admt", res.token); authM = "ok"; load();
@@ -924,8 +926,10 @@
               var rp1 = (document.getElementById("r-pass") || {}).value || "", rp2 = (document.getElementById("r-pass2") || {}).value || "";
               if (rp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
               if (rp1 !== rp2) { toast("パスワードが一致しません"); return; }
-              busy = true; render();
-              post({ action: "admin", op: "resetConfirm", code: halfDigits(val("r-code")), newPass: rp1 }).then(function (res) {
+              var rCode = halfDigits(val("r-code"));
+              if (!/^\d{6}$/.test(rCode)) { toast("メールに届いた6桁のコードを入れてください"); return; }
+              busy = true; render(); // 値は render() の前に読む
+              post({ action: "admin", op: "resetConfirm", code: rCode, newPass: rp1 }).then(function (res) {
                 busy = false;
                 if (res.error) { toast(res.error); render(); return; }
                 lsSet("sw_admt", res.token); authM = "ok"; authMode = "account"; resetStep = ""; toast("パスワードを設定しました"); load(true);
