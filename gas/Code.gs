@@ -1345,6 +1345,17 @@ function kanriDeleteRow_(req) {
   return kanriStudentOp_({ studentId: String(req.studentId), view: req.view });
 }
 
+// 【復旧用・エディタから実行】先生のログイン情報を初期化する(Webからは呼べない)。
+// 実行後、管理画面のログイン画面に「初期設定」フォームが出るので、PIN(0000)とメール・新しいパスワードで再設定する
+function resetTeacherLogin() {
+  ['teacherEmail', 'passSalt', 'passHash', 'adminToken'].forEach(function (k) { setConfig_(k, ''); });
+  setConfig_('failCount', '0');
+  setConfig_('lockUntil', '0');
+  CacheService.getScriptCache().remove('schemaOk4');
+  addLog_('先生のログイン情報を初期化(再設定待ち)');
+  Logger.log('reset done: authMode=' + authMode_());
+}
+
 // エディタから実行する動作確認用(Webからは呼べない)
 function kanriSelfTest() {
   var d = kanriDashboard_();
