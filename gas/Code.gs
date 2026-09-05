@@ -529,57 +529,63 @@ function adminLogin_(req) {
   return { ok: true, token: token, admin: adminState_() };
 }
 
-/* ----- パスワード再設定(登録メールに6桁コードを送る) ----- */
+/* ----- パスワードの設定・再設定(所有者のメールに6桁コードを送る。PIN不要) -----
+   初回設定も再設定も同じ流れ: resetRequest でコード送信 → resetConfirm でコード+新パスワード。
+   送り先はこのスクリプトの所有者(先生)のGoogleアカウントのメールなので、設定が消えていても必ず先生に届く */
+function ownerEmail_() { return String(Session.getEffectiveUser().getEmail() || ''); }
+function maskEmail_(e) {
+  var p = String(e || '').split('@');
+  if (p.length < 2) return '';
+  return p[0].slice(0, 2) + '***@' + p[1];
+}
+
 function adminResetRequest_(req) {
-  if (authMode_() !== 'account') return { error: '先に初期設定をしてください', needSetup: true };
   var last = Number(getConfig_('resetLast') || 0);
   if (Date.now() - last < 60000) return { error: 'コードは1分に1回まで送れます。届いたメールを確認してください' };
-  var email = normEmail_(req.email);
-  var teacher = getConfig_('teacherEmail');
-  setConfig_('resetLast', String(Date.now()));
-  // 登録アドレスと違っても同じ返事をする(登録アドレスを推測させない)
-  if (!email || email !== teacher) return { ok: true, sent: true };
+  var to = ownerEmail_();
+  if (!to) return { error: '送信先のメールアドレスが取得できませんでした' };
   var code = String(Math.floor(100000 + Math.random() * 900000));
-  var salt = getConfig_('passSalt') || newCode_();
+  var salt = newCode_();
+  setConfig_('resetLast', String(Date.now()));
+  setConfig_('resetSalt', salt);
   setConfig_('resetCode', hashPass_(code, salt));
   setConfig_('resetExp', String(Date.now() + 15 * 60000));
   setConfig_('resetFails', '0');
   try {
-    MailApp.sendEmail(teacher, '[ステップワイズ] 管理画面のパスワード再設定コード',
-      '管理画面(https://www.stepwise-education.jp/kanri/)のパスワード再設定コードです。\n\n' +
-      '再設定コード: ' + code + '\n\n15分間有効です。心当たりがない場合はこのメールを無視してください(パスワードは変わりません)。');
+    MailApp.sendEmail(to, '[ステップワイズ] 管理画面のパスワード設定コード',
+      '管理画面(https://www.stepwise-education.jp/kanri/)のパスワード設定コードです。\n\n' +
+      '設定コード: ' + code + '\n\n15分間有効です。心当たりがない場合はこのメールを無視してください(パスワードは変わりません)。');
   } catch (err) {
-    addLog_('再設定コードのメール送信に失敗: ' + err);
+    addLog_('設定コードのメール送信に失敗: ' + err);
     return { error: 'メールを送れませんでした。しばらくしてからお試しください' };
   }
-  addLog_('パスワード再設定コードを送信');
-  return { ok: true, sent: true };
+  addLog_('パスワード設定コードを送信');
+  return { ok: true, sent: true, to: maskEmail_(to) };
 }
 
 function adminResetConfirm_(req) {
-  if (authMode_() !== 'account') return { error: '先に初期設定をしてください', needSetup: true };
   var exp = Number(getConfig_('resetExp') || 0);
   var stored = getConfig_('resetCode');
-  if (!stored || Date.now() > exp) return { error: '再設定コードが無効か期限切れです。もう一度コードを送ってください' };
+  if (!stored || Date.now() > exp) return { error: 'コードが無効か期限切れです。もう一度コードを送ってください' };
   var fails = Number(getConfig_('resetFails') || 0);
   if (fails >= 5) { setConfig_('resetCode', ''); return { error: '入力回数が多すぎます。もう一度コードを送ってください' }; }
-  var email = normEmail_(req.email);
   var code = halfDigits_(req.code);
-  var salt = getConfig_('passSalt') || '';
-  if (email !== getConfig_('teacherEmail') || hashPass_(code, salt) !== stored) {
+  if (!code || hashPass_(code, getConfig_('resetSalt') || '') !== stored) {
     setConfig_('resetFails', String(fails + 1));
-    return { error: 'メールアドレスまたはコードがちがいます' };
+    return { error: 'コードがちがいます' };
   }
   var pass = String(req.newPass || '');
   if (pass.length < 8) return { error: '新しいパスワードは8文字以上にしてください' };
+  var email = getConfig_('teacherEmail') || ownerEmail_();
   var newSalt = newCode_() + newCode_();
+  setConfig_('teacherEmail', email);
   setConfig_('passSalt', newSalt);
   setConfig_('passHash', hashPass_(pass, newSalt));
   setConfig_('resetCode', ''); setConfig_('resetExp', '0'); setConfig_('resetFails', '0');
   setConfig_('failCount', '0'); setConfig_('lockUntil', '0');
   var token = issueToken_();
-  addLog_('パスワードを再設定しました(メールコード)');
-  return { ok: true, token: token };
+  addLog_('パスワードを設定しました(メールコード)');
+  return { ok: true, token: token, email: email };
 }
 
 function adminChangePass_(req) {

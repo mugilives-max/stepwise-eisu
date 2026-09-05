@@ -313,51 +313,44 @@
         function renderLoading() { renderNav(); app.innerHTML = '<div class="loading"><div class="spinner"></div>読み込んでいます…</div>'; }
 
         /* ---------- ログイン ---------- */
-        var authMode = null; // 'account' | 'pin'(未設定=初期設定が必要) | null(確認中)
-        var resetStep = ""; // "" | "request" | "confirm"(パスワード再設定の画面)
+        var authMode = null; // 'account' | 'unset'(パスワード未設定) | null(確認中)
+        var resetStep = "";  // "" | "request" | "confirm"(メールコードでの設定画面)
+        var resetTo = "";    // コードの送り先(マスク表示)
         function renderLogin() {
           renderNav();
           if (authMode === null) {
             authMode = "checking";
             fetch(API + "?action=authmode&t=" + Date.now()).then(function (r) { return r.json(); })
-              .then(function (res) { authMode = res.mode === "account" ? "account" : "pin"; if (authM === "login") renderLogin(); })
+              .then(function (res) { authMode = res.mode === "account" ? "account" : "unset"; if (authM === "login") renderLogin(); })
               .catch(function () { authMode = "account"; if (authM === "login") renderLogin(); });
           }
+          var unset = authMode === "unset";
           var html = '<h1 style="margin-top:28px">管理画面</h1>';
-          if (authMode === "pin") {
-            html += '<p class="sub">先生アカウントの初期設定(または再設定)を行います。初期PINは 0000 です。</p>' +
-              '<div class="card" style="margin-top:14px;max-width:460px"><div class="form">' +
-              '<label for="a-pin">PIN</label><input type="text" id="a-pin" name="setup-pin-code" inputmode="numeric" autocomplete="off" placeholder="0000" style="width:120px">' +
-              '<label for="a-email">メール</label><input type="email" id="a-email" autocomplete="username" placeholder="ログインに使うメールアドレス">' +
-              '<label for="a-pass">新しいパスワード</label><input type="password" id="a-pass" autocomplete="new-password" placeholder="8文字以上">' +
-              '<label for="a-pass2">もう一度</label><input type="password" id="a-pass2" autocomplete="new-password">' +
-              '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="setup"' + (busy ? " disabled" : "") + '>' + (busy ? "設定中…" : "設定してログイン") + '</button></div>' +
-              '<div class="note">メールは認証には使わず、ログイン時のアカウント名として使います。</div></div>';
-          } else if (resetStep) {
-            html += '<p class="sub">パスワードの再設定。登録済みのメールアドレスに6桁のコードを送ります。</p><div class="card" style="margin-top:14px;max-width:460px"><div class="form">' +
-              '<label for="r-email">メール</label><input type="email" id="r-email" autocomplete="username" value="' + esc(resetEmail) + '">';
-            if (resetStep === "confirm") {
-              html += '<label for="r-code">再設定コード</label><input type="text" id="r-code" inputmode="numeric" autocomplete="one-time-code" placeholder="メールの6桁">' +
+          if (unset || resetStep) {
+            html += '<p class="sub">' + (unset ? 'パスワードが未設定です。先生のメール(mugilives@gmail.com)に届くコードで設定します。' : 'パスワードの再設定。先生のメールに届く6桁のコードで新しいパスワードを設定します。') + '</p>';
+            html += '<div class="card" style="margin-top:14px;max-width:460px">';
+            if (resetStep !== "confirm") {
+              html += '<div class="row"><button class="btn-primary" data-action="resetreq"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "コードをメールで送る") + '</button>' + (unset ? "" : '<button class="btn-quiet btn-sm" data-action="resetback">ログインに戻る</button>') + '</div>';
+              html += '<div class="note">送り先はこのシステムの所有者のGoogleアカウント宛てで固定です(他の人には送れません)。</div>';
+            } else {
+              html += '<div class="small muted" style="margin-bottom:8px">' + (resetTo ? esc(resetTo) + ' にコードを送りました。' : 'コードを送りました。') + '届かないときは迷惑メールも確認してください(15分有効)。</div><div class="form">' +
+                '<label for="r-code">コード</label><input type="text" id="r-code" name="one-time-code" inputmode="numeric" autocomplete="one-time-code" placeholder="6桁" style="width:140px">' +
                 '<label for="r-pass">新しいパスワード</label><input type="password" id="r-pass" autocomplete="new-password" placeholder="8文字以上">' +
-                '<label for="r-pass2">もう一度</label><input type="password" id="r-pass2" autocomplete="new-password">';
+                '<label for="r-pass2">もう一度</label><input type="password" id="r-pass2" autocomplete="new-password">' +
+                '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="resetok"' + (busy ? " disabled" : "") + '>' + (busy ? "設定中…" : "このパスワードにしてログイン") + '</button><button class="btn-quiet btn-sm" data-action="resetreq"' + (busy ? " disabled" : "") + '>コードを再送</button>' + (unset ? "" : '<button class="btn-quiet btn-sm" data-action="resetback">ログインに戻る</button>') + '</div>';
             }
-            html += '</div><div class="row" style="margin-top:12px">';
-            if (resetStep === "request") html += '<button class="btn-primary" data-action="resetreq"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "コードをメールで送る") + '</button>';
-            else html += '<button class="btn-primary" data-action="resetok"' + (busy ? " disabled" : "") + '>' + (busy ? "設定中…" : "新しいパスワードにする") + '</button><button class="btn-quiet btn-sm" data-action="resetreq"' + (busy ? " disabled" : "") + '>コードを再送</button>';
-            html += '<button class="btn-quiet btn-sm" data-action="resetback">ログインに戻る</button></div>' +
-              '<div class="note">' + (resetStep === "confirm" ? "メールが届いたら、コードと新しいパスワードを入れてください(コードは15分有効)。届かないときは迷惑メールも確認してください。" : "登録済みのアドレスの場合のみコードが届きます。") + '</div></div>';
+            html += '</div>';
           } else {
             html += '<p class="sub">先生用のログインが必要です。別の端末でログインすると、それまでのログインは無効になります(ログインは1か所のみ有効)</p>' +
               '<div class="card" style="margin-top:14px;max-width:420px"><div class="form">' +
               '<label for="a-email">メール</label><input type="email" id="a-email" autocomplete="username">' +
               '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="current-password">' +
               '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="login"' + (busy ? " disabled" : "") + ">" + (busy ? "ログイン中…" : "ログイン") + '</button><button class="btn-quiet btn-sm" data-action="resetstart">パスワードを忘れた</button></div>' +
-              '<div class="note">「メールアドレスまたはパスワードがちがいます」と出るときは、メール欄が登録したアドレスと完全に一致しているか(自動入力で別のアドレスが入っていないか)も確認してください。5回失敗すると10分間ロックされます。パスワードを忘れたときは「パスワードを忘れた」から、登録メールに届くコードで再設定できます。</div></div>';
+              '<div class="note">「メールアドレスまたはパスワードがちがいます」と出るときは、メール欄が登録したアドレス(mugilives@gmail.com)と完全に一致しているか、自動入力で別のアドレスが入っていないかを確認してください。5回失敗すると10分間ロックされます。</div></div>';
           }
           app.innerHTML = html;
-          var el = document.getElementById(authMode === "pin" ? "a-pin" : resetStep === "confirm" ? "r-code" : resetStep ? "r-email" : "a-email"); if (el) el.focus();
+          var el = document.getElementById(resetStep === "confirm" ? "r-code" : "a-email"); if (el) el.focus();
         }
-        var resetEmail = "";
 
         /* ---------- ホーム(ダッシュボード) ---------- */
         function lessonLine(s, withDate) {
@@ -915,17 +908,15 @@
                 lsSet("sw_admt", res.token); authM = "ok"; load();
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
-            case "resetstart": ev.preventDefault(); resetStep = "request"; resetEmail = val("a-email"); render(); break;
+            case "resetstart": ev.preventDefault(); resetStep = "request"; render(); break;
             case "resetback": ev.preventDefault(); resetStep = ""; render(); break;
             case "resetreq":
               ev.preventDefault();
-              resetEmail = val("r-email");
-              if (!resetEmail) { toast("メールアドレスを入れてください"); return; }
               busy = true; render();
-              post({ action: "admin", op: "resetRequest", email: resetEmail }).then(function (res) {
+              post({ action: "admin", op: "resetRequest" }).then(function (res) {
                 busy = false;
                 if (res.error) { toast(res.error); render(); return; }
-                resetStep = "confirm"; render(); toast("登録済みのアドレスならコードを送りました。メールを確認してください");
+                resetTo = res.to || ""; resetStep = "confirm"; render(); toast("コードを送りました。メールを確認してください");
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "resetok":
@@ -934,22 +925,10 @@
               if (rp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
               if (rp1 !== rp2) { toast("パスワードが一致しません"); return; }
               busy = true; render();
-              post({ action: "admin", op: "resetConfirm", email: val("r-email"), code: halfDigits(val("r-code")), newPass: rp1 }).then(function (res) {
+              post({ action: "admin", op: "resetConfirm", code: halfDigits(val("r-code")), newPass: rp1 }).then(function (res) {
                 busy = false;
                 if (res.error) { toast(res.error); render(); return; }
-                lsSet("sw_admt", res.token); authM = "ok"; resetStep = ""; toast("パスワードを再設定しました"); load(true);
-              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
-              break;
-            case "setup":
-              ev.preventDefault();
-              var sp1 = (document.getElementById("a-pass") || {}).value || "", sp2 = (document.getElementById("a-pass2") || {}).value || "";
-              if (sp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
-              if (sp1 !== sp2) { toast("パスワードが一致しません"); return; }
-              busy = true; render();
-              post({ action: "admin", op: "setupAccount", pin: halfDigits(val("a-pin")), email: val("a-email"), password: sp1 }).then(function (res) {
-                busy = false;
-                if (res.error) { toast(res.error); render(); return; }
-                lsSet("sw_admt", res.token); authM = "ok"; authMode = "account"; toast("アカウントを設定しました"); load(true);
+                lsSet("sw_admt", res.token); authM = "ok"; authMode = "account"; resetStep = ""; toast("パスワードを設定しました"); load(true);
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "logout":
