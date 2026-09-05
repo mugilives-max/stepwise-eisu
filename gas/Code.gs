@@ -524,6 +524,59 @@ function adminLogin_(req) {
   return { ok: true, token: token, admin: adminState_() };
 }
 
+/* ----- パスワード再設定(登録メールに6桁コードを送る) ----- */
+function adminResetRequest_(req) {
+  if (authMode_() !== 'account') return { error: '先に初期設定をしてください', needSetup: true };
+  var last = Number(getConfig_('resetLast') || 0);
+  if (Date.now() - last < 60000) return { error: 'コードは1分に1回まで送れます。届いたメールを確認してください' };
+  var email = normEmail_(req.email);
+  var teacher = getConfig_('teacherEmail');
+  setConfig_('resetLast', String(Date.now()));
+  // 登録アドレスと違っても同じ返事をする(登録アドレスを推測させない)
+  if (!email || email !== teacher) return { ok: true, sent: true };
+  var code = String(Math.floor(100000 + Math.random() * 900000));
+  var salt = getConfig_('passSalt') || newCode_();
+  setConfig_('resetCode', hashPass_(code, salt));
+  setConfig_('resetExp', String(Date.now() + 15 * 60000));
+  setConfig_('resetFails', '0');
+  try {
+    MailApp.sendEmail(teacher, '[ステップワイズ] 管理画面のパスワード再設定コード',
+      '管理画面(https://www.stepwise-education.jp/kanri/)のパスワード再設定コードです。\n\n' +
+      '再設定コード: ' + code + '\n\n15分間有効です。心当たりがない場合はこのメールを無視してください(パスワードは変わりません)。');
+  } catch (err) {
+    addLog_('再設定コードのメール送信に失敗: ' + err);
+    return { error: 'メールを送れませんでした。しばらくしてからお試しください' };
+  }
+  addLog_('パスワード再設定コードを送信');
+  return { ok: true, sent: true };
+}
+
+function adminResetConfirm_(req) {
+  if (authMode_() !== 'account') return { error: '先に初期設定をしてください', needSetup: true };
+  var exp = Number(getConfig_('resetExp') || 0);
+  var stored = getConfig_('resetCode');
+  if (!stored || Date.now() > exp) return { error: '再設定コードが無効か期限切れです。もう一度コードを送ってください' };
+  var fails = Number(getConfig_('resetFails') || 0);
+  if (fails >= 5) { setConfig_('resetCode', ''); return { error: '入力回数が多すぎます。もう一度コードを送ってください' }; }
+  var email = normEmail_(req.email);
+  var code = String(req.code || '').trim();
+  var salt = getConfig_('passSalt') || '';
+  if (email !== getConfig_('teacherEmail') || hashPass_(code, salt) !== stored) {
+    setConfig_('resetFails', String(fails + 1));
+    return { error: 'メールアドレスまたはコードがちがいます' };
+  }
+  var pass = String(req.newPass || '');
+  if (pass.length < 8) return { error: '新しいパスワードは8文字以上にしてください' };
+  var newSalt = newCode_() + newCode_();
+  setConfig_('passSalt', newSalt);
+  setConfig_('passHash', hashPass_(pass, newSalt));
+  setConfig_('resetCode', ''); setConfig_('resetExp', '0'); setConfig_('resetFails', '0');
+  setConfig_('failCount', '0'); setConfig_('lockUntil', '0');
+  var token = issueToken_();
+  addLog_('パスワードを再設定しました(メールコード)');
+  return { ok: true, token: token };
+}
+
 function adminChangePass_(req) {
   if (hashPass_(String(req.current || ''), getConfig_('passSalt')) !== getConfig_('passHash')) {
     return { error: '現在のパスワードがちがいます' };
@@ -553,6 +606,8 @@ function admin_(req) {
   LITE_ = req.from === 'kanri' && req.view !== 'lessons'; // 授業ページは予約ページ用の全データ(admin)をそのまま使う
   if (req.op === 'login') return adminLogin_(req);
   if (req.op === 'setupAccount') return adminSetupAccount_(req);
+  if (req.op === 'resetRequest') return adminResetRequest_(req);
+  if (req.op === 'resetConfirm') return adminResetConfirm_(req);
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
   switch (req.op) {
     case 'state':       return { ok: true, admin: adminState_() };
