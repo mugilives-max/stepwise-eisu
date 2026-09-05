@@ -287,7 +287,7 @@
               });
               if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
             }
-            var clickable = (!past && (it || selMode)) || (past && hasItems);
+            var clickable = !past || hasItems; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)
             if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";
             else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
