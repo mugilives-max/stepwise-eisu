@@ -473,6 +473,17 @@
             html += '</div>';
           }
 
+          // 予定管理(予定表の直下)
+          html += '<h2>予定管理</h2><div class="actions">';
+          html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業の希望</button>';
+          html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
+          html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
+          html += '</div><div class="note">ボタンを押して、上の予定表で日付をタップ。選んだら画面下の内容を確認して送ります。</div>';
+          if (panel === "wish") html += renderWishPanel(today);
+          if (panel === "event") html += renderEventPanel(today, events);
+          if (panel === "ng") html += renderNgPanel(today, blocked);
+
+
           // 次の授業
           var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
           var next = upcoming[0];
@@ -515,16 +526,6 @@
             html += '<div class="empty">確定している授業はありません</div>';
           }
           html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。直前の変更はLINEで直接連絡してください。</div>';
-
-          // 先生に伝える(操作コーナー)
-          html += '<h2>予定管理</h2><div class="actions">';
-          html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業の希望</button>';
-          html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
-          html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
-          html += '</div><div class="note">ボタンを押すと予定表で日付をタップして選べます。日付を選んだら、画面下の内容を確認して送ってください。</div>';
-          if (panel === "wish") html += renderWishPanel(today);
-          if (panel === "event") html += renderEventPanel(today, events);
-          if (panel === "ng") html += renderNgPanel(today, blocked);
 
           html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者」タブにあります。</div>';
 
