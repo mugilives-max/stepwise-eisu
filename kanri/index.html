@@ -109,7 +109,7 @@
       .calday.today { border-color: var(--muted); }
       .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
       .caldot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-      .caldot.op { background: var(--primary); } .caldot.of { background: #d99a2b; } .caldot.rq { background: var(--danger); }
+      .caldot.op { background: var(--primary); } .caldot.of { background: #d99a2b; } .caldot.rq { background: var(--danger); } .caldot.ws { background: var(--green); }
       .calday.sel .caldot { background: var(--white); }
       .calmark { font-size: 10px; line-height: 1; color: var(--muted); font-weight: 700; }
       .calday.sel .calmark { color: var(--white); }
@@ -225,10 +225,12 @@
         function minutesBetween(s, e) { var a = s.split(":"), b = e.split(":"); return (+b[0]) * 60 + (+b[1]) - (+a[0]) * 60 - (+a[1]); }
         function fitMin(m) { var opts = [120, 90, 60, 45, 30]; for (var i = 0; i < opts.length; i++) if (m >= opts[i]) return opts[i]; return 60; }
         function wishRow(x, showName) {
+          var want = x.kind === "want";
           var h = '<div class="line"><span class="t">' + fmtD(x.date) + ' ' + x.start + '〜' + x.end + '</span><span class="w">' +
             (showName ? '<a class="nm" href="#s=' + esc(x.studentId) + '" style="text-decoration:none;color:inherit">' + esc(x.studentName) + '</a> ' : '') +
-            (x.note ? '<span class="small">' + esc(x.note) + '</span>' : '<span class="small muted">メモなし</span>') + (x.createdAt ? ' <span class="small muted">(' + esc(x.createdAt) + ')</span>' : '') + '</span>';
-          h += '<button class="btn-ghost btn-sm" data-action="usewish" data-id="' + esc(x.id) + '" data-sid="' + esc(x.studentId) + '" data-date="' + esc(x.date) + '" data-start="' + esc(x.start) + '" data-end="' + esc(x.end) + '">この希望で案内</button>';
+            '<span class="tag ' + (want ? "blue" : "green") + '">' + (want ? "この日時を希望" : "この時間帯のどこかで") + '</span> ' +
+            (x.note ? '<span class="small">' + esc(x.note) + '</span>' : '') + (x.createdAt ? ' <span class="small muted">(' + esc(x.createdAt) + ')</span>' : '') + '</span>';
+          h += '<button class="btn-ghost btn-sm" data-action="usewish" data-id="' + esc(x.id) + '" data-sid="' + esc(x.studentId) + '" data-kind="' + esc(x.kind || "ok") + '" data-date="' + esc(x.date) + '" data-start="' + esc(x.start) + '" data-end="' + esc(x.end) + '">' + (want ? "この希望で案内" : "この時間帯で案内") + '</button>';
           h += '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(x.id) + '" data-sid="' + esc(x.studentId) + '">削除</button></div>';
           return h;
         }
@@ -243,7 +245,7 @@
           h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" step="300">';
           h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
           h += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
-          h += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>' + (d.wishId ? '<span class="small muted">希望日程から入力中(案内すると希望は消えます)</span>' : '') + '</div>';
+          h += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>' + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
           h += '<div class="note">案内は生徒の予定ページに表示されます(メール登録済みなら通知メールも)。生徒が承認すると確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
           return h;
         }
@@ -646,12 +648,13 @@
               if (it.booked) marks += '<span class="caldot op"></span>';
               if (it.offered) marks += '<span class="caldot of"></span>';
               if (it.req) marks += '<span class="caldot rq"></span>';
+              if (it.wish) marks += '<span class="caldot ws"></span>';
               if (it.ng) marks += '<span class="calmark">×</span>';
             }
             marks += "</span>";
             h += '<button class="' + cls + (ds < today && !it ? " off" : "") + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
-          h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="calmark">×</span> 都合が悪い生徒あり</span></div></div>';
+          h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="calmark">×</span> 都合が悪い生徒あり</span></div></div>';
           return h;
         }
 
@@ -711,10 +714,13 @@
             if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else if (s.status === "offered") it.offered++;
           });
           (A.blocked || []).forEach(function (b) { var it = info[b.date] || (info[b.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ng++; });
+          (A.wishes || []).forEach(function (x) { var it = info[x.date] || (info[x.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.wish = (it.wish || 0) + 1; });
           html += renderCal(info, today);
           html += '<h2>' + fmtD(selDate) + 'の授業</h2>';
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。上のフォームから案内できます(日付は選択済み)。</div>';
+          var dayWish = (A.wishes || []).filter(function (x) { return x.date === selDate; });
+          if (dayWish.length) html += '<div class="card" style="margin-top:10px">' + dayWish.map(function (x) { return wishRow(x, true); }).join("") + '</div>';
           var dayNg = (A.blocked || []).filter(function (b) { return b.date === selDate; });
           if (dayNg.length) {
             html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">都合が悪い</span> <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
@@ -997,7 +1003,8 @@
               offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject"), wishId: offerDraft && offerDraft.wishId };
               sendOffer(false); break;
             case "usewish":
-              var uw = { studentId: btn.getAttribute("data-sid"), date: btn.getAttribute("data-date"), start: btn.getAttribute("data-start"), min: fitMin(minutesBetween(btn.getAttribute("data-start"), btn.getAttribute("data-end"))), wishId: btn.getAttribute("data-id") };
+              var uwWant = btn.getAttribute("data-kind") === "want", uwLen = minutesBetween(btn.getAttribute("data-start"), btn.getAttribute("data-end"));
+              var uw = { studentId: btn.getAttribute("data-sid"), date: btn.getAttribute("data-date"), start: btn.getAttribute("data-start"), min: uwWant ? fitMin(uwLen) : Math.min(90, fitMin(uwLen)), wishId: btn.getAttribute("data-id"), window: uwWant ? "" : btn.getAttribute("data-start") + "〜" + btn.getAttribute("data-end") };
               var srcSlots = route().page === "student" ? (cur.lessons || []).map(function (l) { return { studentId: cur.id, date: l.date, subject: l.subject }; }) : (A ? A.slots : []);
               var lsub = "", ld = "";
               srcSlots.forEach(function (s) { if (sameId(s.studentId, uw.studentId) && s.subject && s.date >= ld) { ld = s.date; lsub = s.subject; } });
@@ -1005,7 +1012,7 @@
               offerDraft = uw; selDate = uw.date; selManual = true;
               render();
               var fe = document.getElementById("f-date"); if (fe) fe.scrollIntoView({ behavior: "smooth", block: "center" });
-              toast("希望日程をフォームに入れました。内容を確認して案内してください");
+              toast(uwWant ? "希望日時をフォームに入れました。内容を確認して案内してください" : "空き時間 " + uw.window + " のあいだで開始時刻と長さを決めて案内してください");
               break;
             case "delwish":
               if (!confirm("この希望日程を削除しますか?")) return;

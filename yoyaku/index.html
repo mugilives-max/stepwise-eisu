@@ -300,6 +300,7 @@
             .then(function (r) { return r.json(); });
         }
 
+        var wishKind = "want"; // 授業の希望フォームの種類(want=この日時 / ok=この時間帯のどこかで)
         var previewK = null; // 先生が生徒画面をプレビュー中の生徒コード
         function myKey() { return previewK || lsGet("sw_k") || ""; }
 
@@ -464,19 +465,29 @@
             html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。先生が確認してから取消になります。直前の変更はLINEで直接連絡してください。</div>';
           }
 
-          html += "<h2>授業の希望日程</h2>";
+          html += "<h2>授業の希望</h2>";
           var wishes = S.wishes || [];
           if (wishes.length > 0) {
             html += '<div class="card">';
             wishes.forEach(function (wv) {
+              var isWant = wv.kind === "want";
               html += '<div class="slotline"><span class="time">' + fmtDateW(wv.date) + " " + wv.start + "〜" + wv.end + "</span>";
-              html += '<span class="who">' + (wv.note ? esc(wv.note) : "") + ' <span style="font-size:11.5px;color:var(--muted)">先生の返事待ち</span></span>';
+              html += '<span class="who"><span class="tag ' + (isWant ? "booked" : "open") + '" style="font-size:11px">' + (isWant ? "この日時を希望" : "この時間帯のどこかで") + '</span> ' + (wv.note ? esc(wv.note) : "") + ' <span style="font-size:11.5px;color:var(--muted)">先生の返事待ち</span></span>';
               html += '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(wv.id) + '">取消</button></div>';
             });
             html += "</div>";
           }
-          html += '<div class="row" style="margin-top:10px"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><span style="color:var(--muted)">〜</span><input type="time" id="f-wend" value="19:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
-          html += '<div class="note">授業をしてほしい日と時間帯を先生に伝えられます。先生が確認して「案内」を送るので、承認すると確定です(希望を送っただけでは確定しません)。</div>';
+          html += '<div class="card" style="margin-top:10px"><div class="row" style="margin-bottom:8px"><span class="seg" style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">' +
+            '<button class="btn-quiet btn-sm" data-action="wkind" data-k="want" style="border:none;border-radius:0;' + (wishKind === "want" ? "background:var(--soft);color:var(--primary);font-weight:700" : "") + '">この日時に授業をしたい</button>' +
+            '<button class="btn-quiet btn-sm" data-action="wkind" data-k="ok" style="border:none;border-radius:0;' + (wishKind === "ok" ? "background:var(--soft);color:var(--primary);font-weight:700" : "") + '">この時間帯のどこかで調整してほしい</button></span></div>';
+          if (wishKind === "want") {
+            html += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><select id="f-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
+            html += '<div class="note">「この日のこの時間に授業をしたい」という希望です。先生が確認して案内を送るので、承認すると確定です。</div>';
+          } else {
+            html += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span style="color:var(--muted)">〜</span><input type="time" id="f-wend" value="18:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>時間帯を送る</button></div>';
+            html += '<div class="note">「この時間帯なら授業ができる」という空き時間です(例: 13:00〜18:00)。先生がこの中から授業の時間を決めて案内します。時間帯すべてが授業になるわけではありません。</div>';
+          }
+          html += '</div>';
 
           html += "<h2>都合が悪い日</h2>";
           var blocked = S.blocked || [];
@@ -1061,14 +1072,22 @@
               var tids = btn.getAttribute("data-ids");
               adminAction("delBlock", tids ? { blockIds: tids.split(",") } : { blockId: id }, "削除しました");
               break;
+            case "wkind":
+              wishKind = btn.getAttribute("data-k"); render(); break;
             case "addwish":
               var wd = (document.getElementById("f-wdate") || {}).value;
               var ws = (document.getElementById("f-wstart") || {}).value;
-              var we = (document.getElementById("f-wend") || {}).value;
               var wn = ((document.getElementById("f-wnote") || {}).value || "").trim();
               if (!wd) { toast("日付をえらんでください"); return; }
-              if (!ws || !we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
-              studentAction({ action: "wish", k: myKey(), date: wd, start: ws, end: we, note: wn }, "希望を先生に送りました");
+              if (!ws) { toast("開始時刻を入れてください"); return; }
+              if (wishKind === "want") {
+                var wm = +((document.getElementById("f-wmin") || {}).value || 90);
+                studentAction({ action: "wish", kind: "want", k: myKey(), date: wd, start: ws, min: wm, note: wn }, "希望を先生に送りました");
+              } else {
+                var we = (document.getElementById("f-wend") || {}).value;
+                if (!we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
+                studentAction({ action: "wish", kind: "ok", k: myKey(), date: wd, start: ws, end: we, note: wn }, "授業できる時間帯を先生に送りました");
+              }
               break;
             case "delwish":
               studentAction({ action: "unwish", k: myKey(), wishId: id }, "希望を取り消しました");
