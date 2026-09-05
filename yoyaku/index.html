@@ -110,6 +110,8 @@
       .callbl.of { color: #a8721c; }
       .callbl.more { color: var(--muted); font-weight: 500; }
       .callbl.dn { color: var(--muted); }
+      .callbl.ev { color: var(--coral); font-weight: 600; }
+      .chip.ev { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 600; }
       .calday.ngsel { background: var(--danger-soft, #fbe9e7); border: 1px dashed var(--danger); }
       .calday.ngsel .calmark { color: var(--danger); }
       .callbl.tm { font-weight: 600; opacity: .85; }
@@ -360,6 +362,7 @@
             if (kind !== "teacher" && hasLessons) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
+                if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + "</span>"; return; }
                 var lc = l.st === "offer" ? " of" : (l.st === "done" || l.st === "past") ? " dn" : "";
                 marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
               });
@@ -382,6 +385,7 @@
             h += '<span><span class="callbl of" style="display:inline">科目</span> 先生からの案内(未承認)</span>';
             h += '<span><span class="callbl dn" style="display:inline">科目</span> 実施済み</span>';
             h += '<span><span class="calmark" style="color:var(--muted)">×</span> 授業できない日</span>';
+            h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
           }
           h += "</div></div>";
           return h;
@@ -511,6 +515,22 @@
           html += '<div class="row" style="margin-top:8px"><input type="date" id="f-bdate" min="' + today + '"><span style="color:var(--muted)">〜</span><input type="date" id="f-bdate2" min="' + today + '"><input type="text" id="f-bnote" placeholder="メモ(任意。例: 修学旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
           html += '<div class="note">1日だけなら左の日付のみでOK。連日の場合は「〜」の右に最終日を入れてください。</div></details>';
 
+          html += "<h2>共有したい予定</h2>";
+          var events = (S.events || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+          var evUpcoming = events.filter(function (e) { return e.dateTo >= today; });
+          if (evUpcoming.length > 0) {
+            html += '<div class="card">';
+            evUpcoming.forEach(function (e) {
+              html += '<div class="slotline"><span class="time">' + (e.date === e.dateTo ? fmtDateW(e.date) : fmtDateW(e.date) + "〜" + fmtDateW(e.dateTo)) + "</span>";
+              html += '<span class="who">' + esc(e.title) + "</span>";
+              html += '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(e.id) + '">取消</button></div>';
+            });
+            html += "</div>";
+          }
+          html += '<div class="card" style="margin-top:10px"><div class="row"><input type="date" id="f-edate" min="' + today + '"><span style="color:var(--muted)">〜</span><input type="date" id="f-edate2" min="' + today + '"><input type="text" id="f-etitle" placeholder="内容(例: 大会、高校見学、修学旅行)" maxlength="40" style="flex:1;min-width:160px"></div>';
+          html += '<div class="row" style="margin-top:8px"><label style="font-size:13px;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="f-eblock"> この期間は授業できない日にもする</label><button class="btn-ghost btn-sm" data-action="addevent"' + (busy ? " disabled" : "") + '>先生に共有</button></div>';
+          html += '<div class="note">部活の大会、学校見学、テスト期間など、先生に知らせておきたい予定です。予定表に表示され、先生にも伝わります。1日だけなら左の日付のみでOK。</div></div>';
+
           html += "<h2>予定表" + (ngMode ? ' <span style="font-size:12.5px;color:var(--danger);font-weight:600">授業できない日をタップして選んでください</span>' : "") + "</h2>";
           var hist = (S.history || []).map(function (h) { return { id: h.id, date: h.date, start: h.start, min: h.min, subject: h.subject, st: h.done ? "done" : "past" }; });
           var byDate = {}, dates = [];
@@ -535,9 +555,15 @@
             calY = +sp[0]; calM = +sp[1] - 1;
           }
           var info = {};
-          slots.concat(hist).forEach(function (s) {
+          var evDays = [];
+          (S.events || []).forEach(function (e) {
+            var d = e.date;
+            for (var ei = 0; ei < 61 && d <= e.dateTo; ei++) { evDays.push({ date: d, title: e.title, id: e.id, st: "event" }); d = addDaysStr(d, 1); }
+          });
+          evDays.forEach(function (e) { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
+          slots.concat(hist).concat(evDays.map(function (e) { return { date: e.date, subject: e.title, st: "event", start: "99:99" }; })).forEach(function (s) {
             var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, labels: [] });
-            if (s.st === "done" || s.st === "past") it.past++; else it[s.st]++;
+            if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev = (it.ev || 0) + 1; else it[s.st]++;
             it.labels.push({ text: s.subject || "授業", st: s.st, start: s.start });
           });
           blocked.forEach(function (b) {
@@ -546,7 +572,7 @@
           });
           html += renderCal(info, today, "student");
 
-          if (slots.length === 0 && hist.length === 0) {
+          if (slots.length === 0 && hist.length === 0 && evDays.length === 0) {
             html += '<div class="empty">いま予定はありません。先生から案内が届くとここに表示されます。</div>';
           } else {
             var dwd = wdOf(selDate);
@@ -557,6 +583,7 @@
             } else {
               html += '<div class="chips">';
               ds2.forEach(function (s) {
+                if (s.st === "event") { html += '<span class="chip ev">' + esc(s.title) + "</span>"; return; }
                 var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
                 if (s.st === "mine") {
                   html += '<span class="chip mine">✓ ' + label + "</span>";
@@ -1141,6 +1168,17 @@
               var bn = ((document.getElementById("f-bnote") || {}).value || "").trim();
               if (!bd) { toast("日付をえらんでください"); return; }
               studentAction({ action: "block", k: myKey(), date: bd, dateTo: bdto || bd, note: bn }, "登録しました");
+              break;
+            case "addevent":
+              var ed = (document.getElementById("f-edate") || {}).value, ed2 = (document.getElementById("f-edate2") || {}).value;
+              var et = ((document.getElementById("f-etitle") || {}).value || "").trim();
+              var eb = !!(document.getElementById("f-eblock") || {}).checked;
+              if (!ed) { toast("日付をえらんでください"); return; }
+              if (!et) { toast("予定の内容を入れてください"); return; }
+              studentAction({ action: "eventAdd", k: myKey(), date: ed, dateTo: ed2 || ed, title: et, alsoBlock: eb }, "先生に共有しました");
+              break;
+            case "delevent":
+              studentAction({ action: "eventDel", k: myKey(), eventId: id }, "予定を取り消しました");
               break;
             case "delblock":
               var sids = btn.getAttribute("data-ids");

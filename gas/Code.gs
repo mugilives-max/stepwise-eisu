@@ -67,6 +67,8 @@ function doPost(e) {
       case 'cancelReq': res = cancelReq_(req); break;
       case 'wish':    res = wish_(req); break;
       case 'unwish':  res = unwish_(req); break;
+      case 'eventAdd': res = eventAdd_(req); break;
+      case 'eventDel': res = eventDel_(req); break;
       case 'block':   res = block_(req); break;
       case 'unblock': res = unblock_(req); break;
       case 'blockSet': res = blockSet_(req); break;
@@ -120,7 +122,10 @@ function studentState_(code) {
     .map(function (b) { return { id: b.id, date: b.date, note: String(b.note || '') }; });
   var wishes = wishRows_().filter(function (x) { return String(x.studentId) === String(me.id) && x.date >= today; })
     .map(function (x) { return { id: x.id, date: x.date, start: x.start, end: x.end, note: x.note, kind: x.kind }; });
-  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  var evSince = addDays_(today, -60);
+  var events = eventRows_().filter(function (x) { return x.studentId === String(me.id) && x.dateTo >= evSince; })
+    .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title }; });
+  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, events: events, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -462,6 +467,80 @@ function delWish_(wishId) {
 }
 
 // 管理画面向け: 今日以降の希望(生徒名付き)
+/* ================= 共有予定(生徒・保護者→先生。大会・見学など) ================= */
+
+function ensureEventsSheet_() {
+  var ss = ss_();
+  if (!ss.getSheetByName('events')) {
+    var sh = ss.insertSheet('events');
+    sh.appendRow(['id', 'studentId', 'date', 'dateTo', 'title', 'createdAt']);
+  }
+}
+
+function eventRows_() {
+  if (!ss_().getSheetByName('events')) return [];
+  return readRows_('events').map(function (x) {
+    return { id: x.id, studentId: String(x.studentId || ''), date: x.date, dateTo: normDate_(x.dateTo) || x.date,
+      title: String(x.title || ''), createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '' };
+  }).filter(function (x) { return x.id && x.date; });
+}
+
+function eventAdd_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var date = String(req.date || ''), dateTo = String(req.dateTo || '') || date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) return { error: '日付をえらんでください' };
+  if (dateTo < date) { var tmp = date; date = dateTo; dateTo = tmp; }
+  if (dateTo > addDays_(date, 60)) return { error: '期間は60日以内にしてください' };
+  var title = String(req.title || '').trim().slice(0, 40);
+  if (!title) return { error: '予定の内容を入れてください(例: 大会、高校見学)' };
+  var mine = eventRows_().filter(function (x) { return x.studentId === String(student.id) && x.dateTo >= todayStr_(); });
+  if (mine.length >= 30) return { error: '予定は30件までです。古いものを取り消してください' };
+  var sh = sheet_('events');
+  sh.appendRow([uid_(), String(student.id), date, dateTo, title, new Date()]);
+  sh.getRange(sh.getLastRow(), 2).setNumberFormat('@');
+  var blocked = 0;
+  if (req.alsoBlock === true || String(req.alsoBlock) === 'true') blocked = addBlockRange_(student.id, date, dateTo, title);
+  var when = rangeText_(date, dateTo);
+  addLog_(student.name + 'さんが予定を共有: ' + when + ' ' + title + (blocked ? '(授業できない日にも登録)' : ''));
+  if (!isTestStudent_(student)) notify_('【共有予定】' + student.name + 'さん',
+    student.name + 'さんから予定の共有がありました。\n' + when + ' ' + title + (blocked ? '\n(この期間は授業できない日としても登録されました)' : '') +
+    '\n\n管理画面: https://www.stepwise-education.jp/kanri/');
+  return { ok: true, state: studentState_(req.k) };
+}
+
+function eventDel_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var rows = readRows_('events');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].id) === String(req.eventId) && String(rows[i].studentId) === String(student.id)) {
+      sheet_('events').deleteRow(i + 2);
+      addLog_(student.name + 'さんが共有予定を取消: ' + fmtDateJa_(rows[i].date) + ' ' + rows[i].title);
+      return { ok: true, state: studentState_(req.k) };
+    }
+  }
+  return { error: 'この予定は見つかりません', refresh: true };
+}
+
+function delEvent_(eventId) {
+  var rows = readRows_('events');
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].id) === String(eventId)) { sheet_('events').deleteRow(i + 2); return true; }
+  }
+  return false;
+}
+
+// 管理画面向け: 今日以降(終了日ベース)の共有予定
+function eventsForAdmin_(sinceDays) {
+  var since = addDays_(todayStr_(), -(sinceDays || 0));
+  var names = {};
+  readRows_('students').forEach(function (s) { names[String(s.id)] = s.name; });
+  return eventRows_().filter(function (x) { return x.dateTo >= since; })
+    .map(function (x) { x.studentName = names[x.studentId] || '(不明)'; return x; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+}
+
 function wishesForAdmin_() {
   var today = todayStr_();
   var names = {};
@@ -664,6 +743,7 @@ function admin_(req) {
     case 'unbook':      return kanriWrap_(req, adminUnbook_(req), req.studentId);
     case 'toggleDone':  return kanriWrap_(req, adminToggleDone_(req), req.studentId);
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
+    case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
     case 'setEmail':    return kanriWrap_(req, adminSetEmail_(req));
     case 'setFee':      return kanriWrap_(req, adminSetFee_(req));
@@ -725,7 +805,7 @@ function adminState_() {
       };
     });
   return {
-    slots: slots, students: students, log: log, blocked: blocked, wishes: wishesForAdmin_(), today: todayStr_(),
+    slots: slots, students: students, log: log, blocked: blocked, wishes: wishesForAdmin_(), events: eventsForAdmin_(0), today: todayStr_(),
     account: getConfig_('teacherEmail')
   };
 }
@@ -1079,7 +1159,8 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk4')) return;
+  if (cache.get('schemaOk5')) return;
+  ensureEventsSheet_();
   ensureReqHeader_();
   ensureWishesSheet_();
   ensureWishKindHeader_();
@@ -1089,7 +1170,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk4', '1', 21600);
+  cache.put('schemaOk5', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1289,7 +1370,8 @@ function kanriDashboard_() {
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
   return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
-    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_() };
+    unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
+    events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }) };
 }
 
 // 予約ページに表示する/しない(studentsシート active 列)。データは消さない
@@ -1350,6 +1432,7 @@ function kanriStudent_(studentId) {
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
+    events: eventsForAdmin_(60).filter(function (x) { return x.studentId === id; }),
     month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
       billed: payments.some(function (p) { return p.ym === month; }) }
   };
