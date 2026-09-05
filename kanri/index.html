@@ -683,7 +683,7 @@
             marks += "</span>";
             h += '<button class="' + cls + (ds < today && !it ? " off" : "") + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
-          h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="calmark">×</span> 都合が悪い生徒あり</span></div></div>';
+          h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="calmark">×</span> 授業できない生徒あり</span></div></div>';
           return h;
         }
 
@@ -752,7 +752,7 @@
           if (dayWish.length) html += '<div class="card" style="margin-top:10px">' + dayWish.map(function (x) { return wishRow(x, true); }).join("") + '</div>';
           var dayNg = (A.blocked || []).filter(function (b) { return b.date === selDate; });
           if (dayNg.length) {
-            html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">都合が悪い</span> <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
+            html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">授業できない</span> <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
           }
 
           // 今後の予定
@@ -761,7 +761,7 @@
           html += next14.length ? '<div class="card">' + next14.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">確定した授業はありません</div>';
 
           // NG日
-          html += '<h2>都合が悪い日(生徒のNG日)</h2><div class="card"><div class="row">';
+          html += '<h2>授業できない日(生徒が登録した日)</h2><div class="card"><div class="row">';
           html += '<select id="b-student"><option value="">生徒</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>'; }).join("") + '</select>';
           html += '<input type="date" id="b-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="b-date2" min="' + today + '">';
           html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px"><button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
