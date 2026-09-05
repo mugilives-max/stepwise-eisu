@@ -714,10 +714,11 @@
           if (!exams.length) return '<div class="empty" style="margin-top:8px">まだ模試の記録がありません</div>';
           var cell = function (v) { if (!v || (v.score === null && v.dev === null)) return "<td>—</td>"; return "<td>" + (v.score === null ? "" : "<b>" + v.score + "</b>") + (v.dev === null ? "" : '<div class="small muted">' + v.dev + "</div>") + "</td>"; };
           var cols = 1 + EXAM_SUBJ.length + 3 + (admin ? 1 : 0);
-          var h = '<div class="tbwrap" style="margin-top:10px"><table class="tb extb"><tr><th>模試</th>' + EXAM_SUBJ.map(function (k) { return '<th title="' + k + '">' + k.charAt(0) + "</th>"; }).join("") + '<th>3教科</th><th>5教科</th><th>順位</th>' + (admin ? "<th></th>" : "") + '</tr>';
+          var h = '<div class="tbwrap" style="margin-top:10px"><table class="tb extb"><tr><th>模試</th>' + EXAM_SUBJ.map(function (k) { return '<th title="' + k + '">' + k.charAt(0) + "</th>"; }).join("") + '<th>3教科</th><th>5教科</th><th>順位(5教科)</th>' + (admin ? "<th></th>" : "") + '</tr>';
           exams.slice().reverse().forEach(function (e) {
-            h += '<tr><td><b>' + esc(e.name) + '</b>' + (e.round ? " " + esc(e.round) : "") + '<div class="small muted">' + fmtDY(e.date) + (e.grade ? "・" + esc(e.grade) : "") + '</div></td>' + EXAM_SUBJ.map(function (k) { return cell(e.subjects && e.subjects[k]); }).join("") + cell(e.total3) + cell(e.total5);
-            h += '<td>' + (e.rank5 ? '<span class="small">5教科</span> ' + esc(e.rank5) : "—") + (e.rank3 ? '<div class="small muted">3教科 ' + esc(e.rank3) + '</div>' : "") + '</td>';
+            var rk = function (rs) { var p = String(rs).split("/"); return "<b>" + esc(p[0]) + "</b>" + (p[1] ? '<div class="small muted">/ ' + esc(p[1]) + "</div>" : ""); };
+            h += '<tr><td class="nw"><b>' + esc(e.name) + '</b>' + (e.round ? " " + esc(e.round) : "") + '<div class="small muted">' + fmtDY(e.date) + (e.grade ? "・" + esc(e.grade) : "") + '</div></td>' + EXAM_SUBJ.map(function (k) { return cell(e.subjects && e.subjects[k]); }).join("") + cell(e.total3) + cell(e.total5);
+            h += '<td class="nw">' + (e.rank5 ? rk(e.rank5) : "—") + (e.rank3 ? '<div class="small muted">3教科 ' + esc(String(e.rank3).split("/")[0]) + '</div>' : "") + '</td>';
             if (admin) h += '<td class="nw">' + (e.url ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(e.url) + '">成績票</a> ' : "") + (e.row ? '<button class="btn-quiet btn-sm" data-action="delrow" data-sheet="模試" data-row="' + e.row + '">削除</button>' : '<span class="small muted">保存中</span>') + '</td>';
             h += '</tr>';
             if ((e.judge && e.judge.length) || e.note) h += '<tr class="exsub"><td colspan="' + cols + '">' + (e.judge || []).map(function (j) { return '<span class="tag ' + judgeCls(j) + '">' + esc(j) + '</span> '; }).join("") + (e.note ? '<span class="small muted">' + esc(e.note) + '</span>' : "") + '</td></tr>';
@@ -741,13 +742,19 @@
           for (var i = 0; i <= 4; i++) { var v = ymin + (ymax - ymin) * i / 4, y = yOf(v); svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '" stroke="#e5e9ee"/><text x="' + (L - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#64717f">' + Math.round(v) + '</text>'; }
           var every = Math.ceil(dates.length / 6);
           dates.forEach(function (d, i) { if (i % every === 0 || i === dates.length - 1) svg += '<text x="' + xOf(d) + '" y="' + (H - 14) + '" text-anchor="middle" font-size="11" fill="#64717f">' + fmtDY(d).slice(5) + '</text>'; });
+          var endLbls = [];
           subjects.forEach(function (sub, si) {
             var col = colorFor(sub, si), minePts = pts.filter(function (g) { return (g.subject || "その他") === sub; });
             svg += '<path d="' + minePts.map(function (g, i) { return (i ? "L" : "M") + xOf(g.date).toFixed(1) + " " + yOf(mode === "dev" ? g.dev : g.score).toFixed(1); }).join(" ") + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
             minePts.forEach(function (g) { var v = mode === "dev" ? g.dev : g.score; svg += '<circle cx="' + xOf(g.date) + '" cy="' + yOf(v) + '" r="4.5" fill="' + col + '" stroke="#fff" stroke-width="2"><title>' + esc(fmtDY(g.date) + " " + (g.test || "") + " " + sub + " " + v + (mode === "dev" ? "" : (g.max ? "/" + g.max : ""))) + '</title></circle>'; });
             var last = minePts[minePts.length - 1];
-            svg += '<text x="' + (xOf(last.date) + 8) + '" y="' + (yOf(mode === "dev" ? last.dev : last.score) + 4) + '" font-size="11.5" font-weight="700" fill="#19212a">' + esc(sub) + ' ' + (mode === "dev" ? last.dev : last.score) + '</text>';
+            endLbls.push({ x: xOf(last.date) + 8, y: yOf(mode === "dev" ? last.dev : last.score) + 4, text: esc(sub) + ' ' + (mode === "dev" ? last.dev : last.score) });
           });
+          // 右端ラベルは上下に13px以上あけて重ならないように並べる
+          endLbls.sort(function (a, b) { return a.y - b.y; });
+          for (var li = 1; li < endLbls.length; li++) if (endLbls[li].y - endLbls[li - 1].y < 13) endLbls[li].y = endLbls[li - 1].y + 13;
+          for (var lj = endLbls.length - 1; lj >= 0; lj--) { var lim = (lj === endLbls.length - 1) ? T + ih + 4 : endLbls[lj + 1].y - 13; if (endLbls[lj].y > lim) endLbls[lj].y = lim; }
+          endLbls.forEach(function (l) { svg += '<text x="' + l.x + '" y="' + l.y.toFixed(1) + '" font-size="11.5" font-weight="700" fill="#19212a">' + l.text + '</text>'; });
           svg += '</svg>';
           if (subjects.length >= 2) svg += '<div class="legend">' + subjects.map(function (s, i) { return '<span><i style="background:' + colorFor(s, i) + '"></i>' + esc(s) + '</span>'; }).join("") + '</div>';
           return svg;
