@@ -69,6 +69,7 @@ function doPost(e) {
       case 'unwish':  res = unwish_(req); break;
       case 'block':   res = block_(req); break;
       case 'unblock': res = unblock_(req); break;
+      case 'blockSet': res = blockSet_(req); break;
       case 'admin':  res = admin_(req); break;
       default:       res = { error: 'unknown action' };
     }
@@ -170,7 +171,39 @@ function block_(req) {
   var note = String(req.note || '').slice(0, 50);
   var added = addBlockRange_(student.id, r.date, r.dateTo, note);
   if (added === 0) return { error: 'この期間はすでに登録されています' };
-  addLog_(student.name + 'さんが ' + rangeText_(r.date, r.dateTo) + ' を都合が悪い日に登録' + (note ? '(' + note + ')' : ''));
+  addLog_(student.name + 'さんが ' + rangeText_(r.date, r.dateTo) + ' を授業できない日に登録' + (note ? '(' + note + ')' : ''));
+  return { ok: true, state: studentState_(req.k) };
+}
+
+// 予定表で選んだ日をまとめて登録/解除(add: 追加する日付の配列, removeIds: 解除する登録のid配列)
+function blockSet_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var today = todayStr_();
+  var seen = {};
+  var add = (req.add || []).map(String).filter(function (d) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < today || seen[d]) return false;
+    seen[d] = true; return true;
+  }).slice(0, 62).sort();
+  var removeIds = (req.removeIds || []).map(String);
+  var note = String(req.note || '').slice(0, 50);
+  var existing = readRows_('blocked');
+  var sh = sheet_('blocked');
+  var delRows = [], removedDates = [];
+  existing.forEach(function (b, i) {
+    if (removeIds.indexOf(String(b.id)) >= 0 && String(b.studentId) === String(student.id)) { delRows.push(i + 2); removedDates.push(b.date); }
+  });
+  delRows.sort(function (a, b) { return b - a; }).forEach(function (rn) { sh.deleteRow(rn); });
+  var added = [];
+  add.forEach(function (d) {
+    var dup = existing.some(function (b) { return String(b.studentId) === String(student.id) && b.date === d && removedDates.indexOf(d) < 0; });
+    if (!dup) { sh.appendRow([uid_(), student.id, d, note]); added.push(d); }
+  });
+  if (!added.length && !removedDates.length) return { error: '変更はありませんでした' };
+  var msg = [];
+  if (added.length) msg.push(added.map(fmtDateJa_).join('、') + ' を授業できない日に登録' + (note ? '(' + note + ')' : ''));
+  if (removedDates.length) msg.push(removedDates.sort().map(fmtDateJa_).join('、') + ' の授業できない日を解除');
+  addLog_(student.name + 'さんが ' + msg.join('。'));
   return { ok: true, state: studentState_(req.k) };
 }
 
@@ -192,7 +225,7 @@ function unblock_(req) {
     sheet_('blocked').deleteRow(ri);
   });
   dates.sort();
-  addLog_(student.name + 'さんが ' + rangeText_(dates[0], dates[dates.length - 1]) + ' の都合が悪い日を取消');
+  addLog_(student.name + 'さんが ' + rangeText_(dates[0], dates[dates.length - 1]) + ' の授業できない日を取消');
   return { ok: true, state: studentState_(req.k) };
 }
 
@@ -239,9 +272,9 @@ function decline_(slotId, code) {
   }
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   sheet_('slots').deleteRow(r.rowIndex);
-  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を「都合が悪い」');
-  if (!isTestStudent_(student)) notify_('【都合が悪い】' + student.name + 'さん',
-    student.name + 'さんが案内「' + when + '」を都合が悪いと回答しました。\n別の時間を案内してください。');
+  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を「この日時は難しい」');
+  if (!isTestStudent_(student)) notify_('【日時が合わない】' + student.name + 'さん',
+    student.name + 'さんが案内「' + when + '」を「この日時は難しい」と回答しました。\n別の時間を案内してください。');
   return { ok: true, state: studentState_(code) };
 }
 
@@ -706,7 +739,7 @@ function adminOffer_(req) {
   }
   if (!student) return { error: '案内する生徒をえらんでください' };
   var repeat = Math.max(1, Math.min(12, Number(req.repeat) || 1));
-  // 生徒が「都合が悪い日」に登録している日への案内は警告(force指定で強行可)
+  // 生徒が「授業できない日」に登録している日への案内は警告(force指定で強行可)
   if (!req.force) {
     var blockedRows = readRows_('blocked');
     var ngDates = [];
@@ -720,7 +753,7 @@ function adminOffer_(req) {
     }
     if (ngDates.length > 0) {
       return {
-        error: student.name + 'さんは ' + ngDates.join('、') + ' を「都合が悪い日」に登録しています',
+        error: student.name + 'さんは ' + ngDates.join('、') + ' を「授業できない日」に登録しています',
         needForce: true
       };
     }
@@ -756,7 +789,7 @@ function offerMailToStudent_(student, dates, start, min, subject) {
       '[ステップワイズ] 授業のご案内が届いています',
       student.name + 'さん\n\n先生から授業のご案内が届いています。' + (subject ? '(' + subject + ')' : '') + '\n\n' +
       dates.map(function (d) { return '・' + d + ' ' + start + '〜' + endTime_(start, min); }).join('\n') +
-      '\n\n下のあなた専用リンクをひらいて、承認するか、都合が悪いかを選んでください。\n' + link);
+      '\n\n下のあなた専用リンクをひらいて、承認するか、「この日時は難しい」かを選んでください。\n' + link);
   } catch (err) {
     addLog_('案内メールの送信に失敗: ' + err);
   }
@@ -826,7 +859,7 @@ function adminAddBlock_(req) {
   var note = String(req.note || '').slice(0, 50);
   var added = addBlockRange_(req.studentId, r.date, r.dateTo, note);
   if (added === 0) return { error: 'この期間はすでに登録されています' };
-  addLog_('先生が' + name + 'さんの ' + rangeText_(r.date, r.dateTo) + ' を都合が悪い日に登録' + (note ? '(' + note + ')' : ''));
+  addLog_('先生が' + name + 'さんの ' + rangeText_(r.date, r.dateTo) + ' を授業できない日に登録' + (note ? '(' + note + ')' : ''));
   return { ok: true, admin: adminState_() };
 }
 
