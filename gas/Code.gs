@@ -68,6 +68,8 @@ function doPost(e) {
       case 'wish':    res = wish_(req); break;
       case 'unwish':  res = unwish_(req); break;
       case 'eventAdd': res = eventAdd_(req); break;
+      case 'parentLogin': res = parentLogin_(req); break;
+      case 'parentData':  res = parentData_(req); break;
       case 'eventDel': res = eventDel_(req); break;
       case 'block':   res = block_(req); break;
       case 'unblock': res = unblock_(req); break;
@@ -467,6 +469,57 @@ function delWish_(wishId) {
 }
 
 // 管理画面向け: 今日以降の希望(生徒名付き)
+/* ================= 保護者ページ(パスワードは当面、先生のログインパスワードと共通) ================= */
+
+function ensureParentHeaders_() {
+  var sh = sheet_('students');
+  if (sh && sh.getRange(1, 8).getValue() !== 'parentToken') {
+    sh.getRange(1, 8).setValue('parentToken');
+    sh.getRange(1, 9).setValue('parentExp');
+  }
+}
+
+function parentLogin_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  if (authMode_() !== 'account') return { error: '保護者ページは準備中です' };
+  var pass = String(req.pass || '');
+  if (!pass || hashPass_(pass, getConfig_('passSalt')) !== getConfig_('passHash')) {
+    Utilities.sleep(800);
+    return { error: 'パスワードがちがいます' };
+  }
+  var rows = readRows_('students');
+  var token = newCode_() + newCode_();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(student.id)) {
+      var sh = sheet_('students');
+      sh.getRange(i + 2, 8, 1, 2).setNumberFormat('@');
+      sh.getRange(i + 2, 8, 1, 2).setValues([[token, String(Date.now() + 12 * 3600 * 1000)]]);
+      break;
+    }
+  }
+  addLog_(student.name + 'さんの保護者ページを表示');
+  return { ok: true, ptoken: token };
+}
+
+function parentData_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var t = String(student.parentToken || ''), exp = Number(student.parentExp || 0);
+  if (!t || String(req.ptoken || '') !== t || Date.now() > exp) return { error: '保護者用パスワードをもう一度入れてください' };
+  var d = kanriStudent_(student.id);
+  if (d.error) return d;
+  var months = {}, keys = [];
+  (d.lessons || []).forEach(function (l) {
+    if (l.status !== 'booked' || !l.done) return;
+    var m = l.date.slice(0, 7);
+    if (!months[m]) { months[m] = { ym: m, count: 0, minutes: 0 }; keys.push(m); }
+    months[m].count++; months[m].minutes += Number(l.min) || 0;
+  });
+  return { ok: true, data: { name: d.name, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
+    payments: d.payments, grades: d.grades, months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }) } };
+}
+
 /* ================= 共有予定(生徒・保護者→先生。大会・見学など) ================= */
 
 function ensureEventsSheet_() {
@@ -1159,7 +1212,8 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk5')) return;
+  if (cache.get('schemaOk6')) return;
+  ensureParentHeaders_();
   ensureEventsSheet_();
   ensureReqHeader_();
   ensureWishesSheet_();
@@ -1170,7 +1224,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk5', '1', 21600);
+  cache.put('schemaOk6', '1', 21600);
 }
 
 function readRows_(name) {

@@ -3,73 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>授業の予定 | ステップワイズ英数教室・個別指導部</title>
-    <meta
-      name="description"
-      content="ステップワイズ個別指導の授業予定ページです。先生からの案内を承認して授業の予定を確定できます。"
-    />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>マイページ | ステップワイズ英数教室・個別指導部</title>
+    <meta name="description" content="ステップワイズ個別指導 生徒のマイページ。授業の予定表、先生からの案内、希望日程の送信ができます。" />
     <style>
       :root {
-        --ink: #19212a;
-        --muted: #64717f;
-        --line: #dbe3ea;
-        --paper: #fbfcfd;
-        --soft: #eef4fb;
-        --primary: #0717a8;
-        --primary-dark: #07106f;
-        --coral: #d86f8d;
-        --coral-soft: #fbeef2;
-        --danger: #c0392b;
-        --taken: #eef1f4;
-        --white: #ffffff;
+        --ink: #19212a; --muted: #64717f; --line: #dbe3ea; --paper: #fbfcfd; --soft: #eef4fb;
+        --primary: #0717a8; --primary-dark: #07106f; --coral: #d86f8d; --coral-soft: #fbeef2;
+        --amber: #a86f12; --amber-soft: #fdf3e3; --green: #2e8b57; --green-soft: #e6f4ec;
+        --danger: #c0392b; --danger-soft: #fbe9e7; --taken: #eef1f4; --white: #ffffff;
         --shadow: 0 10px 30px rgba(31, 48, 64, 0.1);
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; }
-      body {
-        background: var(--paper);
-        color: var(--ink);
-        font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-        font-size: 15px;
-        line-height: 1.7;
-        padding-bottom: 120px;
-      }
-      .site-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 12px clamp(16px, 4vw, 40px);
-        background: rgba(251, 252, 253, 0.92);
-        border-bottom: 1px solid var(--line);
-      }
+      body { background: var(--paper); color: var(--ink); font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif; font-size: 15px; line-height: 1.7; padding-bottom: 120px; }
+      .site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px clamp(16px, 4vw, 40px); background: rgba(251, 252, 253, 0.92); border-bottom: 1px solid var(--line); }
       .brand { font-weight: 700; line-height: 1.25; font-size: 15px; }
       .brand small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
       .site-header a { color: var(--muted); font-size: 13px; text-decoration: none; }
       .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
       h1 { font-size: 21px; margin: 22px 0 2px; }
       .sub { color: var(--muted); font-size: 13px; margin: 0; }
-      h2 {
-        font-size: 15px; font-weight: 700; margin: 26px 0 10px;
-        display: flex; align-items: center; gap: 8px;
-      }
+      h2 { font-size: 15px; font-weight: 700; margin: 26px 0 10px; display: flex; align-items: center; gap: 8px; }
       h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-      .card {
-        background: var(--white); border: 1px solid var(--line);
-        border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow);
-      }
-      select, input[type="text"], input[type="password"], input[type="date"], input[type="time"] {
-        font: inherit; color: var(--ink); background: var(--white);
-        border: 1px solid var(--line); border-radius: 10px;
-        padding: 8px 10px; max-width: 100%;
-      }
-      select:focus, input:focus, button:focus-visible {
-        outline: 2px solid var(--primary); outline-offset: 1px;
-      }
-      button {
-        font: inherit; cursor: pointer; border: none; border-radius: 10px;
-        padding: 9px 14px; font-weight: 600;
-      }
+      h2 .cnt { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .card { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+      select, input[type="text"], input[type="password"], input[type="date"], input[type="time"], input[type="number"] { font: inherit; color: var(--ink); background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-width: 100%; }
+      select:focus, input:focus, button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+      button { font: inherit; cursor: pointer; border: none; border-radius: 10px; padding: 9px 14px; font-weight: 600; }
       button:disabled { opacity: 0.55; cursor: default; }
       .btn-primary { background: var(--primary); color: var(--white); }
       .btn-ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
@@ -78,131 +39,103 @@
       .btn-sm { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
       .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .row.between { justify-content: space-between; }
-      /* カレンダー */
+      .small { font-size: 12.5px; }
+      .muted { color: var(--muted); }
+      /* 予定表 */
       .cal { padding: 12px 12px 10px; }
       .calhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
       .callabel { font-weight: 700; font-size: 15px; }
       .calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
       .calwd { font-size: 11px; color: var(--muted); padding: 2px 0; }
-      .calwd.sun { color: var(--danger); }
-      .calwd.sat { color: var(--primary); }
-      .calday {
-        position: relative; display: flex; flex-direction: column; align-items: center;
-        justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px; max-width: 100%; overflow: hidden;
-        border-radius: 9px; border: 1px solid transparent; background: transparent;
-        font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink);
-      }
+      .calwd.sun { color: var(--danger); } .calwd.sat { color: var(--primary); }
+      .calday { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px; max-width: 100%; overflow: hidden; border-radius: 9px; border: 1px solid transparent; background: transparent; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
       button.calday { cursor: pointer; font-size: 13px; }
-      .calday.sun { color: var(--danger); }
-      .calday.sat { color: var(--primary); }
+      .calday.sun { color: var(--danger); } .calday.sat { color: var(--primary); }
       .calday.off { opacity: 0.35; }
       .calday.today { border-color: var(--muted); }
       .calday.mine:not(.sel) { background: var(--coral-soft); }
       .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
+      .calday.ngsel { background: var(--danger-soft); border: 1px dashed var(--danger); }
+      .calday.ngsel .calmark { color: var(--danger); }
       .caldot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-      .caldot.op { background: var(--primary); }
-      .caldot.tk { background: var(--muted); }
+      .caldot.of { background: #d99a2b; }
       .calday.sel .caldot { background: var(--white); }
-      .calmark { font-size: 10px; line-height: 1; color: var(--coral); font-weight: 700; }
+      .calmark { font-size: 10px; line-height: 1; color: var(--muted); font-weight: 700; }
       .calday.sel .calmark { color: var(--white); }
       .calmarks { display: flex; align-items: center; gap: 2px; min-height: 7px; }
       .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .callbl.of { color: #a8721c; }
-      .callbl.more { color: var(--muted); font-weight: 500; }
+      .callbl.tm { font-weight: 600; opacity: .85; }
+      .callbl.of { color: var(--amber); }
       .callbl.dn { color: var(--muted); }
       .callbl.ev { color: var(--coral); font-weight: 600; }
-      .chip.ev { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 600; }
-      .calday.ngsel { background: var(--danger-soft, #fbe9e7); border: 1px dashed var(--danger); }
-      .calday.ngsel .calmark { color: var(--danger); }
-      .callbl.tm { font-weight: 600; opacity: .85; }
+      .callbl.more { color: var(--muted); font-weight: 500; }
+      .calday.sel .callbl { color: var(--white); }
+      .callegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+      .callegend span { display: inline-flex; align-items: center; gap: 4px; }
+      /* チップ・行 */
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip { font-variant-numeric: tabular-nums; border-radius: 10px; padding: 8px 12px; font-size: 14px; border: 1px solid var(--line); background: var(--white); display: inline-flex; align-items: center; gap: 6px; }
+      button.chip { cursor: pointer; font-weight: 600; }
+      .chip.mine { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 700; }
+      .chip.offer { background: var(--amber-soft); border-color: #d99a2b; color: var(--amber); font-weight: 700; }
       .chip.done { background: var(--taken); border-color: var(--line); color: var(--muted); font-weight: 600; }
       .chip.past { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 600; }
-      .calday.sel .callbl { color: var(--white); }
-      .callegend {
-        display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
-        font-size: 11.5px; color: var(--muted);
-      }
-      .callegend span { display: inline-flex; align-items: center; gap: 4px; }
-      /* 枠チップ */
-      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-      .chip {
-        font-variant-numeric: tabular-nums;
-        border-radius: 10px; padding: 8px 12px; font-size: 14px;
-        border: 1px solid var(--line); background: var(--white);
-        display: inline-flex; align-items: center; gap: 6px;
-      }
-      button.chip { cursor: pointer; font-weight: 600; }
-      .chip.open { border-color: var(--primary); color: var(--primary); }
-      .chip.mine { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 700; }
-      .chip.taken { background: var(--taken); color: var(--muted); }
-      .chip.offer { background: #fdf3e3; border-color: #d99a2b; color: #a8721c; font-weight: 700; }
-      .caldot.of { background: #d99a2b; }
-      .calday.sel .caldot.of { background: var(--white); }
-      .tag.offer { background: #fdf3e3; color: #a8721c; }
-      .chip.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
+      .chip.ev { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 600; }
+      .chip.ng { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .empty { color: var(--muted); font-size: 13.5px; padding: 8px 2px; }
-      .slotline {
-        display: flex; align-items: center; gap: 10px;
-        padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
-      }
+      .slotline { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
       .slotline:last-child { border-bottom: none; }
       .slotline .time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 104px; }
       .slotline .who { flex: 1; min-width: 80px; }
-      .slotline .who .name { font-weight: 700; }
-      .tag { font-size: 11.5px; border-radius: 6px; padding: 1px 7px; font-weight: 700; }
-      .tag.open { background: var(--soft); color: var(--primary); }
-      .tag.done { background: var(--taken); color: var(--muted); }
-      .tag.booked { background: var(--coral-soft); color: var(--coral); }
-      .daygroup { margin-bottom: 14px; }
-      .daylabel { font-weight: 700; font-size: 14px; margin: 0 0 6px 2px; }
-      .daylabel .wd { color: var(--muted); font-weight: 500; font-size: 12.5px; }
-      .daylabel .wd.sat { color: var(--primary); }
-      .daylabel .wd.sun { color: var(--danger); }
-      .formgrid { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; }
-      .formgrid label { font-size: 13px; color: var(--muted); }
+      .tag { font-size: 11.5px; border-radius: 6px; padding: 1px 7px; font-weight: 700; white-space: nowrap; }
+      .tag.blue { background: var(--soft); color: var(--primary); }
+      .tag.amber { background: var(--amber-soft); color: var(--amber); }
+      .tag.green { background: var(--green-soft); color: var(--green); }
+      .tag.gray { background: var(--taken); color: var(--muted); }
+      .tag.red { background: var(--danger-soft); color: var(--danger); }
+      .tag.coral { background: var(--coral-soft); color: var(--coral); }
       .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
-      .loglist { font-size: 13px; color: var(--muted); }
-      .loglist div { padding: 4px 0; border-bottom: 1px dashed var(--line); }
-      .loglist div:last-child { border-bottom: none; }
-      table.rec { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-      table.rec th, table.rec td {
-        text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line);
-        font-variant-numeric: tabular-nums;
-      }
-      table.rec th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
-      .studentline { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-      .studentline:last-child { border-bottom: none; }
-      .studentline .nm { flex: 1; font-weight: 600; }
-      .confirmbar {
-        position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-        background: var(--white); border-top: 1px solid var(--line);
-        box-shadow: 0 -4px 16px rgba(31, 48, 64, 0.12);
-        padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
-      }
+      /* 次の授業 */
+      .next { border-color: var(--primary); background: linear-gradient(180deg, #fff, var(--soft)); }
+      .next .when { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; }
+      .next .in { color: var(--primary); font-size: 12.5px; font-weight: 600; }
+      /* 操作ボタン */
+      .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .actions button { padding: 12px 6px; border-radius: 12px; background: var(--white); border: 1px solid var(--line); color: var(--ink); font-weight: 600; font-size: 13px; line-height: 1.3; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+      .actions button .ico { font-size: 18px; line-height: 1; }
+      .actions button.on { border-color: var(--primary); background: var(--soft); color: var(--primary); }
+      .panel { margin-top: 10px; }
+      .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+      .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px 12px; font-size: 13px; }
+      .seg button.on { background: var(--soft); color: var(--primary); font-weight: 700; }
+      details.month { margin-top: 8px; }
+      details.month summary { cursor: pointer; font-weight: 600; font-size: 14px; list-style: none; padding: 6px 0; }
+      details.month summary::before { content: "▸ "; color: var(--muted); }
+      details.month[open] summary::before { content: "▾ "; }
+      /* 保護者 */
+      .stat { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+      .stat small { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+      table.tb { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+      table.tb th, table.tb td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
+      table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .tbwrap { overflow-x: auto; }
+      .chart { width: 100%; height: auto; display: block; }
+      .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+      .legend span { display: inline-flex; align-items: center; gap: 5px; }
+      .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+      .parentbar { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .parentbar button { background: transparent; color: var(--paper); border: 1px solid rgba(255,255,255,.5); }
+      /* 下部バー・トースト */
+      .confirmbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--white); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(31, 48, 64, 0.12); padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
       .confirmbar .inner { max-width: 640px; margin: 0 auto; }
       .confirmbar .msg { font-weight: 700; margin-bottom: 10px; }
-      #toast {
-        position: fixed; left: 50%; transform: translateX(-50%);
-        bottom: 24px; z-index: 30;
-        background: var(--ink); color: var(--paper);
-        border-radius: 99px; padding: 9px 18px; font-size: 13.5px;
-        opacity: 0; pointer-events: none; transition: opacity 0.25s; max-width: 88vw;
-      }
-      @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+      #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 30; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 9px 18px; font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity 0.25s; max-width: 88vw; }
       #toast.show { opacity: 1; }
       .loading { text-align: center; color: var(--muted); padding: 60px 0; }
-      .spinner {
-        width: 28px; height: 28px; margin: 0 auto 12px;
-        border: 3px solid var(--line); border-top-color: var(--primary);
-        border-radius: 50%; animation: spin 0.9s linear infinite;
-      }
+      .spinner { width: 28px; height: 28px; margin: 0 auto 12px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
-      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
-      footer.app {
-        margin-top: 44px; padding: 16px 0 24px;
-        display: flex; justify-content: space-between; align-items: center;
-        color: var(--muted); font-size: 12.5px;
-      }
+      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } #toast { transition: none; } }
+      footer.app { margin-top: 44px; padding: 16px 0 24px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12.5px; }
     </style>
   </head>
   <body>
@@ -213,153 +146,125 @@
     <div class="wrap" id="app">
       <div class="loading"><div class="spinner"></div>読み込んでいます…</div>
     </div>
-    <div id="toast" role="status"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
 
     <script>
       (function () {
         "use strict";
-        /* デプロイしたApps ScriptウェブアプリのURL(/exec)をここに設定 */
         var API = "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec";
-
         var app = document.getElementById("app");
         var WD = ["日", "月", "火", "水", "木", "金", "土"];
-        var S = null;          // 生徒向け状態 {students, slots, today}
-        var A = null;          // 先生向け状態
-        var pending = null;    // {kind, slotId}
-        var busy = false;
-        var calNow = new Date();
-        var calY = calNow.getFullYear(), calM = calNow.getMonth();
-        var selDate = null, selManual = false;
+        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "社会": "#b8466f" };
 
+        /* ---------- 状態 ---------- */
+        var S = null;            // 生徒の状態(サーバーから)
+        var busy = false;
+        var pending = null;      // 確認バー {kind, slotId}
+        var selDate = null, selManual = false;
+        var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
+        var panel = "";          // "" | "wish" | "event" | "ng"
+        var wishKind = "want";   // want=この日時 / ok=この時間帯のどこかで
+        var ngMode = false, ngSel = {};
+        var previewK = null;     // 先生のプレビュー
+        var parentStep = "";     // "" | "pass" | "data"
+        var P = null;            // 保護者向けデータ
+        var gradeMode = "score";
+
+        /* ---------- ユーティリティ ---------- */
         function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
         function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
         function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
         function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
-        function sameId(a, b) { return String(a) === String(b); }
-        function esc(s) {
-          return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-          });
-        }
-        function pad(n) { return String(n).length < 2 ? "0" + n : String(n); }
+        function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+        function pad(n) { return (n < 10 ? "0" : "") + n; }
         function wdOf(ds) { var p = ds.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]).getDay(); }
         function fmtDate(ds) { var p = ds.split("-"); return (+p[1]) + "/" + (+p[2]); }
         function fmtDateW(ds) { return fmtDate(ds) + "(" + WD[wdOf(ds)] + ")"; }
-        function endTime(start, min) {
-          var p = start.split(":");
-          var t = (+p[0]) * 60 + (+p[1]) + (+min);
-          return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60);
-        }
+        function fmtDY(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return p[0] + "/" + (+p[1]) + "/" + (+p[2]); }
+        function endTime(start, min) { var p = start.split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
+        function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+        function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
         function gcalUrl(s) {
-          var d = s.date.replace(/-/g, "");
-          var st = s.start.replace(":", "");
-          var en = endTime(s.start, s.min).replace(":", "");
-          var u = "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-            "&text=" + encodeURIComponent("塾の授業" + (s.subject ? "(" + s.subject + ")" : "(ステップワイズ)")) +
+          var d = s.date.replace(/-/g, ""), st = s.start.replace(":", ""), en = endTime(s.start, s.min).replace(":", "");
+          var u = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("塾の授業" + (s.subject ? "(" + s.subject + ")" : "(ステップワイズ)")) +
             "&dates=" + d + "T" + st + "00/" + d + "T" + en + "00&ctz=Asia/Tokyo";
           if (s.meet) u += "&details=" + encodeURIComponent("Meetで参加: " + s.meet);
           return u;
         }
-        function addDaysStr(ds, n) {
-          var p = ds.split("-");
-          var d = new Date(+p[0], +p[1] - 1, +p[2] + n);
-          return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
-        }
-        // 連続する日付(同じメモ)を1つのグループにまとめる
         function groupBlocked(list) {
           var sorted = list.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
           var groups = [], cur = null;
           sorted.forEach(function (b) {
-            if (cur && String(b.note || "") === cur.note && b.date === addDaysStr(cur.end, 1)) {
-              cur.end = b.date;
-              cur.ids.push(b.id);
-            } else {
-              cur = { start: b.date, end: b.date, note: String(b.note || ""), ids: [b.id] };
-              groups.push(cur);
-            }
+            if (cur && String(b.note || "") === cur.note && b.date === addDaysStr(cur.end, 1)) { cur.end = b.date; cur.ids.push(b.id); }
+            else { cur = { start: b.date, end: b.date, note: String(b.note || ""), ids: [b.id] }; groups.push(cur); }
           });
           return groups;
         }
-        function rangeLabel(g) {
-          return g.start === g.end ? fmtDateW(g.start) : fmtDateW(g.start) + "〜" + fmtDateW(g.end);
-        }
+        function rangeLabel(g) { return g.start === g.end ? fmtDateW(g.start) : fmtDateW(g.start) + "〜" + fmtDateW(g.end); }
+        function sameId(a, b) { return String(a) === String(b); }
+        function slotCmp(a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); }
         var toastTimer = null;
-        function toast(msg) {
-          var t = document.getElementById("toast");
-          t.textContent = msg; t.classList.add("show");
-          clearTimeout(toastTimer);
-          toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800);
-        }
+        function toast(msg) { var t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800); }
+        function val(id) { var el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
 
         /* ---------- API ---------- */
         function apiGet(params) {
-          var q = Object.keys(params).map(function (k) {
-            return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
-          }).join("&");
+          var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
           return fetch(API + "?" + q).then(function (r) { return r.json(); });
         }
-        function apiPost(body) {
-          return fetch(API, { method: "POST", body: JSON.stringify(body) })
-            .then(function (r) { return r.json(); });
-        }
-
-        var wishKind = "want"; // 授業の希望フォームの種類(want=この日時 / ok=この時間帯のどこかで)
-        var ngMode = false, ngSel = {}; // 予定表で「授業できない日」を選択中かどうか / 選択した日付
-        var previewK = null; // 先生が生徒画面をプレビュー中の生徒コード
+        function apiPost(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
         function myKey() { return previewK || lsGet("sw_k") || ""; }
-
         function loadState() {
           return apiGet({ action: "state", k: myKey() }).then(function (res) {
             if (res.error) throw new Error(res.error);
-            S = res;
-            render();
+            S = res; render();
           });
         }
+        function studentAction(body, okMsg) {
+          if (busy) return;
+          busy = true; render();
+          apiPost(body).then(function (res) {
+            busy = false; pending = null;
+            if (res.error) {
+              toast(res.error);
+              if (res.badCode) { S = { me: null, slots: [], today: "" }; render(); return; }
+              if (res.refresh) return loadState();
+              render(); return;
+            }
+            S = res.state; render();
+            if (okMsg) toast(okMsg);
+          }).catch(function () { busy = false; toast("通信に失敗しました。電波の良いところでもう一度お試しください"); render(); });
+        }
 
-        /* ---------- カレンダー ---------- */
-        function renderCal(info, today, kind) {
+        /* ---------- 予定表 ---------- */
+        function renderCal(info, today) {
           var label = calY + "年" + (calM + 1) + "月";
-          var minIdx = calNow.getFullYear() * 12 + calNow.getMonth();
-          var curIdx = calY * 12 + calM;
-          var maxIdx = minIdx + 3;
+          var minIdx = calNow.getFullYear() * 12 + calNow.getMonth() - 2, curIdx = calY * 12 + calM, maxIdx = minIdx + 5;
           var h = '<div class="card cal"><div class="calhead">';
           h += '<button class="btn-quiet btn-sm" data-action="calprev"' + (curIdx <= minIdx ? " disabled" : "") + ' aria-label="前の月">◀</button>';
           h += '<span class="callabel">' + label + "</span>";
           h += '<button class="btn-quiet btn-sm" data-action="calnext"' + (curIdx >= maxIdx ? " disabled" : "") + ' aria-label="次の月">▶</button>';
           h += '</div><div class="calgrid">';
-          WD.forEach(function (w, i) {
-            h += '<span class="calwd' + (i === 0 ? " sun" : i === 6 ? " sat" : "") + '">' + w + "</span>";
-          });
+          WD.forEach(function (w, i) { h += '<span class="calwd' + (i === 0 ? " sun" : i === 6 ? " sat" : "") + '">' + w + "</span>"; });
           var startWd = new Date(calY, calM, 1).getDay();
           for (var i = 0; i < startWd; i++) h += "<span></span>";
           var days = new Date(calY, calM + 1, 0).getDate();
           for (var d = 1; d <= days; d++) {
             var ds = calY + "-" + pad(calM + 1) + "-" + pad(d);
-            var it = info[ds];
-            var wd = (startWd + d - 1) % 7;
-            var cls = "calday";
-            if (wd === 0) cls += " sun";
-            if (wd === 6) cls += " sat";
-            if (ds === today) cls += " today";
-            if (ds === selDate) cls += " sel";
-            var past = ds < today;
+            var it = info[ds], wd = (startWd + d - 1) % 7, cls = "calday", past = ds < today;
+            if (wd === 0) cls += " sun"; if (wd === 6) cls += " sat";
+            if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
+            var hasItems = !!(it && it.labels && it.labels.length);
             var marks = '<span class="calmarks">';
-            var hasLessons = !!(it && it.labels && it.labels.length);
             if (it && !past) {
-              if (kind === "teacher") {
-                if (it.booked) marks += '<span class="caldot op"></span>';
-                if (it.offered) marks += '<span class="caldot of"></span>';
-              } else {
-                if (it.mine) cls += " mine";
-                if (it.offer && !it.mine) marks += '<span class="caldot of"></span>';
-              }
-              if (it.ng) marks += '<span class="calmark" style="color:var(--muted)">×</span>';
+              if (it.mine) cls += " mine";
+              if (it.offer && !it.mine) marks += '<span class="caldot of"></span>';
+              if (it.ng) marks += '<span class="calmark">×</span>';
             }
-            if (kind !== "teacher" && ngMode && ngSel[ds] && !past && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>';
-            if (kind !== "teacher" && ngMode && ngSel[ds] && !past) cls += " ngsel";
+            if (ngMode && ngSel[ds] && !past) { cls += " ngsel"; if (!(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
             marks += "</span>";
-            if (kind !== "teacher" && hasLessons) {
+            if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
                 if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + "</span>"; return; }
@@ -368,253 +273,199 @@
               });
               if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
             }
-            var clickable = (!past && (it || kind === "teacher" || ngMode)) || (past && hasLessons);
-            if (!clickable) {
-              h += '<span class="' + cls + (past && hasLessons ? "" : " off") + '">' + d + marks + "</span>";
-            } else {
-              h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
-            }
+            var clickable = (!past && (it || ngMode)) || (past && hasItems);
+            if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";
+            else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
           h += '</div><div class="callegend">';
-          if (kind === "teacher") {
-            h += '<span><span class="caldot op"></span> 確定した授業</span>';
-            h += '<span><span class="caldot of"></span> 承認待ちの案内</span>';
-            h += '<span><span class="calmark" style="color:var(--muted)">×</span> 授業できない生徒あり</span>';
-          } else {
-            h += '<span><span class="callbl" style="display:inline">科目</span> あなたの授業(確定)</span>';
-            h += '<span><span class="callbl of" style="display:inline">科目</span> 先生からの案内(未承認)</span>';
-            h += '<span><span class="callbl dn" style="display:inline">科目</span> 実施済み</span>';
-            h += '<span><span class="calmark" style="color:var(--muted)">×</span> 授業できない日</span>';
-            h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
-          }
+          h += '<span><span class="callbl" style="display:inline">科目</span> 授業(確定)</span>';
+          h += '<span><span class="callbl of" style="display:inline">科目</span> 先生からの案内</span>';
+          h += '<span><span class="callbl dn" style="display:inline">科目</span> 実施済み</span>';
+          h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
+          h += '<span><span class="calmark">×</span> 授業できない日</span>';
           h += "</div></div>";
           return h;
         }
 
-        /* ---------- 生徒画面 ---------- */
+        /* ---------- 画面: 専用リンクなし ---------- */
         function renderGuard() {
-          var html = "";
-          html += '<div class="card" style="margin-top:26px;text-align:center;padding:28px 20px">';
-          html += '<div style="font-weight:700;font-size:16px;margin-bottom:8px">専用リンクからひらいてください</div>';
-          html += '<div style="font-size:13.5px;color:var(--muted)">このページは、先生からLINEで送られた<br>あなた専用のリンクからひらく必要があります。<br>リンクが分からないときは、LINEで先生に連絡してください。</div>';
-          html += "</div>";
-          html += '<footer class="app"><span></span><span></span></footer>';
-          app.innerHTML = html;
+          app.innerHTML = '<div class="card" style="margin-top:26px;text-align:center;padding:28px 20px">' +
+            '<div style="font-weight:700;font-size:16px;margin-bottom:8px">専用リンクからひらいてください</div>' +
+            '<div style="font-size:13.5px;color:var(--muted)">このページは、先生からLINEで送られた<br>あなた専用のリンクからひらく必要があります。<br>リンクが分からないときは、LINEで先生に連絡してください。</div></div>' +
+            '<footer class="app"><span></span><span></span></footer>';
         }
 
+        /* ---------- 画面: 生徒のマイページ ---------- */
         function renderStudent() {
           if (!S || !S.me) { renderGuard(); return; }
+          if (parentStep === "data" && P) { renderParent(); return; }
           var today = S.today;
-          var slots = S.slots.slice().sort(function (a, b) {
-            return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
-          });
-
+          var now = new Date();
+          var nowStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
+          var slots = S.slots.slice().sort(slotCmp);
+          var mine = slots.filter(function (s) { return s.st === "mine"; });
+          var offers = slots.filter(function (s) { return s.st === "offer"; });
+          var hist = (S.history || []).map(function (h) { return { id: h.id, date: h.date, start: h.start, min: h.min, subject: h.subject, st: h.done ? "done" : "past" }; });
+          var blocked = S.blocked || [];
+          var events = (S.events || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+          var evDays = [];
+          events.forEach(function (e) { var d = e.date; for (var i = 0; i < 61 && d <= e.dateTo; i++) { evDays.push({ date: d, title: e.title, id: e.id, st: "event" }); d = addDaysStr(d, 1); } });
           var html = "";
-          if (previewK) {
-            html += '<div style="background:#fdf3e3;border:1px solid #d99a2b;color:#a8721c;border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me ? S.me.name : "") + 'さんのページを表示中</strong>(ここでの操作は本人として反映されます)</span><button class="btn-quiet btn-sm" data-action="exitpreview">先生モードへ戻る</button></div>';
-          }
-          html += '<h1>授業の予定</h1><p class="sub">' + esc(S.me.name) + 'さんの予定ページです</p>';
 
-          // 今月の授業(教科ごとの回数)
+          if (previewK) {
+            html += '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー。ここでの操作は本人として反映されます)</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
+          }
+
+          // 見出し + 今月の授業
+          html += '<h1>' + esc(S.me.name) + 'さんのページ</h1><p class="sub">授業の予定表と、先生とのやりとり</p>';
           (function () {
             var ym = today.slice(0, 7);
             var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
             var doneM = histM.filter(function (h) { return h.done; });
-            var planM = slots.filter(function (s) { return s.st === "mine" && s.date.slice(0, 7) === ym; }).concat(histM.filter(function (h) { return !h.done; }));
+            var planM = mine.filter(function (s) { return s.date.slice(0, 7) === ym; }).concat(histM.filter(function (h) { return !h.done; }));
             var bySub = {}, order = [];
             doneM.concat(planM).forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
             doneM.forEach(function (x) { bySub[x.subject || "その他"].done++; });
             planM.forEach(function (x) { bySub[x.subject || "その他"].plan++; });
-            if (order.length === 0) return;
-            html += '<div class="card" style="margin-top:12px;padding:10px 14px"><div style="font-size:12.5px;color:var(--muted);margin-bottom:4px">' + (+ym.slice(5)) + '月の授業</div><div class="row" style="gap:8px 18px">';
-            order.forEach(function (k) {
-              var b = bySub[k];
-              html += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + (b.done + b.plan) + '回</span>' +
-                '<span style="font-size:12px;color:var(--muted)">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>';
-            });
+            if (!order.length) return;
+            html += '<div class="card" style="margin-top:12px;padding:10px 14px"><div class="small muted" style="margin-bottom:2px">' + (+ym.slice(5)) + '月の授業</div><div class="row" style="gap:8px 18px">';
+            order.forEach(function (k) { var b = bySub[k]; html += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + (b.done + b.plan) + '回</span><span class="small muted">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>'; });
             html += '</div></div>';
           })();
 
-          var offers = slots.filter(function (s) { return s.st === "offer"; });
-          if (offers.length > 0) {
-            html += "<h2>先生からの案内</h2>";
-            html += '<div class="card">';
-            offers.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-              html += '<span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
-              html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">承認する</button>';
-              html += '<button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">この日時は難しい</button>';
-              html += "</div>";
-            });
-            html += '</div><div class="note">承認すると授業が確定し、カレンダー登録とMeetリンクの発行が行われます。</div>';
-          }
-
-          var mine = slots.filter(function (s) { return s.st === "mine"; });
-          html += "<h2>あなたの予定</h2>";
-          if (mine.length === 0) {
-            html += '<div class="empty">予定はまだありません。先生から案内が届くとここに表示されます。</div>';
-          } else {
-            html += '<div class="card">';
-            mine.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-              html += '<span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
-              if (s.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meetに参加</a>';
-              html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(s) + '">カレンダーに追加</a>';
-              if (s.req) {
-                html += '<span class="tag amber" style="font-size:11.5px;border-radius:6px;padding:1px 7px;font-weight:700;background:#fdf3e3;color:#a86f12">取消を依頼中</span>';
-                html += '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">依頼を取り下げる</button>';
-              } else if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) {
-                html += '<span style="font-size:12px;color:var(--muted)">変更・取消は先生にLINEで連絡してください</span>';
-              } else {
-                html += '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取消を依頼</button>';
-              }
-              html += "</div>";
-            });
-            html += "</div>";
-            html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。先生が確認してから取消になります。直前の変更はLINEで直接連絡してください。</div>';
-          }
-
-          html += "<h2>授業の希望</h2>";
-          var wishes = S.wishes || [];
-          if (wishes.length > 0) {
-            html += '<div class="card">';
-            wishes.forEach(function (wv) {
-              var isWant = wv.kind === "want";
-              html += '<div class="slotline"><span class="time">' + fmtDateW(wv.date) + " " + wv.start + "〜" + wv.end + "</span>";
-              html += '<span class="who"><span class="tag ' + (isWant ? "booked" : "open") + '" style="font-size:11px">' + (isWant ? "この日時を希望" : "この時間帯のどこかで") + '</span> ' + (wv.note ? esc(wv.note) : "") + ' <span style="font-size:11.5px;color:var(--muted)">先生の返事待ち</span></span>';
-              html += '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(wv.id) + '">取消</button></div>';
-            });
-            html += "</div>";
-          }
-          html += '<div class="card" style="margin-top:10px"><div class="row" style="margin-bottom:8px"><span class="seg" style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">' +
-            '<button class="btn-quiet btn-sm" data-action="wkind" data-k="want" style="border:none;border-radius:0;' + (wishKind === "want" ? "background:var(--soft);color:var(--primary);font-weight:700" : "") + '">この日時に授業をしたい</button>' +
-            '<button class="btn-quiet btn-sm" data-action="wkind" data-k="ok" style="border:none;border-radius:0;' + (wishKind === "ok" ? "background:var(--soft);color:var(--primary);font-weight:700" : "") + '">この時間帯のどこかで調整してほしい</button></span></div>';
-          if (wishKind === "want") {
-            html += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><select id="f-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
-            html += '<div class="note">「この日のこの時間に授業をしたい」という希望です。先生が確認して案内を送るので、承認すると確定です。</div>';
-          } else {
-            html += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span style="color:var(--muted)">〜</span><input type="time" id="f-wend" value="18:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>時間帯を送る</button></div>';
-            html += '<div class="note">「この時間帯なら授業ができる」という空き時間です(例: 13:00〜18:00)。先生がこの中から授業の時間を決めて案内します。時間帯すべてが授業になるわけではありません。</div>';
-          }
-          html += '</div>';
-
-          html += "<h2>授業できない日</h2>";
-          var blocked = S.blocked || [];
-          if (blocked.length > 0) {
-            html += '<div class="card">';
-            groupBlocked(blocked).forEach(function (g) {
-              html += '<div class="slotline"><span class="time">' + rangeLabel(g) + "</span>";
-              html += '<span class="who">' + (g.note ? esc(g.note) : "") + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(g.ids.join(",")) + '">解除</button>';
-              html += "</div>";
-            });
-            html += "</div>";
-          }
-          html += '<div class="row" style="margin-top:10px"><button class="btn-primary btn-sm" data-action="ngmode">予定表で日を選んで登録</button><span style="font-size:12.5px;color:var(--muted)">部活の大会や学校行事など、授業ができない日を先生に伝えます。その日には案内が来なくなります。</span></div>';
-          html += '<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">期間でまとめて登録する(旅行など連日のとき)</summary>';
-          html += '<div class="row" style="margin-top:8px"><input type="date" id="f-bdate" min="' + today + '"><span style="color:var(--muted)">〜</span><input type="date" id="f-bdate2" min="' + today + '"><input type="text" id="f-bnote" placeholder="メモ(任意。例: 修学旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
-          html += '<div class="note">1日だけなら左の日付のみでOK。連日の場合は「〜」の右に最終日を入れてください。</div></details>';
-
-          html += "<h2>共有したい予定</h2>";
-          var events = (S.events || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-          var evUpcoming = events.filter(function (e) { return e.dateTo >= today; });
-          if (evUpcoming.length > 0) {
-            html += '<div class="card">';
-            evUpcoming.forEach(function (e) {
-              html += '<div class="slotline"><span class="time">' + (e.date === e.dateTo ? fmtDateW(e.date) : fmtDateW(e.date) + "〜" + fmtDateW(e.dateTo)) + "</span>";
-              html += '<span class="who">' + esc(e.title) + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(e.id) + '">取消</button></div>';
-            });
-            html += "</div>";
-          }
-          html += '<div class="card" style="margin-top:10px"><div class="row"><input type="date" id="f-edate" min="' + today + '"><span style="color:var(--muted)">〜</span><input type="date" id="f-edate2" min="' + today + '"><input type="text" id="f-etitle" placeholder="内容(例: 大会、高校見学、修学旅行)" maxlength="40" style="flex:1;min-width:160px"></div>';
-          html += '<div class="row" style="margin-top:8px"><label style="font-size:13px;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="f-eblock"> この期間は授業できない日にもする</label><button class="btn-ghost btn-sm" data-action="addevent"' + (busy ? " disabled" : "") + '>先生に共有</button></div>';
-          html += '<div class="note">部活の大会、学校見学、テスト期間など、先生に知らせておきたい予定です。予定表に表示され、先生にも伝わります。1日だけなら左の日付のみでOK。</div></div>';
-
-          html += "<h2>予定表" + (ngMode ? ' <span style="font-size:12.5px;color:var(--danger);font-weight:600">授業できない日をタップして選んでください</span>' : "") + "</h2>";
-          var hist = (S.history || []).map(function (h) { return { id: h.id, date: h.date, start: h.start, min: h.min, subject: h.subject, st: h.done ? "done" : "past" }; });
+          // 予定表(最上部)
           var byDate = {}, dates = [];
-          slots.forEach(function (s) {
-            if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); }
-            byDate[s.date].push(s);
-          });
-          hist.forEach(function (s) {
-            if (!byDate[s.date]) byDate[s.date] = [];
-            byDate[s.date].push(s);
-          });
-          function hasVisible(d) {
-            return (byDate[d] || []).some(function (s) { return s.st === "offer" || s.st === "mine"; });
-          }
+          slots.forEach(function (s) { if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); } byDate[s.date].push(s); });
+          hist.forEach(function (s) { (byDate[s.date] = byDate[s.date] || []).push(s); });
+          evDays.forEach(function (e) { (byDate[e.date] = byDate[e.date] || []).push(e); });
+          function hasVisible(d) { return (byDate[d] || []).some(function (s) { return s.st === "offer" || s.st === "mine"; }); }
           if (selDate === null || (!selManual && !hasVisible(selDate))) {
             var found = null;
-            for (var di = 0; di < dates.length; di++) {
-              if (hasVisible(dates[di])) { found = dates[di]; break; }
-            }
+            for (var di = 0; di < dates.length; di++) if (hasVisible(dates[di])) { found = dates[di]; break; }
             selDate = found || today;
-            var sp = selDate.split("-");
-            calY = +sp[0]; calM = +sp[1] - 1;
+            var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
           var info = {};
-          var evDays = [];
-          (S.events || []).forEach(function (e) {
-            var d = e.date;
-            for (var ei = 0; ei < 61 && d <= e.dateTo; ei++) { evDays.push({ date: d, title: e.title, id: e.id, st: "event" }); d = addDaysStr(d, 1); }
-          });
-          evDays.forEach(function (e) { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
           slots.concat(hist).concat(evDays.map(function (e) { return { date: e.date, subject: e.title, st: "event", start: "99:99" }; })).forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, labels: [] });
-            if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev = (it.ev || 0) + 1; else it[s.st]++;
-            it.labels.push({ text: s.subject || "授業", st: s.st, start: s.start });
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] });
+            if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev++; else it[s.st]++;
+            it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start });
           });
-          blocked.forEach(function (b) {
-            var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0 });
-            it.ng++;
-          });
-          html += renderCal(info, today, "student");
-
-          if (slots.length === 0 && hist.length === 0 && evDays.length === 0) {
-            html += '<div class="empty">いま予定はありません。先生から案内が届くとここに表示されます。</div>';
-          } else {
-            var dwd = wdOf(selDate);
-            html += "<h2>" + fmtDate(selDate) + "(" + WD[dwd] + ")の予定</h2>";
-            var ds2 = byDate[selDate] || [];
-            if (ds2.length === 0) {
-              html += '<div class="empty">この日の予定はありません。印の付いた日をタップしてください。</div>';
-            } else {
+          blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; });
+          html += '<h2>予定表' + (ngMode ? ' <span style="font-size:12.5px;color:var(--danger);font-weight:600">授業できない日をタップして選んでください</span>' : "") + '</h2>';
+          html += renderCal(info, today);
+          if (!ngMode) {
+            var ds2 = (byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
+            var dayNg = blocked.filter(function (b) { return b.date === selDate; });
+            html += '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
+            if (!ds2.length && !dayNg.length) html += '<div class="empty">この日の予定はありません</div>';
+            else {
               html += '<div class="chips">';
               ds2.forEach(function (s) {
                 if (s.st === "event") { html += '<span class="chip ev">' + esc(s.title) + "</span>"; return; }
                 var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
-                if (s.st === "mine") {
-                  html += '<span class="chip mine">✓ ' + label + "</span>";
-                } else if (s.st === "done") {
-                  html += '<span class="chip done">実施済 ' + label + "</span>";
-                } else if (s.st === "past") {
-                  html += '<span class="chip past">' + label + "</span>";
-                } else if (s.st === "offer") {
-                  html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
-                }
+                if (s.st === "mine") html += '<span class="chip mine">✓ ' + label + "</span>";
+                else if (s.st === "done") html += '<span class="chip done">実施済 ' + label + "</span>";
+                else if (s.st === "past") html += '<span class="chip past">' + label + "</span>";
+                else if (s.st === "offer") html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
               });
-              html += "</div>";
+              dayNg.forEach(function (b) { html += '<span class="chip ng">× 授業できない' + (b.note ? " " + esc(b.note) : "") + '</span>'; });
+              html += '</div>';
             }
+            html += '</div>';
+          }
+
+          // 次の授業
+          var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
+          var next = upcoming[0];
+          html += '<h2>次の授業</h2>';
+          if (next) {
+            var untilTxt = next.date === today ? "今日" : next.date === addDaysStr(today, 1) ? "明日" : Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) + "日後";
+            html += '<div class="card next"><div class="in">' + untilTxt + '</div><div class="when">' + fmtDateW(next.date) + " " + next.start + "〜" + endTime(next.start, next.min) + '</div>';
+            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">取消を依頼中</span>' : "") + '</div>';
+            html += '<div class="row" style="margin-top:10px">';
+            if (next.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(next.meet) + '">Meetに参加</a>';
+            html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
+            html += cancelControl(next) + '</div></div>';
+          } else {
+            html += '<div class="empty">次の授業はまだ決まっていません。' + (offers.length ? '下の「先生からの案内」を確認してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
+          }
+
+          // 先生からの案内
+          if (offers.length) {
+            html += '<h2>先生からの案内 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
+            offers.forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
+              html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">承認する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">この日時は難しい</button></div>';
+            });
+            html += '</div><div class="note">承認すると授業が確定し、カレンダー登録とMeetリンクの発行が行われます。</div>';
+          }
+
+          // 今後の予定
+          html += '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2>';
+          if (upcoming.length > 1 || (upcoming.length === 1 && !next)) {
+            html += '<div class="card">';
+            upcoming.forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + (s.req ? ' <span class="tag red">取消を依頼中</span>' : "") + "</span>";
+              if (s.meet) html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meet</a>';
+              html += cancelControl(s) + "</div>";
+            });
+            html += '</div>';
+          } else if (upcoming.length === 1) {
+            html += '<div class="empty">上の「次の授業」の1件だけです</div>';
+          } else {
+            html += '<div class="empty">確定している授業はありません</div>';
+          }
+          html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。直前の変更はLINEで直接連絡してください。</div>';
+
+          // 先生に伝える(操作コーナー)
+          html += '<h2>先生に伝える</h2><div class="actions">';
+          html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業の希望</button>';
+          html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
+          html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
+          html += '</div>';
+          if (panel === "wish") html += renderWishPanel(today);
+          if (panel === "event") html += renderEventPanel(today, events);
+          if (panel === "ng") html += renderNgPanel(today, blocked);
+
+          // これまでの授業
+          var done = (S.history || []).filter(function (h) { return h.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+          html += '<h2>これまでの授業 <span class="cnt">直近' + done.length + '回</span></h2>';
+          if (!done.length) html += '<div class="empty">実施済みの授業はまだありません</div>';
+          else {
+            var months = {}, mk = [];
+            done.forEach(function (h) { var m = h.date.slice(0, 7); if (!months[m]) { months[m] = []; mk.push(m); } months[m].push(h); });
+            html += '<div class="card">';
+            mk.forEach(function (m, i) {
+              var list = months[m], mins = 0; list.forEach(function (h) { mins += Number(h.min) || 0; });
+              html += '<details class="month"' + (i === 0 ? " open" : "") + '><summary>' + (+m.slice(0, 4)) + "年" + (+m.slice(5, 7)) + "月 <span class=\"small muted\">" + list.length + "回・" + mins + "分</span></summary>";
+              list.forEach(function (h) { html += '<div class="slotline"><span class="time">' + fmtDateW(h.date) + " " + h.start + '</span><span class="who">' + (h.subject ? esc(h.subject) : '<span class="muted">科目なし</span>') + ' <span class="small muted">' + h.min + '分</span></span></div>'; });
+              html += '</details>';
+            });
+            html += '</div>';
+          }
+
+          // 保護者の方へ
+          html += '<h2>保護者の方へ</h2>';
+          if (parentStep === "pass") {
+            html += '<div class="card"><div class="row"><input type="password" id="f-ppass" placeholder="保護者用パスワード" autocomplete="off" style="flex:1;min-width:160px"><button class="btn-primary btn-sm" data-action="parentlogin"' + (busy ? " disabled" : "") + '>' + (busy ? "確認中…" : "開く") + '</button><button class="btn-quiet btn-sm" data-action="parentcancel">やめる</button></div>';
+            html += '<div class="note">授業料・お支払い状況・成績推移など、保護者向けの情報です。パスワードは先生から保護者の方にお伝えしています。</div></div>';
+          } else {
+            html += '<div class="card"><div class="row between"><span class="small">授業料・お支払い状況・成績推移(保護者用パスワードが必要です)</span><button class="btn-ghost btn-sm" data-action="parentopen">開く</button></div></div>';
           }
 
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
 
+          // 下部バー
           if (ngMode) {
             var ngByDate = {};
-            (S.blocked || []).forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
+            blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
             var selDates = Object.keys(ngSel).filter(function (d) { return ngSel[d]; }).sort();
-            var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length;
-            var remN = selDates.length - addN;
-            html += '<div class="confirmbar"><div class="inner">';
-            html += '<div class="msg">授業できない日を選択中: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
-            html += '<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">' + (selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し。×が付いている日をタップすると解除できます)") + '</div>';
-            html += '<div class="row"><input type="text" id="f-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px">';
-            html += '<button class="btn-primary" data-action="ngapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="ngcancel">やめる</button></div>';
-            html += "</div></div>";
-          }
-          if (pending && !ngMode) {
+            var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
+            html += '<div class="confirmbar"><div class="inner"><div class="msg">授業できない日を選択中: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
+            html += '<div class="small muted" style="margin-bottom:8px">' + (selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し。×が付いている日をタップすると解除)") + '</div>';
+            html += '<div class="row"><input type="text" id="f-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="ngapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="ngcancel">やめる</button></div></div></div>';
+          } else if (pending) {
             var s = null;
             for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
             if (s) {
@@ -624,10 +475,10 @@
                 html += '<div class="msg">' + when + " の授業を承認して確定しますか?</div>";
                 html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "承認して確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "decline") {
-                html += '<div class="msg">' + when + " の案内を「この日時は難しい」と先生に伝えますか?<br><span style='font-size:12.5px;color:var(--muted)'>先生が別の日時を案内します。</span></div>";
+                html += '<div class="msg">' + when + " の案内を「この日時は難しい」と先生に伝えますか?<br><span class='small muted'>先生が別の日時を案内します。</span></div>";
                 html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "難しいと伝える") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "cancel") {
-                html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span style='font-size:12.5px;color:var(--muted)'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
+                html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span class='small muted'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
                 html += '<input type="text" id="f-creason" maxlength="200" placeholder="理由(任意。例: 学校行事のため)" style="width:100%;margin:6px 0 8px">';
                 html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "取消を依頼する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "withdraw") {
@@ -640,699 +491,234 @@
           app.innerHTML = html;
         }
 
-        /* ---------- 先生画面 ---------- */
-        function renderTeacher() {
-          var today = A.today;
-          var slots = A.slots.slice().sort(function (a, b) {
-            return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
-          });
-          var upcoming = slots.filter(function (s) { return s.date >= today; });
-          var past = slots.filter(function (s) { return s.date < today; }).reverse();
+        function cancelControl(s) {
+          if (s.req) return '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">依頼を取り下げる</button>';
+          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<span class="small muted">変更・取消はLINEで先生へ</span>';
+          return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取消を依頼</button>';
+        }
 
-          var html = "";
-          html += '<div class="row between" style="margin-top:22px"><div><h1 style="margin:0">先生モード</h1></div><div class="row"><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none;display:inline-block">管理画面 ↗</a><button class="btn-quiet btn-sm" data-action="exitteacher">生徒画面へ</button></div></div>';
-
-          function teacherRow(s, withDate) {
-            var subjT = s.subject ? ' <span style="font-weight:400;font-size:12px;color:var(--muted)">' + esc(s.subject) + "</span>" : "";
-            var h = '<div class="slotline"><span class="time">' + (withDate ? fmtDateW(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-            if (s.status === "booked") {
-              h += '<span class="who"><span class="name">' + esc(s.studentName) + "</span>" + subjT + ' <span class="tag booked">確定</span></span>';
-              if (s.meetUrl) h += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meetUrl) + '">Meet</a>';
-              h += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(s.id) + '">予約解除</button>';
-            } else if (s.status === "offered") {
-              h += '<span class="who"><span class="name">' + esc(s.studentName) + "</span>" + subjT + ' <span class="tag offer">承認待ち</span></span>';
-              h += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">取り下げ</button>';
-            } else {
-              h += '<span class="who"><span class="tag open">空き</span></span>';
-              h += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">枠を削除</button>';
-            }
-            return h + "</div>";
-          }
-
-          var offered = upcoming.filter(function (s) { return s.status === "offered"; });
-          if (offered.length > 0) {
-            html += "<h2>承認待ちの案内</h2><div class=\"card\">";
-            offered.forEach(function (s) { html += teacherRow(s, true); });
-            html += "</div>";
-          }
-
-          html += "<h2>予定表</h2>";
-          var byDate = {}, dates = [];
-          upcoming.forEach(function (s) {
-            if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); }
-            byDate[s.date].push(s);
-          });
-          if (selDate === null || (!selManual && !byDate[selDate])) {
-            selDate = dates.length > 0 ? dates[0] : today;
-            var spt = selDate.split("-");
-            calY = +spt[0]; calM = +spt[1] - 1;
-          }
-          var tinfo = {};
-          upcoming.forEach(function (s) {
-            var it = tinfo[s.date] || (tinfo[s.date] = { booked: 0, offered: 0, ng: 0 });
-            if (s.status === "booked") it.booked++;
-            else if (s.status === "offered") it.offered++;
-          });
-          (A.blocked || []).forEach(function (b) {
-            var it = tinfo[b.date] || (tinfo[b.date] = { booked: 0, offered: 0, ng: 0 });
-            it.ng++;
-          });
-          html += renderCal(tinfo, today, "teacher");
-
-          var dwdT = wdOf(selDate);
-          html += "<h2>" + fmtDate(selDate) + "(" + WD[dwdT] + ")の授業</h2>";
-          var dayRows = byDate[selDate] || [];
-          if (dayRows.length === 0) {
-            html += '<div class="empty">この日の授業はありません。下のフォームから案内できます(日付は選択済み)。</div>';
+        function renderWishPanel(today) {
+          var wishes = S.wishes || [];
+          var h = '<div class="panel card">';
+          h += '<div class="row" style="margin-bottom:8px"><span class="seg"><button data-action="wkind" data-k="want" class="' + (wishKind === "want" ? "on" : "") + '">この日時に授業をしたい</button><button data-action="wkind" data-k="ok" class="' + (wishKind === "ok" ? "on" : "") + '">この時間帯のどこかで</button></span></div>';
+          if (wishKind === "want") {
+            h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><select id="f-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
+            h += '<div class="note">「この日のこの時間に授業をしたい」という希望です。先生が確認して案内を送るので、承認すると確定です。</div>';
           } else {
-            html += '<div class="card">';
-            dayRows.forEach(function (s) { html += teacherRow(s, false); });
-            html += "</div>";
+            h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="f-wend" value="18:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>時間帯を送る</button></div>';
+            h += '<div class="note">「この時間帯なら授業ができる」という空き時間です。先生がこの中から授業の時間を決めて案内します(時間帯すべてが授業になるわけではありません)。</div>';
           }
-          var dayNg = (A.blocked || []).filter(function (b) { return b.date === selDate; });
-          if (dayNg.length > 0) {
-            html += '<div class="card" style="margin-top:10px">';
-            dayNg.forEach(function (b) {
-              html += '<div class="slotline"><span class="who"><span class="name">' + esc(b.studentName) + '</span> <span class="tag done">授業できない</span> ' + (b.note ? esc(b.note) : "") + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>';
+          if (wishes.length) {
+            h += '<div style="margin-top:10px">';
+            wishes.forEach(function (wv) {
+              var isWant = wv.kind === "want";
+              h += '<div class="slotline"><span class="time">' + fmtDateW(wv.date) + " " + wv.start + "〜" + wv.end + '</span><span class="who"><span class="tag ' + (isWant ? "blue" : "green") + '">' + (isWant ? "この日時を希望" : "この時間帯のどこかで") + '</span> ' + (wv.note ? esc(wv.note) : "") + ' <span class="small muted">先生の返事待ち</span></span><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(wv.id) + '">取消</button></div>';
             });
-            html += "</div>";
+            h += '</div>';
           }
-          if (upcoming.length > 0) {
-            html += '<div class="row" style="margin-top:10px"><button class="btn-ghost btn-sm" data-action="copyweek">今後7日の予定をコピー(LINE用)</button></div>';
-          }
+          return h + '</div>';
+        }
 
-          html += '<h2>授業の案内</h2><div class="card"><div class="formgrid">';
-          html += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>';
-          A.students.filter(function (x) { return x.active; }).forEach(function (x) {
-            html += '<option value="' + esc(x.id) + '">' + esc(x.name) + "</option>";
+        function renderEventPanel(today, events) {
+          var h = '<div class="panel card">';
+          h += '<div class="row"><input type="date" id="f-edate" min="' + today + '"><span class="muted">〜</span><input type="date" id="f-edate2" min="' + today + '"><input type="text" id="f-etitle" placeholder="内容(例: 大会、高校見学、修学旅行)" maxlength="40" style="flex:1;min-width:160px"></div>';
+          h += '<div class="row" style="margin-top:8px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="f-eblock"> この期間は授業できない日にもする</label><button class="btn-primary btn-sm" data-action="addevent"' + (busy ? " disabled" : "") + '>先生に共有</button></div>';
+          h += '<div class="note">部活の大会、学校見学、テスト期間など、先生に知らせておきたい予定です。予定表に表示され、先生にも伝わります。1日だけなら左の日付のみでOK。</div>';
+          var up = events.filter(function (e) { return e.dateTo >= today; });
+          if (up.length) {
+            h += '<div style="margin-top:10px">';
+            up.forEach(function (e) { h += '<div class="slotline"><span class="time">' + (e.date === e.dateTo ? fmtDateW(e.date) : fmtDateW(e.date) + "〜" + fmtDateW(e.dateTo)) + '</span><span class="who">' + esc(e.title) + '</span><button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(e.id) + '">取消</button></div>'; });
+            h += '</div>';
+          }
+          return h + '</div>';
+        }
+
+        function renderNgPanel(today, blocked) {
+          var h = '<div class="panel card">';
+          h += '<div class="row"><button class="btn-primary btn-sm" data-action="ngmode">予定表で日を選んで登録</button><span class="small muted">部活の大会や学校行事など、授業ができない日を先生に伝えます。その日には案内が来なくなります。</span></div>';
+          h += '<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">期間でまとめて登録する(旅行など連日のとき)</summary>';
+          h += '<div class="row" style="margin-top:8px"><input type="date" id="f-bdate" min="' + today + '"><span class="muted">〜</span><input type="date" id="f-bdate2" min="' + today + '"><input type="text" id="f-bnote" placeholder="メモ(任意。例: 修学旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="addblock"' + (busy ? " disabled" : "") + '>登録</button></div></details>';
+          if (blocked.length) {
+            h += '<div style="margin-top:10px">';
+            groupBlocked(blocked).forEach(function (g) { h += '<div class="slotline"><span class="time">' + rangeLabel(g) + '</span><span class="who">' + (g.note ? esc(g.note) : "") + '</span><button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(g.ids.join(",")) + '">解除</button></div>'; });
+            h += '</div>';
+          }
+          return h + '</div>';
+        }
+
+        /* ---------- 画面: 保護者の方へ ---------- */
+        function colorFor(subject, idx) { return SUBJECT_COLOR[subject] || ["#6b7280", "#4b5563"][idx % 2]; }
+        function gradeChart(grades, mode) {
+          var pts = grades.filter(function (g) { return mode === "dev" ? (g.dev !== null && !isNaN(g.dev)) : !isNaN(g.score); });
+          if (pts.length < 2) return '<div class="empty">記録が2件以上たまるとグラフが表示されます</div>';
+          var dates = []; pts.forEach(function (g) { if (dates.indexOf(g.date) < 0) dates.push(g.date); }); dates.sort();
+          var subjects = []; pts.forEach(function (g) { var s = g.subject || "その他"; if (subjects.indexOf(s) < 0) subjects.push(s); });
+          var W = 640, H = 260, L = 44, R = 90, T = 16, B = 40, iw = W - L - R, ih = H - T - B;
+          var vals = pts.map(function (g) { return mode === "dev" ? g.dev : g.score; });
+          var ymax = Math.max.apply(null, vals.concat(mode === "dev" ? [70] : pts.map(function (g) { return g.max || 100; })));
+          var ymin = mode === "dev" ? Math.min(30, Math.min.apply(null, vals)) : 0;
+          ymax = Math.ceil(ymax / 10) * 10; ymin = Math.floor(ymin / 10) * 10;
+          var xOf = function (d) { var i = dates.indexOf(d); return dates.length === 1 ? L + iw / 2 : L + i * iw / (dates.length - 1); };
+          var yOf = function (v) { return T + ih - (v - ymin) / (ymax - ymin || 1) * ih; };
+          var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="成績推移">';
+          for (var i = 0; i <= 4; i++) { var v = ymin + (ymax - ymin) * i / 4, y = yOf(v); svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '" stroke="#e5e9ee"/><text x="' + (L - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#64717f">' + Math.round(v) + '</text>'; }
+          var every = Math.ceil(dates.length / 6);
+          dates.forEach(function (d, i) { if (i % every === 0 || i === dates.length - 1) svg += '<text x="' + xOf(d) + '" y="' + (H - 14) + '" text-anchor="middle" font-size="11" fill="#64717f">' + fmtDY(d).slice(5) + '</text>'; });
+          subjects.forEach(function (sub, si) {
+            var col = colorFor(sub, si), minePts = pts.filter(function (g) { return (g.subject || "その他") === sub; });
+            svg += '<path d="' + minePts.map(function (g, i) { return (i ? "L" : "M") + xOf(g.date).toFixed(1) + " " + yOf(mode === "dev" ? g.dev : g.score).toFixed(1); }).join(" ") + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+            minePts.forEach(function (g) { var v = mode === "dev" ? g.dev : g.score; svg += '<circle cx="' + xOf(g.date) + '" cy="' + yOf(v) + '" r="4.5" fill="' + col + '" stroke="#fff" stroke-width="2"><title>' + esc(fmtDY(g.date) + " " + (g.test || "") + " " + sub + " " + v + (mode === "dev" ? "" : (g.max ? "/" + g.max : ""))) + '</title></circle>'; });
+            var last = minePts[minePts.length - 1];
+            svg += '<text x="' + (xOf(last.date) + 8) + '" y="' + (yOf(mode === "dev" ? last.dev : last.score) + 4) + '" font-size="11.5" font-weight="700" fill="#19212a">' + esc(sub) + ' ' + (mode === "dev" ? last.dev : last.score) + '</text>';
           });
-          html += "</select>";
-          html += '<label for="f-subject">科目</label><select id="f-subject"><option value="">(科目なし)</option>';
-          ["英語", "数学", "英数", "国語", "理科", "社会"].forEach(function (sub) {
-            html += '<option value="' + sub + '">' + sub + "</option>";
-          });
-          html += "</select>";
-          var formDate = (selDate && selDate >= today) ? selDate : today;
-          html += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + formDate + '">';
-          html += '<label for="f-start">開始</label><input type="time" id="f-start" value="17:00" step="300">';
-          html += '<label for="f-min">長さ</label><select id="f-min"><option value="30">30分</option><option value="45">45分</option><option value="60" selected>60分</option><option value="90">90分</option><option value="120">120分</option></select>';
-          html += '<label for="f-rep">くり返し</label><select id="f-rep"><option value="1">この日だけ</option><option value="2">毎週×2回</option><option value="4">毎週×4回</option><option value="8">毎週×8回</option><option value="12">毎週×12回</option></select>';
-          html += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + ">" + (busy ? "送信中…" : "この内容で案内する") + "</button></div>";
-          html += '<div class="note">案内は生徒の予約ページに表示されます(メール登録済みの生徒にはメールでもお知らせ)。生徒が承認すると授業が確定し、カレンダー登録・Meet発行・確定通知が行われます。</div></div>';
+          svg += '</svg>';
+          if (subjects.length >= 2) svg += '<div class="legend">' + subjects.map(function (s, i) { return '<span><i style="background:' + colorFor(s, i) + '"></i>' + esc(s) + '</span>'; }).join("") + '</div>';
+          return svg;
+        }
 
-          html += '<h2>授業できない日の登録</h2><div class="card"><div class="row">';
-          html += '<select id="b-student"><option value="">生徒</option>';
-          A.students.filter(function (x) { return x.active; }).forEach(function (x) {
-            html += '<option value="' + esc(x.id) + '">' + esc(x.name) + "</option>";
-          });
-          html += "</select>";
-          html += '<input type="date" id="b-date" min="' + today + '">';
-          html += '<span style="color:var(--muted)">〜</span><input type="date" id="b-date2" min="' + today + '">';
-          html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px">';
-          html += '<button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + ">登録</button>";
-          html += "</div>";
-          var ngGroups = [];
-          A.students.forEach(function (st7) {
-            var own = (A.blocked || []).filter(function (b) { return sameId(b.studentId, st7.id); });
-            groupBlocked(own).forEach(function (g) { g.name = st7.name; ngGroups.push(g); });
-          });
-          ngGroups.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
-          if (ngGroups.length > 0) {
-            html += '<div style="margin-top:12px">';
-            ngGroups.forEach(function (g) {
-              html += '<div class="slotline"><span class="time">' + rangeLabel(g) + "</span>";
-              html += '<span class="who"><span class="name">' + esc(g.name) + "</span> " + (g.note ? esc(g.note) : "") + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="tdelblock" data-ids="' + esc(g.ids.join(",")) + '">削除</button>';
-              html += "</div>";
-            });
-            html += "</div>";
-          }
-          html += '<div class="note">1日だけなら左の日付のみ、連日の場合は「〜」の右に最終日を。保護者から聞いたNG日をここに登録できます(生徒も自分のページから登録可能)。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
+        function renderParent() {
+          var d = P;
+          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者の方へ</strong> ' + esc(d.name) + 'さんの学習と授業料のご案内</span><button class="btn-sm" data-action="parentclose">生徒のページに戻る</button></div>';
+          var tm = d.thisMonth || {};
+          html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2><div class="row" style="align-items:stretch">';
+          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
+          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + yen(tm.fee) + '</div><div class="small muted">' + (tm.mode === "monthly" ? "月額固定" : "30分 " + yen(d.rate30) + " × 実施時間") + '</div></div></div>';
+          html += '<div class="note">金額は実施済みの授業から自動計算しています。請求のご案内は先生から別途お送りします。</div>';
 
-          html += "<h2>最近の動き</h2>";
-          if (A.log.length === 0) {
-            html += '<div class="empty">まだ動きはありません。</div>';
-          } else {
-            html += '<div class="card loglist">';
-            A.log.slice(0, 15).forEach(function (l) {
-              html += "<div>" + esc(l.time) + " " + esc(l.message) + "</div>";
-            });
-            html += "</div>";
+          html += '<h2>お支払い状況</h2>';
+          var pays = d.payments || [];
+          if (!pays.length) html += '<div class="empty">請求・入金の記録はまだありません</div>';
+          else {
+            html += '<div class="card tbwrap"><table class="tb"><tr><th>月</th><th>金額</th><th>状態</th><th>入金日</th></tr>';
+            pays.forEach(function (p) { html += '<tr><td>' + esc(p.ym) + '</td><td>' + yen(p.amount) + '</td><td>' + (p.status === "入金済" ? '<span class="tag green">入金済</span>' : '<span class="tag red">未入金</span>') + '</td><td>' + (p.paidDate ? fmtDY(p.paidDate) : "—") + '</td></tr>'; });
+            html += '</table></div>';
           }
 
-          html += "<h2>実施の記録</h2>";
-          var pastBooked = past.filter(function (s) { return s.status === "booked"; });
-          if (pastBooked.length === 0) {
-            html += '<div class="empty">過去の授業はまだありません。</div>';
-          } else {
-            var months = {}, mkeys = [];
-            pastBooked.forEach(function (s) {
-              if (!s.done) return;
-              var mk = s.date.slice(0, 7);
-              if (!months[mk]) { months[mk] = {}; mkeys.push(mk); }
-              var ent = months[mk][s.studentId] ||
-                (months[mk][s.studentId] = { name: s.studentName, count: 0, min: 0 });
-              ent.count++;
-              ent.min += Number(s.min) || 0;
-            });
-            if (mkeys.length > 0) {
-              html += '<div class="card" style="overflow-x:auto"><table class="rec"><tr><th>月</th><th>生徒</th><th>実施</th><th>時間</th><th>授業料</th><th></th></tr>';
-              mkeys.sort().reverse().forEach(function (mk) {
-                Object.keys(months[mk]).sort(function (a, b) {
-                  return months[mk][a].name < months[mk][b].name ? -1 : 1;
-                }).forEach(function (sid2, i) {
-                  var ent = months[mk][sid2];
-                  var st5 = null;
-                  A.students.forEach(function (x) { if (sameId(x.id, sid2)) st5 = x; });
-                  var feeText;
-                  if (st5 && st5.monthly > 0) {
-                    feeText = st5.monthly.toLocaleString() + "円(月謝)";
-                  } else if (st5 && st5.rate30 > 0) {
-                    feeText = Math.round(ent.min / 30 * st5.rate30).toLocaleString() + "円";
-                  } else {
-                    feeText = "単価未設定";
-                  }
-                  html += "<tr><td>" + (i === 0 ? esc((+mk.slice(5, 7)) + "月") : "") + "</td><td>" + esc(ent.name) + "</td><td>" + ent.count + "回</td><td>" + ent.min + "分</td><td>" + feeText + "</td>";
-                  html += '<td><button class="btn-ghost btn-sm" data-action="copybill" data-month="' + esc(mk) + '" data-id="' + esc(sid2) + '">請求文面</button></td></tr>';
-                });
-              });
-              html += "</table></div>";
-            }
-            html += '<div class="card" style="margin-top:10px">';
-            pastBooked.slice(0, 20).forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "</span>";
-              html += '<span class="who"><span class="name">' + esc(s.studentName) + "</span>" + (s.done ? ' <span class="tag done">実施済</span>' : "") + "</span>";
-              html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
-              html += "</div>";
-            });
-            html += '</div><div class="note">「実施にする」を押すと月ごとの回数に集計されます。</div>';
+          var grades = d.grades || [];
+          html += '<h2>成績推移 <span class="cnt">' + grades.length + '件</span>' + (grades.some(function (g) { return g.dev !== null; }) ? '<span class="seg" style="margin-left:auto"><button data-action="gmode" data-m="score" class="' + (gradeMode === "score" ? "on" : "") + '">点数</button><button data-action="gmode" data-m="dev" class="' + (gradeMode === "dev" ? "on" : "") + '">偏差値</button></span>' : "") + '</h2>';
+          html += '<div class="card">' + gradeChart(grades, gradeMode);
+          if (grades.length) {
+            html += '<div class="tbwrap" style="margin-top:10px"><table class="tb"><tr><th>日付</th><th>テスト</th><th>科目</th><th>点数</th><th>偏差値</th><th>順位</th></tr>';
+            grades.slice().reverse().forEach(function (g) { html += '<tr><td>' + fmtDY(g.date) + '</td><td>' + esc(g.test) + '</td><td>' + esc(g.subject) + '</td><td>' + g.score + (g.max ? '<span class="muted">/' + g.max + '</span>' : "") + '</td><td>' + (g.dev === null ? "—" : g.dev) + '</td><td>' + esc(g.rank || "—") + '</td></tr>'; });
+            html += '</table></div>';
           }
+          html += '</div>';
 
-          html += '<h2>生徒の管理</h2><div class="card"><div class="row between"><span style="font-size:13.5px">生徒の追加・専用リンク・メール・料金の設定は<strong>管理画面</strong>で行います。</span>';
-          html += '<a class="btn-primary btn-sm" href="../kanri/#students" style="text-decoration:none;display:inline-block">管理画面を開く ↗</a></div></div>';
-
-          html += '<h2>設定</h2><div class="card">';
-          if (A.account) {
-            html += '<div class="row between" style="margin-bottom:10px"><span style="font-size:13.5px">アカウント: <strong>' + esc(A.account) + '</strong></span>';
-            html += '<button class="btn-quiet btn-sm" data-action="logout">ログアウト</button></div>';
-            html += '<div class="formgrid">';
-            html += '<label for="f-curpass">現在のパスワード</label><input type="password" id="f-curpass" autocomplete="current-password">';
-            html += '<label for="f-newpass">新しいパスワード</label><input type="password" id="f-newpass" autocomplete="new-password" placeholder="8文字以上">';
-            html += '</div><div class="row" style="margin-top:10px"><button class="btn-quiet btn-sm" data-action="changepass"' + (busy ? " disabled" : "") + ">パスワードを変更</button></div>";
+          var months = d.months || [];
+          if (months.length) {
+            html += '<h2>月ごとの授業</h2><div class="card tbwrap"><table class="tb"><tr><th>月</th><th>実施</th><th>時間</th></tr>';
+            months.forEach(function (m) { html += '<tr><td>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月</td><td>' + m.count + '回</td><td>' + m.minutes + '分</td></tr>'; });
+            html += '</table></div>';
           }
-          html += '<div class="note">予約データは「ステップワイズ予約システム」スプレッドシートにも保存されています。パスワードを忘れた場合は、そのconfigシートで passHash / passSalt / teacherEmail の行を削除すると初期設定からやり直せます。</div></div>';
-
+          html += '<div class="note" style="margin-top:14px">ご不明な点は先生までLINEでお気軽にどうぞ。このページは保護者用パスワードを知っている方のみ表示できます(このブラウザでは、閉じるまで再入力なしで開けます)。</div>';
           html += '<footer class="app"><span></span><span></span></footer>';
-
-          if (pending && pending.kind === "ngconfirm" && offerDraft) {
-            html += '<div class="confirmbar"><div class="inner">';
-            html += '<div class="msg">' + esc(offerDraft.msg || "") + "</div>";
-            html += '<div class="row"><button class="btn-primary" data-action="doforce"' + (busy ? " disabled" : "") + '>それでも案内する</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-            html += "</div></div>";
-          }
-          if (pending && (pending.kind === "tdel" || pending.kind === "tcancel")) {
-            var s3 = null;
-            slots.forEach(function (x) { if (sameId(x.id, pending.slotId)) s3 = x; });
-            if (s3) {
-              var when3 = fmtDateW(s3.date) + " " + s3.start + "〜" + endTime(s3.start, s3.min);
-              html += '<div class="confirmbar"><div class="inner">';
-              if (pending.kind === "tdel") {
-                html += '<div class="msg">' + when3 + " の枠を削除しますか?</div>";
-                html += '<div class="row"><button class="btn-danger" data-action="dotdel"' + (busy ? " disabled" : "") + '>削除する</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-              } else {
-                html += '<div class="msg">' + esc(s3.studentName) + "さんの " + when3 + " の予約を解除しますか?</div>";
-                html += '<div class="row"><button class="btn-danger" data-action="dotcancel"' + (busy ? " disabled" : "") + '>解除する</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-              }
-              html += "</div></div>";
-            }
-          }
           app.innerHTML = html;
         }
 
-        var authM = null; // 'pin'(未設定=初期設定画面) | 'account'(ログイン画面)
-        function admToken() { return lsGet("sw_admt") || ""; }
+        function render() { renderStudent(); }
 
-        function renderAuth() {
-          var html = "";
-          html += '<h1 style="margin-top:22px">先生モード</h1>';
-          if (authM === null) {
-            html += '<div class="loading"><div class="spinner"></div>確認しています…</div>';
-          } else if (authM === "pin") {
-            html += '<p class="sub">はじめに先生アカウントを作成します(次回からメールとパスワードでログイン)</p>';
-            html += '<div class="card" style="margin-top:14px"><div class="formgrid">';
-            html += '<label for="a-pin">現在のPIN</label><input type="password" id="a-pin" inputmode="numeric" maxlength="8" autocomplete="off" style="width:110px">';
-            html += '<label for="a-email">メールアドレス</label><input type="email" id="a-email" autocomplete="username" placeholder="you@example.com">';
-            html += '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="new-password" placeholder="8文字以上">';
-            html += '<label for="a-pass2">もう一度</label><input type="password" id="a-pass2" autocomplete="new-password">';
-            html += '</div><div class="row" style="margin-top:12px">';
-            html += '<button class="btn-primary" data-action="dosetup"' + (busy ? " disabled" : "") + ">" + (busy ? "作成しています…" : "アカウントを作成") + "</button>";
-            html += '<button class="btn-quiet btn-sm" data-action="exitteacher">もどる</button>';
-            html += '</div><div class="note">パスワードを忘れた場合は、スプレッドシート「ステップワイズ予約システム」のconfigシートで passHash / passSalt / teacherEmail の行を削除すると、この初期設定からやり直せます。</div></div>';
-          } else {
-            html += '<div class="card" style="margin-top:14px"><div class="formgrid">';
-            html += '<label for="a-email">メールアドレス</label><input type="email" id="a-email" autocomplete="username">';
-            html += '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="current-password">';
-            html += '</div><div class="row" style="margin-top:12px">';
-            html += '<button class="btn-primary" data-action="dologin"' + (busy ? " disabled" : "") + ">" + (busy ? "ログインしています…" : "ログイン") + "</button>";
-            html += '<button class="btn-quiet btn-sm" data-action="exitteacher">もどる</button>';
-            html += "</div></div>";
-          }
-          app.innerHTML = html;
-          var el = document.getElementById("a-email");
-          if (el) el.focus();
-        }
-
-        function mode() { return ssGet("sw_mode") || "student"; }
-        function render() {
-          // 先生モードは管理画面(/kanri/)へ移動したため、このページは常に生徒画面
-          renderStudent();
-        }
-
-        function afterAuth(res) {
-          if (res.token) lsSet("sw_admt", res.token);
-          A = res.admin;
-          ssSet("sw_mode", "teacher");
-          selDate = null; selManual = false;
-          render();
-        }
-
-        /* ---------- 通信つきアクション ---------- */
-        function studentAction(body, okMsg) {
-          if (busy) return;
+        function loadParent(ptoken) {
           busy = true; render();
-          apiPost(body).then(function (res) {
-            busy = false; pending = null;
-            if (res.error) {
-              toast(res.error);
-              if (res.badCode) { S = { me: null, slots: [], today: "" }; render(); return; }
-              if (res.refresh) return loadState();
-              render();
-              return;
-            }
-            S = res.state;
-            render();
-            if (okMsg) toast(okMsg);
-          }).catch(function () {
+          apiPost({ action: "parentData", k: myKey(), ptoken: ptoken }).then(function (res) {
             busy = false;
-            toast("通信に失敗しました。電波の良いところでもう一度お試しください");
-            render();
-          });
-        }
-
-        var offerDraft = null;
-        function sendOffer(force) {
-          if (!offerDraft || busy) return;
-          busy = true; render();
-          var body = { action: "admin", token: admToken(), op: "offer", force: !!force };
-          ["studentId", "date", "start", "min", "repeat", "subject"].forEach(function (k2) { body[k2] = offerDraft[k2]; });
-          apiPost(body).then(function (res) {
-            busy = false;
-            if (res.error) {
-              if (res.needForce) {
-                offerDraft.msg = res.error;
-                pending = { kind: "ngconfirm" };
-                render();
-                return;
-              }
-              toast(res.error);
-              if (res.badAuth) {
-                try { localStorage.removeItem("sw_admt"); } catch (e) {}
-                A = null; authM = "account"; ssSet("sw_mode", "auth");
-              }
-              pending = null; render();
-              return;
-            }
-            pending = null; offerDraft = null;
-            if (res.admin) A = res.admin;
-            render();
-            toast("案内を送りました");
+            if (res.error) { ssDel("sw_pt"); parentStep = "pass"; toast(res.error); render(); return; }
+            P = res.data; parentStep = "data"; render(); window.scrollTo(0, 0);
           }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
         }
 
-        function adminAction(op, extra, okMsg) {
-          if (busy) return;
-          busy = true; render();
-          var body = { action: "admin", token: admToken(), op: op };
-          Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
-          apiPost(body).then(function (res) {
-            busy = false; pending = null;
-            if (res.error) {
-              toast(res.error);
-              if (res.badAuth) {
-                try { localStorage.removeItem("sw_admt"); } catch (e) {}
-                A = null; authM = "account"; ssSet("sw_mode", "auth");
-              }
-              render();
-              return;
-            }
-            if (res.token) lsSet("sw_admt", res.token);
-            if (res.admin) A = res.admin;
-            render();
-            if (okMsg) toast(okMsg);
-          }).catch(function () {
-            busy = false;
-            toast("通信に失敗しました。もう一度お試しください");
-            render();
-          });
-        }
-
-        // 先生モードへ入る(?teacher=1 からの自動遷移と、セッションに先生モードが残っていた場合の復帰に共用)
-        function enterTeacher() {
-              previewK = null;
-              ssSet("sw_mode", "auth"); authM = null; render();
-              apiGet({ action: "authmode", t: Date.now() }).then(function (res) {
-                authM = res.mode === "account" ? "account" : "pin";
-                if (authM === "account" && admToken()) {
-                  // 保存済みトークンで自動ログインを試す
-                  busy = true; render();
-                  apiPost({ action: "admin", token: admToken(), op: "state" }).then(function (r2) {
-                    busy = false;
-                    if (r2.ok) { afterAuth(r2); return; }
-                    try { localStorage.removeItem("sw_admt"); } catch (e) {}
-                    render();
-                  }).catch(function () { busy = false; render(); });
-                } else {
-                  render();
-                }
-              }).catch(function () { authM = "account"; render(); });
-        }
-
-        /* ---------- イベント ---------- */
+        /* ---------- 操作 ---------- */
         app.addEventListener("click", function (ev) {
           var btn = ev.target.closest("[data-action]");
           if (!btn || btn.disabled) return;
-          var act = btn.getAttribute("data-action");
-          var id = btn.getAttribute("data-id");
-
+          var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
           switch (act) {
-            case "teacher": enterTeacher(); break;
-            case "exitteacher":
-              ssSet("sw_mode", "student"); pending = null;
-              selDate = null; selManual = false;
-              busy = true; render();
-              loadState().catch(function () { toast("通信に失敗しました"); })
-                .then(function () { busy = false; render(); });
-              break;
-            case "dosetup":
-              var spin = (document.getElementById("a-pin") || {}).value || "";
-              var sem = ((document.getElementById("a-email") || {}).value || "").trim();
-              var sp1 = (document.getElementById("a-pass") || {}).value || "";
-              var sp2 = (document.getElementById("a-pass2") || {}).value || "";
-              if (sp1.length < 8) { toast("パスワードは8文字以上にしてください"); return; }
-              if (sp1 !== sp2) { toast("パスワードが一致しません"); return; }
-              busy = true; render();
-              apiPost({ action: "admin", op: "setupAccount", pin: spin, email: sem, password: sp1 }).then(function (res) {
-                busy = false;
-                if (res.error) { toast(res.error); render(); return; }
-                afterAuth(res);
-                toast("アカウントを作成しました");
-              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
-              break;
-            case "dologin":
-              var lem = ((document.getElementById("a-email") || {}).value || "").trim();
-              var lpw = (document.getElementById("a-pass") || {}).value || "";
-              busy = true; render();
-              apiPost({ action: "admin", op: "login", email: lem, password: lpw }).then(function (res) {
-                busy = false;
-                if (res.error) { toast(res.error); render(); return; }
-                afterAuth(res);
-              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
-              break;
-            case "closebar":
-              pending = null; render(); break;
-            case "calprev":
-              calM--; if (calM < 0) { calM = 11; calY--; }
-              pending = null; render(); break;
-            case "calnext":
-              calM++; if (calM > 11) { calM = 0; calY++; }
-              pending = null; render(); break;
+            case "closebar": pending = null; render(); break;
+            case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
+            case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
             case "calday":
-              if (ngMode) {
-                var nd = btn.getAttribute("data-date");
-                ngSel[nd] = !ngSel[nd];
-                render(); break;
-              }
-              selDate = btn.getAttribute("data-date");
-              selManual = true; pending = null; render(); break;
+              if (ngMode) { var nd = btn.getAttribute("data-date"); ngSel[nd] = !ngSel[nd]; render(); break; }
+              selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
+            case "panel":
+              var p = btn.getAttribute("data-p"); panel = panel === p ? "" : p; render();
+              if (panel) { var pe = document.querySelector(".panel"); if (pe) pe.scrollIntoView({ behavior: "smooth", block: "center" }); }
+              break;
+            case "askaccept": pending = { kind: "accept", slotId: id }; render(); break;
+            case "doaccept": studentAction({ action: "accept", slotId: pending.slotId, k: myKey() }, "授業が確定しました ✓"); break;
+            case "askdecline": pending = { kind: "decline", slotId: id }; render(); break;
+            case "dodecline": studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "先生に伝えました"); break;
+            case "askcancel": pending = { kind: "cancel", slotId: id }; render(); break;
+            case "docancel":
+              var reason = val("f-creason");
+              studentAction({ action: "cancelReq", slotId: pending.slotId, k: myKey(), reason: reason }, "先生に取消を依頼しました"); break;
+            case "askwithdraw": pending = { kind: "withdraw", slotId: id }; render(); break;
+            case "dowithdraw": studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました"); break;
+            case "wkind": wishKind = btn.getAttribute("data-k"); render(); break;
+            case "addwish":
+              var wd = val("f-wdate"), ws = val("f-wstart"), wn = val("f-wnote");
+              if (!wd) { toast("日付をえらんでください"); return; }
+              if (!ws) { toast("開始時刻を入れてください"); return; }
+              if (wishKind === "want") studentAction({ action: "wish", kind: "want", k: myKey(), date: wd, start: ws, min: +(val("f-wmin") || 90), note: wn }, "希望を先生に送りました");
+              else { var we = val("f-wend"); if (!we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; } studentAction({ action: "wish", kind: "ok", k: myKey(), date: wd, start: ws, end: we, note: wn }, "授業できる時間帯を先生に送りました"); }
+              break;
+            case "delwish": studentAction({ action: "unwish", k: myKey(), wishId: id }, "希望を取り消しました"); break;
+            case "addevent":
+              var ed = val("f-edate"), ed2 = val("f-edate2"), et = val("f-etitle"), eb = !!(document.getElementById("f-eblock") || {}).checked;
+              if (!ed) { toast("日付をえらんでください"); return; }
+              if (!et) { toast("予定の内容を入れてください"); return; }
+              studentAction({ action: "eventAdd", k: myKey(), date: ed, dateTo: ed2 || ed, title: et, alsoBlock: eb }, "先生に共有しました"); break;
+            case "delevent": studentAction({ action: "eventDel", k: myKey(), eventId: id }, "予定を取り消しました"); break;
             case "ngmode":
               ngMode = true; ngSel = {}; pending = null; render();
               var calEl = document.querySelector(".cal"); if (calEl) calEl.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
-            case "ngcancel":
-              ngMode = false; ngSel = {}; render(); break;
+            case "ngcancel": ngMode = false; ngSel = {}; render(); break;
             case "ngapply":
-              var ngBy = {};
-              (S.blocked || []).forEach(function (b) { (ngBy[b.date] = ngBy[b.date] || []).push(b.id); });
+              var ngBy = {}; (S.blocked || []).forEach(function (b) { (ngBy[b.date] = ngBy[b.date] || []).push(b.id); });
               var sel = Object.keys(ngSel).filter(function (d) { return ngSel[d]; });
-              var addD = sel.filter(function (d) { return !ngBy[d]; });
-              var remIds = [];
+              var addD = sel.filter(function (d) { return !ngBy[d]; }), remIds = [];
               sel.forEach(function (d) { if (ngBy[d]) remIds = remIds.concat(ngBy[d]); });
               if (!addD.length && !remIds.length) { toast("日付をえらんでください"); return; }
-              var ngNote = ((document.getElementById("f-ngnote") || {}).value || "").trim();
+              var ngNote = val("f-ngnote");
               ngMode = false; ngSel = {};
-              studentAction({ action: "blockSet", k: myKey(), add: addD, removeIds: remIds, note: ngNote }, "登録しました");
-              break;
-
-            case "askaccept":
-              pending = { kind: "accept", slotId: id }; render(); break;
-            case "doaccept":
-              studentAction({ action: "accept", slotId: pending.slotId, k: myKey() }, "授業が確定しました ✓");
-              break;
-            case "askdecline":
-              pending = { kind: "decline", slotId: id }; render(); break;
-            case "dodecline":
-              studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "先生に伝えました");
-              break;
-            case "askcancel":
-              pending = { kind: "cancel", slotId: id }; render(); break;
-            case "docancel":
-              studentAction({ action: "cancelReq", slotId: pending.slotId, k: myKey(), reason: ((document.getElementById("f-creason") || {}).value || "").trim() }, "先生に取消を依頼しました");
-              break;
-            case "askwithdraw":
-              pending = { kind: "withdraw", slotId: id }; render(); break;
-            case "dowithdraw":
-              studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました");
-              break;
-
-            case "offerslot":
-              var stid = (document.getElementById("f-student") || {}).value;
-              var date = (document.getElementById("f-date") || {}).value;
-              var start = (document.getElementById("f-start") || {}).value;
-              var min = +((document.getElementById("f-min") || {}).value || 60);
-              var rep = +((document.getElementById("f-rep") || {}).value || 1);
-              if (!stid) { toast("生徒をえらんでください"); return; }
-              if (!date || !start) { toast("日付と時間を入れてください"); return; }
-              var subj = (document.getElementById("f-subject") || {}).value || "";
-              offerDraft = { studentId: stid, date: date, start: start, min: min, repeat: rep, subject: subj };
-              sendOffer(false);
-              break;
-            case "doforce":
-              sendOffer(true); break;
-            case "taddblock":
-              var bs = (document.getElementById("b-student") || {}).value;
-              var bd2 = (document.getElementById("b-date") || {}).value;
-              var bd2to = (document.getElementById("b-date2") || {}).value;
-              var bn2 = ((document.getElementById("b-note") || {}).value || "").trim();
-              if (!bs) { toast("生徒をえらんでください"); return; }
-              if (!bd2) { toast("日付をえらんでください"); return; }
-              adminAction("addBlock", { studentId: bs, date: bd2, dateTo: bd2to || bd2, note: bn2 }, "登録しました");
-              break;
-            case "tdelblock":
-              var tids = btn.getAttribute("data-ids");
-              adminAction("delBlock", tids ? { blockIds: tids.split(",") } : { blockId: id }, "削除しました");
-              break;
-            case "wkind":
-              wishKind = btn.getAttribute("data-k"); render(); break;
-            case "addwish":
-              var wd = (document.getElementById("f-wdate") || {}).value;
-              var ws = (document.getElementById("f-wstart") || {}).value;
-              var wn = ((document.getElementById("f-wnote") || {}).value || "").trim();
-              if (!wd) { toast("日付をえらんでください"); return; }
-              if (!ws) { toast("開始時刻を入れてください"); return; }
-              if (wishKind === "want") {
-                var wm = +((document.getElementById("f-wmin") || {}).value || 90);
-                studentAction({ action: "wish", kind: "want", k: myKey(), date: wd, start: ws, min: wm, note: wn }, "希望を先生に送りました");
-              } else {
-                var we = (document.getElementById("f-wend") || {}).value;
-                if (!we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
-                studentAction({ action: "wish", kind: "ok", k: myKey(), date: wd, start: ws, end: we, note: wn }, "授業できる時間帯を先生に送りました");
-              }
-              break;
-            case "delwish":
-              studentAction({ action: "unwish", k: myKey(), wishId: id }, "希望を取り消しました");
-              break;
+              studentAction({ action: "blockSet", k: myKey(), add: addD, removeIds: remIds, note: ngNote }, "登録しました"); break;
             case "addblock":
-              var bd = (document.getElementById("f-bdate") || {}).value;
-              var bdto = (document.getElementById("f-bdate2") || {}).value;
-              var bn = ((document.getElementById("f-bnote") || {}).value || "").trim();
+              var bd = val("f-bdate"), bdto = val("f-bdate2"), bn = val("f-bnote");
               if (!bd) { toast("日付をえらんでください"); return; }
-              studentAction({ action: "block", k: myKey(), date: bd, dateTo: bdto || bd, note: bn }, "登録しました");
-              break;
-            case "addevent":
-              var ed = (document.getElementById("f-edate") || {}).value, ed2 = (document.getElementById("f-edate2") || {}).value;
-              var et = ((document.getElementById("f-etitle") || {}).value || "").trim();
-              var eb = !!(document.getElementById("f-eblock") || {}).checked;
-              if (!ed) { toast("日付をえらんでください"); return; }
-              if (!et) { toast("予定の内容を入れてください"); return; }
-              studentAction({ action: "eventAdd", k: myKey(), date: ed, dateTo: ed2 || ed, title: et, alsoBlock: eb }, "先生に共有しました");
-              break;
-            case "delevent":
-              studentAction({ action: "eventDel", k: myKey(), eventId: id }, "予定を取り消しました");
-              break;
+              studentAction({ action: "block", k: myKey(), date: bd, dateTo: bdto || bd, note: bn }, "登録しました"); break;
             case "delblock":
               var sids = btn.getAttribute("data-ids");
-              studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "取り消しました");
+              studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "解除しました"); break;
+            case "parentopen":
+              var saved = ssGet("sw_pt");
+              if (saved) loadParent(saved); else { parentStep = "pass"; render(); var pp = document.getElementById("f-ppass"); if (pp) pp.focus(); }
               break;
-            case "delslot":
-              pending = { kind: "tdel", slotId: id }; render(); break;
-            case "dotdel":
-              adminAction("deleteSlot", { slotId: pending.slotId }, "枠を削除しました");
-              break;
-            case "unbook":
-              pending = { kind: "tcancel", slotId: id }; render(); break;
-            case "dotcancel":
-              adminAction("unbook", { slotId: pending.slotId }, "予約を解除しました");
-              break;
-            case "toggledone":
-              adminAction("toggleDone", { slotId: id });
-              break;
-            case "copybill":
-              var mk2 = btn.getAttribute("data-month");
-              var sid3 = id;
-              var stu = null;
-              A.students.forEach(function (x) { if (sameId(x.id, sid3)) stu = x; });
-              if (!stu) { toast("生徒が見つかりません"); return; }
-              var lessons = A.slots.filter(function (x) {
-                return sameId(x.studentId, sid3) && x.status === "booked" && x.done && x.date.slice(0, 7) === mk2;
-              }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-              if (lessons.length === 0) { toast("実施済みの授業がありません"); return; }
-              var totalMin = 0;
-              var lines2 = ["【" + (+mk2.slice(5, 7)) + "月分 授業料のご案内】" + stu.name + "さん", ""];
-              lessons.forEach(function (x) {
-                totalMin += Number(x.min) || 0;
-                lines2.push("・" + fmtDateW(x.date) + " " + x.start + "〜" + endTime(x.start, x.min) + "(" + x.min + "分" + (x.subject ? "・" + x.subject : "") + ")");
-              });
-              lines2.push("");
-              if (stu.monthly > 0) {
-                lines2.push("月謝: " + stu.monthly.toLocaleString() + "円(実施 " + lessons.length + "回)");
-              } else {
-                lines2.push("合計: " + lessons.length + "回・" + totalMin + "分 = " + Math.round(totalMin / 30 * (stu.rate30 || 0)).toLocaleString() + "円");
-              }
-              copyText(lines2.join("\n"), "請求文面をコピーしました。LINEに貼り付けできます");
-              break;
-            case "viewstudent":
-              var st6 = null;
-              A.students.forEach(function (x) { if (sameId(x.id, id)) st6 = x; });
-              if (!st6 || !st6.code) { toast("リンクがまだ発行されていません"); return; }
-              previewK = st6.code;
-              ssSet("sw_mode", "student");
-              pending = null; selDate = null; selManual = false;
+            case "parentcancel": parentStep = ""; render(); break;
+            case "parentlogin":
+              var ppass = (document.getElementById("f-ppass") || {}).value || "";
+              if (!ppass) { toast("パスワードを入れてください"); return; }
               busy = true; render();
-              loadState().catch(function () { toast("通信に失敗しました"); })
-                .then(function () { busy = false; render(); });
-              break;
-            case "exitpreview":
-              previewK = null;
-              ssSet("sw_mode", "teacher");
-              pending = null; selDate = null; selManual = false;
-              busy = true; render();
-              apiPost({ action: "admin", token: admToken(), op: "state" }).then(function (res) {
+              apiPost({ action: "parentLogin", k: myKey(), pass: ppass }).then(function (res) {
                 busy = false;
-                if (res.ok) { A = res.admin; render(); return; }
-                A = null; authM = "account"; ssSet("sw_mode", "auth"); render();
+                if (res.error) { toast(res.error); render(); return; }
+                ssSet("sw_pt", res.ptoken); loadParent(res.ptoken);
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
-            case "changepass":
-              var cpw = (document.getElementById("f-curpass") || {}).value || "";
-              var npw = (document.getElementById("f-newpass") || {}).value || "";
-              if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
-              adminAction("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました");
-              break;
-            case "logout":
-              apiPost({ action: "admin", token: admToken(), op: "logout" }).catch(function () {});
-              try { localStorage.removeItem("sw_admt"); } catch (e) {}
-              A = null; authM = "account";
-              ssSet("sw_mode", "student");
-              pending = null; selDate = null; selManual = false;
-              busy = true; render();
-              loadState().catch(function () {}).then(function () { busy = false; render(); });
-              toast("ログアウトしました");
-              break;
-            case "copyweek":
-              var t0 = A.today;
-              var p0 = t0.split("-");
-              var lim = new Date(+p0[0], +p0[1] - 1, +p0[2] + 7);
-              var limS = lim.getFullYear() + "-" + pad(lim.getMonth() + 1) + "-" + pad(lim.getDate());
-              var wk = A.slots.filter(function (x) {
-                return x.date >= t0 && x.date < limS && x.status === "booked";
-              }).sort(function (a, b) {
-                return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
-              });
-              if (wk.length === 0) { toast("今後7日の予約はありません"); return; }
-              var ls = ["【今週の授業予定】"];
-              wk.forEach(function (x) {
-                ls.push(fmtDateW(x.date) + " " + x.start + "〜" + endTime(x.start, x.min) + " " + x.studentName + "さん");
-              });
-              copyText(ls.join("\n"), "コピーしました。LINEに貼り付けできます");
-              break;
+            case "parentclose": parentStep = ""; P = null; render(); window.scrollTo(0, 0); break;
+            case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
           }
         });
-
-
-        // 案内フォームで生徒を選ぶと、その生徒の前回の科目を自動セット
-        app.addEventListener("change", function (ev) {
-          if (!ev.target || ev.target.id !== "f-student") return;
-          var sel = document.getElementById("f-subject");
-          if (!sel || !A) return;
-          var sid5 = ev.target.value;
-          var latest = "", latestDate = "";
-          (A.slots || []).forEach(function (s) {
-            if (sameId(s.studentId, sid5) && s.subject && s.date >= latestDate) {
-              latestDate = s.date; latest = s.subject;
-            }
-          });
-          sel.value = latest || "";
-        });
-
-        function copyText(text, okMsg) {
-          function fallback() {
-            var ta = document.createElement("textarea");
-            ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-            document.body.appendChild(ta); ta.select();
-            var ok = false;
-            try { ok = document.execCommand("copy"); } catch (e) {}
-            document.body.removeChild(ta);
-            toast(ok ? okMsg : "コピーできませんでした");
-          }
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
-          } else fallback();
-        }
 
         /* ---------- 起動 ---------- */
         try {
           var qs = new URLSearchParams(location.search);
-          var qk = qs.get("k");
-          var qp = qs.get("preview"); // 管理画面から「生徒画面を見る」(先生ログイン時のみ・本人キーは保存しない)
-          if (qs.get("teacher")) history.replaceState(null, "", location.pathname); // 旧リンク互換(先生機能は管理画面へ移動済み)
-          if (qk) {
-            lsSet("sw_k", qk);
-            history.replaceState(null, "", location.pathname);
-          } else if (qp) {
-            if (lsGet("sw_admt")) { previewK = qp; ssSet("sw_mode", "student"); }
-            history.replaceState(null, "", location.pathname);
-          }
+          var qk = qs.get("k"), qp = qs.get("preview");
+          if (qk) { lsSet("sw_k", qk); history.replaceState(null, "", location.pathname); }
+          else if (qp) { if (lsGet("sw_admt")) previewK = qp; history.replaceState(null, "", location.pathname); }
+          else if (qs.toString()) history.replaceState(null, "", location.pathname);
         } catch (e) {}
-        if (API.indexOf("http") !== 0) {
-          app.innerHTML = '<div class="loading">予約システムは準備中です。<br>もうしばらくお待ちください。</div>';
-        } else {
-          loadState().then(function () {
-            // 先生機能は管理画面(/kanri/)に移動。このページは生徒専用
-          }).catch(function (e) {
-            app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
-          });
-        }
+        loadState().catch(function () {
+          app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
+        });
       })();
     </script>
   </body>
