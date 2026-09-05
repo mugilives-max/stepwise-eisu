@@ -379,7 +379,7 @@
               html += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + have + (goal ? '<span class="muted">/' + goal + '</span>' : "") + '回</span><span class="small muted">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>';
             });
             var stTag = S.planStatus === "approved" ? '<span class="tag green">保護者承認済み</span>' : S.planStatus === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : "";
-            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。「先生に伝える」から希望日を送れます。</div>' : "") + '</div>';
+            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。「予定管理」から希望日を送れます。</div>' : "") + '</div>';
           })();
 
           // 予定表(最上部)
@@ -444,17 +444,17 @@
             html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
             html += cancelControl(next) + '</div></div>';
           } else {
-            html += '<div class="empty">次の授業はまだ決まっていません。' + (offers.length ? '下の「先生からの案内」を確認してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
+            html += '<div class="empty">次の授業はまだ決まっていません。' + (offers.length ? '下の「授業登録」から確定してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
           }
 
           // 先生からの案内
           if (offers.length) {
-            html += '<h2>先生からの案内 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
+            html += '<h2>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
             offers.forEach(function (s) {
               html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
-              html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">承認する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">この日時は難しい</button></div>';
+              html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
             });
-            html += '</div><div class="note">承認すると授業が確定し、カレンダー登録とMeetリンクの発行が行われます。</div>';
+            html += '</div><div class="note">「確定」を押すと授業が決まり、カレンダー登録とMeetリンクの発行が行われます。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>';
           }
 
           // 今後の予定
@@ -475,7 +475,7 @@
           html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。直前の変更はLINEで直接連絡してください。</div>';
 
           // 先生に伝える(操作コーナー)
-          html += '<h2>先生に伝える</h2><div class="actions">';
+          html += '<h2>予定管理</h2><div class="actions">';
           html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業の希望</button>';
           html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
           html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
@@ -518,11 +518,11 @@
               var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
               html += '<div class="confirmbar"><div class="inner">';
               if (pending.kind === "accept") {
-                html += '<div class="msg">' + when + " の授業を承認して確定しますか?</div>";
-                html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "承認して確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+                html += '<div class="msg">' + when + " の授業を確定しますか?</div>";
+                html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "decline") {
-                html += '<div class="msg">' + when + " の案内を「この日時は難しい」と先生に伝えますか?<br><span class='small muted'>先生が別の日時を案内します。</span></div>";
-                html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "難しいと伝える") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+                html += '<div class="msg">' + when + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
+                html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
               } else if (pending.kind === "cancel") {
                 html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span class='small muted'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
                 html += '<input type="text" id="f-creason" maxlength="200" placeholder="理由(任意。例: 学校行事のため)" style="width:100%;margin:6px 0 8px">';
@@ -783,9 +783,9 @@
               }
               break;
             case "askaccept": pending = { kind: "accept", slotId: id }; render(); break;
-            case "doaccept": studentAction({ action: "accept", slotId: pending.slotId, k: myKey() }, "授業が確定しました ✓"); break;
+            case "doaccept": studentAction({ action: "accept", slotId: pending.slotId, k: myKey() }, "授業を確定しました ✓"); break;
             case "askdecline": pending = { kind: "decline", slotId: id }; render(); break;
-            case "dodecline": studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "先生に伝えました"); break;
+            case "dodecline": studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "再調整をお願いしました"); break;
             case "askcancel": pending = { kind: "cancel", slotId: id }; render(); break;
             case "docancel":
               var reason = val("f-creason");
