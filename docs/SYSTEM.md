@@ -75,7 +75,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 - 呼び出しは `POST /exec` に JSON。`action` で分岐。生徒側は `k`(専用リンクのコード)で本人確認、先生側は `action:"admin"` + `token`(ログイン時に発行)+ `op`。
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades / parentLogin / parentData / parentPlanDecide
-- 先生側 op: state / offer / deleteSlot / unbook / toggleDone / addStudent / setEmail / setFee / newCode / addBlock / delBlock / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
+- 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
 - 主なルール: 確定授業の取消は生徒からの「依頼」で先生が承認(締切は授業の24時間前 `CANCEL_DEADLINE_H`)。月の授業回数は保護者(または先生が記録した承諾)の承認がないと請求できない前提。
 - エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`。
 
@@ -105,3 +105,4 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - 2026-09-04 管理画面 `/kanri/` 追加、生徒管理を管理画面へ移行、高速化
 - 2026-09-05 生徒ページをマイページ化(タブ、保護者ページ、希望日程・共有予定・授業できない日、月の授業回数と保護者承認、宿題・テスト予定)、パスワード再設定をメールコード方式に
 - 2026-09-05 模試(北辰テスト)の記録を追加(台帳「模試」シート、管理画面・生徒ページで表示)
+- 2026-09-06 返事がないまま日付が過ぎた案内を管理画面ホーム/授業/カルテで警告し、「実施済みにする」「未実施」を選べるように(GAS v40)
