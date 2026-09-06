@@ -1155,6 +1155,7 @@ function admin_(req) {
     case 'deleteSlot':  return kanriWrap_(req, adminDeleteSlot_(req), req.studentId);
     case 'unbook':      return kanriWrap_(req, adminUnbook_(req), req.studentId);
     case 'toggleDone':  return kanriWrap_(req, adminToggleDone_(req), req.studentId);
+    case 'finishOffered': return kanriWrap_(req, adminFinishOffered_(req), req.studentId);
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
@@ -1323,6 +1324,19 @@ function adminToggleDone_(req) {
   if (!r) return { error: '枠が見つかりません' };
   r.slot.done = !(String(r.slot.done) === 'true' || r.slot.done === true);
   writeSlotRow_(r);
+  return { ok: true, admin: adminState_() };
+}
+
+// 返事がないまま日付が過ぎた案内を「確定・実施済み」として記録する(生徒の承認なし。メール・カレンダー登録はしない)
+function adminFinishOffered_(req) {
+  var r = findSlotRow_(req.slotId);
+  if (!r) return { error: '枠が見つかりません' };
+  if (r.slot.status !== 'offered') return { error: 'この枠は承認待ちではありません。画面を更新してください', refresh: true };
+  if (hoursUntil_(r.slot.date, r.slot.start) > 0) return { error: 'まだ開始前の案内です。過ぎてから記録してください' };
+  r.slot.status = 'booked';
+  r.slot.done = true;
+  writeSlotRow_(r);
+  addLog_('先生が' + studentName_(r.slot.studentId) + 'さんの ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内(返事なし)を実施済みとして記録');
   return { ok: true, admin: adminState_() };
 }
 
@@ -1777,6 +1791,9 @@ function kanriDashboard_() {
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var lessonsWeek = slots.filter(function (s) { return s.date > today && s.date < weekEnd && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var pending = slots.filter(function (s) { return s.date >= today && s.status === 'offered'; }).map(slim).sort(slotSort_);
+  // 返事がないまま日付が過ぎた案内(直近90日)。ホームで「実施済み/未実施」を選んでもらう
+  var expSince = addDays_(today, -90);
+  var expired = slots.filter(function (s) { return s.status === 'offered' && s.date < today && s.date >= expSince; }).map(slim).sort(slotSort_);
   // ホームの全体予定表用: 今後70日の確定・承認待ちと、生徒の授業できない日
   var horizon = addDays_(today, 70);
   var upcomingAll = slots.filter(function (s) { return s.date >= today && s.date < horizon && (s.status === 'booked' || s.status === 'offered'); }).map(slim).sort(slotSort_);
@@ -1805,7 +1822,7 @@ function kanriDashboard_() {
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
-  return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending,
+  return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
     slots: upcomingAll, blocked: blockedUp, allEvents: eventsForAdmin_(0) };

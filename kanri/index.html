@@ -409,6 +409,8 @@
             html += '<div class="note">承認するとカレンダーから削除され、生徒にメールで伝わります(メール登録時)。「予定どおり行う」は依頼を取り下げて生徒に伝えます。いずれもLINEでのひと言があると丁寧です。</div></div>';
           }
 
+          html += expiredCard(d.expired || [], true);
+
           var evs = d.events || [];
           if (evs.length) {
             html += '<h2 style="margin-top:16px">生徒・保護者からの共有予定 <span class="cnt">3週間以内 ' + evs.length + '件</span></h2><div class="card">' + evs.slice(0, 8).map(function (e) { return '<div class="line"><span class="t">' + evRange(e) + '</span><span class="w"><a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> ' + esc(e.title) + '</span></div>'; }).join("") + '</div>';
@@ -756,6 +758,7 @@
           // 今後の予定(確定・承認待ち)と案内
           var tdy = s.today || today();
           var upcoming = (s.lessons || []).filter(function (l) { return l.date >= tdy && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
+          html += expiredCard((s.lessons || []).filter(function (l) { return l.status === "offered" && l.date < tdy; }).map(function (l) { return Object.assign({ studentId: s.id, studentName: s.name }, l); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }), false);
           html += '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2><div class="card">';
           if (upcoming.length) {
             upcoming.forEach(function (l) {
@@ -894,6 +897,22 @@
           return h;
         }
 
+        // 返事がないまま日付が過ぎた案内の行。実施済みにするか、未実施(取り下げ)にするかを選ぶ
+        function expiredRow(s, withName) {
+          var h = '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span><span class="w">';
+          if (withName) h += '<a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + '</a> ';
+          h += (s.subject ? esc(s.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + s.min + '分</span> <span class="tag amber">返事なし</span></span>';
+          h += '<button class="btn-primary btn-sm" data-action="finishoffered" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>実施済みにする</button>';
+          h += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '" data-mode="noshow"' + (busy ? ' disabled' : '') + '>未実施</button></div>';
+          return h;
+        }
+        function expiredCard(list, withName) {
+          if (!list.length) return "";
+          var h = '<h2 style="margin-top:16px">日付が過ぎた案内 <span class="cnt">' + list.length + '件・実施したか選んでください</span></h2><div class="card" style="border-color:var(--amber)">';
+          list.forEach(function (s) { h += expiredRow(s, withName); });
+          h += '<div class="note">生徒から返事がないまま日付が過ぎた案内です。実際に授業をした場合は「実施済みにする」(確定・実施済みになり、授業料と月の回数に数えます)。しなかった場合は「未実施」で取り下げます。</div></div>';
+          return h;
+        }
         function lessonRow(s, withDate) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(s.subject) + "</span>" : "");
@@ -941,6 +960,7 @@
           var offered = upcoming.filter(function (s) { return s.status === "offered"; });
           html += '<h2>承認待ちの案内 <span class="cnt">' + offered.length + '件</span></h2>';
           html += offered.length ? '<div class="card">' + offered.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">返事待ちの案内はありません</div>';
+          html += expiredCard(past.filter(function (s) { return s.status === "offered"; }).slice().reverse(), true);
 
           // 予定表
           html += '<h2>予定表</h2>';
@@ -1307,8 +1327,20 @@
               else actA("delWish", { wishId: btn.getAttribute("data-id") }, "削除しました");
               break;
             case "delslot":
-              if (!confirm("この案内を取り下げますか?")) return;
-              (route().page === "student" ? act : actA)("deleteSlot", { slotId: btn.getAttribute("data-id"), studentId: sid }, "取り下げました"); break;
+              var noshow = btn.getAttribute("data-mode") === "noshow", dsid = sid || btn.getAttribute("data-sid") || "";
+              if (!confirm(noshow ? "この案内を「未実施」として取り下げますか?(記録には残りません)" : "この案内を取り下げますか?")) return;
+              (route().page === "lessons" ? actA : act)("deleteSlot", { slotId: btn.getAttribute("data-id"), studentId: dsid }, noshow ? "未実施として取り下げました" : "取り下げました", function () {
+                var did = btn.getAttribute("data-id");
+                if (D && D.expired) D.expired = D.expired.filter(function (x) { return String(x.id) !== String(did); });
+                if (cur && cur.lessons) cur.lessons = cur.lessons.filter(function (x) { return String(x.id) !== String(did); });
+              }); break;
+            case "finishoffered":
+              var fsid = sid || btn.getAttribute("data-sid") || "", fid = btn.getAttribute("data-id");
+              if (!confirm("この案内を「確定・実施済み」として記録しますか?\n生徒の承認なしで記録され、授業料と月の回数に数えられます。")) return;
+              (route().page === "lessons" ? actA : act)("finishOffered", { slotId: fid, studentId: fsid }, "実施済みとして記録しました", function () {
+                if (D && D.expired) D.expired = D.expired.filter(function (x) { return String(x.id) !== String(fid); });
+                if (cur && cur.lessons) cur.lessons.forEach(function (x) { if (String(x.id) === String(fid)) { x.status = "booked"; x.done = true; } });
+              }); break;
             case "unbook":
               if (!confirm(btn.getAttribute("data-name") + "さんの " + btn.getAttribute("data-when") + " の授業を解除しますか?\nカレンダーの予定も削除されます。生徒への連絡は別途お願いします。")) return;
               (route().page === "student" ? act : actA)("unbook", { slotId: btn.getAttribute("data-id"), studentId: sid }, "解除しました"); break;
