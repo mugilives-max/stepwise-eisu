@@ -107,6 +107,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 ## 8-2. 関連ドキュメント
 
 - [MCP_DESIGN.md](MCP_DESIGN.md): ChatGPT / Codex から操作するための MCP サーバー設計と段階計画(2026-09-06〜)
+- [MCP_OPERATIONS.md](MCP_OPERATIONS.md): **MCP の運用手順**(置き場所、緊急停止、キー・パスフレーズの変更、再配置、トラブル対応)
 - [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 契約書に追加する条項の下書き(保護者承認・保護者パスワード)
 - MCP サーバー本体: private リポジトリ `stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)。リモート版は Cloudflare Workers `https://stepwise-mcp.stepwise-edu.workers.dev/mcp`(OAuth 2.1、パスフレーズ認証、閲覧のみ)。Cloudflare アカウントは mugilives@gmail.com、Worker 名 `stepwise-mcp`、KV `OAUTH_KV`
 
@@ -119,3 +120,4 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - 2026-09-06 返事がないまま日付が過ぎた案内を管理画面ホーム/授業/カルテで警告し、「実施済みにする」「未実施」を選べるように(GAS v40)
 - 2026-09-06 先生の休み(teacherOff シート)。管理画面から登録、各カレンダーに「休」、案内時に警告、生徒ページにも表示(GAS v41)。同日、ホームの日付タップから登録、時間帯指定(start/end)に対応(GAS v42)
 - 2026-09-06 生徒の「授業できない日」も時間帯指定に対応(blocked に start/end)。生徒ページ右上の「トップページへ」リンクを削除(GAS v43)
+- 2026-09-06〜07 MCP 連携: GAS に読み取り専用の MCP 入口(v44)、MCP サーバー(閲覧7ツール)を Codex(stdio)と Cloudflare Workers(ChatGPT、OAuth)に配置。運用手順は docs/MCP_OPERATIONS.md
