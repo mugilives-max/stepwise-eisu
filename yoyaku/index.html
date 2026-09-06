@@ -224,6 +224,7 @@
         function fmtDate(ds) { var p = ds.split("-"); return (+p[1]) + "/" + (+p[2]); }
         function fmtDateW(ds) { return fmtDate(ds) + "(" + WD[wdOf(ds)] + ")"; }
         function fmtDY(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return p[0] + "/" + (+p[1]) + "/" + (+p[2]); }
+        function cT(t) { return String(t || "").replace(/^0/, "").replace(/:00$/, ""); } // 13:00→13, 09:30→9:30
         function endTime(start, min) { var p = start.split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
         function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
@@ -317,6 +318,7 @@
             if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
             marks += "</span>";
             if (it && it.toff && !past) marks += '<span class="callbl to">先生休み</span>';
+            if (it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">先生休み' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -454,19 +456,20 @@
             it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, kind: s.kind });
           });
           blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; });
-          (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.toff = 1; });
+          (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "希望する日をタップ(複数可)。時間は画面下で", event: "予定の日をタップ(複数可)。内容は画面下で" };
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : "") + '</h2>';
           html += renderCal(info, today);
           if (!selMode) {
             var ds2 = (byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
             var dayNg = blocked.filter(function (b) { return b.date === selDate; });
-            var dayToff = (S.teacherOff || []).some(function (o) { return o.date === selDate; });
+            var dayOffs = (S.teacherOff || []).filter(function (o) { return o.date === selDate; });
+            var dayToff = dayOffs.some(function (o) { return !o.start; });
             html += '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
-            if (!ds2.length && !dayNg.length && !dayToff) html += '<div class="empty">この日の予定はありません</div>';
+            if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
             else {
               html += '<div class="chips">';
-              if (dayToff) html += '<span class="chip toff">先生の休み(授業なし)</span>';
+              dayOffs.forEach(function (o) { html += '<span class="chip toff">' + (o.start ? '先生の休み ' + o.start + '〜' + o.end : '先生の休み(終日・授業なし)') + '</span>'; });
               ds2.forEach(function (s) {
                 if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
                 var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");

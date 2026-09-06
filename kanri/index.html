@@ -219,6 +219,7 @@
         var A = null; // 予約システムの全データ(slots/students/blocked/log)
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
         var selDate = null, selManual = false, offerDraft = null;
+        var homeOffOpen = null; // ホームで「先生の休みにする」フォームを開いている日付
         function isLessons(r) { return r.page === "lessons" || r.page === "settings"; }
         function viewOf() { var p = route().page; return p === "student" ? "student" : (p === "lessons" || p === "settings") ? "lessons" : "home"; }
         function sameId(a, b) { return String(a) === String(b); }
@@ -233,7 +234,10 @@
           return groups;
         }
         function rangeLabel(g) { return g.start === g.end ? fmtD(g.start) : fmtD(g.start) + "〜" + fmtD(g.end); }
-        function offLine(o) { return '<div class="line"><span class="w"><span class="tag gray">先生の休み</span> <span class="small muted">' + esc(o.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>'; }
+        function cT(t) { return String(t || "").replace(/^0/, "").replace(/:00$/, ""); } // 13:00→13, 09:30→9:30
+        function offWhen(o) { return o.start ? o.start + "〜" + o.end : "終日"; }
+        function offLine(o) { return '<div class="line"><span class="w"><span class="tag gray">先生の休み</span> ' + offWhen(o) + ' <span class="small muted">' + esc(o.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>'; }
+        function offMark(it, o) { if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; }
         function evRange(e) { return e.date === e.dateTo ? fmtD(e.date) : fmtD(e.date) + "〜" + fmtD(e.dateTo); }
         function eventRow(e, showName) {
           return '<div class="line"><span class="t">' + evRange(e) + '</span><span class="w">' + (showName ? '<a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> ' : '') + '<span class="tag coral">共有予定</span> ' + esc(e.title) + '</span>' +
@@ -452,7 +456,7 @@
           var hit = function (dd) { return hinfo[dd] || (hinfo[dd] = { booked: 0, offered: 0, req: 0, ng: 0, wish: 0, ev: 0 }); };
           hs.forEach(function (s) { var it = hit(s.date); if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else it.offered++; });
           (d.blocked || []).forEach(function (b) { hit(b.date).ng++; });
-          (d.teacherOff || []).forEach(function (o) { hit(o.date).toff = 1; });
+          (d.teacherOff || []).forEach(function (o) { offMark(hit(o.date), o); });
           (d.wishes || []).forEach(function (x) { hit(x.date).wish++; });
           (d.allEvents || []).forEach(function (e) { var dd = e.date; for (var ei = 0; ei < 61 && dd <= e.dateTo; ei++) { hit(dd).ev++; dd = addDaysStr(dd, 1); } });
           if (!selDate || selDate < d.today) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
@@ -460,7 +464,12 @@
           html += renderCal(hinfo, d.today);
           var hday = hs.filter(function (s) { return s.date === selDate; });
           var hOff = (d.teacherOff || []).filter(function (o) { return o.date === selDate; });
-          html += '<h2>' + fmtD(selDate) + 'の予定 <span class="cnt">' + hday.length + '件</span>' + (selDate >= d.today ? '<span style="margin-left:auto">' + (hOff.length ? '<button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(hOff.map(function (o) { return o.id; }).join(",")) + '"' + (busy ? ' disabled' : '') + '>先生の休みを解除</button>' : '<button class="btn-ghost btn-sm" data-action="homeoff" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>この日を先生の休みにする</button>') + '</span>' : '') + '</h2>';
+          var hAllDay = hOff.some(function (o) { return !o.start; });
+          html += '<h2>' + fmtD(selDate) + 'の予定 <span class="cnt">' + hday.length + '件</span>' + (selDate >= d.today ? '<span style="margin-left:auto;display:inline-flex;gap:6px">' + (hOff.length ? '<button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(hOff.map(function (o) { return o.id; }).join(",")) + '"' + (busy ? ' disabled' : '') + '>先生の休みを解除</button>' : '') + (hAllDay ? '' : '<button class="btn-ghost btn-sm" data-action="homeoff" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>' + (homeOffOpen === selDate ? 'やめる' : '先生の休みにする') + '</button>') + '</span>' : '') + '</h2>';
+          if (homeOffOpen === selDate && selDate >= d.today) {
+            html += '<div class="card" style="margin-bottom:10px;border-color:var(--amber)"><div class="row"><strong>' + fmtD(selDate) + '</strong><span class="small muted">終日なら時間は空欄のまま</span></div>';
+            html += '<div class="row" style="margin-top:8px"><input type="time" id="ho-start" step="900"><span class="muted">〜</span><input type="time" id="ho-end" step="900"><input type="text" id="ho-note" placeholder="メモ(任意。例: 学会、旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="homeoffsave" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>登録</button></div></div>';
+          }
           html += hday.length ? '<div class="card">' + hday.map(function (s) { return lessonLine(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません</div>';
           var hEv = (d.allEvents || []).filter(function (e) { return e.date <= selDate && selDate <= e.dateTo; });
           var hNg = (d.blocked || []).filter(function (b) { return b.date === selDate; });
@@ -613,7 +622,7 @@
               it.labels.push({ start: l.start, text: l.subject || "授業", st: l.status === "offered" ? "offer" : (l.done ? "done" : "mine") });
             });
             (s.blocked || []).forEach(function (b) { it0(b.date).ng++; });
-            (s.teacherOff || []).forEach(function (o) { it0(o.date).toff = 1; });
+            (s.teacherOff || []).forEach(function (o) { offMark(it0(o.date), o); });
             (s.wishes || []).forEach(function (x) { it0(x.date).wish++; });
             (s.events || []).forEach(function (e) { var dd = e.date; for (var i = 0; i < 61 && dd <= e.dateTo; i++) { var it = it0(dd); it.ev++; it.labels.push({ start: "99:99", text: e.title, st: "event" }); dd = addDaysStr(dd, 1); } });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
@@ -893,6 +902,7 @@
             }
             marks += "</span>";
             if (it && it.toff) marks += '<span class="callbl to">休</span>';
+            if (it && it.toffT) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">休' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
             if (it && it.labels && it.labels.length) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -981,7 +991,7 @@
             if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else if (s.status === "offered") it.offered++;
           });
           (A.blocked || []).forEach(function (b) { var it = info[b.date] || (info[b.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ng++; });
-          (A.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.toff = 1; });
+          (A.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); offMark(it, o); });
           (A.wishes || []).forEach(function (x) { var it = info[x.date] || (info[x.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.wish = (it.wish || 0) + 1; });
           (A.events || []).forEach(function (e) { var d = e.date; for (var ei = 0; ei < 61 && d <= e.dateTo; ei++) { var it = info[d] || (info[d] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ev = (it.ev || 0) + 1; d = addDaysStr(d, 1); } });
           html += renderCal(info, today);
@@ -1007,12 +1017,16 @@
           // 先生の休み
           html += '<h2>先生の休み(先生が授業できない日)</h2><div class="card"><div class="row">';
           html += '<input type="date" id="o-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="o-date2" min="' + today + '">';
-          html += '<input type="text" id="o-note" placeholder="メモ(任意。例: 学会、旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-ghost btn-sm" data-action="taddoff"' + (busy ? " disabled" : "") + '>登録</button></div>';
-          var offGroups = groupBlocked(A.teacherOff || []);
-          if (offGroups.length) {
-            html += '<div style="margin-top:12px">' + offGroups.map(function (g) { return '<div class="line"><span class="t">' + rangeLabel(g) + '</span><span class="w">' + (g.note ? esc(g.note) : '<span class="muted">メモなし</span>') + ' <span class="small muted">' + g.ids.length + '日</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(g.ids.join(",")) + '">削除</button></div>'; }).join("") + '</div>';
-          } else html += '<div class="empty" style="margin-top:8px">登録はありません</div>';
-          html += '<div class="note">1日だけなら左の日付のみでOK。カレンダーに「休」と表示され、その日に案内しようとすると警告が出ます。生徒のページにも「先生の休み」と出ます(メモは生徒には見えません)。</div></div>';
+          html += '<input type="text" id="o-note" placeholder="メモ(任意。例: 学会、旅行)" maxlength="50" style="flex:1;min-width:140px"></div>';
+          html += '<div class="row" style="margin-top:8px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="o-start" step="900"><span class="muted">〜</span><input type="time" id="o-end" step="900"><button class="btn-ghost btn-sm" data-action="taddoff"' + (busy ? " disabled" : "") + '>登録</button></div>';
+          var offAll = (A.teacherOff || []).filter(function (o) { return !o.start; }), offTimed = (A.teacherOff || []).filter(function (o) { return o.start; });
+          var offGroups = groupBlocked(offAll);
+          var offRows = offGroups.map(function (g) { return { key: g.start, html: '<div class="line"><span class="t">' + rangeLabel(g) + '</span><span class="w">終日 ' + (g.note ? esc(g.note) : '<span class="muted">メモなし</span>') + ' <span class="small muted">' + g.ids.length + '日</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(g.ids.join(",")) + '">削除</button></div>' }; })
+            .concat(offTimed.map(function (o) { return { key: o.date + o.start, html: '<div class="line"><span class="t">' + fmtD(o.date) + ' ' + o.start + '〜' + o.end + '</span><span class="w">' + (o.note ? esc(o.note) : '<span class="muted">メモなし</span>') + '</span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>' }; }))
+            .sort(function (a, b) { return a.key < b.key ? -1 : 1; });
+          if (offRows.length) html += '<div style="margin-top:12px">' + offRows.map(function (x) { return x.html; }).join("") + '</div>';
+          else html += '<div class="empty" style="margin-top:8px">登録はありません</div>';
+          html += '<div class="note">1日だけなら左の日付のみでOK。時間帯を入れると、その時間に重なる案内だけ警告になります。カレンダーには「休」(終日)や「休13-17」(時間帯)と表示され、生徒のページにも出ます(メモは生徒には見えません)。</div></div>';
 
           // NG日
           html += '<h2>授業できない日(生徒が登録した日)</h2><div class="card"><div class="row">';
@@ -1376,17 +1390,25 @@
               if (!bd) { toast("日付をえらんでください"); return; }
               actA("addBlock", { studentId: bs, date: bd, dateTo: bd2 || bd, note: val("b-note") }, "登録しました"); break;
             case "homeoff":
-              var hod = btn.getAttribute("data-date");
-              var hnote = prompt(fmtD(hod) + " を先生の休みにします。メモ(任意。例: 学会、旅行)", "");
-              if (hnote === null) return;
-              act("addOff", { date: hod, dateTo: hod, note: hnote.trim() }, "先生の休みを登録しました", function () {
-                if (D) D.teacherOff = (D.teacherOff || []).concat([{ id: "tmp-" + hod, date: hod, note: hnote.trim() }]);
+              homeOffOpen = homeOffOpen === btn.getAttribute("data-date") ? null : btn.getAttribute("data-date"); render();
+              var hoEl = document.getElementById("ho-start"); if (hoEl) hoEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              break;
+            case "homeoffsave":
+              var hod = btn.getAttribute("data-date"), hst = val("ho-start"), hen = val("ho-end"), hnote = val("ho-note");
+              if ((hst && !hen) || (!hst && hen)) { toast("時間帯は開始と終了の両方を入れてください(終日なら両方空欄)"); return; }
+              if (hst && hst >= hen) { toast("終了は開始より後にしてください"); return; }
+              homeOffOpen = null;
+              act("addOff", { date: hod, dateTo: hod, start: hst, end: hen, note: hnote }, "先生の休みを登録しました", function () {
+                if (D) D.teacherOff = (D.teacherOff || []).concat([{ id: "tmp-" + hod + hst, date: hod, start: hst, end: hen, note: hnote }]);
               });
               break;
             case "taddoff":
               var od = val("o-date"), od2 = val("o-date2");
               if (!od) { toast("日付をえらんでください"); return; }
-              actA("addOff", { date: od, dateTo: od2 || od, note: val("o-note") }, "先生の休みを登録しました"); break;
+              var ost = val("o-start"), oen = val("o-end");
+              if ((ost && !oen) || (!ost && oen)) { toast("時間帯は開始と終了の両方を入れてください(終日なら両方空欄)"); return; }
+              if (ost && ost >= oen) { toast("終了は開始より後にしてください"); return; }
+              actA("addOff", { date: od, dateTo: od2 || od, start: ost, end: oen, note: val("o-note") }, "先生の休みを登録しました"); break;
             case "tdeloff":
               if (!confirm("この先生の休みを削除しますか?")) return;
               var oids = (btn.getAttribute("data-ids") || "").split(",").filter(Boolean);

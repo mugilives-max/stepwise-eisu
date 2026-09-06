@@ -400,20 +400,36 @@ function adminResolveCancel_(req) {
 
 /* ================= 希望日程(生徒→先生) ================= */
 
-// 先生の休み(先生が授業できない日)。1行=1日
+// 先生の休み(先生が授業できない日・時間帯)。1行=1日(start/end が空なら終日、入っていればその時間帯だけ)
 function ensureTeacherOffSheet_() {
   var ss = ss_();
-  if (!ss.getSheetByName('teacherOff')) {
-    var sh = ss.insertSheet('teacherOff');
-    sh.appendRow(['id', 'date', 'note']);
+  var sh = ss.getSheetByName('teacherOff');
+  if (!sh) {
+    sh = ss.insertSheet('teacherOff');
+    sh.appendRow(['id', 'date', 'note', 'start', 'end']);
+  } else if (sh.getRange(1, 4).getValue() !== 'start') {
+    sh.getRange(1, 4).setValue('start'); sh.getRange(1, 5).setValue('end');
   }
 }
 // 先生の休み(from 以降)。生徒向けには note を渡さない(withNote=false)
 function teacherOff_(from, withNote) {
   return readRows_('teacherOff').filter(function (x) { return x.date >= from; })
-    .map(function (x) { return withNote ? { id: x.id, date: x.date, note: String(x.note || '') } : { date: x.date }; })
-    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    .map(function (x) {
+      var o = { date: x.date, start: normTime_(x.start || ''), end: normTime_(x.end || '') };
+      if (withNote) { o.id = x.id; o.note = String(x.note || ''); }
+      return o;
+    })
+    .sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
 }
+function toMin_(hm) { var p = String(hm || '0:0').split(':'); return (+p[0]) * 60 + (+p[1] || 0); }
+// 先生の休み o が、date の start から min 分の授業と重なるか(終日なら常に true)
+function offHits_(o, date, start, min) {
+  if (o.date !== date) return false;
+  if (!o.start || !o.end) return true;
+  var s = toMin_(start), e = s + (Number(min) || 60);
+  return toMin_(o.start) < e && s < toMin_(o.end);
+}
+function offLabel_(o) { return fmtDateJa_(o.date) + (o.start && o.end ? ' ' + o.start + '〜' + o.end : '') + (o.note ? '(' + o.note + ')' : ''); }
 
 function ensureWishesSheet_() {
   var ss = ss_();
@@ -1260,7 +1276,7 @@ function adminOffer_(req) {
   // 生徒が「授業できない日」に登録している日への案内は警告(force指定で強行可)
   if (!req.force) {
     var blockedRows = readRows_('blocked');
-    var offRows = readRows_('teacherOff');
+    var offRows = teacherOff_(req.date, true);
     var ngDates = [], offDates = [];
     for (var w0 = 0; w0 < repeat; w0++) {
       var d0 = addDays_(req.date, w0 * 7);
@@ -1268,9 +1284,9 @@ function adminOffer_(req) {
       blockedRows.forEach(function (b) {
         if (String(b.studentId) === String(student.id) && b.date === d0) hit = b;
       });
-      offRows.forEach(function (o) { if (o.date === d0) offHit = o; });
+      offRows.forEach(function (o) { if (offHits_(o, d0, req.start, req.min)) offHit = o; });
       if (hit) ngDates.push(fmtDateJa_(d0) + (hit.note ? '(' + hit.note + ')' : ''));
-      if (offHit) offDates.push(fmtDateJa_(d0) + (offHit.note ? '(' + offHit.note + ')' : ''));
+      if (offHit) offDates.push(offLabel_(offHit));
     }
     if (ngDates.length > 0 || offDates.length > 0) {
       var msgs = [];
@@ -1390,15 +1406,20 @@ function adminAddOff_(req) {
   var r = normRange_(req);
   if (!r) return { error: '日付をえらんでください' };
   var note = String(req.note || '').slice(0, 50);
-  var existing = readRows_('teacherOff').map(function (x) { return x.date; });
+  var start = normTime_(req.start || ''), end = normTime_(req.end || '');
+  if ((start && !end) || (!start && end)) return { error: '時間帯は開始と終了の両方を入れてください(終日なら両方空欄)' };
+  if (start && (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || toMin_(start) >= toMin_(end))) return { error: '時間帯が正しくありません' };
+  var existing = readRows_('teacherOff').map(function (x) { return { date: x.date, start: normTime_(x.start || ''), end: normTime_(x.end || '') }; });
   var sh = sheet_('teacherOff');
   var added = 0, d = r.date;
   for (var i = 0; i < 62 && d <= r.dateTo; i++) {
-    if (existing.indexOf(d) < 0) { sh.appendRow([uid_(), d, note]); added++; }
+    var dd = d;
+    var dup = existing.some(function (x) { return x.date === dd && (!x.start || (x.start === start && x.end === end)); });
+    if (!dup) { sh.appendRow([uid_(), d, note, start, end]); added++; }
     d = addDays_(d, 1);
   }
   if (added === 0) return { error: 'この期間はすでに登録されています' };
-  addLog_('先生が ' + rangeText_(r.date, r.dateTo) + ' を先生の休みに登録' + (note ? '(' + note + ')' : ''));
+  addLog_('先生が ' + rangeText_(r.date, r.dateTo) + (start ? ' ' + start + '〜' + end : '') + ' を先生の休みに登録' + (note ? '(' + note + ')' : ''));
   return { ok: true, admin: adminState_() };
 }
 
@@ -1641,7 +1662,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk10')) return;
+  if (cache.get('schemaOk11')) return;
   ensureTeacherOffSheet_();
   ensureTasksSheet_();
   ensureEventKindCol_();
@@ -1658,7 +1679,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk10', '1', 21600);
+  cache.put('schemaOk11', '1', 21600);
 }
 
 function readRows_(name) {
