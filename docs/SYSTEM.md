@@ -108,7 +108,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 - [MCP_DESIGN.md](MCP_DESIGN.md): ChatGPT / Codex から操作するための MCP サーバー設計と段階計画(2026-09-06〜)
 - [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 契約書に追加する条項の下書き(保護者承認・保護者パスワード)
-- MCP サーバー本体: private リポジトリ `stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)
+- MCP サーバー本体: private リポジトリ `stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)。リモート版は Cloudflare Workers `https://stepwise-mcp.stepwise-edu.workers.dev/mcp`(OAuth 2.1、パスフレーズ認証、閲覧のみ)。Cloudflare アカウントは mugilives@gmail.com、Worker 名 `stepwise-mcp`、KV `OAUTH_KV`
 
 ## 9. 変更履歴(要点)
 
