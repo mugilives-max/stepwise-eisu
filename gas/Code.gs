@@ -1195,6 +1195,7 @@ function admin_(req) {
   if (req.op === 'setupAccount') return adminSetupAccount_(req);
   if (req.op === 'resetRequest') return adminResetRequest_(req);
   if (req.op === 'resetConfirm') return adminResetConfirm_(req);
+  if (req.mcpKey !== undefined) return mcpEntry_(req); // MCP(ChatGPT/Codex)からの呼び出し。先生のログインとは別系統
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
   switch (req.op) {
     case 'state':       return { ok: true, admin: adminState_() };
@@ -1684,7 +1685,8 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk12')) return;
+  if (cache.get('schemaOk13')) return;
+  ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
   ensureTasksSheet_();
   ensureEventKindCol_();
@@ -1701,7 +1703,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk12', '1', 21600);
+  cache.put('schemaOk13', '1', 21600);
 }
 
 function readRows_(name) {
@@ -2118,6 +2120,179 @@ function kanriSelfTest() {
     var s = kanriStudent_(d.students[0].id);
     Logger.log('student ' + s.name + ' lessons=' + s.lessons.length + ' grades=' + s.grades.length + ' fee=' + s.thisMonth.fee);
   }
+}
+
+/* ================= MCP(ChatGPT / Codex)用の入口 ================= */
+// 設計: docs/MCP_DESIGN.md。MCP サーバーは mcpKey(Script Properties の MCP_KEY)を付けて admin action を呼ぶ。
+// 先生のログイントークンとは独立。実行できる op はホワイトリストのみ。すべて mcpLog シートに記録する。
+var MCP_READ_OPS = ['mcpPing', 'mcpStudents', 'mcpSchedule', 'mcpStudent', 'mcpPending', 'mcpBilling', 'mcpTeacherOff', 'mcpWishes'];
+var MCP_WRITE_OPS = []; // 段階4で追加(offer / addOff / delOff / resolveCancel / finishOffered / setDone / taskAdd など)
+
+function mcpKey_() { return String(PropertiesService.getScriptProperties().getProperty('MCP_KEY') || ''); }
+
+// 【エディタから実行】MCP 用キーを新規発行して Script Properties に保存し、実行ログに1回だけ表示する。実行のたびに旧キーは無効になる
+function mcpRotateKey() {
+  var k = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '').slice(0, 48);
+  PropertiesService.getScriptProperties().setProperty('MCP_KEY', k);
+  Logger.log('MCP_KEY=' + k + '  (MCP サーバーの .env / Secret に設定してください。このログ以外には残りません)');
+}
+// 【エディタから実行】MCP を止める(キーを削除)。再開は mcpRotateKey
+function mcpDisable() { PropertiesService.getScriptProperties().deleteProperty('MCP_KEY'); Logger.log('MCP_KEY を削除しました'); }
+
+function ensureMcpLogSheet_() {
+  var ss = ss_();
+  if (!ss.getSheetByName('mcpLog')) ss.insertSheet('mcpLog').appendRow(['time', 'requestId', 'client', 'op', 'target', 'params', 'result', 'ms']);
+}
+function mcpLog_(req, res, t0) {
+  try {
+    var p = {}; Object.keys(req).forEach(function (k) { if (k !== 'mcpKey' && k !== 'token' && k !== 'action') p[k] = req[k]; });
+    sheet_('mcpLog').appendRow([new Date(), String(req.requestId || ''), String(req.client || ''), String(req.op || ''),
+      String(req.studentId || req.slotId || ''), JSON.stringify(p).slice(0, 500), res && res.error ? 'error: ' + res.error : 'ok', Date.now() - t0]);
+  } catch (e) {}
+}
+
+function mcpEntry_(req) {
+  var t0 = Date.now();
+  LITE_ = true; // 管理画面向けの全データは作らない
+  var cache = CacheService.getScriptCache();
+  var fails = Number(cache.get('mcpFails') || 0);
+  if (fails >= 20) return { error: 'MCP の認証失敗が続いたため一時停止中です(10分後に再試行)', badAuth: true };
+  var k = mcpKey_();
+  if (!k || k.length < 16 || String(req.mcpKey || '') !== k) {
+    cache.put('mcpFails', String(fails + 1), 600);
+    Utilities.sleep(300);
+    return { error: 'MCP キーが正しくありません', badAuth: true };
+  }
+  var op = String(req.op || '');
+  var res;
+  if (MCP_READ_OPS.indexOf(op) < 0 && MCP_WRITE_OPS.indexOf(op) < 0) res = { error: 'この操作は MCP から実行できません: ' + op, badAuth: true };
+  else {
+    try { res = mcpDispatch_(op, req); }
+    catch (e) { res = { error: String(e && e.message || e) }; }
+  }
+  mcpLog_(req, res, t0);
+  return res;
+}
+
+function mcpDispatch_(op, req) {
+  switch (op) {
+    case 'mcpPing':       return { ok: true, service: 'stepwise-yoyaku', today: todayStr_(), readOps: MCP_READ_OPS, writeOps: MCP_WRITE_OPS };
+    case 'mcpStudents':   return mcpStudents_(req);
+    case 'mcpSchedule':   return mcpSchedule_(req);
+    case 'mcpStudent':    return mcpStudent_(req);
+    case 'mcpPending':    return mcpPending_(req);
+    case 'mcpBilling':    return mcpBilling_(req);
+    case 'mcpTeacherOff': return mcpTeacherOff_(req);
+    case 'mcpWishes':     return mcpWishes_(req);
+    default: return { error: 'unknown op' };
+  }
+}
+
+function hmAdd_(start, min) { var t = toMin_(start) + (Number(min) || 0); return ('0' + Math.floor(t / 60) % 24).slice(-2) + ':' + ('0' + t % 60).slice(-2); }
+function mcpDate_(v, dflt) { var s = String(v || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : dflt; }
+function mcpSlot_(s, nameOf) {
+  var rq = parseReq_(s.req);
+  return { slotId: String(s.id), date: s.date, start: s.start, end: hmAdd_(s.start, s.min), min: Number(s.min) || 0, status: s.status,
+    done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''),
+    student: s.studentId ? { id: String(s.studentId), name: nameOf[String(s.studentId)] || studentName_(s.studentId) } : null,
+    cancelRequest: rq ? { reason: String(rq.reason || ''), at: String(rq.at || '') } : null };
+}
+function mcpNameMap_() { var m = {}; readRows_('students').forEach(function (s) { m[String(s.id)] = s.name; }); return m; }
+
+// 生徒検索(名前・ふりがなの部分一致)。専用リンクコードやメールアドレスは返さない
+function mcpStudents_(req) {
+  var q = String(req.query || '').trim();
+  var profiles = {};
+  ledgerRows_('生徒台帳').forEach(function (p) { profiles[String(p['生徒ID'])] = p; });
+  var out = readRows_('students').map(function (s) {
+    var pr = profiles[String(s.id)] || {};
+    return { id: String(s.id), name: String(s.name), kana: String(pr['ふりがな'] || ''), grade: String(pr['学年'] || ''), school: String(pr['学校'] || ''),
+      status: String(pr['状態'] || '在籍'), active: !(String(s.active) === 'false' || s.active === false), hasEmail: !!String(s.email || ''),
+      feeMode: Number(s.monthly || 0) > 0 ? 'monthly' : 'time' };
+  }).filter(function (s) { return !q || s.name.indexOf(q) >= 0 || s.kana.indexOf(q) >= 0 || s.id === q; });
+  return { ok: true, students: out };
+}
+
+// 期間内の授業(空き枠・案内中・確定)と、先生の休み・生徒の授業できない日・希望
+function mcpSchedule_(req) {
+  var today = todayStr_();
+  var from = mcpDate_(req.from, today), to = mcpDate_(req.to, addDays_(from, 14));
+  if (to < from) { var t = from; from = to; to = t; }
+  if (addDays_(from, 120) < to) to = addDays_(from, 120);
+  var sid = String(req.studentId || '');
+  var nameOf = mcpNameMap_();
+  var lessons = readRows_('slots').filter(function (s) { return s.date >= from && s.date <= to && (!sid || String(s.studentId) === sid); })
+    .map(function (s) { return mcpSlot_(s, nameOf); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
+  var off = teacherOff_(from, true).filter(function (o) { return o.date <= to; });
+  var ng = blockedRows_().filter(function (b) { return b.date >= from && b.date <= to && (!sid || String(b.studentId) === sid); })
+    .map(function (b) { return { student: { id: String(b.studentId), name: nameOf[String(b.studentId)] || '' }, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; });
+  var wishes = wishesForAdmin_().filter(function (x) { return x.date >= from && x.date <= to && (!sid || x.studentId === sid); });
+  return { ok: true, from: from, to: to, today: today, lessons: lessons, teacherOff: off, studentNg: ng, wishes: wishes };
+}
+
+// 生徒カルテ(管理画面と同じ元データ)を、秘密情報を落として返す
+function mcpStudent_(req) {
+  var id = String(req.studentId || '');
+  if (!id) return { error: 'studentId が必要です(mcpStudents で検索してください)' };
+  var d = kanriStudent_(id);
+  if (d.error) return d;
+  var today = d.today;
+  var pr = d.profile || {};
+  var lessons = (d.lessons || []).map(function (l) { return { slotId: l.id, date: l.date, start: l.start, end: hmAdd_(l.start, l.min), min: l.min, status: l.status, done: l.done, subject: l.subject, cancelRequest: l.req ? { reason: String(l.req.reason || '') } : null }; });
+  return { ok: true, id: d.id, name: d.name, active: d.active, hasEmail: !!d.email,
+    profile: { grade: String(pr['学年'] || ''), school: String(pr['学校'] || ''), status: String(pr['状態'] || ''), subjects: String(pr['科目'] || ''), since: String(pr['入塾日'] || ''), memo: String(pr['備考'] || '') },
+    feeMode: d.monthly > 0 ? 'monthly' : 'time',
+    upcoming: lessons.filter(function (l) { return l.date >= today && (l.status === 'booked' || l.status === 'offered'); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }).slice(0, 20),
+    recentDone: lessons.filter(function (l) { return l.date < today && l.status === 'booked' && l.done; }).slice(0, 10),
+    thisMonth: d.thisMonth, plan: d.plan && d.plan.months, tasks: (d.tasks || []).filter(function (t) { return !t.doneAt; }),
+    wishes: d.wishes, blocked: d.blocked, events: d.events,
+    latestExam: (d.exams || []).slice(-1)[0] ? (function (e) { return { date: e.date, name: e.name, round: e.round, total5: e.total5, total3: e.total3, subjects: e.subjects }; })((d.exams || []).slice(-1)[0]) : null,
+    gradesCount: (d.grades || []).length, paymentsUnpaid: (d.payments || []).filter(function (p) { return p.status !== '入金済'; }).map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate }; }) };
+}
+
+// 先生が対応すべきもの一覧
+function mcpPending_(req) {
+  var d = kanriDashboard_();
+  var slim = function (s) { return { slotId: s.id, date: s.date, start: s.start, end: hmAdd_(s.start, s.min), min: s.min, subject: s.subject, student: { id: s.studentId, name: s.studentName }, cancelRequest: s.req ? { reason: String(s.req.reason || ''), at: String(s.req.at || '') } : null }; };
+  return { ok: true, today: d.today, month: d.month,
+    cancelRequests: (d.cancelReqs || []).map(slim),
+    awaitingReply: (d.pending || []).map(slim),
+    expiredOffers: (d.expired || []).map(slim),
+    wishes: d.wishes || [], eventsSoon: d.events || [],
+    unpaid: (d.unpaid || []).map(function (u) { return { student: { id: u.studentId, name: u.name }, ym: u.ym, amount: u.amount, billDate: u.billDate }; }),
+    planNotApproved: (d.students || []).filter(function (s) { return s.planStatus !== 'approved' && (s.plannedThisMonth > 0 || s.bookedThisMonth > 0 || s.doneThisMonth > 0); })
+      .map(function (s) { return { student: { id: s.id, name: s.name }, planStatus: s.planStatus, planned: s.plannedThisMonth, booked: s.bookedThisMonth, done: s.doneThisMonth }; }) };
+}
+
+// 月ごとの実施回数・分数・請求予定額・請求/入金状況・承認状態(サーバー側計算)
+function mcpBilling_(req) {
+  var ym = /^\d{4}-\d{2}$/.test(String(req.month || '')) ? String(req.month) : todayStr_().slice(0, 7);
+  var slots = readRows_('slots');
+  var planRowsAll = planRows_();
+  var payments = ledgerRows_('入金管理').filter(function (p) { return String(p['年月']) === ym; });
+  var rows = readRows_('students').filter(function (s) { return !(String(s.active) === 'false' || s.active === false); }).map(function (s) {
+    var id = String(s.id);
+    var mine = slots.filter(function (x) { return String(x.studentId) === id && x.status === 'booked' && x.date.slice(0, 7) === ym; });
+    var done = mine.filter(function (x) { return String(x.done) === 'true' || x.done === true; });
+    var minutes = 0; done.forEach(function (x) { minutes += Number(x.min) || 0; });
+    var fee = studentFee_(id, minutes);
+    var pm = planMonthInfo_(id, ym, planRowsAll);
+    var pay = payments.filter(function (p) { return String(p['生徒ID']) === id; }).map(function (p) { return { amount: Number(p['請求額'] || 0), status: String(p['状態'] || ''), billDate: String(p['請求日'] || ''), paidDate: String(p['入金日'] || '') }; });
+    return { student: { id: id, name: String(s.name) }, doneCount: done.length, doneMinutes: minutes, bookedNotDone: mine.length - done.length,
+      doneDates: done.map(function (x) { return x.date + ' ' + x.start + (x.subject ? ' ' + x.subject : ''); }).sort(),
+      fee: fee.amount, feeMode: fee.mode, planTotal: pm.total, planStatus: pm.status, approvedVia: pm.approvedVia, payments: pay };
+  }).filter(function (r) { return r.doneCount || r.bookedNotDone || r.payments.length || r.planTotal; });
+  var total = 0; rows.forEach(function (r) { total += r.fee; });
+  return { ok: true, month: ym, rows: rows, totalFee: total, note: 'fee は実施済み(done)の授業から計算。月謝制の生徒は固定額。承認(planStatus)が approved でない月は請求前に確認が必要' };
+}
+
+function mcpTeacherOff_(req) {
+  var from = mcpDate_(req.from, todayStr_()), to = mcpDate_(req.to, addDays_(from, 60));
+  return { ok: true, from: from, to: to, teacherOff: teacherOff_(from, true).filter(function (o) { return o.date <= to; }) };
+}
+function mcpWishes_(req) {
+  var sid = String(req.studentId || '');
+  return { ok: true, wishes: wishesForAdmin_().filter(function (x) { return !sid || x.studentId === sid; }) };
 }
 
 /* ================= 日付ヘルパー ================= */
