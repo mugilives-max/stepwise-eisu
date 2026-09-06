@@ -12,7 +12,7 @@ Codex(このPC)       ─stdio────────────►  PC 内の
 
 | もの | 場所 | 備考 |
 |---|---|---|
-| MCP サーバーのコード | PC: `C:\Users\mugir\dev\stepwise-mcp`(git 管理。GitHub の private リポジトリは未作成) | `src/tools.ts` ツール定義、`src/stdio.ts` Codex 用入口、`src/worker.ts` Cloudflare 用入口、`test/` 動作確認スクリプト |
+| MCP サーバーのコード | PC: `C:\Users\mugir\dev\stepwise-mcp`。GitHub private リポジトリ `mugilives-max/stepwise-mcp`(main)に同期済み(2026-09-07) | `src/tools.ts` ツール定義、`src/stdio.ts` Codex 用入口、`src/worker.ts` Cloudflare 用入口、`test/` 動作確認スクリプト |
 | リモート版(ChatGPT が接続する先) | Cloudflare Workers。URL `https://stepwise-mcp.stepwise-edu.workers.dev/mcp` | Cloudflare アカウント: mugilives@gmail.com(Account ID 51b3ef02…)。Worker 名 `stepwise-mcp`、workers.dev サブドメイン `stepwise-edu`、KV `OAUTH_KV`(OAuth のトークン保存用) |
 | Cloudflare の Secret(3つ) | Cloudflare 側にのみ保存。表示不可 | `STEPWISE_GAS_URL`(GAS の /exec URL)、`STEPWISE_MCP_KEY`(GAS 側の MCP_KEY と同じ値)、`MCP_LOGIN_PASSWORD`(ChatGPT 接続時のパスフレーズ。先生だけが知る) |
 | PC 側の設定 | `C:\Users\mugir\dev\stepwise-mcp\.env`(gitignore 済み) | `STEPWISE_GAS_URL`、`STEPWISE_MCP_KEY`、`STEPWISE_CLIENT=codex` |
