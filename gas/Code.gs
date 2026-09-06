@@ -137,7 +137,7 @@ function studentState_(code) {
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
   var tasks = tasksFor_(me.id, 45);
-  return { me: { name: me.name }, slots: slots, blocked: blocked, history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { me: { name: me.name }, slots: slots, blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -399,6 +399,21 @@ function adminResolveCancel_(req) {
 }
 
 /* ================= 希望日程(生徒→先生) ================= */
+
+// 先生の休み(先生が授業できない日)。1行=1日
+function ensureTeacherOffSheet_() {
+  var ss = ss_();
+  if (!ss.getSheetByName('teacherOff')) {
+    var sh = ss.insertSheet('teacherOff');
+    sh.appendRow(['id', 'date', 'note']);
+  }
+}
+// 先生の休み(from 以降)。生徒向けには note を渡さない(withNote=false)
+function teacherOff_(from, withNote) {
+  return readRows_('teacherOff').filter(function (x) { return x.date >= from; })
+    .map(function (x) { return withNote ? { id: x.id, date: x.date, note: String(x.note || '') } : { date: x.date }; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+}
 
 function ensureWishesSheet_() {
   var ss = ss_();
@@ -1170,6 +1185,8 @@ function admin_(req) {
     case 'newCode':     return kanriWrap_(req, adminNewCode_(req));
     case 'addBlock':    return adminAddBlock_(req);
     case 'delBlock':    return adminDelBlock_(req);
+    case 'addOff':      return kanriWrap_(req, adminAddOff_(req));
+    case 'delOff':      return kanriWrap_(req, adminDelOff_(req));
     case 'hideStudent': return adminHideStudent_(req);
     case 'changePass':  return adminChangePass_(req);
     case 'resolveCancel':    return kanriWrap_(req, adminResolveCancel_(req), req.studentId);
@@ -1226,7 +1243,7 @@ function adminState_() {
       };
     });
   return {
-    slots: slots, students: students, log: log, blocked: blocked, wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
+    slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(todayStr_(), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
     account: getConfig_('teacherEmail')
   };
 }
@@ -1243,20 +1260,23 @@ function adminOffer_(req) {
   // 生徒が「授業できない日」に登録している日への案内は警告(force指定で強行可)
   if (!req.force) {
     var blockedRows = readRows_('blocked');
-    var ngDates = [];
+    var offRows = readRows_('teacherOff');
+    var ngDates = [], offDates = [];
     for (var w0 = 0; w0 < repeat; w0++) {
       var d0 = addDays_(req.date, w0 * 7);
-      var hit = null;
+      var hit = null, offHit = null;
       blockedRows.forEach(function (b) {
         if (String(b.studentId) === String(student.id) && b.date === d0) hit = b;
       });
+      offRows.forEach(function (o) { if (o.date === d0) offHit = o; });
       if (hit) ngDates.push(fmtDateJa_(d0) + (hit.note ? '(' + hit.note + ')' : ''));
+      if (offHit) offDates.push(fmtDateJa_(d0) + (offHit.note ? '(' + offHit.note + ')' : ''));
     }
-    if (ngDates.length > 0) {
-      return {
-        error: student.name + 'さんは ' + ngDates.join('、') + ' を「授業できない日」に登録しています',
-        needForce: true
-      };
+    if (ngDates.length > 0 || offDates.length > 0) {
+      var msgs = [];
+      if (offDates.length) msgs.push(offDates.join('、') + ' は先生の休みに登録されています');
+      if (ngDates.length) msgs.push(student.name + 'さんは ' + ngDates.join('、') + ' を「授業できない日」に登録しています');
+      return { error: msgs.join('。'), needForce: true };
     }
   }
   var subject = String(req.subject || '').slice(0, 20);
@@ -1363,6 +1383,34 @@ function adminSetFee_(req) {
     }
   }
   return { error: '生徒が見つかりません' };
+}
+
+// 先生の休みを date〜dateTo で登録(1日1行。重複はスキップ)
+function adminAddOff_(req) {
+  var r = normRange_(req);
+  if (!r) return { error: '日付をえらんでください' };
+  var note = String(req.note || '').slice(0, 50);
+  var existing = readRows_('teacherOff').map(function (x) { return x.date; });
+  var sh = sheet_('teacherOff');
+  var added = 0, d = r.date;
+  for (var i = 0; i < 62 && d <= r.dateTo; i++) {
+    if (existing.indexOf(d) < 0) { sh.appendRow([uid_(), d, note]); added++; }
+    d = addDays_(d, 1);
+  }
+  if (added === 0) return { error: 'この期間はすでに登録されています' };
+  addLog_('先生が ' + rangeText_(r.date, r.dateTo) + ' を先生の休みに登録' + (note ? '(' + note + ')' : ''));
+  return { ok: true, admin: adminState_() };
+}
+
+function adminDelOff_(req) {
+  var ids = (req.offIds || (req.offId ? [req.offId] : [])).map(String);
+  var rows = readRows_('teacherOff');
+  var toDel = [];
+  rows.forEach(function (x, i) { if (ids.indexOf(String(x.id)) >= 0) toDel.push(i + 2); });
+  if (toDel.length === 0) return { error: '登録が見つかりません' };
+  toDel.sort(function (a, b) { return b - a; }).forEach(function (ri) { sheet_('teacherOff').deleteRow(ri); });
+  addLog_('先生が先生の休みを ' + toDel.length + '日分解除');
+  return { ok: true, admin: adminState_() };
 }
 
 function adminAddBlock_(req) {
@@ -1593,7 +1641,8 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は重いので1日1回だけ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk9')) return;
+  if (cache.get('schemaOk10')) return;
+  ensureTeacherOffSheet_();
   ensureTasksSheet_();
   ensureEventKindCol_();
   ensurePlansSheet_();
@@ -1609,7 +1658,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk9', '1', 21600);
+  cache.put('schemaOk10', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1825,7 +1874,7 @@ function kanriDashboard_() {
   return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
-    slots: upcomingAll, blocked: blockedUp, allEvents: eventsForAdmin_(0) };
+    slots: upcomingAll, blocked: blockedUp, teacherOff: teacherOff_(today, true), allEvents: eventsForAdmin_(0) };
 }
 
 // 予約ページに表示する/しない(studentsシート active 列)。データは消さない
@@ -1887,6 +1936,7 @@ function kanriStudent_(studentId) {
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
     blocked: readRows_('blocked').filter(function (b) { return String(b.studentId) === id && b.date >= today; }).map(function (b) { return { id: b.id, date: b.date, note: String(b.note || '') }; }),
+    teacherOff: teacherOff_(today, true),
     plan: (function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
       monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
       months: [planMonthInfo_(id, month, rows), planMonthInfo_(id, nextYm_(month), rows)] }; })(),

@@ -44,6 +44,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | students | id, name, active, email, code, rate30, monthly, parentToken, parentExp | 生徒。`code` が専用リンク(`/yoyaku/?k=code`)の鍵。`rate30` は30分単価、`monthly` は月謝(あれば定額)。`active=false` は停止中 |
 | slots | id, date, start, min, status, studentId, done, eventId, meetUrl, subject, req | 授業枠。`status` は open(空き)/offered(案内中=承認待ち)/booked(確定)。`done=true` で実施済み。`eventId`/`meetUrl` はカレンダー連携。`req` は取消依頼のJSON |
 | blocked | id, studentId, date, note | 生徒の「授業できない日」 |
+| teacherOff | id, date, note | 先生の休み(先生が授業できない日)。1行=1日。管理画面の授業ページから登録。生徒にはメモを見せない |
 | wishes | id, studentId, date, start, end, note, createdAt, kind | 生徒の希望日程。`kind` は want(この日時に授業をしたい)/ok(この時間帯のどこかで) |
 | events | id, studentId, date, dateTo, title, createdAt, kind | 生徒が共有した予定(大会・見学など)。`kind=test` はテスト・模試(マイページでカウントダウン表示) |
 | plans | id, studentId, ym, subject, count, status, proposedAt, approvedAt, approvedVia, memo | 月の授業回数(計画)。`ym` は `YYYY-MM` か `default`(毎月の既定)。`status` は draft/proposed/approved、`approvedVia` は parent(保護者ページで承認)/teacher(LINE・電話で承諾を先生が記録) |
@@ -75,7 +76,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 - 呼び出しは `POST /exec` に JSON。`action` で分岐。生徒側は `k`(専用リンクのコード)で本人確認、先生側は `action:"admin"` + `token`(ログイン時に発行)+ `op`。
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades / parentLogin / parentData / parentPlanDecide
-- 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
+- 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / addOff / delOff(先生の休み) / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
 - 主なルール: 確定授業の取消は生徒からの「依頼」で先生が承認(締切は授業の24時間前 `CANCEL_DEADLINE_H`)。月の授業回数は保護者(または先生が記録した承諾)の承認がないと請求できない前提。
 - エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`。
 
@@ -106,3 +107,4 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - 2026-09-05 生徒ページをマイページ化(タブ、保護者ページ、希望日程・共有予定・授業できない日、月の授業回数と保護者承認、宿題・テスト予定)、パスワード再設定をメールコード方式に
 - 2026-09-05 模試(北辰テスト)の記録を追加(台帳「模試」シート、管理画面・生徒ページで表示)
 - 2026-09-06 返事がないまま日付が過ぎた案内を管理画面ホーム/授業/カルテで警告し、「実施済みにする」「未実施」を選べるように(GAS v40)
+- 2026-09-06 先生の休み(teacherOff シート)。管理画面から登録、各カレンダーに「休」、案内時に警告、生徒ページにも表示(GAS v41)

@@ -52,6 +52,9 @@
       button.calday { cursor: pointer; font-size: 13px; }
       .calday.sun { color: var(--danger); } .calday.sat { color: var(--primary); }
       .calday.off { opacity: 0.35; }
+      .calday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
+      .callbl.to { color: var(--muted); font-weight: 600; }
+      .chip.toff { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .calday.today { border-color: var(--muted); }
       .calday.mine:not(.sel) { background: var(--coral-soft); }
       .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
@@ -304,6 +307,7 @@
             if (wd === 0) cls += " sun"; if (wd === 6) cls += " sat";
             if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
             var hasItems = !!(it && it.labels && it.labels.length);
+            if (it && it.toff && !past) cls += " toff";
             var marks = '<span class="calmarks">';
             if (it && !past) {
               if (it.mine) cls += " mine";
@@ -312,6 +316,7 @@
             }
             if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
             marks += "</span>";
+            if (it && it.toff && !past) marks += '<span class="callbl to">先生休み</span>';
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -332,6 +337,7 @@
           h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
           h += '<span><span class="callbl ts" style="display:inline">テスト</span> テスト・模試</span>';
           h += '<span><span class="calmark">×</span> 授業できない日</span>';
+          h += '<span><span class="callbl to" style="display:inline">先生休み</span> 先生の休み(授業なし)</span>';
           h += "</div></div>";
           return h;
         }
@@ -448,16 +454,19 @@
             it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, kind: s.kind });
           });
           blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; });
+          (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.toff = 1; });
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "希望する日をタップ(複数可)。時間は画面下で", event: "予定の日をタップ(複数可)。内容は画面下で" };
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : "") + '</h2>';
           html += renderCal(info, today);
           if (!selMode) {
             var ds2 = (byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
             var dayNg = blocked.filter(function (b) { return b.date === selDate; });
+            var dayToff = (S.teacherOff || []).some(function (o) { return o.date === selDate; });
             html += '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
-            if (!ds2.length && !dayNg.length) html += '<div class="empty">この日の予定はありません</div>';
+            if (!ds2.length && !dayNg.length && !dayToff) html += '<div class="empty">この日の予定はありません</div>';
             else {
               html += '<div class="chips">';
+              if (dayToff) html += '<span class="chip toff">先生の休み(授業なし)</span>';
               ds2.forEach(function (s) {
                 if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
                 var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
@@ -471,7 +480,7 @@
             }
             if (selDate >= today) {
               html += '<div class="row" style="margin-top:10px;gap:6px"><span class="small muted">この日に:</span>' +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>' +
+                (dayToff ? "" : '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>') +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button>' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">' + (dayNg.length ? "授業できない日を解除" : "授業できない日にする") + '</button></div>';
             }
