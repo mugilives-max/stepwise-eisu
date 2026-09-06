@@ -50,6 +50,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | plans | id, studentId, ym, subject, count, status, proposedAt, approvedAt, approvedVia, memo | 月の授業回数(計画)。`ym` は `YYYY-MM` か `default`(毎月の既定)。`status` は draft/proposed/approved、`approvedVia` は parent(保護者ページで承認)/teacher(LINE・電話で承諾を先生が記録) |
 | tasks | id, studentId, type, title, due, createdAt, createdBy, doneAt | 宿題・持ち物(やること)。生徒も先生も追加できる |
 | log | time, message | 操作ログ(日本語1行) |
+| mcpLog | time, requestId, client, op, target, params, result, ms | MCP(ChatGPT/Codex)からの呼び出し記録 |
 
 ### 3-2. 「塾管理台帳」(人が見る台帳。列名は日本語。シートを直接編集してもよい)
 
@@ -72,13 +73,16 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 保護者ページのパスワードは、いまは先生の管理ログインのパスワードと同じです。
 
+**予定(2026-09-06 決定、未実装)**: 保護者ごとの専用パスワードに切り替える。`parents` シート(studentId, passSalt, passHash, setAt, lastLogin, failCount, lockUntil)にハッシュのみ保存し、先生は「設定済み/未設定・最終ログイン」だけ見える。初回・再設定は先生が管理画面で発行する6桁の設定コード(24時間有効)を LINE で伝え、保護者がマイページの保護者タブで自分のパスワードを決める。授業の承認は「月ごとの授業回数を保護者が事前承認」(方式 A)を正式運用とし、契約書もそれに合わせて更新する(条項案: `docs/CONTRACT_CLAUSES_DRAFT.md`)。
+
 ## 5. API(Apps Script)
 
 - 呼び出しは `POST /exec` に JSON。`action` で分岐。生徒側は `k`(専用リンクのコード)で本人確認、先生側は `action:"admin"` + `token`(ログイン時に発行)+ `op`。
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades / parentLogin / parentData / parentPlanDecide
 - 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / addOff / delOff(先生の休み) / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
 - 主なルール: 確定授業の取消は生徒からの「依頼」で先生が承認(締切は授業の24時間前 `CANCEL_DEADLINE_H`)。月の授業回数は保護者(または先生が記録した承諾)の承認がないと請求できない前提。
-- エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`。
+- エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`、`mcpRotateKey`(MCP 用キーの発行・更新)、`mcpDisable`(MCP 停止)。
+- MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(現在は空)のホワイトリストのみ。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。
 
 ## 6. 更新・デプロイ手順
 
@@ -102,7 +106,9 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 ## 8-2. 関連ドキュメント
 
-- [MCP_DESIGN.md](MCP_DESIGN.md): ChatGPT / Codex から操作するための MCP サーバー設計案(2026-09-06、未実装)
+- [MCP_DESIGN.md](MCP_DESIGN.md): ChatGPT / Codex から操作するための MCP サーバー設計と段階計画(2026-09-06〜)
+- [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 契約書に追加する条項の下書き(保護者承認・保護者パスワード)
+- MCP サーバー本体: private リポジトリ `stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)
 
 ## 9. 変更履歴(要点)
 
