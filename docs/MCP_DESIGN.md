@@ -1,6 +1,6 @@
 # Stepwise MCP サーバー 設計案
 
-作成: 2026-09-06 / 状態: **段階1(GAS 読み取り専用の入口)を実装中**。MCP サーバーのコードは private リポジトリ `stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)。契約条項の下書きは [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md)。
+作成: 2026-09-06 / 状態: **段階1・2 完了(2026-09-06 夜、GAS v44)**: 読み取り専用の MCP 入口と閲覧ツール7本が動作、Codex にローカル stdio で登録済み。次は段階3(Cloudflare Workers + OAuth で ChatGPT から)。MCP サーバーのコードは private リポジトリ `stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)。契約条項の下書きは [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md)。
 前提となる現行構成は [SYSTEM.md](SYSTEM.md) を参照。
 
 ## 0. 結論(先に要点)
@@ -163,8 +163,8 @@ Codex(CLI / IDE)      ──stdio または HTTPS──►  同じコード(ロ�
 | 段階 | 内容 | 完了条件 |
 |---|---|---|
 | 0 | この設計の合意。private リポジトリ `stepwise-mcp` を作成(または本リポジトリの `mcp/` に置くなら Secrets は絶対にコミットしない) | 合意 |
-| 1 | GAS: G1, G2, G3, G7, G8 を追加してデプロイ(**読み取りのみ**。ホワイトリストは読み取り op だけ) | 管理画面・生徒ページが従来どおり動く。python から mcpKey 付きで `mcpSchedule` が返る |
-| 2 | MCP サーバー(TypeScript, `@modelcontextprotocol/sdk`)。閲覧系 7 ツール。stdio で **Codex に接続**して「来週の予約状況」「未処理の取消依頼」を確認 | Codex から読める。秘密情報が返却値に含まれないことを目視 |
+| 1 | GAS: G1, G2, G3, G7, G8 を追加してデプロイ(**読み取りのみ**。ホワイトリストは読み取り op だけ) | **完了(v44)**。mcpPing〜mcpWishes が返り、許可外の op と誤ったキーは拒否される |
+| 2 | MCP サーバー(TypeScript, `@modelcontextprotocol/sdk`)。閲覧系 7 ツール。stdio で **Codex に接続**して「来週の予約状況」「未処理の取消依頼」を確認 | **完了**。`~/.codex/config.toml` に `[mcp_servers.stepwise]` 登録済み。stdio クライアントのテストで7ツールが動作、返却値に code/email/token/meetUrl が無いことを機械的に確認 |
 | 3 | Cloudflare Workers に配備、OAuth(Google サインイン、許可メールのみ)。**ChatGPT** の開発者モードでコネクタ登録し、閲覧系で同じ質問 | ChatGPT から読める。別の Google アカウントではログイン拒否される |
 | 4 | GAS: 更新系 op をホワイトリストに追加、`MCP_WRITE_SCOPE=test`。MCP: 更新系ツール(2段階確認、request_id)。**テスト生徒【テスト】Claude だけ**で offer → confirm → record → cancel → payment を通す。同じ request_id の再送で二重登録されないこと、confirm_token なしで実行されないことを確認 | 一連の操作が通り、mcpLog と log に記録される。テストデータを片付ける |
 | 5 | G5/G6(先生側確定、過去授業の新規登録、請求集計)を追加 | 同上 |
