@@ -43,7 +43,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | config | key, value | 設定と先生のログイン情報。`passHash`/`passSalt`(パスワードのハッシュ)、`adminToken`/`adminTokenExp`(ログイン中トークン。1か所のみ有効)、`teacherEmail`、`calendarSync`、`emailNotify`、`reset*`(パスワード再設定コード)、`failCount`/`lockUntil` |
 | students | id, name, active, email, code, rate30, monthly, parentToken, parentExp | 生徒。`code` が専用リンク(`/yoyaku/?k=code`)の鍵。`rate30` は30分単価、`monthly` は月謝(あれば定額)。`active=false` は停止中 |
 | slots | id, date, start, min, status, studentId, done, eventId, meetUrl, subject, req | 授業枠。`status` は open(空き)/offered(案内中=承認待ち)/booked(確定)。`done=true` で実施済み。`eventId`/`meetUrl` はカレンダー連携。`req` は取消依頼のJSON |
-| blocked | id, studentId, date, note | 生徒の「授業できない日」 |
+| blocked | id, studentId, date, note, start, end | 生徒の「授業できない日」。start/end が空なら終日、入っていればその時間帯だけ |
 | teacherOff | id, date, note, start, end | 先生の休み。1行=1日。start/end が空なら終日、入っていればその時間帯だけ。管理画面のホーム(日付タップ)か授業ページから登録。生徒にはメモを見せない |
 | wishes | id, studentId, date, start, end, note, createdAt, kind | 生徒の希望日程。`kind` は want(この日時に授業をしたい)/ok(この時間帯のどこかで) |
 | events | id, studentId, date, dateTo, title, createdAt, kind | 生徒が共有した予定(大会・見学など)。`kind=test` はテスト・模試(マイページでカウントダウン表示) |
@@ -108,3 +108,4 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - 2026-09-05 模試(北辰テスト)の記録を追加(台帳「模試」シート、管理画面・生徒ページで表示)
 - 2026-09-06 返事がないまま日付が過ぎた案内を管理画面ホーム/授業/カルテで警告し、「実施済みにする」「未実施」を選べるように(GAS v40)
 - 2026-09-06 先生の休み(teacherOff シート)。管理画面から登録、各カレンダーに「休」、案内時に警告、生徒ページにも表示(GAS v41)。同日、ホームの日付タップから登録、時間帯指定(start/end)に対応(GAS v42)
+- 2026-09-06 生徒の「授業できない日」も時間帯指定に対応(blocked に start/end)。生徒ページ右上の「トップページへ」リンクを削除(GAS v43)

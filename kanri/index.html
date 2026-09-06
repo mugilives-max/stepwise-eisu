@@ -238,6 +238,8 @@
         function offWhen(o) { return o.start ? o.start + "〜" + o.end : "終日"; }
         function offLine(o) { return '<div class="line"><span class="w"><span class="tag gray">先生の休み</span> ' + offWhen(o) + ' <span class="small muted">' + esc(o.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>'; }
         function offMark(it, o) { if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; }
+        function ngMark(it, b) { if (b.start) (it.ngT = it.ngT || []).push(b); else it.ng++; }
+        function ngWhen(b) { return b.start ? ' ' + b.start + '〜' + b.end : ''; }
         function evRange(e) { return e.date === e.dateTo ? fmtD(e.date) : fmtD(e.date) + "〜" + fmtD(e.dateTo); }
         function eventRow(e, showName) {
           return '<div class="line"><span class="t">' + evRange(e) + '</span><span class="w">' + (showName ? '<a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> ' : '') + '<span class="tag coral">共有予定</span> ' + esc(e.title) + '</span>' +
@@ -455,7 +457,7 @@
           var hinfo = {};
           var hit = function (dd) { return hinfo[dd] || (hinfo[dd] = { booked: 0, offered: 0, req: 0, ng: 0, wish: 0, ev: 0 }); };
           hs.forEach(function (s) { var it = hit(s.date); if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else it.offered++; });
-          (d.blocked || []).forEach(function (b) { hit(b.date).ng++; });
+          (d.blocked || []).forEach(function (b) { ngMark(hit(b.date), b); });
           (d.teacherOff || []).forEach(function (o) { offMark(hit(o.date), o); });
           (d.wishes || []).forEach(function (x) { hit(x.date).wish++; });
           (d.allEvents || []).forEach(function (e) { var dd = e.date; for (var ei = 0; ei < 61 && dd <= e.dateTo; ei++) { hit(dd).ev++; dd = addDaysStr(dd, 1); } });
@@ -478,7 +480,7 @@
             html += '<div class="card" style="margin-top:10px">';
             hOff.forEach(function (o) { html += offLine(o); });
             hEv.forEach(function (e) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> <span class="tag coral">共有予定</span> ' + esc(e.title) + (e.date !== e.dateTo ? ' <span class="small muted">(' + evRange(e) + ')</span>' : '') + '</span></div>'; });
-            hNg.forEach(function (b) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(b.studentId) + '" style="text-decoration:none;color:inherit">' + esc(b.studentName) + '</a> <span class="tag gray">授業できない</span> <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
+            hNg.forEach(function (b) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(b.studentId) + '" style="text-decoration:none;color:inherit">' + esc(b.studentName) + '</a> <span class="tag gray">授業できない</span>' + ngWhen(b) + ' <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
             hWish.forEach(function (x) { html += '<div class="line"><span class="w"><a class="nm" href="#s=' + esc(x.studentId) + '" style="text-decoration:none;color:inherit">' + esc(x.studentName) + '</a> <span class="tag ' + (x.kind === "want" ? "blue" : "green") + '">' + (x.kind === "want" ? "この日時を希望" : "この時間帯のどこかで") + '</span> ' + esc(x.start) + '〜' + esc(x.end) + (x.note ? ' <span class="small muted">' + esc(x.note) + '</span>' : '') + '</span><a class="btn-ghost btn-sm" href="#lessons">授業ページで案内</a></div>'; });
             html += '</div>';
           }
@@ -621,7 +623,7 @@
               if (l.status === "booked") { it.booked++; if (l.req) it.req++; } else it.offered++;
               it.labels.push({ start: l.start, text: l.subject || "授業", st: l.status === "offered" ? "offer" : (l.done ? "done" : "mine") });
             });
-            (s.blocked || []).forEach(function (b) { it0(b.date).ng++; });
+            (s.blocked || []).forEach(function (b) { ngMark(it0(b.date), b); });
             (s.teacherOff || []).forEach(function (o) { offMark(it0(o.date), o); });
             (s.wishes || []).forEach(function (x) { it0(x.date).wish++; });
             (s.events || []).forEach(function (e) { var dd = e.date; for (var i = 0; i < 61 && dd <= e.dateTo; i++) { var it = it0(dd); it.ev++; it.labels.push({ start: "99:99", text: e.title, st: "event" }); dd = addDaysStr(dd, 1); } });
@@ -637,7 +639,7 @@
             if (!dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) html += '<div class="empty">この日の予定はありません</div>';
             dayL.forEach(function (l) { html += '<div class="line"><span class="t">' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' ' + (l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : l.req ? '<span class="tag red">取消依頼中</span>' : l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>') + '</span>' + (l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : "") + '</div>'; });
             dayE.forEach(function (e) { html += '<div class="line"><span class="w"><span class="tag coral">共有予定</span> ' + esc(e.title) + (e.date !== e.dateTo ? ' <span class="small muted">(' + evRange(e) + ')</span>' : "") + '</span></div>'; });
-            dayN.forEach(function (b) { html += '<div class="line"><span class="w"><span class="tag gray">授業できない</span> <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
+            dayN.forEach(function (b) { html += '<div class="line"><span class="w"><span class="tag gray">授業できない</span>' + ngWhen(b) + ' <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
             dayW.forEach(function (x) { html += wishRow(x, false); });
             html += '</div>';
           })();
@@ -903,6 +905,7 @@
             marks += "</span>";
             if (it && it.toff) marks += '<span class="callbl to">休</span>';
             if (it && it.toffT) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">休' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
+            if (it && it.ngT) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
             if (it && it.labels && it.labels.length) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -990,7 +993,7 @@
             var it = info[s.date] || (info[s.date] = { booked: 0, offered: 0, req: 0, ng: 0 });
             if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else if (s.status === "offered") it.offered++;
           });
-          (A.blocked || []).forEach(function (b) { var it = info[b.date] || (info[b.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ng++; });
+          (A.blocked || []).forEach(function (b) { var it = info[b.date] || (info[b.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); ngMark(it, b); });
           (A.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); offMark(it, o); });
           (A.wishes || []).forEach(function (x) { var it = info[x.date] || (info[x.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.wish = (it.wish || 0) + 1; });
           (A.events || []).forEach(function (e) { var d = e.date; for (var ei = 0; ei < 61 && d <= e.dateTo; ei++) { var it = info[d] || (info[d] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ev = (it.ev || 0) + 1; d = addDaysStr(d, 1); } });
@@ -1006,7 +1009,7 @@
           if (dayOff.length) html += '<div class="card" style="margin-top:10px">' + dayOff.map(offLine).join("") + '</div>';
           var dayNg = (A.blocked || []).filter(function (b) { return b.date === selDate; });
           if (dayNg.length) {
-            html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">授業できない</span> <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
+            html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">授業できない</span>' + ngWhen(b) + ' <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
           }
 
           // 今後の予定
@@ -1032,15 +1035,17 @@
           html += '<h2>授業できない日(生徒が登録した日)</h2><div class="card"><div class="row">';
           html += '<select id="b-student"><option value="">生徒</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>'; }).join("") + '</select>';
           html += '<input type="date" id="b-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="b-date2" min="' + today + '">';
-          html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px"><button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
+          html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px"></div>';
+          html += '<div class="row" style="margin-top:8px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-start" step="900"><span class="muted">〜</span><input type="time" id="b-end" step="900"><button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
           var ngGroups = [];
           A.students.forEach(function (st) {
             var own = (A.blocked || []).filter(function (b) { return sameId(b.studentId, st.id); });
-            groupBlocked(own).forEach(function (g) { g.name = st.name; ngGroups.push(g); });
+            groupBlocked(own.filter(function (b) { return !b.start; })).forEach(function (g) { g.name = st.name; g.label = rangeLabel(g); ngGroups.push(g); });
+            own.filter(function (b) { return b.start; }).forEach(function (b) { ngGroups.push({ start: b.date + b.start, name: st.name, label: fmtD(b.date) + ' ' + b.start + '〜' + b.end, note: String(b.note || ""), ids: [b.id] }); });
           });
           ngGroups.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
           if (ngGroups.length) {
-            html += '<div style="margin-top:12px">' + ngGroups.map(function (g) { return '<div class="line"><span class="t">' + rangeLabel(g) + '</span><span class="w"><strong>' + esc(g.name) + '</strong> <span class="small muted">' + esc(g.note) + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-ids="' + esc(g.ids.join(",")) + '">削除</button></div>'; }).join("") + '</div>';
+            html += '<div style="margin-top:12px">' + ngGroups.map(function (g) { return '<div class="line"><span class="t">' + g.label + '</span><span class="w"><strong>' + esc(g.name) + '</strong> <span class="small muted">' + esc(g.note) + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-ids="' + esc(g.ids.join(",")) + '">削除</button></div>'; }).join("") + '</div>';
           }
           html += '<div class="note">生徒も自分のページから登録できます。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
 
@@ -1388,7 +1393,10 @@
               var bs = val("b-student"), bd = val("b-date"), bd2 = val("b-date2");
               if (!bs) { toast("生徒をえらんでください"); return; }
               if (!bd) { toast("日付をえらんでください"); return; }
-              actA("addBlock", { studentId: bs, date: bd, dateTo: bd2 || bd, note: val("b-note") }, "登録しました"); break;
+              var bst = val("b-start"), ben = val("b-end");
+              if ((bst && !ben) || (!bst && ben)) { toast("時間帯は開始と終了の両方を入れてください(終日なら両方空欄)"); return; }
+              if (bst && bst >= ben) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
+              actA("addBlock", { studentId: bs, date: bd, dateTo: bd2 || bd, note: val("b-note"), start: bst, end: ben }, "登録しました"); break;
             case "homeoff":
               homeOffOpen = homeOffOpen === btn.getAttribute("data-date") ? null : btn.getAttribute("data-date"); render();
               var hoEl = document.getElementById("ho-start"); if (hoEl) hoEl.scrollIntoView({ behavior: "smooth", block: "center" });
