@@ -8,4 +8,4 @@ GitHub Pages (main ブランチ / root) で配信しています。
 
 ## 予約・管理システムについて
 
-生徒マイページ(`/yoyaku/`)、管理画面(`/kanri/`)、Apps Script(`gas/Code.gs`)の構成とデータの置き場所は [docs/SYSTEM.md](docs/SYSTEM.md) にまとめています。
+生徒マイページ(`/yoyaku/`)、管理画面(`/kanri/`)、Apps Script(`gas/Code.gs`)の構成とデータの置き場所は [docs/SYSTEM.md](docs/SYSTEM.md) にまとめています。残っている課題・今後の予定は [docs/FUTURE_WORK.md](docs/FUTURE_WORK.md) に書き溜めています。

@@ -93,6 +93,8 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 ## 7. 運用メモ
 
+- 残っている課題・今後やりたいことは [FUTURE_WORK.md](FUTURE_WORK.md) に集約(気づいたらその場で追記)。
+
 - 先生のログインは1か所のみ有効。別端末でログインすると前のログインは切れます。
 - パスワードを忘れたら管理画面の「パスワードを忘れた」→ 登録メール(mugilives@gmail.com)に届く6桁コードで再設定。
 - 通知メールは Apps Script から Gmail で送信(送信済みに残る)。確定授業は Google カレンダーにも作成(写し)。
