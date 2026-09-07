@@ -4,6 +4,8 @@
 
 現行の構成・台帳・API・反映手順の正本。作業対象に関係する節を参照する。共通の制約と資料案内は [AGENTS.md](../AGENTS.md)、未完了事項は [FUTURE_WORK.md](FUTURE_WORK.md)。
 
+授業記録と月間承認・請求の新仕様は現在ローカル実装済みで、GAS v45からの公開切替前。反映状況はFUTURE_WORKを参照する。
+
 ## 1. 一言でいうと
 
 - 画面(HTML)は **GitHub Pages**、ロジック(API)は **Google Apps Script**、データは **Google Drive のスプレッドシート2つ** にあります。
@@ -14,7 +16,7 @@
 先生のスマホ・PC   ──► https://www.stepwise-education.jp/kanri/  (管理画面, PWA)
         │  fetch(POST, JSON)
         ▼
-Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
+Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
         │
         ├─ スプレッドシート「ステップワイズ予約システム」 … 予定・生徒・設定
         ├─ スプレッドシート「塾管理台帳」                 … 台帳・成績・模試・入金・面談
@@ -26,7 +28,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 
 | 置き場所 | 何があるか | 備考 |
 |---|---|---|
-| GitHub `mugilives-max/stepwise-eisu`（public、main / root を Pages 配信） | `index.html` ホームページ、`yoyaku/index.html` 生徒マイページ、`kanri/index.html` 管理画面、`gas/Code.gs` サーバーコードの写し、`docs/` 文書 | 作業先は [AGENTS.md](../AGENTS.md)。公開確認は `?nc=適当な値` でキャッシュを避け、配信内容を照合する |
+| GitHub `mugilives-max/stepwise-eisu`（public、main / root を Pages 配信） | `index.html` ホームページ、`yoyaku/index.html` 生徒マイページ、`kanri/index.html` 管理画面、`gas/*.gs` サーバーコードの写し、`docs/` 文書 | 作業先は [AGENTS.md](../AGENTS.md)。公開確認は `?nc=適当な値` でキャッシュを避け、配信内容を照合する |
 | Google Apps Script（予約システムに紐づくコンテナバインド） | 実行中のコード。WebアプリURL・デプロイIDは両HTMLの `API` 定数を参照 | [プロジェクト](https://script.google.com/home/projects/1vlfS4thMpRgV0WbHXZ8joFLzZBMmoROdopAJXK6JEIQWplokSgvgo619/edit)。Script IDはこのURLの `/projects/` と `/edit` の間。反映は6章 |
 | Drive: スプレッドシート「ステップワイズ予約システム」 | 生徒一覧と専用リンクコード、授業枠、授業できない日、希望日程、共有予定、月の授業回数(計画)と保護者承認、宿題・持ち物、先生ログイン情報(ハッシュ)、操作ログ | 場所: マイドライブ/ステップワイズ塾/ |
 | Drive: スプレッドシート「塾管理台帳」 | 生徒台帳、成績推移、模試、入金管理、面談記録 | 同上。ID は `Code.gs` の `LEDGER_ID` |
@@ -47,8 +49,10 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | teacherOff | id, date, note, start, end | 先生の休み。1行=1日。start/end が空なら終日、入っていればその時間帯だけ。管理画面のホーム(日付タップ)か授業ページから登録。生徒にはメモを見せない |
 | wishes | id, studentId, date, start, end, note, createdAt, kind | 生徒の希望日程。`kind` は want(この日時に授業をしたい)/ok(この時間帯のどこかで) |
 | events | id, studentId, date, dateTo, title, createdAt, kind | 生徒が共有した予定(大会・見学など)。`kind=test` はテスト・模試(マイページでカウントダウン表示) |
-| plans | id, studentId, ym, subject, count, status, proposedAt, approvedAt, approvedVia, memo | 月の授業回数(計画)。`ym` は `YYYY-MM` か `default`(毎月の既定)。`status` は draft/proposed/approved、`approvedVia` は parent(保護者ページで承認)/teacher(LINE・電話で承諾を先生が記録) |
-| tasks | id, studentId, type, title, due, createdAt, createdBy, doneAt | 宿題・持ち物(やること)。生徒も先生も追加できる |
+| plans | id, studentId, ym, subject, count, status, proposedAt, approvedAt, approvedVia, memo | 月の授業回数(計画)。`ym` は `YYYY-MM` か `default`(毎月の既定)。`status` は draft/proposed/approved/declined。表示互換用の承認欄を残すが、承認の有効性はmonthAgreementsと月別回数の一致で判定 |
+| tasks | id, studentId, type, title, due, createdAt, createdBy, doneAt, sourceRecordId, sourceItemId, sourceRevision, withdrawnAt | 宿題・持ち物。授業記録由来の課題は元の記録・項目・版を保持し、取り下げても履歴と完了状態を消さない |
+| lessonRecords / lessonPrivateNotes / lessonReportDrafts / lessonWrites | 列・再送・復旧仕様は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md) | 指導記録、先生だけのメモ、未公開の報告、保存処理の記録 |
+| monthAgreements / approvalEvents | 正確な列順は `gas/BillingApproval.gs` の定数 | 生徒・月ごとの回数・料金・承認版の正本と、承諾・請求・訂正の履歴 |
 | log | time, message | 操作ログ(日本語1行) |
 | mcpLog | time, requestId, client, op, target, params, result, ms | MCP(ChatGPT/Codex)からの呼び出し記録 |
 
@@ -59,12 +63,12 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | 生徒台帳 | 生徒ID, 氏名, ふりがな, 学年, 学校, 保護者名, 保護者連絡先, メール, 入塾日, 状態, 科目, 単価(30分), 月謝, 備考 |
 | 成績推移 | 日付, 生徒ID, 氏名, テスト名, 科目, 点数, 満点, 偏差値, 順位, 備考(1行=1科目) |
 | 模試 | 日付, 生徒ID, 氏名, 模試名, 回, 学年, 国語, 国語偏差値, 数学, 数学偏差値, 社会, 社会偏差値, 理科, 理科偏差値, 英語, 英語偏差値, 3教科, 3教科偏差値, 5教科, 5教科偏差値, 3教科順位, 5教科順位, 受験者数, 志望校判定(" / "区切り), 資料URL(成績票PDF。先生のみ表示), 備考(1行=1回分) |
-| 入金管理 | 年月, 生徒ID, 氏名, 請求額, 請求日, 入金日, 入金方法, 状態, 備考 |
+| 入金管理 | 年月, 生徒ID, 氏名, 請求額, 請求日, 入金日, 入金方法, 状態, 備考, 請求ID, 承認版, 料金方式, 確定単価(30分), 確定月謝, 実施分数, 実施回数, 実績JSON, 取消日時, 取消理由, 処理ID, 入金版 |
 | 面談記録 | 日付, 生徒ID, 氏名, 相手, 方法, 内容, 次のアクション |
 
 `生徒ID` は「ステップワイズ予約システム」students シートの `id` と同じ値で、2つのファイルをつないでいます。
 
-構造変更では列名・列順・ID・行番号の参照を確認する。`config`、`slots`、`plans`、`students.code`、入金状態、ログ、Script Propertiesのキーは管理画面または対応API/専用関数から更新する。台帳の直接編集が必要な場合も、行番号で参照する処理（例: `kanriSetPaid_`）と既存データへの影響を確認してから行う。
+構造変更では列名・列順・ID・行番号の参照を確認する。`config`、`slots`、`plans`、`students.code`、入金状態、ログ、Script Propertiesのキーは管理画面または対応API/専用関数から更新する。台帳の直接編集が必要な場合も、成績・面談など行番号で参照する処理と既存データへの影響を確認してから行う。
 
 ## 4. 画面
 
@@ -80,17 +84,29 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - 呼び出しは `POST /exec` に JSON。`action` で分岐。生徒側は `k`(専用リンクのコード)で本人確認、先生側は `action:"admin"` + `token`(ログイン時に発行)+ `op`。
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades。保護者actionと先生のコード発行opは [PARENT_AUTH.md API](PARENT_AUTH.md#api)。
 - 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / addOff / delOff(先生の休み) / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
-- 確定授業の取消は生徒からの「依頼」で先生が承認（締切は授業の24時間前 `CANCEL_DEADLINE_H`）。月の授業回数の事前承認は業務上の方針だが、案内・確定・請求APIが承認と回数上限を一律には強制していない。未解決事項は [FUTURE_WORK.md](FUTURE_WORK.md#月間承認と請求予約apiの整合)。
+- 確定授業の取消は生徒からの「依頼」で先生が承認（締切は授業の24時間前 `CANCEL_DEADLINE_H`）。月間承認と請求の制御は次節。
+- 授業記録の先生専用op・返却範囲は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md)。通常のカルテ・予定・MCPには内部メモや下書き本文を含めない。
 - エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`、`mcpRotateKey`(MCP 用キーの発行・更新)、`mcpDisable`(MCP 停止)。
 - MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(現在は空)のホワイトリストのみ。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。
+
+### 5-1. 月間承認と請求
+
+- `plans` は科目別回数、`monthAgreements` はその月に提示した回数・30分単価・月謝・承認版の正本。`default` は新しい月の入力補助で、承認の代わりにはならない。標準料金の変更は合意済み月の料金を変えない。
+- 案内は承認前でも出せる。生徒の予約確定、先生の実施記録、期限切れ案内の実施処理、請求は、本人・対象月・科目の承認と回数枠をサーバーで確認する。確定済み枠を1回ずつ数え、実施済みとの二重計上をしない。追加回数や月の料金変更は再提案・再承認が必要。
+- `planPropose` は `studentId,ym,expectedRevision,rate30,monthly`。過去月は当時の単価・月謝を明示する。保護者の `parentPlanDecide` と先生の `planApproveTeacher` は画面の `expectedRevision` 必須で、古い画面からの承認を拒否する。
+- LINE・電話などの承諾は、先生が実際の `consentDate` と `via` を入力する。授業後・過去月の承諾は `memo` に経緯も必要。実際の記録日時は別に残す。既存データを自動承認したり、承諾日を推測して補わない。
+- `billingPreview` は対象月の承認・実績・金額・請求可否を返す。未実施の確定授業、不正な日時・分数、未承認科目、回数超過がある月は請求不可。月謝制は合意した固定額、時間制は実施分数×30分単価÷30を円単位に丸める。承認済み月謝は実施0回でも対象になる。
+- `kanriAddPayment` は `studentId,ym,requestId`。金額はサーバーで計算し、請求ID・承認版・料金・実施明細を1行に固定する。同月の有効な請求は1件。同じ要求の再送は同じ請求を返す。旧9列の請求は値を保持してIDだけ補完し、二重発行を防ぐ。
+- 請求後はその月の計画・予約・実施状態を変更できない。未入金なら `kanriVoidInvoice` に請求IDと理由を渡して取消を記録し、新しい要求IDで再発行できる。取消済みも履歴に残す。
+- `kanriSetPaid` は行番号ではなく `studentId,invoiceId,date,method,expectedPaymentRevision` を使う。画面の入金版が古い変更は拒否し、訂正の再送で新しい入金を消さない。誤入金登録を戻す場合は `unpaid:true,reason` が必要。入金済み請求の取消と入金管理行の直接削除は拒否する。実際の送金・返金を行う機能ではない。
 
 ## 6. 更新・デプロイ手順
 
 1. Gitの差分と対象の本番版を確認し、変更範囲に応じて検証する。JS/GASは `npm run check`、認証変更は `npm test` と [認証の検証条件](PARENT_AUTH.md#今後の再反映時の順序と確認)。文書だけなら参照の整合確認でよい。
 2. GASを変更する場合は、実稼働ソースを退避してローカル基準と比較する。データ移行・構造変更では対象台帳もコピーし、内容・構造を比較してから進める。`ensureSchema_` / `LEDGER_COLS` の自動追加任せにせず、既存列との互換性と準備手順を確認する。初期設定用 `setup()` を移行のために再実行しない。
-3. Apps Scriptエディタに `gas/Code.gs` を反映・保存し、読み戻した全文を改行正規化後に照合する。「保存しています」等の表示だけで判断しない。一時検証関数は削除し、既存の「デプロイを管理」→鉛筆→「新バージョン」で公開する（既存URLを維持）。Codexでもブラウザ経由の反映を実施済み。`clasp` 導入は [未着手の課題](FUTURE_WORK.md#apps-script-の反映を自動化clasp)。
+3. Apps Scriptエディタに `gas/Code.gs`・`gas/LessonCycle.gs`・`gas/BillingApproval.gs` を別ファイルで反映・保存し、読み戻した全文を改行正規化後に照合する。「保存しています」等の表示だけで判断しない。構造変更時は既存版の公開を維持したまま `prepareStepwise20260908` で列を準備する。一時検証ファイルは削除し、既存の「デプロイを管理」→鉛筆→「新バージョン」で公開する（既存URLを維持）。Codexでもブラウザ経由の反映を実施済み。`clasp` 導入は [未着手の課題](FUTURE_WORK.md#apps-script-の反映を自動化clasp)。
 4. mainへ `git commit` → `git push origin main` でGitHub/Pagesを更新する。**新APIに依存する画面はGAS→HTMLの順**にし、旧画面との互換性も確認する。独立した画面・文書変更ではGASの再デプロイは不要。
-5. Pagesのビルド完了と対象ファイルの公開内容を確認する。GAS更新時は `/exec` の応答と、変更機能のテスト生徒による疎通を確認する。通知・カレンダーを動かす検証は対象と設定を確認し、作成したテストデータを片付ける。
+5. Pagesのビルド完了と対象ファイルの公開内容を確認する。GAS更新時は `/exec` の応答（この版の `release` は `2026-09-08-lessons-billing`）と、変更機能のテスト生徒による疎通を確認する。通知・カレンダーを動かす検証は対象と設定を確認し、作成したテストデータを片付ける。
 
 画面は対象コミットのrevert→pushで戻す。GASは既存デプロイの版を戻せるが、スキーマや認証の互換性を確認して選ぶ。コードの差し戻しと台帳の復旧は分け、無関係の授業・入金まで巻き戻さない。保護者認証の旧版復帰の制約は [戻し方](PARENT_AUTH.md#戻し方)。
 
@@ -105,7 +121,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 ## 8. 別チャット・他のAIから参照するとき
 
 - 共通入口は [AGENTS.md](../AGENTS.md)。GitHubの `docs/` を文書の正本とし、Driveの00〜04は対応する正本へのリンクにする。本文を二重保守しない。
-- コードの実装は [gas/Code.gs](../gas/Code.gs)、画面は [kanri/index.html](../kanri/index.html) / [yoyaku/index.html](../yoyaku/index.html)。機能を変更するときは対象コードも確認する。
+- 共通処理は [gas/Code.gs](../gas/Code.gs)、授業記録は [gas/LessonCycle.gs](../gas/LessonCycle.gs)、月間承認・請求は [gas/BillingApproval.gs](../gas/BillingApproval.gs)、画面は [kanri/index.html](../kanri/index.html) / [yoyaku/index.html](../yoyaku/index.html)。機能を変更するときは対象コードも確認する。
 - [Driveの05引き継ぎ](https://drive.google.com/file/d/1N3KMqRqJAC6vT294lFhB1aQEHA3bIMmt/view)は2026-09-07の履歴。過去の編集手段（ClaudeのMonaco操作）、当時の環境やメモリの所在を調べる場合だけ参照する。そこでの「毎回読む順序」「Codexの反映未確認」「v44」「専用検証環境なし」は現行の指示・状態ではない。
 
 ## 8-2. 関連ドキュメント
@@ -114,10 +130,12 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - [MCP_OPERATIONS.md](MCP_OPERATIONS.md): **MCP の運用手順**(置き場所、緊急停止、キー・パスフレーズの変更、再配置、トラブル対応)
 - [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 契約書に追加する条項の下書き(保護者承認・保護者パスワード)
 - [PARENT_AUTH.md](PARENT_AUTH.md): 保護者専用認証の実装と反映順序
-- [REDESIGN_CURRENT_STATE.md](REDESIGN_CURRENT_STATE.md) / [REDESIGN_MASTER_PLAN.md](REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](LESSON_CYCLE_PHASE1_SPEC.md): 移行前の調査記録・将来計画・未実装仕様。採否はMASTER_PLAN、具体的な受け入れ条件はPHASE1_SPEC
+- [REDESIGN_CURRENT_STATE.md](REDESIGN_CURRENT_STATE.md) / [REDESIGN_MASTER_PLAN.md](REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](LESSON_CYCLE_PHASE1_SPEC.md): 移行前の調査記録・将来計画・授業記録の実装仕様。採否はMASTER_PLAN、具体的な受け入れ条件はPHASE1_SPEC
 - MCPサーバー本体は別のprivateリポジトリ `mugilives-max/stepwise-mcp`。接続先・環境・配置手順は [MCP_OPERATIONS.md](MCP_OPERATIONS.md) に集約する。
 
 ## 9. 変更履歴(要点)
+
+- 2026-09-08 授業記録と月間承認・請求をローカル実装、API/UI回帰100件が通過。本番の架空保護者の認証・同時ログインを確認。2台帳をDrive「ステップワイズ塾/授業記録・承認請求反映前バックアップ_20260908」へコピーし、全18シートの構成と対象見出しを照合。GAS編集前ソースはGit基準 `9a7b16e` と一致。ブラウザ接続停止により実GAS検証・公開切替は未完了（既存公開v45）。詳細の退避・検証出力は非公開の `.verification/implementation-20260908/` に保存。
 
 - 2026-09-07 保護者専用認証を本番GAS v45へ反映（実装commit a2b6fe6）。検証・退避の記録は [PARENT_AUTH.md](PARENT_AUTH.md#今回の確認範囲)、残件は [FUTURE_WORK.md](FUTURE_WORK.md)。
 

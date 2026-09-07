@@ -39,7 +39,7 @@
 | parentLogin | k、pass | ptoken |
 | parentLogout | k、ptoken | ok。失効済みの再送も成功、新しいセッションを巻き込まない |
 | parentData | k、ptoken | 本人生徒の保護者向けデータ |
-| parentPlanDecide | k、ptoken、ym、approve、memo | 既存の月間承認結果 |
+| parentPlanDecide | k、ptoken、ym、approve、memo、expectedRevision | 表示した回数・料金の版への回答。詳細は [月間承認と請求](SYSTEM.md#5-1-月間承認と請求) |
 
 全POSTは既存ScriptLock内で読み込み・検証・保存。認証失効は `parentAuthRequired`、初回未設定は `needSetup` を返す。設定コード発行はMCP・生徒・保護者には開放しない。
 
@@ -93,3 +93,5 @@ parentsは追加データだけなので、他の台帳の列や既存データ�
 反映前に2台帳をDrive「ステップワイズ塾/認証反映前バックアップ_20260907」へ退避。`parents`追加を除く全17シートの名前・シートID・寸法・見出し・順序が退避コピーと一致し、元台帳・コピーとも所有者以外への共有がないことを確認した。本番ではスキーマ準備関数を先に実行し、`parents`の12列・データ0行を確認してから公開した。実生徒のデータは変更していない。
 
 2026-09-07 23:20（日本時間）に既存デプロイをGAS v45へ更新。mainの `a2b6fe6` をGitHub Pagesへ反映し、ビルド完了・公開HTML2ページの全文一致を確認した。本番のテスト生徒に対する `parentLogin` が `needSetup:true` を返すことも確認した。この時点では先生セッション失効により本番画面の最終操作確認を完了できなかった。実生徒への設定コード発行・連絡は行っていない。
+
+2026-09-08、本番の架空生徒でログイン・本人データ取得・ログアウト・旧セッション拒否をHTTPで確認。同時2件のログインはどちらも成功し、約5.8秒・12.0秒（サーバー内約4.2秒・9.6秒）。後続確認では有効1件・失効1件となり、検証セッションは終了した。少人数の同時操作の確認であり、多数同時の負荷保証ではない。結果のみを `.verification/implementation-20260908/production-auth-check.json` に保存し、認証情報は含めない。

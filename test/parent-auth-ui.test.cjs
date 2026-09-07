@@ -10,7 +10,8 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const sessionKey = child => 'sw_pt_v2:' + child;
 const studentState = child => ({ me: { id: child, name: '【テスト】' + child } });
 const parentData = child => ({ name: '【テスト保護者】' + child, month: '2026-09', planMonths: [
-  { ym: '2026-10', status: 'proposed', rows: [{ subject: '数学', count: 4 }], total: 4 }
+  { ym: '2026-10', status: 'proposed', revision: 1, termsKnown: true, rate30: 1500, monthly: 0,
+    rows: [{ subject: '数学', count: 4 }], total: 4 }
 ] });
 const studentCard = () => ({ id: 'test-id', name: '【テスト】カルテ', active: true,
   code: 'synthetic-link', lessons: [], grades: [], payments: [], meetings: [], month: '2026-09',

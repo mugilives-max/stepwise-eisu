@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-lessons-billing' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -55,8 +55,10 @@ function doGet(e) {
 function doPost(e) {
   var t0 = Date.now();
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  var locked = false;
   try {
+    lock.waitLock(10000); locked = true;
+    memoClear_();
     ensureSchema_();
     var req = JSON.parse(e.postData.contents);
     var res;
@@ -89,9 +91,9 @@ function doPost(e) {
     if (res && typeof res === 'object') res.ms = Date.now() - t0; // 処理時間(ミリ秒)。フロントのconsoleに出る
     return json_(res);
   } catch (err) {
-    return json_({ error: String(err) });
+    return json_({ error: String(err), errorCode: locked ? (err.billingCode || 'serverError') : 'pending' });
   } finally {
-    lock.releaseLock();
+    if (locked) lock.releaseLock();
   }
 }
 
@@ -287,6 +289,7 @@ function accept_(slotId, code) {
   if (r.slot.status !== 'offered' || String(r.slot.studentId) !== String(student.id)) {
     return { error: 'この案内は承認できません', refresh: true };
   }
+  var gate = billingSlotAllowed_(r.slot); if (gate) return gate;
   r.slot.status = 'booked';
   var cal = createCalEvent_(r.slot, student);
   r.slot.eventId = cal.eventId;
@@ -406,6 +409,7 @@ function adminResolveCancel_(req) {
   var name = student ? student.name : '(不明)';
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   if (req.approve === true || String(req.approve) === 'true') {
+    var gate = billingSlotMutable_(r.slot); if (gate) return gate;
     deleteCalEvent_(r.slot);
     sheet_('slots').deleteRow(r.rowIndex);
     addLog_('先生が ' + name + 'さんの ' + when + ' の取消を承認');
@@ -601,7 +605,7 @@ function planRows_() {
 }
 
 // その月の承認状況(月行がなければ none)。行ごとの status を月として集約: どれかが declined→declined、全部 approved→approved、どれかが proposed→proposed、それ以外→draft
-function planMonthInfo_(studentId, ym, rows) {
+function planMonthInfoLegacy_(studentId, ym, rows) {
   rows = rows || planRows_();
   var mine = rows.filter(function (x) { return x.studentId === String(studentId); });
   var month = mine.filter(function (x) { return x.ym === ym; });
@@ -618,6 +622,8 @@ function planMonthInfo_(studentId, ym, rows) {
     status: status, proposedAt: first.proposedAt || '', approvedAt: first.approvedAt || '', approvedVia: first.approvedVia || '', memo: month.map(function (x) { return x.memo; }).filter(Boolean)[0] || '' };
 }
 
+function planMonthInfo_(studentId, ym, rows) { return billingMonthInfo_(studentId, ym, rows); }
+
 function nextYm_(ym) { var p = ym.split('-'); var d = new Date(+p[0], +p[1], 1); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
 
 // 月の行の status をまとめて更新(既定から月行を作る場合は copyDefault)
@@ -629,14 +635,14 @@ function planSetStatus_(studentId, ym, status, via, memo, copyDefault) {
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].studentId) !== String(studentId) || planYm_(rows[i].ym) !== ym) continue;
     found = true;
-    var vals = [[status, status === 'proposed' ? now : (rows[i].proposedAt || ''), status === 'approved' ? now : (status === 'proposed' || status === 'draft' ? '' : rows[i].approvedAt || ''), status === 'approved' ? String(via || '') : (status === 'proposed' || status === 'draft' ? '' : rows[i].approvedVia || ''), String(memo || '')]];
+    var vals = [[status, status === 'proposed' ? now : (rows[i].proposedAt || ''), status === 'approved' ? now : (status === 'proposed' || status === 'draft' ? '' : rows[i].approvedAt || ''), status === 'approved' ? billingText_(via || '') : (status === 'proposed' || status === 'draft' ? '' : rows[i].approvedVia || ''), billingText_(memo || '')]];
     sh.getRange(i + 2, 6, 1, 5).setValues(vals);
   }
   if (!found && copyDefault) {
     var defs = rows.filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === 'default' && Number(x.count) > 0; });
     if (!defs.length) return { error: '計画がありません。先に科目と回数を登録してください' };
     defs.forEach(function (x) {
-      sh.appendRow([uid_(), String(studentId), ym, String(x.subject), Number(x.count), status, status === 'proposed' ? now : '', status === 'approved' ? now : '', status === 'approved' ? String(via || '') : '', String(memo || '')]);
+      sh.appendRow([uid_(), String(studentId), ym, String(x.subject), Number(x.count), status, status === 'proposed' ? now : '', status === 'approved' ? now : '', status === 'approved' ? billingText_(via || '') : '', billingText_(memo || '')]);
       sh.getRange(sh.getLastRow(), 2, 1, 2).setNumberFormat('@');
     });
     found = true;
@@ -645,48 +651,13 @@ function planSetStatus_(studentId, ym, status, via, memo, copyDefault) {
 }
 
 // 先生: 保護者に提案(未承認に戻す)
-function planPropose_(req) {
-  var id = String(req.studentId || ''), ym = String(req.ym || '');
-  var st = systemStudent_(id);
-  if (!st) return { error: '生徒が見つかりません' };
-  if (!/^\d{4}-\d{2}$/.test(ym)) return { error: '月の形式は YYYY-MM です' };
-  var res = planSetStatus_(id, ym, 'proposed', '', '', true);
-  if (res.error) return res;
-  addLog_('先生が ' + st.name + 'さんの ' + ym + ' の授業回数を保護者に提案');
-  return { ok: true };
-}
+function planPropose_(req) { return billingPlanPropose_(req); }
 
 // 先生: LINE・電話などで得た承諾を記録
-function planApproveTeacher_(req) {
-  var id = String(req.studentId || ''), ym = String(req.ym || '');
-  var st = systemStudent_(id);
-  if (!st) return { error: '生徒が見つかりません' };
-  if (!/^\d{4}-\d{2}$/.test(ym)) return { error: '月の形式は YYYY-MM です' };
-  var via = String(req.via || '').trim().slice(0, 20) || 'LINE';
-  var res = planSetStatus_(id, ym, 'approved', via, String(req.memo || '').slice(0, 100), true);
-  if (res.error) return res;
-  addLog_('先生が ' + st.name + 'さんの ' + ym + ' の授業回数の承諾を記録(' + via + ')');
-  return { ok: true };
-}
+function planApproveTeacher_(req) { return billingApproveTeacher_(req); }
 
 // 保護者(保護者ページ): 承認 / 見送り
-function parentPlanDecide_(req) {
-  var auth = parentRequire_(req);
-  if (auth.error) return auth;
-  var student = auth.student;
-  var ym = String(req.ym || '');
-  if (!/^\d{4}-\d{2}$/.test(ym)) return { error: '月の形式は YYYY-MM です' };
-  var approve = req.approve === true || String(req.approve) === 'true';
-  var memo = String(req.memo || '').trim().slice(0, 100);
-  var res = planSetStatus_(student.id, ym, approve ? 'approved' : 'declined', approve ? '保護者ページ' : '', memo, false);
-  if (res.error) return res;
-  var info = planMonthInfo_(student.id, ym);
-  var text = info.rows.map(function (x) { return x.subject + ' ' + x.count + '回'; }).join('、');
-  addLog_(student.name + 'さんの保護者が ' + ym + ' の授業回数を' + (approve ? '承認' : '見送り') + (memo ? '(' + memo + ')' : ''));
-  if (!isTestStudent_(student)) notify_('【回数' + (approve ? '承認' : '見送り') + '】' + student.name + 'さん ' + ym,
-    student.name + 'さんの保護者が ' + ym + ' の授業回数(' + text + ')を' + (approve ? '承認しました。' : '見送りました。') + (memo ? '\nメモ: ' + memo : '') + '\n\n管理画面: https://www.stepwise-education.jp/kanri/');
-  return { ok: true, data: parentData_(req).data };
-}
+function parentPlanDecide_(req) { return billingParentDecide_(req); }
 
 // その月の計画(科目→回数)。月の指定が無ければ既定を使う
 function planFor_(studentId, ym, rows) {
@@ -699,34 +670,7 @@ function planFor_(studentId, ym, rows) {
   return { plan: out, fromDefault: !month.length && src.length > 0 };
 }
 
-function planSet_(req) {
-  var id = String(req.studentId || '');
-  if (!systemStudent_(id)) return { error: '生徒が見つかりません' };
-  var ym = String(req.ym || '');
-  if (ym !== 'default' && !/^\d{4}-\d{2}$/.test(ym)) return { error: '月の形式は YYYY-MM です' };
-  var subject = String(req.subject || '').trim().slice(0, 20);
-  if (!subject) return { error: '科目をえらんでください' };
-  var count = Math.max(0, Math.min(31, Math.floor(Number(req.count) || 0)));
-  var rows = readRows_('plans');
-  var sh = sheet_('plans');
-  for (var i = rows.length - 1; i >= 0; i--) {
-    var rowYm = rows[i].ym instanceof Date ? Utilities.formatDate(rows[i].ym, TZ, 'yyyy-MM') : String(rows[i].ym || '');
-    if (String(rows[i].studentId) === id && rowYm === ym && String(rows[i].subject) === subject) {
-      if (count === 0) sh.deleteRow(i + 2);
-      else {
-        var changed = Number(rows[i].count) !== count;
-        sh.getRange(i + 2, 5).setValue(count);
-        if (changed && ym !== 'default') sh.getRange(i + 2, 6, 1, 4).setValues([['draft', '', '', '']]); // 回数を変えたら承認をやり直し
-      }
-      return { ok: true };
-    }
-  }
-  if (count > 0) {
-    sh.appendRow([uid_(), id, ym, subject, count]);
-    sh.getRange(sh.getLastRow(), 2, 1, 2).setNumberFormat('@');
-  }
-  return { ok: true };
-}
+function planSet_(req) { return billingPlanSet_(req); }
 
 /* ================= 保護者専用認証 ================= */
 
@@ -941,8 +885,9 @@ function parentData_(req) {
     months[m].count++; months[m].minutes += Number(l.min) || 0;
   });
   var prows = planRows_();
-  var planMonths = [planMonthInfo_(student.id, d.month, prows), planMonthInfo_(student.id, nextYm_(d.month), prows)].filter(function (x) { return x.status !== 'none' && x.status !== 'draft'; });
+  var planMonths = d.plan.months.filter(function (x) { return x.status !== 'none' && x.status !== 'draft'; });
   return { ok: true, data: { name: d.name, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
+    billing: {amount:d.billing.amount,mode:d.billing.mode,rate30:d.billing.rate30,monthly:d.billing.monthly,provisional:d.billing.provisional,invoice:d.billing.invoice?{amount:d.billing.invoice.amount,status:d.billing.invoice.status}:null},
     payments: d.payments.map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate, paidDate: p.paidDate, method: p.method, status: p.status }; }),
     grades: d.grades.map(function (g) { return { date: g.date, test: g.test, subject: g.subject, score: g.score, max: g.max, dev: g.dev, rank: g.rank }; }),
     months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }), planMonths: planMonths } };
@@ -973,7 +918,7 @@ function ensureTasksSheet_() {
 }
 function taskRows_() {
   if (!ss_().getSheetByName('tasks')) return [];
-  return readRows_('tasks').map(function (x) {
+  return readRows_('tasks').filter(function (x) { return !x.withdrawnAt; }).map(function (x) {
     return { id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), title: String(x.title || ''),
       due: normDate_(x.due) || '', createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '', createdBy: String(x.createdBy || ''),
       done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' };
@@ -1006,7 +951,7 @@ function taskDone_(req) {
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var rows = readRows_('tasks');
   for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(student.id)) {
+    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(student.id) && !rows[i].withdrawnAt) {
       sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : '');
       return { ok: true, state: studentState_(req.k) };
     }
@@ -1038,15 +983,17 @@ function adminTaskAdd_(req) {
 }
 function adminTaskDel_(req) {
   var rows = readRows_('tasks');
-  for (var i = rows.length - 1; i >= 0; i--) {
-    if (String(rows[i].id) === String(req.taskId)) { sheet_('tasks').deleteRow(i + 2); return { ok: true }; }
+  for (var i=rows.length-1;i>=0;i--) {
+    if(String(rows[i].id)!==String(req.taskId) || String(rows[i].studentId)!==String(req.studentId)) continue;
+    if(rows[i].sourceRecordId) return lessonTaskWithdraw_(req,rows[i]);
+    sheet_('tasks').deleteRow(i+2); return {ok:true};
   }
-  return { error: '見つかりません' };
+  return {error:'見つかりません'};
 }
 function adminTaskDone_(req) {
   var rows = readRows_('tasks');
   for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].id) === String(req.taskId)) { sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; }
+    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(req.studentId) && !rows[i].withdrawnAt) { sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; }
   }
   return { error: '見つかりません' };
 }
@@ -1338,7 +1285,10 @@ function admin_(req) {
   if (req.op === 'resetConfirm') return adminResetConfirm_(req);
   if (req.mcpKey !== undefined) return mcpEntry_(req); // MCP(ChatGPT/Codex)からの呼び出し。先生のログインとは別系統
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
+  if (['lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
+    case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
+    case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));
     case 'state':       return { ok: true, admin: adminState_() };
     case 'parentIssueSetupCode': return adminParentIssueSetupCode_(req);
     case 'offer': {
@@ -1398,6 +1348,8 @@ function adminState_() {
       done: String(s.done) === 'true' || s.done === true,
       subject: String(s.subject || ''),
       meetUrl: String(s.meetUrl || ''),
+      lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus,
+      lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus,
       req: parseReq_(s.req)
     };
   });
@@ -1423,6 +1375,7 @@ function adminState_() {
     });
   return {
     slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(todayStr_(), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
+    billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
   };
 }
@@ -1435,7 +1388,11 @@ function adminOffer_(req) {
         !(String(rows[i].active) === 'false' || rows[i].active === false)) student = rows[i];
   }
   if (!student) return { error: '案内する生徒をえらんでください' };
-  var repeat = Math.max(1, Math.min(12, Number(req.repeat) || 1));
+  var repeat = req.repeat == null ? 1 : Number(req.repeat);
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > 12 || !billingSlotValid_({date:req.date,start:req.start,min:req.min,subject:req.subject})) return {error:'正しい日付・時刻・授業分数・科目を入力してください'};
+  for (var checkWeek=0;checkWeek<repeat;checkWeek++) {
+    var gate=billingMonthUnlocked_(student.id,addDays_(req.date,checkWeek*7).slice(0,7));if(gate)return gate;
+  }
   // 生徒が「授業できない日」に登録している日への案内は警告(force指定で強行可)
   if (!req.force) {
     var blockedRows = blockedRows_();
@@ -1499,6 +1456,7 @@ function adminDeleteSlot_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r) return { error: '枠が見つかりません' };
   if (r.slot.status === 'booked') return { error: '予約が入っている枠です。先に予約を解除してください' };
+  var gate = billingSlotMutable_(r.slot); if (gate) return gate;
   sheet_('slots').deleteRow(r.rowIndex);
   return { ok: true, admin: adminState_() };
 }
@@ -1506,6 +1464,7 @@ function adminDeleteSlot_(req) {
 function adminUnbook_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r || r.slot.status !== 'booked') return { error: '予約が見つかりません' };
+  var gate = billingSlotMutable_(r.slot); if (gate) return gate;
   var name = studentName_(r.slot.studentId);
   deleteCalEvent_(r.slot);
   r.slot.status = 'open';
@@ -1520,9 +1479,14 @@ function adminUnbook_(req) {
 
 function adminToggleDone_(req) {
   var r = findSlotRow_(req.slotId);
-  if (!r) return { error: '枠が見つかりません' };
-  r.slot.done = !(String(r.slot.done) === 'true' || r.slot.done === true);
-  writeSlotRow_(r);
+  if (!r || r.slot.status !== 'booked') return { error: '確定した授業を選んでください' };
+  var gate = billingSlotMutable_(r.slot); if (gate) return gate;
+  var done = req.done == null ? !(String(r.slot.done) === 'true' || r.slot.done === true) : (req.done === true || String(req.done) === 'true');
+  if (done) {
+    gate = billingSlotAllowed_(r.slot); if (gate) return gate;
+    if (hoursUntil_(r.slot.date,r.slot.start) > 0) return {error:'開始前の授業は実施済みにできません'};
+  }
+  r.slot.done = done; writeSlotRow_(r);
   return { ok: true, admin: adminState_() };
 }
 
@@ -1532,6 +1496,7 @@ function adminFinishOffered_(req) {
   if (!r) return { error: '枠が見つかりません' };
   if (r.slot.status !== 'offered') return { error: 'この枠は承認待ちではありません。画面を更新してください', refresh: true };
   if (hoursUntil_(r.slot.date, r.slot.start) > 0) return { error: 'まだ開始前の案内です。過ぎてから記録してください' };
+  var gate = billingSlotAllowed_(r.slot); if (gate) return gate;
   r.slot.status = 'booked';
   r.slot.done = true;
   writeSlotRow_(r);
@@ -1829,7 +1794,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk14')) return;
+  if (cache.get('schemaOk15')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1848,7 +1813,9 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk14', '1', 21600);
+  ensureLessonSchema_();
+  ensureBillingSchema_();
+  cache.put('schemaOk15', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1867,12 +1834,14 @@ function readRows_(name) {
 
 function findSlotRow_(slotId) {
   var rows = readRows_('slots');
+  var match = null;
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(slotId)) {
-      return { slot: rows[i], rowIndex: i + 2 };
+      if (match) { var err = new Error('授業IDが重複しています。台帳を確認してください'); err.billingCode='conflict'; throw err; }
+      match = { slot: rows[i], rowIndex: i + 2 };
     }
   }
-  return null;
+  return match;
 }
 
 function writeSlotRow_(r) {
@@ -1936,7 +1905,7 @@ var LEDGER_COLS = {
   '成績推移': ['日付', '生徒ID', '氏名', 'テスト名', '科目', '点数', '満点', '偏差値', '順位', '備考'],
   '模試': ['日付', '生徒ID', '氏名', '模試名', '回', '学年', '国語', '国語偏差値', '数学', '数学偏差値', '社会', '社会偏差値', '理科', '理科偏差値', '英語', '英語偏差値',
            '3教科', '3教科偏差値', '5教科', '5教科偏差値', '3教科順位', '5教科順位', '受験者数', '志望校判定', '資料URL', '備考'],
-  '入金管理': ['年月', '生徒ID', '氏名', '請求額', '請求日', '入金日', '入金方法', '状態', '備考'],
+  '入金管理': ['年月','生徒ID','氏名','請求額','請求日','入金日','入金方法','状態','備考','請求ID','承認版','料金方式','確定単価(30分)','確定月謝','実施分数','実施回数','実績JSON','取消日時','取消理由','処理ID','入金版'],
   '面談記録': ['日付', '生徒ID', '氏名', '相手', '方法', '内容', '次のアクション']
 };
 
@@ -1995,13 +1964,7 @@ function systemStudent_(studentId) {
   return null;
 }
 
-function studentFee_(studentId, minutes) {
-  var st = systemStudent_(studentId);
-  var monthly = st ? Number(st.monthly || 0) : 0;
-  var rate30 = st ? Number(st.rate30 || 0) : 0;
-  if (monthly > 0) return { amount: monthly, mode: 'monthly' };
-  return { amount: Math.round(minutes / 30 * rate30), mode: 'time', rate30: rate30 };
-}
+function studentFee_(studentId, minutes, ym) { return billingFee_(studentId, minutes, ym); }
 
 function slotSort_(a, b) {
   return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1);
@@ -2024,7 +1987,7 @@ function kanriDashboard_() {
     return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''),
       studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId),
-      meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req) };
+      meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus };
   };
   var cancelReqs = slots.filter(function (s) { return s.status === 'booked' && s.date >= today && parseReq_(s.req); }).map(slim).sort(slotSort_);
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
@@ -2039,8 +2002,8 @@ function kanriDashboard_() {
   var blockedUp = blockedRows_().filter(function (b) { return b.date >= today && b.date < horizon; })
     .map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, studentId: String(b.studentId || ''), studentName: nameOf[String(b.studentId)] || studentName_(b.studentId), note: String(b.note || '') }; });
   var payments = ledgerRows_('入金管理');
-  var unpaid = payments.filter(function (p) { return String(p['状態'] || '') !== '入金済' && Number(p['請求額'] || 0) > 0; })
-    .map(function (p) { return { row: p._row, ym: String(p['年月']), studentId: String(p['生徒ID']), name: p['氏名'], amount: Number(p['請求額']), billDate: p['請求日'] || '' }; });
+  var unpaid = payments.filter(function (p) { return String(p['状態'] || '') !== '入金済' && p['状態'] !== '取消' && !p['取消日時'] && Number(p['請求額'] || 0) > 0; })
+    .map(function (p) { return { id:String(p['請求ID']||''), row: p._row, ym: String(p['年月']), studentId: String(p['生徒ID']), name: p['氏名'], amount: Number(p['請求額']), billDate: p['請求日'] || '' }; });
   var meetings = ledgerRows_('面談記録').sort(function (a, b) { return a['日付'] < b['日付'] ? 1 : -1; }).slice(0, 5)
     .map(function (m) { return { date: m['日付'], studentId: String(m['生徒ID']), name: m['氏名'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; });
   var profiles = {};
@@ -2106,7 +2069,7 @@ function kanriStudent_(studentId) {
   if (profile) delete profile._row;
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
     .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
-      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req) }; })
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });
@@ -2115,14 +2078,15 @@ function kanriStudent_(studentId) {
       max: Number(g['満点'] || 0) || null, dev: g['偏差値'] === '' ? null : Number(g['偏差値']), rank: g['順位'], note: g['備考'] }; })
     .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
   var payments = ledgerRows_('入金管理').filter(function (p) { return String(p['生徒ID']) === id; })
-    .map(function (p) { return { row: p._row, ym: String(p['年月']), amount: Number(p['請求額'] || 0), billDate: p['請求日'] || '',
+    .map(function (p) { return { paymentRevision:Number(p['入金版'])||0, lessons:billingSavedLessons_(p), id:String(p['請求ID']||''), voidedAt:String(p['取消日時']||''), voidReason:String(p['取消理由']||''), row: p._row, ym: String(p['年月']), amount: Number(p['請求額'] || 0), billDate: p['請求日'] || '',
       paidDate: p['入金日'] || '', method: p['入金方法'] || '', status: p['状態'] || '', note: p['備考'] || '' }; })
     .sort(function (a, b) { return a.ym < b.ym ? 1 : -1; });
   var meetings = ledgerRows_('面談記録').filter(function (m) { return String(m['生徒ID']) === id; })
     .map(function (m) { return { row: m._row, date: m['日付'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; })
     .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-  var fee = studentFee_(id, minutes);
+  var fee = studentFee_(id, minutes, month), billingMonths = billingMonths_(id);
   return {
+    billing:billingPreview_(id,month), billingMonths:billingMonths,
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     parentAuth: parentStatus_(id),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
@@ -2131,11 +2095,11 @@ function kanriStudent_(studentId) {
     teacherOff: teacherOff_(today, true),
     plan: (function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
       monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
-      months: [planMonthInfo_(id, month, rows), planMonthInfo_(id, nextYm_(month), rows)] }; })(),
+      months: billingMonths.map(function(b){return planMonthInfo_(id,b.ym,rows);}) }; })(),
     events: eventsForAdmin_(60).filter(function (x) { return x.studentId === id; }),
     tasks: tasksFor_(id, 60),
     month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
-      billed: payments.some(function (p) { return p.ym === month; }) }
+      billed: payments.some(function (p) { return p.ym === month && p.status !== '取消'; }) }
   };
 }
 
@@ -2200,30 +2164,9 @@ function kanriAddExam_(req) {
   return kanriStudentOp_({ studentId: id, view: req.view });
 }
 
-function kanriAddPayment_(req) {
-  var id = String(req.studentId || '');
-  var sys = systemStudent_(id);
-  if (!sys) return { error: '生徒が見つかりません' };
-  if (!/^\d{4}-\d{2}$/.test(String(req.ym || ''))) return { error: '年月の形式は YYYY-MM です' };
-  var amount = Number(req.amount);
-  if (isNaN(amount) || amount <= 0) return { error: '請求額を入れてください' };
-  var paid = String(req.paidDate || '');
-  ledgerAppend_('入金管理', { '年月': String(req.ym), '生徒ID': id, '氏名': sys.name, '請求額': amount,
-    '請求日': String(req.billDate || todayStr_()), '入金日': paid, '入金方法': String(req.method || ''),
-    '状態': paid ? '入金済' : '未入金', '備考': String(req.note || '').slice(0, 200) });
-  return kanriStudentOp_({ studentId: id, view: req.view });
-}
+function kanriAddPayment_(req) { return billingMutationResult_(req,billingAddInvoice_(req)); }
 
-function kanriSetPaid_(req) {
-  var sh = ledgerSheet_('入金管理');
-  var row = Number(req.row);
-  var cols = LEDGER_COLS['入金管理'];
-  var vals = sh.getRange(row, 1, 1, cols.length).getValues()[0];
-  if (String(vals[1]) !== String(req.studentId)) return { error: '行が一致しません。画面を更新してください' };
-  var paid = req.unpaid ? '' : String(req.paidDate || todayStr_());
-  sh.getRange(row, 6, 1, 3).setValues([[paid, req.unpaid ? '' : String(req.method || ''), paid ? '入金済' : '未入金']]);
-  return kanriStudentOp_({ studentId: String(req.studentId), view: req.view });
-}
+function kanriSetPaid_(req) { return billingMutationResult_(req,billingSetPaid_(req)); }
 
 function kanriAddMeeting_(req) {
   var id = String(req.studentId || '');
@@ -2237,7 +2180,7 @@ function kanriAddMeeting_(req) {
 
 function kanriDeleteRow_(req) {
   var name = String(req.sheet || '');
-  if (!LEDGER_COLS[name] || name === '生徒台帳') return { error: 'このシートの行は削除できません' };
+  if (!LEDGER_COLS[name] || name === '生徒台帳' || name === '入金管理') return { error: 'このシートの行は削除できません' };
   var sh = ledgerSheet_(name);
   var row = Number(req.row);
   var cols = LEDGER_COLS[name];
@@ -2397,7 +2340,7 @@ function mcpStudent_(req) {
     thisMonth: d.thisMonth, plan: d.plan && d.plan.months, tasks: (d.tasks || []).filter(function (t) { return !t.doneAt; }),
     wishes: d.wishes, blocked: d.blocked, events: d.events,
     latestExam: (d.exams || []).slice(-1)[0] ? (function (e) { return { date: e.date, name: e.name, round: e.round, total5: e.total5, total3: e.total3, subjects: e.subjects }; })((d.exams || []).slice(-1)[0]) : null,
-    gradesCount: (d.grades || []).length, paymentsUnpaid: (d.payments || []).filter(function (p) { return p.status !== '入金済'; }).map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate }; }) };
+    gradesCount: (d.grades || []).length, paymentsUnpaid: (d.payments || []).filter(function (p) { return p.status !== '入金済' && p.status !== '取消'; }).map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate }; }) };
 }
 
 // 先生が対応すべきもの一覧
@@ -2425,15 +2368,15 @@ function mcpBilling_(req) {
     var mine = slots.filter(function (x) { return String(x.studentId) === id && x.status === 'booked' && x.date.slice(0, 7) === ym; });
     var done = mine.filter(function (x) { return String(x.done) === 'true' || x.done === true; });
     var minutes = 0; done.forEach(function (x) { minutes += Number(x.min) || 0; });
-    var fee = studentFee_(id, minutes);
+    var fee = studentFee_(id, minutes, ym), bp=billingPreview_(id,ym);
     var pm = planMonthInfo_(id, ym, planRowsAll);
     var pay = payments.filter(function (p) { return String(p['生徒ID']) === id; }).map(function (p) { return { amount: Number(p['請求額'] || 0), status: String(p['状態'] || ''), billDate: String(p['請求日'] || ''), paidDate: String(p['入金日'] || '') }; });
     return { student: { id: id, name: String(s.name) }, doneCount: done.length, doneMinutes: minutes, bookedNotDone: mine.length - done.length,
       doneDates: done.map(function (x) { return x.date + ' ' + x.start + (x.subject ? ' ' + x.subject : ''); }).sort(),
-      fee: fee.amount, feeMode: fee.mode, planTotal: pm.total, planStatus: pm.status, approvedVia: pm.approvedVia, payments: pay };
+      fee: fee.amount, feeMode: fee.mode, canBill:bp.canBill, billingReason:bp.reason, planTotal: pm.total, planStatus: pm.status, approvedVia: pm.approvedVia, payments: pay };
   }).filter(function (r) { return r.doneCount || r.bookedNotDone || r.payments.length || r.planTotal; });
   var total = 0; rows.forEach(function (r) { total += r.fee; });
-  return { ok: true, month: ym, rows: rows, totalFee: total, note: 'fee は実施済み(done)の授業から計算。月謝制の生徒は固定額。承認(planStatus)が approved でない月は請求前に確認が必要' };
+  return { ok: true, month: ym, rows: rows, totalFee: total, note: 'fee は実施済み(done)の授業から計算。月謝制の生徒は固定額。承認と科目別回数を検証し、canBillがtrueの場合に請求可。請求記録後の金額は固定' };
 }
 
 function mcpTeacherOff_(req) {

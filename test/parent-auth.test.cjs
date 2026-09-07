@@ -305,10 +305,12 @@ test('authenticated monthly approval changes only own plan and does not send tes
   const sh = h.spreadsheet.getSheetByName('plans');
   sh.appendRow(['plan-a', 'test-a', '2026-09', '数学', 4, 'proposed', '', '', '', '']);
   sh.appendRow(['plan-b', 'test-b', '2026-09', '英語', 2, 'proposed', '', '', '', '']);
+  ok(h.admin('planPropose', {studentId:'test-a',ym:'2026-09',rate30:1500,monthly:0}));
+  const revision=h.rows('monthAgreements')[0].revision;
   const before = h.rows('plans');
   authRejected(h.parent('parentPlanDecide', { ym: '2026-09', approve: true }));
   assert.deepEqual(h.rows('plans'), before);
-  ok(h.parent('parentPlanDecide', { ptoken, ym: '2026-09', approve: true }));
+  ok(h.parent('parentPlanDecide', { ptoken, ym: '2026-09', approve: true, expectedRevision:revision }));
   assert.equal(h.rows('plans')[0].status, 'approved');
   assert.equal(h.rows('plans')[1].status, 'proposed');
   assert.ok(h.rows('plans')[0].approvedAt);
@@ -345,7 +347,7 @@ test('parent data excludes teacher-only grade and payment notes and ledger row n
   const { ptoken } = setup(h);
   const c = h.context();
   h.ledger.insertSheet('成績推移').appendRow(c.LEDGER_COLS['成績推移']).appendRow(['2026-09-01', 'test-a', '【テスト】保護者認証A', 'テスト', '数学', 80, 100, '', '', 'teacher-private-grade-note']);
-  h.ledger.insertSheet('入金管理').appendRow(c.LEDGER_COLS['入金管理']).appendRow(['2026-09', 'test-a', '【テスト】保護者認証A', 6000, '', '', '', '未入金', 'teacher-private-payment-note']);
+  h.ledger.getSheetByName('入金管理').appendRow(['2026-09', 'test-a', '【テスト】保護者認証A', 6000, '', '', '', '未入金', 'teacher-private-payment-note']);
   const parent = ok(h.parent('parentData', { ptoken })).data;
   assert.equal(parent.grades[0].score, 80);
   assert.equal(parent.payments[0].amount, 6000);

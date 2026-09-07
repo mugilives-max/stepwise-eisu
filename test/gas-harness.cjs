@@ -23,7 +23,8 @@ class Range {
     values.forEach((row, r) => row.forEach((value, c) => {
       const target = this.row + r - 1;
       this.sheet.values[target] ||= [];
-      this.sheet.values[target][this.column + c - 1] = value;
+      // Sheets consumes a leading apostrophe used as a literal-text marker.
+      this.sheet.values[target][this.column + c - 1] = typeof value === 'string' && value.startsWith("'") ? value.slice(1) : value;
     }));
     return this;
   }
@@ -86,7 +87,9 @@ function createHarness(options = {}) {
     put(key, value, seconds = 600) { cacheValues.set(key, { value: String(value), expires: now + seconds * 1000 }); },
     remove(key) { cacheValues.delete(key); }
   };
-  const source = fs.readFileSync(path.resolve(__dirname, '../gas/Code.gs'), 'utf8');
+  const source = fs.readdirSync(path.resolve(__dirname, '../gas')).filter(name => name.endsWith('.gs'))
+    .sort((a, b) => a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : a.localeCompare(b))
+    .map(name => fs.readFileSync(path.resolve(__dirname, '../gas', name), 'utf8')).join('\n');
   function context() {
     class ClockDate extends Date {
       constructor(...args) { super(...(args.length ? args : [now])); }

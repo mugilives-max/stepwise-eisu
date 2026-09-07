@@ -205,6 +205,7 @@
         var previewK = null;     // 先生のプレビュー
         var parentStep = "pass"; // "pass" | "setup" | "data" | "logout"
         var parentNotice = "";
+        var parentPlanMemos = Object.create(null), parentPlanNotice = "";
         var P = null;            // 保護者向けデータ
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
@@ -601,7 +602,7 @@
           // テストまでのカウントダウン + やること(宿題・持ち物)
           (function () {
             var tests = events.filter(function (e) { return e.kind === "test" && e.dateTo >= today; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-            var tasks = (S.tasks || []).slice();
+            var tasks = (S.tasks || []).filter(function (t) { return !t.withdrawnAt && !t.withdrawn; });
             var open = tasks.filter(function (t) { return !t.done; });
             var doneT = tasks.filter(function (t) { return t.done; });
             var nextL = mine.filter(function (s) { return s.date >= today; })[0];
@@ -684,7 +685,7 @@
           h += '<div class="row" style="margin-bottom:8px"><span class="seg"><button data-action="wkind" data-k="want" class="' + (wishKind === "want" ? "on" : "") + '">この日時に授業をしたい</button><button data-action="wkind" data-k="ok" class="' + (wishKind === "ok" ? "on" : "") + '">この時間帯のどこかで</button></span></div>';
           if (wishKind === "want") {
             h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="17:00" step="900"><select id="f-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>希望を送る</button></div>';
-            h += '<div class="note">「この日のこの時間に授業をしたい」という希望です。先生が確認して案内を送るので、承認すると確定です。</div>';
+            h += '<div class="note">「この日のこの時間に授業をしたい」という希望です。先生が案内を送ります。保護者が月の回数と料金を承認した範囲内で、日程を承認すると確定します。</div>';
           } else {
             h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="f-wend" value="18:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>時間帯を送る</button></div>';
             h += '<div class="note">「この時間帯なら授業ができる」という空き時間です。先生がこの中から授業の時間を決めて案内します(時間帯すべてが授業になるわけではありません)。</div>';
@@ -866,33 +867,36 @@
         function renderParent() {
           var d = P;
           var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="parentclose"' + (busy ? " disabled" : "") + '>ログアウト</button></div>';
-          var tm = d.thisMonth || {};
+          var tm = d.thisMonth || {}, bill = d.billing;
+          if (parentPlanNotice) html += '<p class="parent-error" role="alert">' + esc(parentPlanNotice) + '</p>';
+          html += '<p><button class="btn-sm" data-action="parentrefresh"' + (busy ? " disabled" : "") + '>最新の提案・請求を確認</button></p>';
           html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2><div class="row" style="align-items:stretch">';
           html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
-          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + yen(tm.fee) + '</div><div class="small muted">' + (tm.mode === "monthly" ? "月額固定" : "30分 " + yen(d.rate30) + " × 実施時間") + '</div></div></div>';
+          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (bill && bill.mode === "recorded" ? "請求記録額" : tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + (bill && bill.provisional && !bill.invoice ? "料金の承認待ち" : yen(bill ? (bill.invoice ? bill.invoice.amount : bill.amount) : tm.fee)) + '</div><div class="small muted">' + (bill && bill.provisional && !bill.invoice ? "この月の条件を先生にご確認ください" : bill && bill.mode === "recorded" ? "過去の請求記録（当時の料金条件は未記録）" : tm.mode === "monthly" ? "月額固定" : "30分 " + yen(bill ? bill.rate30 : d.rate30) + " × 実施時間") + '</div></div></div>';
 
           html += '<h2>お支払い状況</h2>';
           var pays = d.payments || [];
           if (!pays.length) html += '<div class="empty">請求・入金の記録はまだありません</div>';
           else {
             html += '<div class="card tbwrap"><table class="tb"><tr><th>月</th><th>金額</th><th>状態</th><th>入金日</th></tr>';
-            pays.forEach(function (p) { html += '<tr><td>' + esc(p.ym) + '</td><td>' + yen(p.amount) + '</td><td>' + (p.status === "入金済" ? '<span class="tag green">入金済</span>' : '<span class="tag red">未入金</span>') + '</td><td>' + (p.paidDate ? fmtDY(p.paidDate) : "—") + '</td></tr>'; });
+            pays.forEach(function (p) { html += '<tr><td>' + esc(p.ym) + '</td><td>' + yen(p.amount) + '</td><td>' + (p.status === "取消" ? '<span class="tag gray">取消済み</span>' : p.status === "入金済" ? '<span class="tag green">入金済</span>' : '<span class="tag red">未入金</span>') + '</td><td>' + (p.paidDate ? fmtDY(p.paidDate) : "—") + '</td></tr>'; });
             html += '</table></div>';
           }
 
           var pms = d.planMonths || [];
-          html += '<h2>授業回数の承認</h2>';
+          html += '<h2>授業回数と料金の承認</h2>';
           if (!pms.length) html += '<div class="empty">承認をお願いする予定はいまありません</div>';
           else {
             html += '<div class="card">';
             pms.forEach(function (m) {
               html += '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row between"><strong>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月の授業回数</strong>' + (m.status === "approved" ? '<span class="tag green">承認済み ' + esc(m.approvedAt) + '</span>' : m.status === "declined" ? '<span class="tag red">見送り</span>' : '<span class="tag amber">ご確認ください</span>') + '</div>';
               html += '<div style="margin:4px 0">' + m.rows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") + '<span class="small muted">(合計 ' + m.total + '回)</span></div>';
-              if (m.status === "proposed") html += '<div class="row" style="margin-top:6px"><button class="btn-primary btn-sm" data-action="planok" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>この回数で承認する</button><input type="text" id="pl-memo-' + esc(m.ym) + '" placeholder="見送る場合の理由や相談(任意)" maxlength="100" style="flex:1;min-width:160px"><button class="btn-quiet btn-sm" data-action="planng" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>見送る・相談する</button></div>';
+              html += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? "月謝 " + yen(m.monthly) + "（月額固定）" : "30分あたり " + yen(m.rate30) + "（実施時間で計算）") : "料金条件が未確認です。先生からの再提案をお待ちください。") + (m.revision != null ? "・第" + esc(m.revision) + "版" : "") + '</p>';
+              if (m.status === "proposed" && m.termsKnown && m.revision != null) html += '<div class="row" style="margin-top:6px"><button class="btn-primary btn-sm" data-action="planok" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>この回数と料金を承認する</button><input type="text" id="pl-memo-' + esc(m.ym) + '" value="' + esc(parentPlanMemos[myKey() + ":" + m.ym] || "") + '" data-parent-plan-memo="' + esc(m.ym) + '" aria-label="' + esc(m.ym) + 'の相談" placeholder="見送る場合の理由や相談(任意)" maxlength="100" style="flex:1;min-width:160px"><button class="btn-quiet btn-sm" data-action="planng" data-ym="' + esc(m.ym) + '"' + (busy ? " disabled" : "") + '>見送る・相談する</button></div>';
               else if (m.status === "declined" && m.memo) html += '<div class="small muted">' + esc(m.memo) + '</div>';
               html += '</div>';
             });
-            html += '<div class="note">承認いただいた回数をもとに授業を予定し、授業料をご請求します。回数の変更を先生が行った場合は、あらためて承認をお願いします。</div></div>';
+            html += '<div class="note">承認いただいた月の回数と料金で授業を確定・実施・請求します。回数や料金を変更する場合は、あらためて承認をお願いします。請求済みの金額は履歴に残ります。</div></div>';
           }
           html += '<div class="note">テストの結果は「成績」タブで見られます。</div>';
 
@@ -1065,20 +1069,25 @@
               studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "解除しました"); break;
             case "parentmode": if (busy) return; parentStep = parentStep === "setup" ? "pass" : "setup"; parentNotice = ""; render(); break;
             case "parentresume": if (busy) return; loadParent(ssGet(parentSessionKey()) || ""); break;
-            case "parentclose": logoutParent(); break;
+            case "parentclose": parentPlanMemos = Object.create(null); parentPlanNotice = ""; logoutParent(); break;
+            case "parentrefresh": parentPlanNotice = ""; loadParent(ssGet(parentSessionKey()) || ""); break;
             case "planok":
             case "planng":
               if (busy) return;
               var pym = btn.getAttribute("data-ym"), approve = act === "planok", pmemo = val("pl-memo-" + pym);
-              if (!approve && !confirm("この月の回数を見送り(相談)として先生に伝えますか?")) return;
+              var proposedMonth = (P && P.planMonths || []).filter(function (m) { return m.ym === pym; })[0];
+              if (!proposedMonth || proposedMonth.revision == null || !proposedMonth.termsKnown) { toast("最新の提案を確認してください"); return; }
+              parentPlanMemos[myKey() + ":" + pym] = pmemo;
+              if (!confirm(approve ? pym + " の第" + proposedMonth.revision + "版、回数と料金を承認しますか？" : "この月の回数と料金を見送り(相談)として先生に伝えますか?")) return;
               var approvalKey = myKey();
               busy = true; render();
-              apiPost({ action: "parentPlanDecide", k: approvalKey, ptoken: ssGet(parentSessionKey(approvalKey)) || "", ym: pym, approve: approve, memo: pmemo }).then(function (res) {
+              apiPost({ action: "parentPlanDecide", k: approvalKey, ptoken: ssGet(parentSessionKey(approvalKey)) || "", ym: pym, expectedRevision: proposedMonth.revision, approve: approve, memo: pmemo }).then(function (res) {
                 if (approvalKey !== myKey()) return;
                 busy = false;
-                if (res.error) { if (res.parentAuthRequired || res.badCode) { clearParentSession(approvalKey); parentNotice = res.error; } else toast(res.error); render(); return; }
+                if (res.error) { if (res.parentAuthRequired || res.badCode) { clearParentSession(approvalKey); parentNotice = res.error; } else { parentPlanNotice = res.error + "。最新の提案を確認してからお試しください。"; } render(); return; }
+                delete parentPlanMemos[approvalKey + ":" + pym]; parentPlanNotice = "";
                 P = res.data; render(); toast(approve ? "承認しました。ありがとうございます" : "先生に伝えました");
-              }).catch(function () { if (approvalKey !== myKey()) return; busy = false; toast("通信に失敗しました"); render(); });
+              }).catch(function () { if (approvalKey !== myKey()) return; busy = false; parentPlanNotice = "通信に失敗しました。入力は保持しています。最新の提案を確認してからお試しください。"; render(); });
               break;
             case "gohome": location.hash = "#home"; break;
             case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
@@ -1091,6 +1100,8 @@
           if (!el || el.getAttribute("data-action") !== "taskdone") return;
           studentAction({ action: "taskDone", k: myKey(), taskId: el.getAttribute("data-id"), done: el.checked }, el.checked ? "できた! ✓" : "未完了に戻しました");
         });
+
+        app.addEventListener("input", function (ev) { var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) parentPlanMemos[myKey() + ":" + ym] = ev.target.value; });
 
         /* ---------- 起動 ---------- */
         ssDel("sw_pt"); // 旧方式の、全生徒で共通だった端末内セッションを破棄する。

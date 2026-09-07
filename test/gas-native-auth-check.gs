@@ -79,6 +79,7 @@ function stepwiseNativeAuthCheck() {
     };
     Object.keys(schema).forEach(function (name) { ensureSheet_(app, name, schema[name]); });
     Object.keys(LEDGER_COLS).forEach(function (name) { ensureSheet_(ledger, name, LEDGER_COLS[name]); });
+    ensureLessonSchema_(); ensureBillingSchema_();
     app.getSheetByName('students').getRange(2, 1, 1, 9).setNumberFormat('@').setValues([
       [studentId, studentName, 'true', '', studentCode, '1500', '', '', '']
     ]);

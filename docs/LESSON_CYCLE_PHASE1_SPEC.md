@@ -1,6 +1,6 @@
 # 授業サイクル・初回実装仕様
 
-作成: 2026-09-07 / **状態: 未実装の詳細仕様案。** 授業サイクルの実装・レビュー時に読む、設計判断と受け入れ条件の正本です。以下は実装時の要求であり、実装済み機能の説明ではありません。[画面試作](../prototypes/lesson-cycle/index.html) の範囲は [第9節](#9-画面試作の確認範囲) を参照してください。
+作成: 2026-09-07 / 更新: 2026-09-08 / **状態: ローカル実装済み。本番未反映・実GAS検証待ち。** 授業サイクルの保守・レビュー時に読む、設計判断と受け入れ条件の正本です。以下は `gas/LessonCycle.gs` と管理画面の実装仕様です。ローカルの検証範囲は [第7節](#7-受け入れ条件)、当初の [画面試作](../prototypes/lesson-cycle/index.html) の範囲は [第9節](#9-画面試作の確認範囲) を参照してください。
 
 導入順・採否は [REDESIGN_MASTER_PLAN.md](REDESIGN_MASTER_PLAN.md)、現在の稼働仕様は [SYSTEM.md](SYSTEM.md)、認証仕様は [PARENT_AUTH.md](PARENT_AUTH.md)、作業の進捗は [FUTURE_WORK.md](FUTURE_WORK.md) で管理します。
 
@@ -29,7 +29,7 @@
 
 「実施済みにする」「請求登録」は既存の別操作です。記録保存では `slots.done`、承認、請求額、入金、Calendar、メール、LINEを変更しません。
 
-入力上限案: 授業内容2,000文字、取り組みの様子1,000文字、次回の焦点1,000文字、先生メモ2,000文字、報告下書き4,000文字。宿題は最大10件、1件の題名80文字、期限は空または実在する日付。上限超過は切り捨てず入力エラーとします。
+入力上限: 授業内容2,000文字、取り組みの様子1,000文字、次回の焦点1,000文字、先生メモ2,000文字、報告下書き4,000文字。宿題は最大10件、1件の題名80文字、期限は空または1900〜2199年の実在する日付。上限超過や改行・タブ以外の制御文字は入力エラーとし、切り捨てません。
 
 入力時間の目標は1〜2分ですが未計測です。管理画面では、過去の実施済み授業で記録がなければ「未入力」、有効記録ありなら「記録済み」、報告があれば「下書き・未公開」と区別します。初回には「公開済み」を発生させる操作はありません。将来は公開された本文を別版として保持し、編集中の下書きとは独立させます。
 
@@ -61,12 +61,17 @@ lessonRecordsを授業内容の正本、tasksを宿題の公開内容・完了�
 
 | op（新規） | 主な入力 | 返すもの |
 |---|---|---|
-| `lessonContext` | studentId, slotId | 対象授業、当該記録、前回記録、未完了宿題、現在revision、宿題反映状態、下書き |
+| `lessonContext` | studentId, slotId、任意recordId | 対象授業、当該記録、前回記録、未完了宿題、現在revision、宿題反映状態、下書き、全件の授業選択肢。slotIdが空なら直近の対象を選び、対象なしはslot:null |
 | `lessonRecordSave` | studentId, slotId, expectedRevision, requestId, record | 保存済みrevision、時刻、反映待ち宿題差分。初回expectedRevisionは0 |
 | `lessonHomeworkApply` | studentId, recordId, expectedRevision, requestId | 追加・更新・保留・失敗の項目ID、最新tasks、再試行の要否 |
-| `lessonHomeworkWithdraw` | studentId, recordId, itemId, requestId | 明示的に取り下げた結果。doneAtは保存 |
-| `lessonReportDraftSave` | studentId, recordId, expectedDraftRevision, sourceRevision, requestId, body | 下書きrevision、保存時刻。公開しない |
+| `lessonHomeworkWithdraw` | studentId, recordId, itemId, requestId、任意expectedRevision | 明示的に取り下げた結果。doneAtは保存。新画面はexpectedRevisionも送る |
+| `lessonReportDraftSave` | studentId, recordId, expectedDraftRevision, sourceRevision, requestId, body | draftRevision、保存時刻。sourceRevisionは現在の記録版と一致が必要。公開しない |
 | `lessonRecordVoid` | studentId, recordId, expectedRevision, requestId, reason | 無効化した記録。物理削除せず、宿題・請求・予約の扱いは別操作 |
+| `lessonWriteResume` | studentId, requestId | 別タブで中断した書き込みを再開。受理済みの内容を使い、完了済みなら保存結果を返す |
+
+成功は `{ ok: true, context }` を返し、書き込みには元の `operation`、recordId、版数、保存時刻を付けます。contextは先生専用で、student、slot、record（teacherNote含む）、previous（内部メモなし）、otherPrevious、openTasks、homeworkState、draft、draftTemplate、pending、slotChanged、lessonChoicesを持ちます。保存済みデータの端末キャッシュに入れず、画面を閉じるまでのメモリに保持します。
+
+宿題の差分状態は `new`（未反映）、`changed`（変更あり）、`applied`（一致）、`held`（完了済み変更保留）、`withdrawn`（取り下げ済み）、`removed`（下書きから除去したが公開課題は残る）です。反映結果はadded/updated/unchanged/held/withdrawnの項目IDで返します。
 
 未認証は既存の `badAuth`。入力不正は `validation`、対象不一致は `notFound`、版競合は `conflict`、途中処理は `pending` を `errorCode` として返す。競合時は入力を残し、「最新を確認」へ誘導し、自動上書きしません。
 
@@ -76,15 +81,19 @@ lessonRecordsを授業内容の正本、tasksを宿題の公開内容・完了�
 - recordIdを受け取る操作は必ず保存されたstudentIdを照合する。taskIdだけ、シート行番号だけの更新はしない。
 - 日付と時刻の正規化、文字数・配列数・必須値・型・重複itemIdを検証する。未知の書き込みフィールドを拒否し、reqで日時・生徒ID・完了・公開状態を上書きできないようにする。
 - 入力テキストはプレーンテキストとして保存し、先頭 `=` などを数式として評価させない書き込み方法を共通化する。画面表示は `esc` またはtextContentを使う。
-- 非在籍生徒の既存記録は先生が閲覧・訂正できる。新たな宿題反映は不可。対象slotが消失・他生徒に再割当されていれば追記保存を止める。
+- 非在籍生徒の既存記録は先生が閲覧・訂正できる。新たな宿題反映は不可。対象slotが消失・他生徒に再割当、または日時・時間数・科目が変更されていれば新たな保存を止める。受理済み処理の再開は下記の復旧規則に従う。
 
 ### 再送・同時更新・途中失敗
 
-`ScriptLock` の取得・解放はtry/finallyに含め、取得タイムアウトをエラーに変換します。同じrequestId・同じ正規化payloadの再送は以前の結果または未完了工程の再開にし、同じIDで内容が違えば拒否します。expectedRevisionが古ければ書き込まず競合を返します。
+`doPost` が `ScriptLock` をtry/finallyで取得・解放し、先生用取得と書き込みを直列化します。授業モジュールは二重ロックしません。取得タイムアウトはpendingを返します。同じrequestId・同じ正規化payloadの再送は以前の結果または未完了工程の再開にし、同じIDで内容が違えば拒否します。expectedRevisionが古ければ書き込まず競合を返します。
 
 Sheetsの複数行書き込みはトランザクションではありません。書き込み前に全項目の検証を終え、`lessonWrites` にpendingの内容を保存します。固定IDでのupsertを順番に行い、最後にappliedと結果を記録します。pendingを認めた対象recordには別更新を受け付けず、先生の再試行または管理用復旧関数で完了させます。書き込み記録自体の保存に失敗した場合は後続処理を始めません。
 
 教師用の取得も同じロックとpending判定を使い、保存途中の異なる版の本文・内部メモを完成済みとして返しません。宿題反映は項目ごとに公開され得るため、途中失敗を「全件成功」と表示しません。既存の生徒GETは全件一括反映を保証しないことを前提に、個々のtasks行は1回のsetValuesで整合するよう更新します。
+
+中断後に予約が取消・変更された場合でも、受理済みの記録・内部メモ・下書きは、元の生徒と授業日時を保持した履歴として完成させます。中断した宿題反映は、再開時に非在籍・予約変更を検出したら未反映項目の公開を停止し、書き込み記録をfailedで終えます。既に反映した宿題と完了履歴は残し、`partial: true`、failed項目ID、`retryRequired: false`、最新contextを返します。同じリクエストの再送でもこの結果を返し、既存の宿題は別操作で取り下げられます。
+
+通信失敗と認証切れでは画面の入力と送信内容・requestIdを保持します。競合では最新内容と手元の入力を比較し、明示的に編集を続けるか最新へ入れ替えます。比較だけでは保存しません。別授業へ移動後の遅延応答はその画面を上書きせず、以前のトークンの応答で新しい先生ログインを失効させません。
 
 ## 5. 宿題と授業枠の変化
 
@@ -100,11 +109,13 @@ Sheetsの複数行書き込みはトランザクションではありません�
 
 1. 開始時に2つの台帳をバックアップし、GASの公開版・Gitコミットを記録する。機能ごとにコミットを分け、Gitへの保存と本番反映の完了を区別する。
 2. 新規シートを追加し、tasksの既存ヘッダーを確認して末尾列だけを追加する。想定と違う場合は移行を止める。移行は何度実行しても同じ結果にする。
-3. `ensureSchema_` のキャッシュキーを更新し、スキーマ版を記録する。過去授業から架空の記録や宿題を自動生成しない。
-4. 新規機能を非表示にできるスイッチを設け、GAS→画面の順に反映。未対応APIには「準備中」を表示する。
+3. `ensureLessonSchema_` が全対象のヘッダーを確認してから追加する。`ensureSchema_` のキャッシュキーは今回 `schemaOk15` へ更新。過去授業から架空の記録や宿題を自動生成しない。
+4. `config.lessonCycleEnabled` を `off` にすると専用APIを停止し、画面は「準備中」を表示する（空またはonは有効）。GAS→画面の順に反映する。
 5. ロールバックは機能を非表示にして書き込みを止め、追加シート・列を保持する。宿題取り下げを理解しない旧GASへ戻す場合は、そのまま戻すと課題が再表示され得るため互換版を用意する。稼働中データをバックアップで丸ごと上書きしない。
 
 ## 7. 受け入れ条件
+
+ローカルでは [授業APIテスト](../test/lesson-cycle.test.cjs) が保存・移行・参照保護・途中失敗・ダミー台帳のコピーからの復旧・HTTP認証とロック・公開APIへの混入防止を、[画面VMテスト](../test/lesson-cycle-ui.test.cjs) が再送・再ログイン時の入力保持・競合比較・遅延応答・端末保存の不使用を検証します。VMはブラウザの表示検証ではありません。[実GAS用検証関数](../test/gas-native-lesson-check.gs) は新規の架空台帳2冊だけで実関数・数式評価の防止を確認する一時ヘルパーで、公開対象に含めません。実行結果と本番反映の完了は [FUTURE_WORK.md](FUTURE_WORK.md) を参照してください。
 
 - 初回保存と同一requestIdの再送で記録1件。同じ画面からの再保存で同じ記録のrevisionが増える。
 - 古いrevision、他生徒のslotId・recordId・taskId、無効token、停止生徒への新規宿題を拒否する。
@@ -123,7 +134,8 @@ Sheetsの複数行書き込みはトランザクションではありません�
 
 | ファイル | 目的・既存処理への影響 |
 |---|---|
-| `gas/Code.gs` | 新シート・移行・先生API・対象検証・版管理・書き込み復旧を追加。taskRows/tasksForと先生のtaskDelを取り下げに対応させる。既存生徒/保護者/MCPの返却項目を検証 |
+| `gas/LessonCycle.gs` | 新シート・移行・先生API・対象検証・版管理・書き込み復旧。Code.gsと同じGASプロジェクトへ配置する |
+| `gas/Code.gs` | 専用APIへの振り分け、移行呼び出し、taskRows/tasksForの取り下げ除外、先生taskDelの取り下げ対応、本文を含まない一覧バッジ |
 | `kanri/index.html` | カルテ/今日の授業からの入口、記録未入力表示、入力保持、宿題差分、下書き、次回準備。新しい記録は既存端末キャッシュへ入れない |
 | `yoyaku/index.html` | 既存やること一覧の取り下げ除外と状態再取得。授業記録や報告を先行公開しない |
 | `docs/SYSTEM.md`, `docs/FUTURE_WORK.md` | 実装したシート/API/運用、残る課題、GitとGASの対応版を更新 |
