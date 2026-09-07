@@ -276,7 +276,7 @@
           if (!/[\u3040-\u30ff\u4e00-\u9fff]/.test(n)) return n.slice(0, 6);
           return n.length >= 5 ? n.slice(0, 3) : n.slice(0, 2);
         }
-        // 時刻順に並べ、時間帯が重なる授業(同時授業)をひとつのグループにする → [[l], [l1, l2], ...]
+        // 時刻順に並べ、時間帯の重なりが連なる授業をまとめる。グループの件数は同時人数ではない。
         function groupOverlap(list) {
           var sorted = list.slice().sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : String(a.studentName) < String(b.studentName) ? -1 : 1; });
           var out = [], cur = null, curEnd = "";
@@ -916,10 +916,10 @@
             if (it && it.toff) cls += " toff";
             var marks = "";
             if (boxes) {
-              // Box 表示(ホーム): 先生の休み → 授業(時刻順。同時授業は左の太線でひとまとまり) → 生徒の希望 → 共有予定。全件を直列に並べ、省略しない
+              // Box 表示(ホーム): 先生の休み → 授業(時刻順。時間が重なる授業は左の太線でまとめる) → 生徒の希望 → 共有予定。全件を直列に並べ、省略しない
               if (it && it.toff) marks += '<span class="cbox to">休み(終日)</span>';
               if (it && it.toffT) it.toffT.forEach(function (o) { marks += '<span class="cbox to">休 ' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
-              if (it && it.rows) it.rows.forEach(function (g) { var inner = g.map(lessonBox).join(""); marks += g.length > 1 ? '<span class="cgrp" title="同じ時間帯の授業(' + g.length + '人)">' + inner + '</span>' : inner; });
+              if (it && it.rows) it.rows.forEach(function (g) { var inner = g.map(lessonBox).join(""); marks += g.length > 1 ? '<span class="cgrp" title="時間が重なる授業">' + inner + '</span>' : inner; });
               if (it && it.wishL) it.wishL.forEach(function (x) { marks += '<span class="cbox ws" title="' + esc(x.studentName + ' ' + (x.kind === "want" ? 'この日時を希望' : 'この時間帯のどこかで') + ' ' + x.start + '〜' + x.end + (x.note ? ' ' + x.note : '')) + '">希 ' + esc(shortName(x.studentName)) + ' ' + cT(x.start) + '-' + cT(x.end) + '</span>'; });
               if (it && it.evL) it.evL.forEach(function (e) { marks += '<span class="cbox ev" title="' + esc(e.studentName + ' ' + e.title) + '">' + esc(shortName(e.studentName)) + ' ' + esc(e.title) + '</span>'; });
               if (it && !opts.noNg && (it.ng || it.ngT)) marks += '<span class="cbox ng">× 授業できない生徒 ' + ((it.ng || 0) + (it.ngT ? it.ngT.length : 0)) + '人</span>';
@@ -952,7 +952,7 @@
           h += '</div><div class="callegend">';
           if (boxes) {
             h += '<span><span class="cbox">確定</span></span><span><span class="cbox of">承認待ち</span></span><span><span class="cbox rq">取消依頼</span></span><span><span class="cbox ws">希 生徒の希望・空き時間</span></span><span><span class="cbox ev">共有予定(大会など)</span></span><span><span class="cbox to">休 先生の休み</span></span>';
-            h += '<span class="muted">授業は「時刻 姓 科目」。左に太線が付いたひとまとまりは同じ時間帯の授業(2人同時)。' + (opts.noNg ? '生徒の授業できない日は日付をタップすると下に出ます' : '') + '</span>';
+            h += '<span class="muted">授業は「時刻 姓 科目」。左に太線が付いたひとまとまりは、時間の一部が重なる授業です。' + (opts.noNg ? '生徒の授業できない日は日付をタップすると下に出ます' : '') + '</span>';
           } else {
             h += '<span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="caldot ev"></span> 共有予定(大会など)</span>' + (opts.noNg ? '' : '<span><span class="calmark">×</span> 授業できない生徒あり</span>') + '<span><span class="callbl to" style="display:inline">休</span> 先生の休み</span>';
           }

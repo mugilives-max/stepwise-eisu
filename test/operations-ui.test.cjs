@@ -141,3 +141,14 @@ test('server pending recovery overrides stale local state and shows snapshots ev
   assert.match(ui.html(), /次の2件を確定/); assert.match(ui.html(), /17:00/); assert.match(ui.html(), /18:00/); assert.match(ui.html(), /未完了の確定処理/);
   ui.click('batchsend'); assert.equal(ui.requests.at(-1).body.requestId, 'server-pending-request'); assert.deepEqual(ui.requests.at(-1).body.slotIds, ['slot-a', 'slot-b']);
 });
+
+test('calendar overlap chains keep all four lessons without claiming four people or fixed concurrency', async () => {
+  const slots = ['17:00', '17:30', '18:30', '19:00'].map((start, i) => slot('chain-' + i, { start, min: 90, status: 'booked', studentId: i % 2 ? 'test-b' : 'test-a', studentName: i % 2 ? '【テスト】B' : '【テスト】A' }));
+  const ui = createUI('admin', { hash: '#home' });
+  ui.requests[0].reply({ data: { today: '2026-09-08', slots, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [] } }); await flush();
+  assert.equal((ui.html().match(/class="cgrp"/g) || []).length, 1);
+  assert.match(ui.html(), /title="時間が重なる授業"/);
+  for (const start of ['17:00', '17:30', '18:30', '19:00']) assert.ok(ui.html().includes('title="' + start + '〜'), 'calendar retains ' + start);
+  assert.equal(ui.html().includes('同じ時間帯の授業(4人)'), false);
+  assert.equal(ui.html().includes('2人同時'), false);
+});
