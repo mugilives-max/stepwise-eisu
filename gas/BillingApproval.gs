@@ -123,12 +123,30 @@ function billingPlanSet_(req) {
   if(check)return check;
   var rows=readRows_('plans'),found=-1;
   for(var i=0;i<rows.length;i++)if(String(rows[i].studentId)===id && planYm_(rows[i].ym)===ym && String(rows[i].subject)===subject){if(found>=0)return billingError_('科目の計画が重複しています');found=i;}
-  if(found>=0 && Number(rows[found].count)===count)return {ok:true};
-  if(found<0 && count===0)return {ok:true};
+  if(found>=0 && Number(rows[found].count)===count || found<0 && count===0){
+    // Only an unproposed draft made by planSet can finish an interrupted write.
+    // planPropose stamps proposedAt before its own intermediate draft is saved.
+    if(a && a.status==='draft' && !a.proposedAt){
+      var snapshot=JSON.stringify(billingPlanList_(id,ym));
+      var eventId=a.id+':'+a.revision+':changed';
+      var auditExists=readRows_('approvalEvents').some(function(e){return String(e.id)===eventId;});
+      var statusPending=rows.some(function(p){return String(p.studentId)===id && planYm_(p.ym)===ym && (p.status!=='draft'||p.approvedAt||p.approvedVia||p.memo);});
+      if(String(a.planJson)!==snapshot || statusPending || !auditExists){
+        check=billingRevisionCheck_(req,a,true);if(check)return check;
+        var snapshotPending=String(a.planJson)!==snapshot;a.planJson=snapshot;
+        // Validate an existing receipt before touching a conflicting snapshot.
+        if(auditExists)billingAudit_(a,'planChanged',eventId);
+        if(statusPending)planSetStatus_(id,ym,'draft','','',false);
+        if(snapshotPending)billingWriteAgreement_(a);
+        if(!auditExists)billingAudit_(a,'planChanged',eventId);
+      }
+    }
+    return {ok:true};
+  }
   // 先に承認を無効化する。計画の保存途中で失敗しても古い承認を使えない。
   if(ym!=='default'){
     a=a||{id:billingId_(),studentId:id,ym:ym,revision:0,rate30:'',monthly:''};
-    a.revision=Number(a.revision)+1;a.status='draft';a.approvedAt='';a.approvedVia='';a.consentDate='';a.memo='';
+    a.revision=Number(a.revision)+1;a.status='draft';a.proposedAt='';a.approvedAt='';a.approvedVia='';a.consentDate='';a.memo='';
     billingWriteAgreement_(a);
   }
   var sh=sheet_('plans');
@@ -254,6 +272,7 @@ function billingMonths_(id) {
   var seen={},current=todayStr_().slice(0,7);seen[current]=true;seen[nextYm_(current)]=true;
   readRows_('slots').forEach(function(s){if(String(s.studentId)===String(id)&&billingMonthValid_(s.date.slice(0,7)))seen[s.date.slice(0,7)]=true;});
   planRows_().forEach(function(p){if(String(p.studentId)===String(id)&&billingMonthValid_(p.ym))seen[p.ym]=true;});
+  readRows_('monthAgreements').forEach(function(a){if(String(a.studentId)===String(id)&&billingMonthValid_(String(a.ym)))seen[String(a.ym)]=true;});
   billingInvoiceRows_(id).forEach(function(p){if(billingMonthValid_(String(p['年月'])))seen[String(p['年月'])]=true;});
   return Object.keys(seen).sort().reverse().map(function(ym){return billingPreview_(id,ym);});
 }

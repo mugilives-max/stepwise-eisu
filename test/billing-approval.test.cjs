@@ -43,6 +43,170 @@ function approve(h, options = {}) {
   return preview(h, studentId, ym);
 }
 
+// Fail one real Sheets write at a persistence boundary, leaving earlier writes
+// durable. The retry still enters doPost with a fresh GAS execution context.
+function failWriteOnce(sheet, matches, afterWrite = false) {
+  const getRange = sheet.getRange;
+  sheet.getRange = function(...args) {
+    const range = getRange.apply(this, args);
+    const setValues = range.setValues;
+    range.setValues = function(values) {
+      if (!matches(values, range)) return setValues.call(this, values);
+      sheet.getRange = getRange;
+      if (afterWrite) setValues.call(this, values);
+      throw new Error('Synthetic interrupted Sheets write');
+    };
+    return range;
+  };
+}
+
+function planPersistence(h) {
+  return ['plans','monthAgreements','approvalEvents'].map(name => h.rows(name));
+}
+
+for (const count of [0, 3]) {
+  for (const stage of ['status', 'snapshot', 'audit']) {
+    test(`same-count retry repairs a ${count === 0 ? 'deleted' : 'changed'} plan after ${stage} failure at the same revision`, () => {
+      const h = createBillingHarness();
+      const ym = stage === 'snapshot' ? '2026-08' : '2026-09';
+      const before = approve(h, { ym, counts: { 数学: 2, 英語: 1 }, rate30: 1700, monthly: 0 });
+      ok(h.admin('setFee', { studentId: 'test-a', rate30: 9999, monthly: 50000 }));
+      const expectedPlan = count ? [{subject:'数学',count},{subject:'英語',count:1}] : [{subject:'英語',count:1}];
+      const expectedJson = JSON.stringify(expectedPlan);
+      if (stage === 'status') {
+        failWriteOnce(h.spreadsheet.getSheetByName('plans'), (values, range) => range.column === 6 && values[0][0] === 'draft');
+      } else if (stage === 'snapshot') {
+        failWriteOnce(h.spreadsheet.getSheetByName('monthAgreements'), values => values[0][4] === 'draft' && values[0][5] === expectedJson);
+      } else {
+        failWriteOnce(h.spreadsheet.getSheetByName('approvalEvents'), values => values[0][4] === 'planChanged' && Number(values[0][3]) === before.revision + 1);
+      }
+      const request = {studentId:'test-a',ym,subject:'数学',count,expectedRevision:before.revision};
+      rejected(h.admin('planSet', request));
+      const interrupted = h.rows('monthAgreements')[0];
+      assert.equal(interrupted.status, 'draft');
+      assert.equal(interrupted.proposedAt, '');
+      assert.equal(Number(interrupted.revision), before.revision + 1);
+      assert.equal(Number(h.rows('plans').find(p => p.subject === '数学')?.count || 0), count);
+      const partiallySaved = planPersistence(h);
+      assert.equal(rejected(h.admin('planSet', request)).errorCode, 'conflict');
+      assert.equal(rejected(h.admin('planSet', {...request,expectedRevision:undefined})).errorCode, 'conflict');
+      assert.deepEqual(planPersistence(h), partiallySaved);
+
+      const current = {...request,expectedRevision:Number(interrupted.revision)};
+      ok(h.admin('planSet', current));
+      const repaired = h.rows('monthAgreements')[0];
+      assert.equal(Number(repaired.revision), Number(interrupted.revision));
+      assert.equal(repaired.status, 'draft');
+      assert.equal(repaired.planJson, expectedJson);
+      assert.equal(Number(repaired.rate30), 1700);
+      assert.equal(Number(repaired.monthly), 0);
+      assert(h.rows('plans').every(p => p.status === 'draft' && !p.approvedAt && !p.approvedVia && !p.memo));
+      const receipts = h.rows('approvalEvents').filter(e => e.id === `${repaired.id}:${repaired.revision}:changed`);
+      assert.equal(receipts.length, 1);
+      assert.equal(receipts[0].event, 'planChanged');
+      assert.deepEqual(JSON.parse(receipts[0].snapshotJson), {plan:expectedPlan,rate30:1700,monthly:0});
+      const complete = planPersistence(h);
+      h.advance(1000);
+      ok(h.admin('planSet', current));
+      assert.deepEqual(planPersistence(h), complete, 'completed retry must not rewrite timestamps, statuses or audit rows');
+      assert.equal(rejected(h.admin('planSet', request)).errorCode, 'conflict');
+      assert.deepEqual(planPersistence(h), complete);
+    });
+  }
+}
+
+test('same-count approved, proposed, completed draft, default and absent plans are true no-ops', () => {
+  for (const state of ['approved','proposed','draft','default','absent']) {
+    const h = createBillingHarness();
+    let ym = '2026-09', count = 2;
+    if (state === 'approved') approve(h);
+    if (state === 'proposed') propose(h);
+    if (state === 'draft') ok(h.admin('planSet', {studentId:'test-a',ym,subject:'数学',count}));
+    if (state === 'default') { ym = 'default'; h.seedPlan({ym}); }
+    if (state === 'absent') count = 0;
+    const before = planPersistence(h);
+    h.advance(1000);
+    ok(h.admin('planSet', {studentId:'test-a',ym,subject:'数学',count}));
+    assert.deepEqual(planPersistence(h), before, state);
+  }
+});
+
+test('same-count retry does not reinterpret a proposal intermediate draft as a plan change', () => {
+  const h = createBillingHarness();
+  ok(h.admin('planSet', {studentId:'test-a',ym:'2026-08',subject:'数学',count:2}));
+  failWriteOnce(h.spreadsheet.getSheetByName('monthAgreements'), values => values[0][4] === 'proposed');
+  rejected(h.admin('planPropose', {studentId:'test-a',ym:'2026-08',rate30:900,monthly:0}));
+  const interrupted = h.rows('monthAgreements')[0];
+  assert.equal(interrupted.status, 'draft');
+  assert(interrupted.proposedAt);
+  const before = planPersistence(h);
+  ok(h.admin('planSet', {studentId:'test-a',ym:'2026-08',subject:'数学',count:2,expectedRevision:interrupted.revision}));
+  assert.deepEqual(planPersistence(h), before);
+});
+
+test('deleting the last past-month plan keeps its latest revision in the admin detail for a same-count repair', () => {
+  const h = createBillingHarness(), ym = '2026-07';
+  approve(h, {ym,counts:{数学:1},rate30:1500,monthly:0});
+  // Another student's agreement must not become a month in this student's card.
+  propose(h, {studentId:'test-b',ym:'2026-06',rate30:900,monthly:0});
+  const before = ok(h.admin('kanriStudent', {studentId:'test-a'})).data.plan.months.find(m => m.ym === ym);
+  failWriteOnce(h.spreadsheet.getSheetByName('monthAgreements'), values => values[0][4] === 'draft' && values[0][5] === '[]');
+  rejected(h.admin('planSet', {studentId:'test-a',ym,subject:'数学',count:0,expectedRevision:before.revision}));
+  assert.equal(h.rows('plans').filter(p => p.studentId === 'test-a').length, 0);
+  assert.equal(h.rows('slots').length, 0);
+  assert.equal(h.payments().length, 0);
+  const refreshed = ok(h.admin('kanriStudent', {studentId:'test-a'})).data;
+  const selected = refreshed.plan.months.find(m => m.ym === ym);
+  assert(selected, 'the agreement-only month must remain selectable after the last plan row is deleted');
+  assert.equal(typeof selected.revision, 'number');
+  assert.equal(selected.revision, before.revision + 1);
+  assert.equal(selected.status, 'draft');
+  assert(!refreshed.plan.months.some(m => m.ym === '2026-06'));
+  const result = ok(h.admin('planSet', {studentId:'test-a',ym,subject:'数学',count:0,expectedRevision:selected.revision,from:'kanri',view:'student'}));
+  const complete = result.data.plan.months.find(m => m.ym === ym);
+  assert.equal(complete.revision, selected.revision);
+  assert.equal(complete.status, 'draft');
+  const a = h.rows('monthAgreements').find(a => a.studentId === 'test-a');
+  assert.equal(a.planJson, '[]');
+  assert.equal(h.rows('approvalEvents').filter(e => e.id === `${a.id}:${a.revision}:changed`).length, 1);
+});
+
+test('a saved plan-change receipt makes a lost response a no-op retry', () => {
+  const h = createBillingHarness();
+  const before = approve(h);
+  failWriteOnce(h.spreadsheet.getSheetByName('approvalEvents'), values => values[0][4] === 'planChanged' && Number(values[0][3]) === before.revision + 1, true);
+  rejected(h.admin('planSet', {studentId:'test-a',ym:'2026-09',subject:'数学',count:0,expectedRevision:before.revision}));
+  const complete = planPersistence(h), a = h.rows('monthAgreements')[0];
+  h.advance(1000);
+  ok(h.admin('planSet', {studentId:'test-a',ym:'2026-09',subject:'数学',count:0,expectedRevision:a.revision}));
+  assert.deepEqual(planPersistence(h), complete);
+});
+
+test('invoice freeze also blocks a same-count draft repair', () => {
+  const h = createBillingHarness();
+  const before = approve(h);
+  failWriteOnce(h.spreadsheet.getSheetByName('approvalEvents'), values => values[0][4] === 'planChanged' && Number(values[0][3]) === before.revision + 1);
+  rejected(h.admin('planSet', {studentId:'test-a',ym:'2026-09',subject:'数学',count:3,expectedRevision:before.revision}));
+  h.seedPayment();
+  const persisted = planPersistence(h), a = h.rows('monthAgreements')[0];
+  assert.equal(rejected(h.admin('planSet', {studentId:'test-a',ym:'2026-09',subject:'数学',count:3,expectedRevision:a.revision})).errorCode, 'invoiceLocked');
+  assert.deepEqual(planPersistence(h), persisted);
+});
+
+test('draft repair validates an existing conflicting receipt before rewriting the snapshot', () => {
+  const h = createBillingHarness();
+  const before = approve(h);
+  failWriteOnce(h.spreadsheet.getSheetByName('monthAgreements'), values => values[0][4] === 'draft' && values[0][5] === '[]');
+  rejected(h.admin('planSet', {studentId:'test-a',ym:'2026-09',subject:'数学',count:0,expectedRevision:before.revision}));
+  const a = h.rows('monthAgreements')[0];
+  h.spreadsheet.getSheetByName('approvalEvents').appendRow([
+    `${a.id}:${a.revision}:changed`, 'test-b', '2026-09', a.revision, 'planChanged', '', '', '', '', '{}'
+  ]);
+  const persisted = planPersistence(h);
+  assert.equal(rejected(h.admin('planSet', {studentId:'test-a',ym:'2026-09',subject:'数学',count:0,expectedRevision:a.revision})).errorCode, 'conflict');
+  assert.deepEqual(planPersistence(h), persisted);
+});
+
 test('monthly approval, fee edits and invoice creation require teacher authorization', () => {
   const h = createBillingHarness();
   const ptoken = parentSession(h);

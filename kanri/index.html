@@ -1902,7 +1902,17 @@
               act("taskDel", { studentId: sid, taskId: btn.getAttribute("data-id") }, sourceTask ? "取り下げました" : "削除しました");
               break;
             case "plansave":
-              act("planSet", { studentId: sid, ym: val("pl-scope") === "default" ? "default" : val("pl-target"), subject: val("pl-subject"), count: +(val("pl-count") || 0) }, "計画を保存しました");
+              var saveRoute = route();
+              if (saveRoute.page !== "student" || !cur || !sameId(saveRoute.id, cur.id) || !sameId(sid, cur.id)) { toast("画面を更新して生徒の計画を確認してください"); return; }
+              var savePlan = { studentId: cur.id, ym: val("pl-scope") === "default" ? "default" : val("pl-target"), subject: val("pl-subject"), count: +(val("pl-count") || 0) };
+              if (savePlan.ym !== "default") {
+                var saveMonths = (cur.plan || {}).months;
+                if (!Array.isArray(saveMonths)) { toast("画面を更新して月の条件を確認してください"); return; }
+                var saveMonth = saveMonths.filter(function (m) { return m.ym === savePlan.ym; })[0];
+                if (saveMonth && (!Number.isSafeInteger(saveMonth.revision) || saveMonth.revision < 0)) { toast("画面を更新して月の条件を確認してください"); return; }
+                savePlan.expectedRevision = saveMonth ? saveMonth.revision : 0;
+              }
+              act("planSet", savePlan, "計画を保存しました");
               break;
             case "delrow":
               if (!confirm("この記録を削除しますか?")) return;

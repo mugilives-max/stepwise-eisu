@@ -35,6 +35,78 @@ function setPayment(ui) {
 function setFee(ui, rate) {
   ui.click('editfee'); ui.el('e-rate').value = String(rate); ui.el('e-monthly').value = '0'; ui.click('savefee');
 }
+function setPlan(ui, ym = '2026-09', count = 4) {
+  ui.el('pl-scope').value = ym === 'default' ? 'default' : 'month';
+  ui.el('pl-target').value = ym === 'default' ? '2026-09' : ym;
+  ui.el('pl-subject').value = '英語'; ui.el('pl-count').value = String(count); ui.click('plansave');
+}
+function month(ym, revision) { return { ...card().plan.months[0], ym, revision }; }
+function planCard(months, overrides = {}) { return card({ plan: { ...card().plan, months }, ...overrides }); }
+
+test('count saves use the target month revision instead of the displayed month', async () => {
+  const ui = await ready(planCard([month('2026-09', 2), month('2026-10', 7)]));
+  assert.match(ui.html(), /2026-09 <span class="tag/);
+  setPlan(ui, '2026-10', 6);
+  const body = ui.requests.at(-1).body;
+  assert.equal(body.op, 'planSet'); assert.equal(body.studentId, 'test-a');
+  assert.equal(body.ym, '2026-10'); assert.equal(body.expectedRevision, 7);
+  assert.equal(body.subject, '英語'); assert.equal(body.count, 6);
+});
+
+test('known months with an unavailable revision and missing month lists require refresh before saving', async () => {
+  for (const data of [planCard([month('2026-09', undefined)]), card({ plan: { current: {}, defaultRows: [] } })]) {
+    const ui = await ready(data), before = ui.requests.length;
+    setPlan(ui);
+    assert.equal(ui.requests.length, before);
+    assert.match(ui.el('toast').textContent, /画面を更新/);
+  }
+});
+
+test('new month count saves send revision zero while default changes omit it', async () => {
+  const ui = await ready(); setPlan(ui, '2027-01');
+  assert.equal(ui.requests.at(-1).body.expectedRevision, 0);
+  assert.equal(ui.requests.at(-1).body.ym, '2027-01');
+  const defaults = await ready(); setPlan(defaults, 'default');
+  assert.equal(defaults.requests.at(-1).body.ym, 'default');
+  assert.equal(Object.hasOwn(defaults.requests.at(-1).body, 'expectedRevision'), false);
+});
+
+test('an interrupted count save can be resent with the refreshed draft revision', async () => {
+  const ui = await ready(planCard([month('2026-09', 3)])); setPlan(ui, '2026-09', 5);
+  assert.equal(ui.requests.at(-1).body.expectedRevision, 3);
+  ui.requests.at(-1).fail(); await flush();
+  assert.equal(ui.requests.at(-1).body.op, 'kanriStudent');
+  ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 4)]) }); await flush();
+  setPlan(ui, '2026-09', 5);
+  assert.equal(ui.requests.at(-1).body.expectedRevision, 4);
+  assert.equal(ui.requests.at(-1).body.count, 5);
+});
+
+test('a late background read cannot supply the revision for the next count save', async () => {
+  const ui = await ready(planCard([month('2026-09', 1)]));
+  ui.navigate('#students'); ui.navigate('#s=test-a'); const background = ui.requests.at(-1);
+  setPlan(ui); ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 2)]) }); await flush();
+  background.reply({ ok: true, data: planCard([month('2026-09', 1)]) }); await flush();
+  setPlan(ui); assert.equal(ui.requests.at(-1).body.expectedRevision, 2);
+});
+
+test('late responses for another student cannot supply a count save student or revision', async () => {
+  const ui = await ready(planCard([month('2026-09', 1)])); ui.click('reload'); const oldRead = ui.requests.at(-1);
+  ui.navigate('#s=test-b');
+  ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 8)], { id: 'test-b' }) }); await flush();
+  oldRead.reply({ ok: true, data: planCard([month('2026-09', 99)]) }); await flush();
+  setPlan(ui);
+  assert.equal(ui.requests.at(-1).body.studentId, 'test-b');
+  assert.equal(ui.requests.at(-1).body.expectedRevision, 8);
+});
+
+test('a failed student switch cannot save the previous student card still on screen', async () => {
+  const ui = await ready(); ui.navigate('#s=test-b');
+  ui.requests.at(-1).fail(); await flush();
+  const before = ui.requests.length; setPlan(ui);
+  assert.equal(ui.requests.length, before);
+  assert.match(ui.el('toast').textContent, /画面を更新して生徒/);
+});
 
 test('late cached-card read cannot roll a completed payment back to unpaid', async () => {
   const before = card({ payments: [invoice()] }), after = card({ payments: [invoice({ status: '入金済', paidDate: '2026-09-01' })] });

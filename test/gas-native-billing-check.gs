@@ -8,7 +8,7 @@
  */
 function stepwiseNativeBillingCheck() {
   var app=null, ledger=null, stage='create_test_books', started=Date.now(), checks={}, timings=[];
-  var original={memo:MEMO_,ss:ss_,ledger:ledger_,lite:LITE_,audit:billingAudit_,paymentCols:LEDGER_COLS['入金管理'],
+  var original={memo:MEMO_,ss:ss_,ledger:ledger_,lite:LITE_,audit:billingAudit_,agreementWrite:billingWriteAgreement_,paymentCols:LEDGER_COLS['入金管理'],
     notify:notify_,mail:mailStudent_,offerMail:offerMailToStudent_,createCalendar:createCalEvent_,deleteCalendar:deleteCalEvent_,meet:addMeet_};
   var studentId='native-billing-student', studentCode='native-billing-link', token='native-billing-fixture-token';
   var forbiddenCalls=0;
@@ -81,6 +81,49 @@ function stepwiseNativeBillingCheck() {
     check(call('billingPreview',{ym:ym,token:'invalid-native-fixture-token'}).badAuth,'teacher_authorization_required');
     check(!!accept('native-billing-slot-1').error,'unapproved_accept_rejected');
 
+    stage='interrupted_plan_retry';
+    // This older month has no slots/invoices and is separate from that fixture. The real
+    // Sheets plan row commits before the injected agreement/audit failure.
+    var retryYm=addDays_(ym+'-01',-1).slice(0,7);
+    check(call('planSet',{ym:retryYm,subject:'数学',count:1}).ok &&
+      call('planPropose',{ym:retryYm,rate30:1500,monthly:0}).ok,'retry_plan_fixture_prepared');
+    refresh();
+    var retryBefore=billingAgreement_(studentId,retryYm),retryRev=Number(retryBefore.revision),retryInterrupted=false;
+    billingWriteAgreement_=function(a){
+      if(String(a.ym)===retryYm && a.status==='draft' && a.planJson==='[{"subject":"数学","count":3}]')throw new Error('intentional_native_snapshot_failure');
+      return original.agreementWrite(a);
+    };
+    try{call('planSet',{ym:retryYm,subject:'数学',count:3,expectedRevision:retryRev});}catch(err){retryInterrupted=true;}
+    billingWriteAgreement_=original.agreementWrite;refresh();
+    var interruptedDraft=billingAgreement_(studentId,retryYm);
+    check(retryInterrupted && interruptedDraft.status==='draft' && !interruptedDraft.proposedAt &&
+      Number(interruptedDraft.revision)===retryRev+1 && billingPlanList_(studentId,retryYm)[0].count===3,'changed_plan_survives_snapshot_failure');
+    check(!!call('planSet',{ym:retryYm,subject:'数学',count:3,expectedRevision:retryRev}).error,'plan_repair_rejects_old_revision');
+    var retryCurrent=Number(interruptedDraft.revision);
+    check(call('planSet',{ym:retryYm,subject:'数学',count:3,expectedRevision:retryCurrent}).ok,'changed_plan_same_count_repaired');
+    refresh();
+    var repairedDraft=billingAgreement_(studentId,retryYm),repairedJson=JSON.stringify(repairedDraft),retryAuditId=repairedDraft.id+':'+retryCurrent+':changed';
+    check(Number(repairedDraft.revision)===retryCurrent && Number(repairedDraft.rate30)===1500 && Number(repairedDraft.monthly)===0 &&
+      repairedDraft.planJson==='[{"subject":"数学","count":3}]' && readRows_('approvalEvents').filter(function(e){return String(e.id)===retryAuditId;}).length===1,'plan_snapshot_terms_revision_and_single_audit_preserved');
+    var retryEventsJson=JSON.stringify(readRows_('approvalEvents'));
+    var retryReplay=call('planSet',{ym:retryYm,subject:'数学',count:3,expectedRevision:retryCurrent});refresh();
+    check(retryReplay.ok && JSON.stringify(billingAgreement_(studentId,retryYm))===repairedJson &&
+      JSON.stringify(readRows_('approvalEvents'))===retryEventsJson,'completed_plan_retry_does_not_rewrite');
+    billingAudit_=function(a,event,id,extra){
+      if(String(a.ym)===retryYm && event==='planChanged')throw new Error('intentional_native_plan_audit_failure');
+      return original.audit(a,event,id,extra);
+    };
+    retryInterrupted=false;
+    try{call('planSet',{ym:retryYm,subject:'数学',count:0,expectedRevision:retryCurrent});}catch(err){retryInterrupted=true;}
+    billingAudit_=original.audit;refresh();
+    var deletedDraft=billingAgreement_(studentId,retryYm),deletedRev=Number(deletedDraft.revision);
+    var deletedMonth=billingMonths_(studentId).filter(function(m){return m.ym===retryYm;})[0];
+    check(retryInterrupted && billingPlanList_(studentId,retryYm).length===0 && deletedDraft.planJson==='[]' && deletedRev===retryCurrent+1 &&
+      !!deletedMonth && typeof deletedMonth.revision==='number' && deletedMonth.revision===deletedRev,'deleted_plan_survives_audit_failure');
+    var deletionReplay=call('planSet',{ym:retryYm,subject:'数学',count:0,expectedRevision:deletedMonth.revision});refresh();
+    check(deletionReplay.ok && Number(billingAgreement_(studentId,retryYm).revision)===deletedRev &&
+      readRows_('approvalEvents').filter(function(e){return String(e.id)===deletedDraft.id+':'+deletedRev+':changed';}).length===1,'deleted_plan_same_count_repairs_one_audit');
+
     stage='proposal_and_consent';
     check(call('planSet',{ym:ym,subject:'数学',count:2}).ok,'plan_saved');
     check(!!call('planPropose',{ym:ym}).error,'past_fees_must_be_explicit');
@@ -147,7 +190,7 @@ function stepwiseNativeBillingCheck() {
     var failed={ok:false,error:{stage:stage,code:err.nativeBillingCode||'unexpected_error',type:String(err.name||'Error')},checks:checks,timings:timings,testSpreadsheets:books()};
     Logger.log(JSON.stringify(failed));return failed;
   }finally{
-    MEMO_=original.memo;ss_=original.ss;ledger_=original.ledger;LITE_=original.lite;billingAudit_=original.audit;LEDGER_COLS['入金管理']=original.paymentCols;
+    MEMO_=original.memo;ss_=original.ss;ledger_=original.ledger;LITE_=original.lite;billingAudit_=original.audit;billingWriteAgreement_=original.agreementWrite;LEDGER_COLS['入金管理']=original.paymentCols;
     notify_=original.notify;mailStudent_=original.mail;offerMailToStudent_=original.offerMail;createCalEvent_=original.createCalendar;deleteCalEvent_=original.deleteCalendar;addMeet_=original.meet;
   }
 }
