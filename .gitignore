@@ -1,0 +1,5 @@
+node_modules/
+.verification/
+.env
+.dev.vars
+.clasprc.json

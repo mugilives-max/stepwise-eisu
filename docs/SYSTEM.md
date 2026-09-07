@@ -1,6 +1,8 @@
 # ステップワイズ個別指導 システム概要
 
-最終更新: 2026-09-06 / 管理者: 麦倉優輔 (mugilives@gmail.com)
+最終更新: 2026-09-07 / 管理者: 麦倉優輔 (mugilives@gmail.com)
+
+> 作業ブランチ `codex/parent-auth`: 保護者専用認証を実装・ローカル検証済み。本番の確認済み公開版はv44で、今回の変更は未反映。反映手順と変更後仕様は [PARENT_AUTH.md](PARENT_AUTH.md)。
 
 このファイルが「システム全体のどこに何があるか」の正本です。別のチャットや別のAI(ChatGPT など)から作業するときは、まずここを読んでください。
 公開リポジトリに置いているため、生徒の氏名・ID・専用リンクのコード・パスワードは書きません。
@@ -41,6 +43,7 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | シート | 列 | 意味 |
 |---|---|---|
 | config | key, value | 設定と先生のログイン情報。`passHash`/`passSalt`(パスワードのハッシュ)、`adminToken`/`adminTokenExp`(ログイン中トークン。1か所のみ有効)、`teacherEmail`、`calendarSync`、`emailNotify`、`reset*`(パスワード再設定コード)、`failCount`/`lockUntil` |
+| parents（今回追加、本番未反映） | studentId, passSalt, passHash, setAt, lastLogin, failCount, lockUntil, setupHash, setupExpiresAt, setupFailCount, tokenHash, tokenExpiresAt | 生徒別の保護者認証。パスワード・設定コード・トークンは平文保存しない。旧students.parentToken/parentExpは新コードで使用しない |
 | students | id, name, active, email, code, rate30, monthly, parentToken, parentExp | 生徒。`code` が専用リンク(`/yoyaku/?k=code`)の鍵。`rate30` は30分単価、`monthly` は月謝(あれば定額)。`active=false` は停止中 |
 | slots | id, date, start, min, status, studentId, done, eventId, meetUrl, subject, req | 授業枠。`status` は open(空き)/offered(案内中=承認待ち)/booked(確定)。`done=true` で実施済み。`eventId`/`meetUrl` はカレンダー連携。`req` は取消依頼のJSON |
 | blocked | id, studentId, date, note, start, end | 生徒の「授業できない日」。start/end が空なら終日、入っていればその時間帯だけ |
@@ -71,11 +74,13 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 | `/yoyaku/?k=<code>` | 生徒(LINEで専用リンクを配布) | マイページ。タブ: ホーム(今月の授業・やること・予定表(見るだけ、先生の休みは出さない)・次の授業・授業登録の確定/再調整・今後の予定)/ 予定(予定表(先生の休みも表示)・予定管理: 授業の希望・予定の共有・授業できない日 / 授業登録 / 今後の予定)/ 成績(模試・成績推移)/ 授業の記録 / 保護者(パスワード制。今月の授業・お支払い・授業回数の承認) |
 | `/kanri/` | 先生(メール+パスワードでログイン。PIN は廃止、再設定は登録メール宛の6桁コード) | ホーム(取消依頼・共有予定・希望、今日/今週、全体の予定表、生徒カード)/ 授業(案内フォーム・承認待ち・カレンダー・NG日・実施記録と請求文面)/ 生徒(追加・停止中)/ 生徒カルテ `#s=<id>`(予定表、基本情報、リンク設定、今月の授業と請求、月の授業回数と承認、成績推移、模試、今後の予定、履歴、入金、面談)/ 設定 |
 
-保護者ページのパスワードは、いまは先生の管理ログインのパスワードと同じです。
+本番v44の保護者ページのパスワードは、先生の管理ログインのパスワードと同じです。今回の作業ブランチではこの共通認証を廃止し、保護者専用の初回設定・ログイン・再設定・ログアウトに置き換えています。
 
-**予定(2026-09-06 決定、未実装)**: 保護者ごとの専用パスワードに切り替える。`parents` シート(studentId, passSalt, passHash, setAt, lastLogin, failCount, lockUntil)にハッシュのみ保存し、先生は「設定済み/未設定・最終ログイン」だけ見える。初回・再設定は先生が管理画面で発行する6桁の設定コード(24時間有効)を LINE で伝え、保護者がマイページの保護者タブで自分のパスワードを決める。授業の承認は「月ごとの授業回数を保護者が事前承認」(方式 A)を正式運用とし、契約書もそれに合わせて更新する(条項案: `docs/CONTRACT_CLAUSES_DRAFT.md`)。
+**今回の実装（本番未反映）**: 先生が生徒カルテで6桁の設定コード（24時間・1回限り）を発行し、保護者が専用パスワードを設定。先生は設定状況と最終ログインだけを確認する。試行回数制限、12時間セッション、再設定・停止・リンク再発行時の失効を実装。詳細は [PARENT_AUTH.md](PARENT_AUTH.md)。月間承認の本運用と契約条項は別途の課題であり、この認証変更だけで完了したものとしない。
 
 ## 5. API(Apps Script)
+
+- 今回追加（本番未反映）: 生徒リンク側 `parentSetup` / `parentLogout`、先生側 `parentIssueSetupCode`。`parentLogin` / `parentData` / `parentPlanDecide` は専用認証へ変更。
 
 - 呼び出しは `POST /exec` に JSON。`action` で分岐。生徒側は `k`(専用リンクのコード)で本人確認、先生側は `action:"admin"` + `token`(ログイン時に発行)+ `op`。
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades / parentLogin / parentData / parentPlanDecide
@@ -111,6 +116,8 @@ Google Apps Script Web アプリ (/exec)  … gas/Code.gs が本体
 - [MCP_DESIGN.md](MCP_DESIGN.md): ChatGPT / Codex から操作するための MCP サーバー設計と段階計画(2026-09-06〜)
 - [MCP_OPERATIONS.md](MCP_OPERATIONS.md): **MCP の運用手順**(置き場所、緊急停止、キー・パスフレーズの変更、再配置、トラブル対応)
 - [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 契約書に追加する条項の下書き(保護者承認・保護者パスワード)
+- [PARENT_AUTH.md](PARENT_AUTH.md): 保護者専用認証の実装と反映順序
+- [REDESIGN_CURRENT_STATE.md](REDESIGN_CURRENT_STATE.md) / [REDESIGN_MASTER_PLAN.md](REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](LESSON_CYCLE_PHASE1_SPEC.md): 最新コードを照合した授業サイクルの初回仕様・ダミー試作
 - MCP サーバー本体: GitHub private リポジトリ `mugilives-max/stepwise-mcp`(ローカル `C:/Users/mugir/dev/stepwise-mcp`)。リモート版は Cloudflare Workers `https://stepwise-mcp.stepwise-edu.workers.dev/mcp`(OAuth 2.1、パスフレーズ認証、閲覧のみ)。Cloudflare アカウントは mugilives@gmail.com、Worker 名 `stepwise-mcp`、KV `OAUTH_KV`
 
 ## 9. 変更履歴(要点)

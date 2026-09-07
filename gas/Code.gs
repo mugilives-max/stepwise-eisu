@@ -75,6 +75,8 @@ function doPost(e) {
       case 'taskDel':  res = taskDel_(req); break;
       case 'grades':  res = studentGrades_(req); break;
       case 'parentLogin': res = parentLogin_(req); break;
+      case 'parentSetup': res = parentSetup_(req); break;
+      case 'parentLogout': res = parentLogout_(req); break;
       case 'parentData':  res = parentData_(req); break;
       case 'parentPlanDecide': res = parentPlanDecide_(req); break;
       case 'eventDel': res = eventDel_(req); break;
@@ -669,10 +671,9 @@ function planApproveTeacher_(req) {
 
 // 保護者(保護者ページ): 承認 / 見送り
 function parentPlanDecide_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var t = String(student.parentToken || ''), exp = Number(student.parentExp || 0);
-  if (!t || String(req.ptoken || '') !== t || Date.now() > exp) return { error: '保護者ページを開き直してください' };
+  var auth = parentRequire_(req);
+  if (auth.error) return auth;
+  var student = auth.student;
   var ym = String(req.ym || '');
   if (!/^\d{4}-\d{2}$/.test(ym)) return { error: '月の形式は YYYY-MM です' };
   var approve = req.approve === true || String(req.approve) === 'true';
@@ -727,7 +728,151 @@ function planSet_(req) {
   return { ok: true };
 }
 
-/* ================= 保護者ページ(パスワードは当面、先生のログインパスワードと共通) ================= */
+/* ================= 保護者専用認証 ================= */
+
+// 生徒ごとに1保護者アカウント。先生の認証情報・旧students.parentTokenは使用しない。
+var PARENT_AUTH_COLUMNS_ = ['studentId', 'passSalt', 'passHash', 'setAt', 'lastLogin',
+  'failCount', 'lockUntil', 'setupHash', 'setupExpiresAt', 'setupFailCount', 'tokenHash', 'tokenExpiresAt'];
+var PARENT_PASSWORD_ITERATIONS_ = 600000;
+var PARENT_SESSION_MS_ = 12 * 3600 * 1000;
+var PARENT_SETUP_MS_ = 24 * 3600 * 1000;
+var PARENT_LOCK_MS_ = 15 * 60 * 1000;
+var PARENT_MAX_FAILURES_ = 5;
+
+function ensureParentAuthSheet_() {
+  var sh = ensureSheet_(ss_(), 'parents', PARENT_AUTH_COLUMNS_);
+  var headers = sh.getRange(1, 1, 1, PARENT_AUTH_COLUMNS_.length).getValues()[0];
+  if (headers.join('|') !== PARENT_AUTH_COLUMNS_.join('|')) {
+    throw new Error('parentsシートの列構成を確認してください。自動で上書きは行いません');
+  }
+}
+
+function parentRecord_(studentId) {
+  var rows = readRows_('parents'), found = null;
+  rows.forEach(function (p, i) {
+    if (String(p.studentId) !== String(studentId)) return;
+    if (found) throw new Error('保護者アカウントが重複しています。先生へご連絡ください');
+    found = p; found._row = i + 2;
+  });
+  return found;
+}
+
+function parentWrite_(p) {
+  var sh = sheet_('parents');
+  var row = p._row || sh.getLastRow() + 1;
+  var values = PARENT_AUTH_COLUMNS_.map(function (key) { return String(p[key] == null ? '' : p[key]); });
+  sh.getRange(row, 1, 1, values.length).setNumberFormat('@').setValues([values]);
+  p._row = row;
+}
+
+// 管理画面へ返せるものを明示。ハッシュ・セッション・設定コードは含めない。
+function parentStatus_(studentId) {
+  var p = parentRecord_(studentId);
+  return { configured: !!(p && p.passHash), setAt: p ? String(p.setAt || '') : '',
+    lastLogin: p ? String(p.lastLogin || '') : '',
+    setupExpiresAt: p && p.setupHash && Number(p.setupExpiresAt) > Date.now() ? Number(p.setupExpiresAt) : 0 };
+}
+
+function parentSecret_() { return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); }
+function parentSetupCode_() {
+  // 剰余の偏りを避け、先頭0も保持する。Math.randomは認証情報に使わない。
+  var n;
+  do { n = parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 8), 16); } while (n >= 4294000000);
+  return ('000000' + (n % 1000000)).slice(-6);
+}
+function parentDigest_(kind, studentId, value) {
+  return hashPass_(String(value), 'parent-v2:' + kind + ':' + String(studentId));
+}
+function parentEqual_(a, b) {
+  a = String(a || ''); b = String(b || '');
+  var diff = a.length ^ b.length;
+  for (var i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+function parentPasswordHash_(pass, salt) {
+  var bytes = function (s) { return new Uint8Array(Utilities.newBlob(s).getBytes().map(function (v) { return (v + 256) % 256; })); };
+  return 'pbkdf2-sha256$' + PARENT_PASSWORD_ITERATIONS_ + '$' +
+    StepwiseParentCrypto.derive(bytes(pass), bytes(salt), PARENT_PASSWORD_ITERATIONS_);
+}
+function parentClearSession_(p) { p.tokenHash = ''; p.tokenExpiresAt = ''; }
+function parentClearSetup_(p) { p.setupHash = ''; p.setupExpiresAt = ''; p.setupFailCount = 0; }
+function parentInvalidate_(studentId) {
+  var p = parentRecord_(studentId);
+  if (!p) return;
+  parentClearSession_(p); parentClearSetup_(p); parentWrite_(p);
+}
+function parentIssueSession_(p) {
+  var token = 'pa2.' + parentSecret_();
+  p.tokenHash = parentDigest_('session', p.studentId, token);
+  p.tokenExpiresAt = Date.now() + PARENT_SESSION_MS_;
+  p.lastLogin = new Date().toISOString();
+  parentWrite_(p);
+  return { ok: true, ptoken: token };
+}
+function parentTokenMatches_(p, token) {
+  return !!(p && p.passHash && p.tokenHash && Number(p.tokenExpiresAt) > Date.now() &&
+    /^pa2\.[a-f0-9]{64}$/.test(String(token || '')) &&
+    parentEqual_(p.tokenHash, parentDigest_('session', p.studentId, token)));
+}
+function parentRequire_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true, parentAuthRequired: true };
+  var p = parentRecord_(student.id);
+  if (!parentTokenMatches_(p, req.ptoken)) return { error: '保護者用パスワードでログインしてください', parentAuthRequired: true };
+  return { student: student, record: p };
+}
+
+// admin_の認証後のみ到達。コードはこの応答で1回表示し、ログ・台帳には平文を保存しない。
+function adminParentIssueSetupCode_(req) {
+  if (authMode_() !== 'account' || !tokenOk_(req.token)) {
+    return { error: '先生アカウントでログインし直してください', badAuth: true };
+  }
+  var student = findStudent_(String(req.studentId || ''));
+  if (!student) return { error: '利用中の生徒が見つかりません' };
+  var p = parentRecord_(student.id) || { studentId: String(student.id) };
+  var code = parentSetupCode_();
+  p.setupHash = parentDigest_('setup', student.id, code);
+  p.setupExpiresAt = Date.now() + PARENT_SETUP_MS_;
+  p.setupFailCount = 0;
+  // 再設定が完了するまで旧パスワードは使える。既存セッションは直ちに失効。
+  parentClearSession_(p); parentWrite_(p);
+  addLog_(student.name + 'さんの保護者用設定コードを発行');
+  return { ok: true, setupCode: code, expiresAt: Number(p.setupExpiresAt), parentAuth: parentStatus_(student.id) };
+}
+
+function parentSetup_(req) {
+  var student = findStudentByCode_(req.k);
+  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
+  var p = parentRecord_(student.id);
+  if (!p || !p.setupHash || !(Number(p.setupExpiresAt) > Date.now())) {
+    return { error: '設定コードが無効か期限切れです。先生に再発行をお願いしてください' };
+  }
+  var code = halfDigits_(req.setupCode || '');
+  if (!/^\d{6}$/.test(code) || !parentEqual_(p.setupHash, parentDigest_('setup', student.id, code))) {
+    p.setupFailCount = Number(p.setupFailCount || 0) + 1;
+    var exhausted = p.setupFailCount >= PARENT_MAX_FAILURES_;
+    if (exhausted) parentClearSetup_(p);
+    parentWrite_(p);
+    return { error: exhausted ? '設定コードの入力間違いが続いたため無効になりました。先生に再発行をお願いしてください' : '設定コードがちがいます' };
+  }
+  var pass = String(req.pass || '');
+  if (pass.length < 12 || pass.length > 128) return { error: 'パスワードは12〜128文字で設定してください' };
+  var salt = parentSecret_();
+  p.passHash = parentPasswordHash_(pass, salt); p.passSalt = salt;
+  p.setAt = new Date().toISOString(); p.failCount = 0; p.lockUntil = '';
+  parentClearSetup_(p);
+  var result = parentIssueSession_(p);
+  addLog_(student.name + 'さんの保護者用パスワードを設定');
+  return result;
+}
+
+function parentLogout_(req) {
+  var student = findStudentByCode_(req.k);
+  var p = student ? parentRecord_(student.id) : null;
+  // 通信再送・期限切れでも成功扱い。古いトークンで新しいログインは失効させない。
+  if (parentTokenMatches_(p, req.ptoken)) { parentClearSession_(p); parentWrite_(p); }
+  return { ok: true };
+}
 
 function ensureParentHeaders_() {
   var sh = sheet_('students');
@@ -767,31 +912,25 @@ function examsFor_(id, withUrl) {
 function parentLogin_(req) {
   var student = findStudentByCode_(req.k);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  if (authMode_() !== 'account') return { error: '保護者ページは準備中です' };
+  var p = parentRecord_(student.id);
+  if (!p || !p.passHash) return { error: '初回設定が必要です。先生から設定コードを受け取ってください', needSetup: true };
+  if (Number(p.lockUntil || 0) > Date.now()) return { error: '入力間違いが続いています。15分後にもう一度お試しください' };
+  if (Number(p.lockUntil || 0)) { p.failCount = 0; p.lockUntil = ''; }
   var pass = String(req.pass || '');
-  if (!pass || hashPass_(pass, getConfig_('passSalt')) !== getConfig_('passHash')) {
-    Utilities.sleep(800);
-    return { error: 'パスワードがちがいます' };
+  if (pass.length < 12 || pass.length > 128 || !parentEqual_(p.passHash, parentPasswordHash_(pass, p.passSalt))) {
+    p.failCount = Number(p.failCount || 0) + 1;
+    if (p.failCount >= PARENT_MAX_FAILURES_) p.lockUntil = Date.now() + PARENT_LOCK_MS_;
+    parentWrite_(p);
+    return { error: p.lockUntil ? '入力間違いが続いたため15分間ログインを停止しました' : '保護者用パスワードがちがいます' };
   }
-  var rows = readRows_('students');
-  var token = newCode_() + newCode_();
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].id) === String(student.id)) {
-      var sh = sheet_('students');
-      sh.getRange(i + 2, 8, 1, 2).setNumberFormat('@');
-      sh.getRange(i + 2, 8, 1, 2).setValues([[token, String(Date.now() + 12 * 3600 * 1000)]]);
-      break;
-    }
-  }
-  addLog_(student.name + 'さんの保護者ページを表示');
-  return { ok: true, ptoken: token };
+  p.failCount = 0; p.lockUntil = '';
+  return parentIssueSession_(p);
 }
 
 function parentData_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var t = String(student.parentToken || ''), exp = Number(student.parentExp || 0);
-  if (!t || String(req.ptoken || '') !== t || Date.now() > exp) return { error: '保護者用パスワードをもう一度入れてください' };
+  var auth = parentRequire_(req);
+  if (auth.error) return auth;
+  var student = auth.student;
   var d = kanriStudent_(student.id);
   if (d.error) return d;
   var months = {}, keys = [];
@@ -804,7 +943,9 @@ function parentData_(req) {
   var prows = planRows_();
   var planMonths = [planMonthInfo_(student.id, d.month, prows), planMonthInfo_(student.id, nextYm_(d.month), prows)].filter(function (x) { return x.status !== 'none' && x.status !== 'draft'; });
   return { ok: true, data: { name: d.name, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
-    payments: d.payments, grades: d.grades, months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }), planMonths: planMonths } };
+    payments: d.payments.map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate, paidDate: p.paidDate, method: p.method, status: p.status }; }),
+    grades: d.grades.map(function (g) { return { date: g.date, test: g.test, subject: g.subject, score: g.score, max: g.max, dev: g.dev, rank: g.rank }; }),
+    months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }), planMonths: planMonths } };
 }
 
 /* ================= 共有予定(生徒・保護者→先生。大会・見学など) ================= */
@@ -1199,6 +1340,7 @@ function admin_(req) {
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
   switch (req.op) {
     case 'state':       return { ok: true, admin: adminState_() };
+    case 'parentIssueSetupCode': return adminParentIssueSetupCode_(req);
     case 'offer': {
       var ro = adminOffer_(req);
       if (ro && ro.ok && req.wishId) { delWish_(req.wishId); if (ro.admin) ro.admin.wishes = wishesForAdmin_(); }
@@ -1498,6 +1640,7 @@ function adminNewCode_(req) {
   var rows = readRows_('students');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.studentId)) {
+      parentInvalidate_(rows[i].id);
       var cell = sheet_('students').getRange(i + 2, 5);
       cell.setNumberFormat('@');
       cell.setValue(newCode_());
@@ -1560,6 +1703,7 @@ function adminHideStudent_(req) {
   var rows = readRows_('students');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.studentId)) {
+      parentInvalidate_(rows[i].id);
       sheet_('students').getRange(i + 2, 3).setValue(false);
     }
   }
@@ -1682,10 +1826,11 @@ function sheetValues_(name) {
   return MEMO_.rows[name];
 }
 
-// スキーマ確認(列見出しの追加など)は重いので1日1回だけ
+// スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk13')) return;
+  if (cache.get('schemaOk14')) return;
+  ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
   ensureTasksSheet_();
@@ -1703,7 +1848,7 @@ function ensureSchema_() {
   ensureFeeHeaders_();
   ensureBlockedSheet_();
   ensureSubjectHeader_();
-  cache.put('schemaOk13', '1', 21600);
+  cache.put('schemaOk14', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1934,6 +2079,7 @@ function kanriSetActive_(req) {
         });
         if (dup) return { error: '同じ名前の生徒がすでに在籍中です' };
       }
+      if (!on) parentInvalidate_(rows[i].id);
       sheet_('students').getRange(i + 2, 3).setValue(on);
       return { ok: true };
     }
@@ -1978,6 +2124,7 @@ function kanriStudent_(studentId) {
   var fee = studentFee_(id, minutes);
   return {
     id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
+    parentAuth: parentStatus_(id),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
     blocked: blockedRows_().filter(function (b) { return String(b.studentId) === id && b.date >= today; }).map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; }),
@@ -2145,7 +2292,10 @@ function ensureMcpLogSheet_() {
 }
 function mcpLog_(req, res, t0) {
   try {
-    var p = {}; Object.keys(req).forEach(function (k) { if (k !== 'mcpKey' && k !== 'token' && k !== 'action') p[k] = req[k]; });
+    // 記録対象を許可リストにする。誤って付加された認証情報も残さない。
+    var p = {}; ['op', 'studentId', 'slotId', 'query', 'from', 'to', 'ym', 'includeInactive'].forEach(function (k) {
+      if (typeof req[k] === 'string' || typeof req[k] === 'number' || typeof req[k] === 'boolean') p[k] = req[k];
+    });
     sheet_('mcpLog').appendRow([new Date(), String(req.requestId || ''), String(req.client || ''), String(req.op || ''),
       String(req.studentId || req.slotId || ''), JSON.stringify(p).slice(0, 500), res && res.error ? 'error: ' + res.error : 'ok', Date.now() - t0]);
   } catch (e) {}
@@ -2347,3 +2497,8 @@ function uid_() {
   if (/^[0-9]+$/.test(s)) s = 'a' + s.slice(1);
   return s;
 }
+
+// BEGIN GENERATED PARENT CRYPTO
+// @noble/hashes 1.8.0 (MIT), see gas/THIRD_PARTY_LICENSES.md. Regenerate: npm run build:crypto
+var StepwiseParentCrypto=(()=>{var F=Object.defineProperty;var v=Object.getOwnPropertyDescriptor;var J=Object.getOwnPropertyNames;var X=Object.prototype.hasOwnProperty;var q=(e,t)=>{for(var s in t)F(e,s,{get:t[s],enumerable:!0})},z=(e,t,s,n)=>{if(t&&typeof t=="object"||typeof t=="function")for(let r of J(t))!X.call(e,r)&&r!==s&&F(e,r,{get:()=>t[r],enumerable:!(n=v(t,r))||n.enumerable});return e};var Q=e=>z(F({},"__esModule",{value:!0}),e);var rt={};q(rt,{derive:()=>ot});/*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */function Y(e){return e instanceof Uint8Array||ArrayBuffer.isView(e)&&e.constructor.name==="Uint8Array"}function A(e){if(!Number.isSafeInteger(e)||e<0)throw new Error("positive integer expected, got "+e)}function g(e,...t){if(!Y(e))throw new Error("Uint8Array expected");if(t.length>0&&!t.includes(e.length))throw new Error("Uint8Array expected of length "+t+", got length="+e.length)}function E(e){if(typeof e!="function"||typeof e.create!="function")throw new Error("Hash should be wrapped by utils.createHasher");A(e.outputLen),A(e.blockLen)}function L(e,t=!0){if(e.destroyed)throw new Error("Hash instance has been destroyed");if(t&&e.finished)throw new Error("Hash#digest() has already been called")}function G(e,t){g(e);let s=t.outputLen;if(e.length<s)throw new Error("digestInto() expects output buffer of length at least "+s)}function l(...e){for(let t=0;t<e.length;t++)e[t].fill(0)}function B(e){return new DataView(e.buffer,e.byteOffset,e.byteLength)}function u(e,t){return e<<32-t|e>>>t}var Z=typeof Uint8Array.from([]).toHex=="function"&&typeof Uint8Array.fromHex=="function",$=Array.from({length:256},(e,t)=>t.toString(16).padStart(2,"0"));function V(e){if(g(e),Z)return e.toHex();let t="";for(let s=0;s<e.length;s++)t+=$[e[s]];return t}function O(e){if(typeof e!="string")throw new Error("string expected");return new Uint8Array(new TextEncoder().encode(e))}function I(e){return typeof e=="string"&&(e=O(e)),g(e),e}function C(e){return typeof e=="string"&&(e=O(e)),g(e),e}function W(e,t){if(t!==void 0&&{}.toString.call(t)!=="[object Object]")throw new Error("options should be object or undefined");return Object.assign(e,t)}var m=class{};function R(e){let t=n=>e().update(I(n)).digest(),s=e();return t.outputLen=s.outputLen,t.blockLen=s.blockLen,t.create=()=>e(),t}var S=class extends m{constructor(t,s){super(),this.finished=!1,this.destroyed=!1,E(t);let n=I(s);if(this.iHash=t.create(),typeof this.iHash.update!="function")throw new Error("Expected instance of class which extends utils.Hash");this.blockLen=this.iHash.blockLen,this.outputLen=this.iHash.outputLen;let r=this.blockLen,i=new Uint8Array(r);i.set(n.length>r?t.create().update(n).digest():n);for(let o=0;o<i.length;o++)i[o]^=54;this.iHash.update(i),this.oHash=t.create();for(let o=0;o<i.length;o++)i[o]^=106;this.oHash.update(i),l(i)}update(t){return L(this),this.iHash.update(t),this}digestInto(t){L(this),g(t,this.outputLen),this.finished=!0,this.iHash.digestInto(t),this.oHash.update(t),this.oHash.digestInto(t),this.destroy()}digest(){let t=new Uint8Array(this.oHash.outputLen);return this.digestInto(t),t}_cloneInto(t){t||(t=Object.create(Object.getPrototypeOf(this),{}));let{oHash:s,iHash:n,finished:r,destroyed:i,blockLen:o,outputLen:c}=this;return t=t,t.finished=r,t.destroyed=i,t.blockLen=o,t.outputLen=c,t.oHash=s._cloneInto(t.oHash),t.iHash=n._cloneInto(t.iHash),t}clone(){return this._cloneInto()}destroy(){this.destroyed=!0,this.oHash.destroy(),this.iHash.destroy()}},D=(e,t,s)=>new S(e,t).update(s).digest();D.create=(e,t)=>new S(e,t);function tt(e,t,s,n){E(e);let r=W({dkLen:32,asyncTick:10},n),{c:i,dkLen:o,asyncTick:c}=r;if(A(i),A(o),A(c),i<1)throw new Error("iterations (c) should be >= 1");let a=C(t),f=C(s),d=new Uint8Array(o),h=D.create(e,a),x=h._cloneInto().update(f);return{c:i,dkLen:o,asyncTick:c,DK:d,PRF:h,PRFSalt:x}}function et(e,t,s,n,r){return e.destroy(),t.destroy(),n&&n.destroy(),l(r),s}function j(e,t,s,n){let{c:r,dkLen:i,DK:o,PRF:c,PRFSalt:a}=tt(e,t,s,n),f,d=new Uint8Array(4),h=B(d),x=new Uint8Array(c.outputLen);for(let b=1,w=0;w<i;b++,w+=c.outputLen){let y=o.subarray(w,w+c.outputLen);h.setInt32(0,b,!1),(f=a._cloneInto(f)).update(d).digestInto(x),y.set(x.subarray(0,y.length));for(let T=1;T<r;T++){c._cloneInto(f).update(x).digestInto(x);for(let U=0;U<y.length;U++)y[U]^=x[U]}}return et(c,a,o,f,x)}function st(e,t,s,n){if(typeof e.setBigUint64=="function")return e.setBigUint64(t,s,n);let r=BigInt(32),i=BigInt(4294967295),o=Number(s>>r&i),c=Number(s&i),a=n?4:0,f=n?0:4;e.setUint32(t+a,o,n),e.setUint32(t+f,c,n)}function K(e,t,s){return e&t^~e&s}function M(e,t,s){return e&t^e&s^t&s}var _=class extends m{constructor(t,s,n,r){super(),this.finished=!1,this.length=0,this.pos=0,this.destroyed=!1,this.blockLen=t,this.outputLen=s,this.padOffset=n,this.isLE=r,this.buffer=new Uint8Array(t),this.view=B(this.buffer)}update(t){L(this),t=I(t),g(t);let{view:s,buffer:n,blockLen:r}=this,i=t.length;for(let o=0;o<i;){let c=Math.min(r-this.pos,i-o);if(c===r){let a=B(t);for(;r<=i-o;o+=r)this.process(a,o);continue}n.set(t.subarray(o,o+c),this.pos),this.pos+=c,o+=c,this.pos===r&&(this.process(s,0),this.pos=0)}return this.length+=t.length,this.roundClean(),this}digestInto(t){L(this),G(t,this),this.finished=!0;let{buffer:s,view:n,blockLen:r,isLE:i}=this,{pos:o}=this;s[o++]=128,l(this.buffer.subarray(o)),this.padOffset>r-o&&(this.process(n,0),o=0);for(let h=o;h<r;h++)s[h]=0;st(n,r-8,BigInt(this.length*8),i),this.process(n,0);let c=B(t),a=this.outputLen;if(a%4)throw new Error("_sha2: outputLen should be aligned to 32bit");let f=a/4,d=this.get();if(f>d.length)throw new Error("_sha2: outputLen bigger than state");for(let h=0;h<f;h++)c.setUint32(4*h,d[h],i)}digest(){let{buffer:t,outputLen:s}=this;this.digestInto(t);let n=t.slice(0,s);return this.destroy(),n}_cloneInto(t){t||(t=new this.constructor),t.set(...this.get());let{blockLen:s,buffer:n,length:r,finished:i,destroyed:o,pos:c}=this;return t.destroyed=o,t.finished=i,t.length=r,t.pos=c,r%s&&t.buffer.set(n),t}clone(){return this._cloneInto()}},p=Uint32Array.from([1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225]);var nt=Uint32Array.from([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),H=new Uint32Array(64),k=class extends _{constructor(t=32){super(64,t,8,!1),this.A=p[0]|0,this.B=p[1]|0,this.C=p[2]|0,this.D=p[3]|0,this.E=p[4]|0,this.F=p[5]|0,this.G=p[6]|0,this.H=p[7]|0}get(){let{A:t,B:s,C:n,D:r,E:i,F:o,G:c,H:a}=this;return[t,s,n,r,i,o,c,a]}set(t,s,n,r,i,o,c,a){this.A=t|0,this.B=s|0,this.C=n|0,this.D=r|0,this.E=i|0,this.F=o|0,this.G=c|0,this.H=a|0}process(t,s){for(let h=0;h<16;h++,s+=4)H[h]=t.getUint32(s,!1);for(let h=16;h<64;h++){let x=H[h-15],b=H[h-2],w=u(x,7)^u(x,18)^x>>>3,y=u(b,17)^u(b,19)^b>>>10;H[h]=y+H[h-7]+w+H[h-16]|0}let{A:n,B:r,C:i,D:o,E:c,F:a,G:f,H:d}=this;for(let h=0;h<64;h++){let x=u(c,6)^u(c,11)^u(c,25),b=d+x+K(c,a,f)+nt[h]+H[h]|0,y=(u(n,2)^u(n,13)^u(n,22))+M(n,r,i)|0;d=f,f=a,a=c,c=o+b|0,o=i,i=r,r=n,n=b+y|0}n=n+this.A|0,r=r+this.B|0,i=i+this.C|0,o=o+this.D|0,c=c+this.E|0,a=a+this.F|0,f=f+this.G|0,d=d+this.H|0,this.set(n,r,i,o,c,a,f,d)}roundClean(){l(H)}destroy(){this.set(0,0,0,0,0,0,0,0),l(this.buffer)}};var P=R(()=>new k);var N=P;function ot(e,t,s){return V(j(N,e,t,{c:s,dkLen:32}))}return Q(rt);})();
+// END GENERATED PARENT CRYPTO

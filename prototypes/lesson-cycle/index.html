@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>授業をつなぐ — ステップワイズ画面試作</title>
+  <style>
+    :root{color-scheme:light;--ink:#223c50;--muted:#657887;--blue:#286a89;--line:#dce5e9;--green:#2e7965;--bg:#f3f6f7}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Yu Gothic UI",Meiryo,sans-serif}
+    button,input,textarea{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:10px 16px;color:var(--ink);background:#fff;font-weight:600}button:hover{border-color:var(--blue)}button:disabled{cursor:default;opacity:.5}button.primary{background:var(--blue);color:white;border-color:var(--blue)}button.soft{background:#edf4f7;color:var(--blue)}button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #8fc8e2;outline-offset:3px}
+    .demo{background:#e8f0f4;text-align:center;font-size:12px;padding:8px 16px;color:#46677d}header{background:#fff;border-bottom:1px solid var(--line)}.brand{max-width:1160px;margin:auto;display:flex;align-items:center;gap:14px;padding:18px 24px}.mark{background:var(--ink);color:white;width:37px;height:37px;display:grid;place-items:center;border-radius:10px;font-weight:800}.brand strong{font-size:16px;letter-spacing:.04em}.brand small{display:block;color:var(--muted);font-size:11px}.teacher{margin-left:auto;color:var(--muted);font-size:12px}
+    main{max-width:1160px;margin:0 auto;padding:30px 24px 90px}.overline{color:var(--muted);font-size:12px;letter-spacing:.05em}h1{font-size:28px;margin:5px 0 6px;line-height:1.4}h2{font-size:18px;margin:0 0 16px}h3{font-size:14px;margin:0 0 6px}p{margin:0 0 12px}.sub{color:var(--muted);font-size:13px}.heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}.badge{display:inline-block;background:#eaf1f5;border:1px solid #dbe6ed;border-radius:30px;color:var(--blue);font-size:12px;padding:3px 10px;font-weight:600}.badge.private{background:#f4f0e8;color:#8c6836;border-color:#e9e0d0}.badge.ok{background:#eaf4ef;border-color:#d4e9de;color:var(--green)}
+    .steps{display:flex;gap:4px;background:#e8eef1;border-radius:10px;padding:5px;margin-bottom:24px}.steps button{flex:1;background:transparent;border:0;font-size:13px;padding:10px}.steps button[aria-selected="true"]{background:#fff;box-shadow:0 2px 5px #263e5010;color:var(--blue)}.step-no{display:inline-grid;place-items:center;width:21px;height:21px;border-radius:50%;background:#dde7ed;font-size:11px;margin-right:7px}
+    .layout{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(270px,1fr);gap:22px;align-items:start}.card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:25px;margin-bottom:20px}.card.tint{background:#eef5f2;border-color:#d4e5db}.card-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.card-header h2{margin:0}.divider{border:0;border-top:1px solid var(--line);margin:20px 0}.label{display:flex;justify-content:space-between;align-items:center;margin:18px 0 7px;font-weight:600;font-size:14px}.label:first-child{margin-top:0}.optional{color:var(--muted);font-size:11px;font-weight:400}.required{color:#957244;font-size:11px;font-weight:400}.field-help{font-size:12px;color:var(--muted);margin:0 0 7px}input[type="text"],input[type="date"],textarea{display:block;width:100%;border:1px solid #cdd9e0;background:#fbfcfd;border-radius:8px;padding:10px 12px;color:var(--ink)}textarea{resize:vertical;min-height:83px}textarea.report{min-height:295px;background:#fff;line-height:1.9}.homework-entry{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px}.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:18px}.feedback{font-size:13px;color:var(--green);margin-top:12px;min-height:23px}.mini{font-size:12px;color:var(--muted)}.small-list{padding-left:18px;margin:0 0 10px}.small-list li{margin:5px 0}.prepared{font-size:13px}.prepared section{margin:15px 0}.task{display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid var(--line);padding:12px 0}.task:last-child{border:0}.task input{width:19px;height:19px;margin:3px 0;accent-color:var(--green)}.task label{flex:1;font-size:13px;cursor:pointer}.task.done label{color:var(--muted);text-decoration:line-through}.task small{display:block;font-size:11px;color:var(--muted)}details{border-top:1px solid var(--line);padding-top:15px;margin-top:22px}summary{cursor:pointer;font-size:13px;font-weight:600}.notice{border-left:3px solid #88ae99;padding:2px 0 2px 14px;font-size:13px;margin-top:18px}.panel[hidden]{display:none}.empty{padding:14px 0;color:var(--muted);font-size:13px}.footer-note{font-size:12px;color:var(--muted);margin-top:14px}.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}#reset{margin-left:auto;font-size:12px;padding:7px 12px}
+    @media(max-width:760px){main{padding:22px 15px 60px}.brand{padding:14px 16px}.teacher{display:none}h1{font-size:23px}.layout,.two{grid-template-columns:1fr}.card{padding:20px}.heading{align-items:flex-start}.steps button{padding:10px 4px;font-size:12px}.step-no{display:none}.homework-entry{grid-template-columns:1fr}.actions button{flex:1}.card-header{flex-wrap:wrap}.layout aside{order:2}}
+  </style>
+</head>
+<body>
+  <div class="demo">画面試作 · 架空の生徒データです。入力はこのページ内だけで動作し、再読み込みで消えます。</div>
+  <header><div class="brand"><span class="mark" aria-hidden="true">S</span><div><strong>ステップワイズ</strong><small>先生のワークスペース</small></div><span class="teacher">授業のつながりを、ひとつの記録から。</span></div></header>
+  <main>
+    <div class="heading"><div><div class="overline">生徒カルテ / 授業</div><h1>【テスト】サンプルさん</h1><div class="sub">9月7日（月） 18:00–19:00 · 数学 · 中学2年</div></div><span id="record-badge" class="badge">記録 未入力</span></div>
+    <div class="steps" role="tablist" aria-label="授業サイクル">
+      <button id="tab-record" type="button" role="tab" aria-controls="panel-record" aria-selected="true" data-tab="record"><span class="step-no">1</span>授業の記録</button>
+      <button id="tab-report" type="button" role="tab" aria-controls="panel-report" aria-selected="false" data-tab="report"><span class="step-no">2</span>報告の下書き</button>
+      <button id="tab-next" type="button" role="tab" aria-controls="panel-next" aria-selected="false" data-tab="next"><span class="step-no">3</span>次回の準備</button>
+    </div>
+
+    <section id="panel-record" class="panel" role="tabpanel" aria-labelledby="tab-record">
+      <div class="layout">
+        <div>
+          <div class="card">
+            <div class="card-header"><h2>今日の学びを残す</h2><span class="badge">先生のみ</span></div>
+            <label class="label" for="content">授業内容 <span class="required">必須</span></label>
+            <p class="field-help">扱った単元や問題を、短く記録します。</p>
+            <textarea id="content" maxlength="2000">一次関数の式の求め方。表から変化の割合を読み取り、切片を求める練習。</textarea>
+            <label class="label" for="progress">取り組みの様子・理解できたこと <span class="optional">任意</span></label>
+            <textarea id="progress" maxlength="1000">表から変化の割合を求めることは自力でできた。負の数の計算は途中式を確認すると修正できた。</textarea>
+            <label class="label" for="next-focus">次回の焦点 <span class="optional">任意</span></label>
+            <textarea id="next-focus" maxlength="1000">傾きが負の場合を復習し、グラフから式を求める問題へ進む。</textarea>
+            <label class="label" for="homework">宿題 <span class="optional">任意 · まず下書きとして保存</span></label>
+            <div class="homework-entry"><input id="homework" type="text" maxlength="80" value="ワーク p.24–25 一次関数の式" aria-label="宿題の内容"><input id="due" type="date" value="2026-09-14" aria-label="宿題の期限"></div>
+            <details><summary>先生だけのメモ <span class="badge private">報告には入りません</span></summary><label class="label" for="private-note">内部メモ <span class="optional">任意</span></label><textarea id="private-note" maxlength="2000">説明を急がず、本人が途中式を書き終わるまで待つ。</textarea></details>
+            <div class="actions"><button id="save" type="button" class="primary">記録を保存</button><span class="mini" id="save-meta">未保存</span></div>
+            <p class="footer-note">記録の保存で、実施済みや請求の状態は変わりません。</p>
+            <div id="save-status" class="feedback" role="status" aria-live="polite"></div>
+          </div>
+          <div class="card"><div class="card-header"><h2>宿題を生徒へ反映</h2><span id="homework-badge" class="badge">反映前</span></div><p id="homework-summary" class="sub">記録を保存すると、反映する宿題をここで確認できます。</p><button id="apply" type="button" class="soft" disabled>生徒の「やること」へ反映</button><div id="apply-status" class="feedback" role="status" aria-live="polite"></div></div>
+        </div>
+        <aside>
+          <div class="card tint prepared"><div class="overline">授業前にひと目で</div><h2>前回からの引き継ぎ</h2><p class="mini">8月31日（月） · 数学</p><section><h3>前回やったこと</h3><p>比例との違いを確認。表から変化の割合を求める。</p></section><section><h3>今日、確認すること</h3><p>負の数の引き算を確認してから、一次関数の式へ進む。</p></section><div class="notice">小さなつまずきを確認しながら、自分で解ける範囲を広げる。</div></div>
+          <div class="card"><h2>生徒の「やること」</h2><p class="mini">チェックで、生徒が完了した状態を試せます。</p><div id="tasks"></div></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="panel-report" class="panel" role="tabpanel" aria-labelledby="tab-report" hidden>
+      <div class="layout"><div class="card"><div class="card-header"><h2>保護者向け報告の下書き</h2><span class="badge private">未公開</span></div><p class="sub">保存した授業内容から下書きを作り、伝え方を整えます。</p><div class="actions"><button id="generate" class="soft" type="button" disabled>保存した記録から下書きを作る</button></div><label class="label" for="report">報告文 <span class="optional">先生のみ閲覧</span></label><textarea id="report" class="report" maxlength="4000" placeholder="授業記録を保存してから、下書きを作成してください。"></textarea><div class="actions"><button id="save-report" class="primary" type="button" disabled>下書きを保存</button></div><div id="report-status" class="feedback" role="status" aria-live="polite"></div></div><aside class="card tint"><h2>伝える内容</h2><ul class="small-list"><li>今回、何を学んだか</li><li>理解できたこと・取り組み</li><li>次回に向けた宿題</li><li>次に扱うこと</li></ul><p class="mini">先生だけのメモは含めません。初回は下書きまでとし、保護者への公開は次の段階で整えます。</p></aside></div>
+    </section>
+
+    <section id="panel-next" class="panel" role="tabpanel" aria-labelledby="tab-next" hidden>
+      <div class="card tint"><div class="overline">次の授業</div><div class="card-header"><h2>9月14日（月） 18:00–19:00 · 数学</h2><span class="badge ok">準備カード</span></div><p class="sub">今回の記録と、現在の未完了宿題から確認できます。</p></div>
+      <div class="two"><div class="card"><h2>前回の学び</h2><p id="next-content" class="empty">今回の記録を保存すると表示されます。</p><hr class="divider"><h3>次回の焦点</h3><p id="next-focus-view" class="empty">まだ記録されていません。</p></div><div class="card"><h2>未完了の宿題</h2><div id="next-tasks"></div><p class="footer-note">完了した課題は、未完了の一覧から外れます。</p></div></div>
+    </section>
+    <div class="actions"><span class="mini">ダミー画面 · 本番接続なし · 保存・反映は動作イメージです</span><button id="reset" type="button">最初の状態に戻す</button></div>
+  </main>
+  <script>
+  (function () {
+    "use strict";
+    const $ = id => document.getElementById(id);
+    let saved = null, revision = 0, dirty = false, savedReport = null, draftSourceRevision = 0;
+    const tasks = [{ id: "demo-existing", title: "前回の復習：負の数の計算 5問", due: "2026-09-07", done: false }];
+    const demoItemId = "demo-lesson-homework-1";
+    function say(id, text) { $(id).textContent = text; }
+    function renderTasks() {
+      $("tasks").replaceChildren(); $("next-tasks").replaceChildren();
+      tasks.forEach(task => {
+        const line = document.createElement("div"); line.className = "task" + (task.done ? " done" : "");
+        const check = document.createElement("input"); check.type = "checkbox"; check.checked = task.done; check.id = "check-" + task.id;
+        const label = document.createElement("label"); label.htmlFor = check.id; label.textContent = task.title;
+        const due = document.createElement("small"); due.textContent = task.due ? task.due + "まで" : "期限なし"; label.appendChild(due);
+        check.addEventListener("change", () => { task.done = check.checked; renderTasks(); });
+        line.append(check, label); $("tasks").appendChild(line);
+        if (!task.done) { const item = document.createElement("div"); item.className = "task"; item.textContent = task.title + (task.due ? "（" + task.due + "まで）" : ""); $("next-tasks").appendChild(item); }
+      });
+      if (!tasks.some(t => !t.done)) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "未完了の宿題はありません。"; $("next-tasks").appendChild(empty); }
+    }
+    document.querySelectorAll("[data-tab]").forEach(button => button.addEventListener("click", () => {
+      document.querySelectorAll("[data-tab]").forEach(tab => tab.setAttribute("aria-selected", String(tab === button)));
+      document.querySelectorAll(".panel").forEach(panel => { panel.hidden = panel.id !== "panel-" + button.dataset.tab; });
+    }));
+    ["content", "progress", "next-focus", "homework", "due", "private-note"].forEach(id => $(id).addEventListener("input", () => {
+      dirty = true; say("save-meta", "変更あり・未保存"); $("apply").disabled = true;
+    }));
+    $("save").addEventListener("click", () => {
+      if (!$("content").value.trim()) { say("save-status", "授業内容を入力してください。"); $("content").focus(); return; }
+      saved = { content: $("content").value.trim(), progress: $("progress").value.trim(), next: $("next-focus").value.trim(), homework: $("homework").value.trim(), due: $("due").value, privateNote: $("private-note").value };
+      revision++; dirty = false;
+      say("record-badge", "記録済み"); $("record-badge").className = "badge ok";
+      say("save-meta", "保存済み · 第" + revision + "版"); say("save-status", "この試作内に保存しました。宿題の反映内容も確認できます。");
+      say("homework-summary", saved.homework ? saved.homework + (saved.due ? " / " + saved.due + "まで" : " / 期限なし") : "今回の宿題はありません。公開済みの宿題はそのまま残ります。");
+      $("apply").disabled = !saved.homework; $("generate").disabled = false; say("homework-badge", "内容を確認");
+      say("next-content", saved.content); say("next-focus-view", saved.next || "次回の焦点は未入力です。");
+      if ($("report").value) say("report-status", "記録が更新されました。保存済み下書きはそのまま保持しています。");
+    });
+    $("apply").addEventListener("click", () => {
+      if (!saved || dirty || !saved.homework) return;
+      const existing = tasks.find(t => t.id === demoItemId);
+      if (existing && existing.done && (existing.title !== saved.homework || existing.due !== saved.due)) {
+        say("apply-status", "完了済みの宿題なので、内容の変更を保留しました。再出題は新しい宿題として追加する想定です。"); say("homework-badge", "完了済み・変更保留"); return;
+      }
+      if (existing) { existing.title = saved.homework; existing.due = saved.due; }
+      else tasks.push({ id: demoItemId, title: saved.homework, due: saved.due, done: false });
+      renderTasks(); say("homework-badge", "反映済み"); say("apply-status", "やることに反映しました。もう一度押しても増えず、完了状態を保ちます。");
+    });
+    $("generate").addEventListener("click", () => {
+      if (!saved) return;
+      if ($("report").value.trim()) { say("report-status", "編集中の下書きを保持しました。作り直す場合は報告文を空にしてから押してください。"); return; }
+      // Build only from explicitly shareable fields. Never use privateNote here.
+      const lines = ["9月7日 数学の授業", "", "【今回の内容】", saved.content];
+      if (saved.progress) lines.push("", "【取り組みの様子】", saved.progress);
+      if (saved.homework) lines.push("", "【宿題】", saved.homework + (saved.due ? "（" + saved.due + "まで）" : ""));
+      if (saved.next) lines.push("", "【次回の予定】", saved.next);
+      const body = lines.join("\n");
+      if (body.length > 4000) { say("report-status", "下書きが4,000文字を超えます。要点をまとめて入力してください。"); return; }
+      $("report").value = body; draftSourceRevision = revision; $("save-report").disabled = false; say("report-status", "下書きを作りました。伝え方を確認して保存してください。");
+    });
+    $("report").addEventListener("input", () => { $("save-report").disabled = !saved || !$("report").value.trim(); say("report-status", "下書きを編集中です。"); });
+    $("save-report").addEventListener("click", () => {
+      if (!saved || !$("report").value.trim()) return;
+      savedReport = { body: $("report").value.trim(), sourceRevision: draftSourceRevision || revision };
+      say("report-status", "この試作内に下書きを保存しました（記録の第" + savedReport.sourceRevision + "版から作成）。保護者には公開されません。");
+    });
+    $("reset").addEventListener("click", () => location.reload());
+    renderTasks();
+  })();
+  </script>
+</body>
+</html>

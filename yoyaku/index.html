@@ -153,6 +153,11 @@
       .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
       .parentbar { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .parentbar button { background: transparent; color: var(--paper); border: 1px solid rgba(255,255,255,.5); }
+      .parent-auth { margin-top: 14px; }
+      .parent-auth label { display: block; font-weight: 600; margin: 14px 0 5px; font-size: 13.5px; }
+      .parent-auth input { display: block; width: 100%; }
+      .parent-auth .row { margin-top: 16px; }
+      .parent-error { margin: 12px 0; padding: 10px 12px; background: var(--danger-soft); color: var(--danger); border-radius: 8px; font-size: 13px; }
       /* 下部バー・トースト */
       .confirmbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--white); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(31, 48, 64, 0.12); padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
       .confirmbar .inner { max-width: 640px; margin: 0 auto; }
@@ -198,7 +203,8 @@
         var wishKind = "want";   // want=この日時 / ok=この時間帯のどこかで
         var selMode = "", selDays = {}; // 予定表で日付を選択中のモード("" | "ng" | "wish" | "event") と選んだ日付
         var previewK = null;     // 先生のプレビュー
-        var parentStep = "";     // "" | "pass" | "data"
+        var parentStep = "pass"; // "pass" | "setup" | "data" | "logout"
+        var parentNotice = "";
         var P = null;            // 保護者向けデータ
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
@@ -273,8 +279,15 @@
         }
         function apiPost(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
         function myKey() { return previewK || lsGet("sw_k") || ""; }
+        function parentSessionKey(k) { return "sw_pt_v2:" + (k === undefined ? myKey() : k); }
+        function clearParentSession(k) {
+          ssDel(parentSessionKey(k)); ssDel(parentSessionKey(k) + ":logout"); ssDel("sw_pt");
+          if (k === undefined || k === myKey()) { P = null; parentStep = "pass"; }
+        }
         function loadState() {
-          return apiGet({ action: "state", k: myKey() }).then(function (res) {
+          var k = myKey();
+          return apiGet({ action: "state", k: k }).then(function (res) {
+            if (k !== myKey()) return;
             if (res.error) throw new Error(res.error);
             S = res; render();
           });
@@ -766,10 +779,27 @@
 
         /* ---------- 画面: 保護者ページ ---------- */
         function renderParentPage() {
+          if (ssGet(parentSessionKey() + ":logout")) { P = null; parentStep = "logout"; }
           if (parentStep === "data" && P) return renderParent();
           var h = '<h1>保護者ページ</h1><p class="sub">' + esc(S.me.name) + 'さんの授業料とお支払い状況</p>';
-          h += '<div class="card" style="margin-top:12px"><div class="row"><input type="password" id="f-ppass" placeholder="パスワード" autocomplete="off" style="flex:1;min-width:160px"><button class="btn-primary btn-sm" data-action="parentopen"' + (busy ? " disabled" : "") + '>' + (busy ? "確認中…" : "開く") + '</button></div></div>';
-          return h;
+          var dis = busy ? " disabled" : "";
+          h += '<div class="card parent-auth">';
+          if (parentNotice) h += '<p class="parent-error" role="alert">' + esc(parentNotice) + '</p>';
+          if (parentStep === "logout") {
+            return h + '<p>ログアウトを完了するには、サーバーでの確認が必要です。</p><button class="btn-primary" data-action="parentclose"' + dis + '>' + (busy ? "ログアウト中…" : "ログアウトを再試行") + '</button></div>';
+          }
+          if (ssGet(parentSessionKey())) {
+            return h + '<p>前回のログインを確認して、保護者ページを開きます。</p><div class="row"><button class="btn-primary" data-action="parentresume"' + dis + '>' + (busy ? "確認中…" : "保護者ページを開く") + '</button><button class="btn-quiet" data-action="parentclose"' + dis + '>ログアウト</button></div></div>';
+          }
+          var setup = parentStep === "setup";
+          h += '<strong>' + (setup ? "保護者用パスワードの設定・再設定" : "保護者ログイン") + '</strong>';
+          h += '<p class="small muted" id="parent-auth-help">' + (setup ? "先生から受け取った6桁の設定コードを入力し、ご自身で保護者用パスワードを決めてください。コードの有効期限は発行から24時間です。" : "保護者ご自身が設定したパスワードでログインしてください。初めての方・パスワードを忘れた方は、先生に設定コードの発行をご依頼ください。") + '</p>';
+          h += '<form id="parent-auth-form" aria-describedby="parent-auth-help">';
+          if (setup) h += '<label for="f-pcode">先生から受け取った設定コード</label><input type="text" id="f-pcode" inputmode="numeric" pattern="[0-9０-９]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6桁の数字" required' + dis + '>';
+          h += '<label for="f-ppass">' + (setup ? "新しい保護者用パスワード" : "保護者用パスワード") + '</label><input type="password" id="f-ppass" autocomplete="' + (setup ? "new-password" : "current-password") + '" maxlength="128"' + (setup ? ' minlength="12" aria-describedby="parent-pass-help"' : '') + ' required' + dis + '>';
+          if (setup) h += '<div class="small muted" id="parent-pass-help">12〜128文字で設定してください。長い言葉を組み合わせても構いません。</div><label for="f-ppass2">新しい保護者用パスワード（確認）</label><input type="password" id="f-ppass2" autocomplete="new-password" minlength="12" maxlength="128" required' + dis + '>';
+          h += '<div class="row"><button type="submit" class="btn-primary"' + dis + '>' + (busy ? "確認中…" : setup ? "パスワードを設定して開く" : "ログイン") + '</button><button type="button" class="btn-quiet btn-sm" data-action="parentmode"' + dis + '>' + (setup ? "ログインに戻る" : "初めて・パスワードを忘れた方") + '</button></div></form></div>';
+          return h + '<p class="note">パスワードは保護者ご自身で管理してください。共用の端末では、ご利用後にログアウトしてください。</p>';
         }
 
         var EXAM_SUBJ = ["国語", "数学", "社会", "理科", "英語"];
@@ -835,7 +865,7 @@
 
         function renderParent() {
           var d = P;
-          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="parentclose">閉じる</button></div>';
+          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="parentclose"' + (busy ? " disabled" : "") + '>ログアウト</button></div>';
           var tm = d.thisMonth || {};
           html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2><div class="row" style="align-items:stretch">';
           html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
@@ -878,13 +908,64 @@
         function render() { renderStudent(); }
 
         function loadParent(ptoken) {
-          busy = true; render();
-          apiPost({ action: "parentData", k: myKey(), ptoken: ptoken }).then(function (res) {
+          var k = myKey();
+          busy = true; parentNotice = ""; render();
+          apiPost({ action: "parentData", k: k, ptoken: ptoken }).then(function (res) {
+            if (k !== myKey()) return;
             busy = false;
-            if (res.error) { ssDel("sw_pt"); parentStep = "pass"; toast(res.error); render(); return; }
+            if (res.error) {
+              if (res.parentAuthRequired || res.badCode) clearParentSession(k);
+              parentNotice = res.error; render(); return;
+            }
             P = res.data; parentStep = "data"; render(); window.scrollTo(0, 0);
-          }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
+          }).catch(function () { if (k !== myKey()) return; busy = false; parentNotice = "通信に失敗しました。もう一度お試しください。"; render(); });
         }
+
+        function submitParentAuth() {
+          if (busy) return;
+          var setup = parentStep === "setup", passEl = document.getElementById("f-ppass"), confirmEl = document.getElementById("f-ppass2");
+          var pass = passEl ? passEl.value : "", confirmPass = confirmEl ? confirmEl.value : "";
+          var code = val("f-pcode").replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+          if (!pass) { toast("保護者用パスワードを入力してください"); return; }
+          if (setup && !/^\d{6}$/.test(code)) { toast("先生から受け取った6桁の設定コードを入力してください"); return; }
+          if (setup && (pass.length < 12 || pass.length > 128)) { toast("パスワードは12〜128文字で設定してください"); return; }
+          if (setup && pass !== confirmPass) { toast("確認用のパスワードが一致しません"); return; }
+          var k = myKey(), body = { action: setup ? "parentSetup" : "parentLogin", k: k, pass: pass };
+          try { sessionStorage.setItem(parentSessionKey(k) + ":check", "1"); sessionStorage.removeItem(parentSessionKey(k) + ":check"); }
+          catch (e) { parentNotice = "このブラウザでログインを一時保存できません。ブラウザの設定を確認して、もう一度お試しください。"; render(); return; }
+          if (setup) body.setupCode = code;
+          if (passEl) passEl.value = "";
+          if (confirmEl) confirmEl.value = "";
+          busy = true; parentNotice = ""; render();
+          apiPost(body).then(function (res) {
+            if (k !== myKey()) return;
+            busy = false;
+            if (res.error) { if (res.needSetup) parentStep = "setup"; parentNotice = res.error; render(); return; }
+            if (!res.ptoken) { parentNotice = "ログインを確認できませんでした。もう一度お試しください。"; render(); return; }
+            ssSet(parentSessionKey(k), res.ptoken); ssDel("sw_pt"); loadParent(res.ptoken);
+          }).catch(function () { if (k !== myKey()) return; busy = false; parentNotice = "通信に失敗しました。もう一度お試しください。"; render(); });
+        }
+
+        function logoutParent() {
+          if (busy) return;
+          var k = myKey(), ptoken = ssGet(parentSessionKey(k));
+          P = null; parentNotice = "";
+          if (!ptoken) { clearParentSession(k); render(); return; }
+          // 通信失敗時は再試行に必要なトークンを sessionStorage に残し、完了と表示しない。
+          ssSet(parentSessionKey(k) + ":logout", "1"); parentStep = "logout"; busy = true; render();
+          apiPost({ action: "parentLogout", k: k, ptoken: ptoken }).then(function (res) {
+            if (res.ok || res.parentAuthRequired || res.badCode) clearParentSession(k);
+            if (k !== myKey()) return;
+            busy = false;
+            if (!res.ok && !res.parentAuthRequired && !res.badCode) { parentNotice = "ログアウトが完了していません。" + (res.error || "サーバーの応答を確認できませんでした。") + " 再試行してください。"; render(); return; }
+            parentNotice = ""; render(); toast("ログアウトしました"); window.scrollTo(0, 0);
+          }).catch(function () { if (k !== myKey()) return; busy = false; parentNotice = "通信に失敗し、ログアウトが完了していません。通信状態を確認して再試行してください。"; render(); });
+        }
+
+        app.addEventListener("submit", function (ev) {
+          if (!ev.target || ev.target.id !== "parent-auth-form") return;
+          ev.preventDefault(); submitParentAuth();
+        });
 
         /* ---------- 操作 ---------- */
         app.addEventListener("click", function (ev) {
@@ -982,29 +1063,22 @@
             case "delblock":
               var sids = btn.getAttribute("data-ids");
               studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "解除しました"); break;
-            case "parentopen":
-              var saved = ssGet("sw_pt");
-              var ppass = (document.getElementById("f-ppass") || {}).value || "";
-              if (saved && !ppass) { loadParent(saved); return; }
-              if (!ppass) { toast("パスワードを入れてください"); return; }
-              busy = true; render();
-              apiPost({ action: "parentLogin", k: myKey(), pass: ppass }).then(function (res) {
-                busy = false;
-                if (res.error) { toast(res.error); render(); return; }
-                ssSet("sw_pt", res.ptoken); loadParent(res.ptoken);
-              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
-              break;
-            case "parentclose": parentStep = ""; P = null; render(); window.scrollTo(0, 0); break;
+            case "parentmode": if (busy) return; parentStep = parentStep === "setup" ? "pass" : "setup"; parentNotice = ""; render(); break;
+            case "parentresume": if (busy) return; loadParent(ssGet(parentSessionKey()) || ""); break;
+            case "parentclose": logoutParent(); break;
             case "planok":
             case "planng":
+              if (busy) return;
               var pym = btn.getAttribute("data-ym"), approve = act === "planok", pmemo = val("pl-memo-" + pym);
               if (!approve && !confirm("この月の回数を見送り(相談)として先生に伝えますか?")) return;
+              var approvalKey = myKey();
               busy = true; render();
-              apiPost({ action: "parentPlanDecide", k: myKey(), ptoken: ssGet("sw_pt") || "", ym: pym, approve: approve, memo: pmemo }).then(function (res) {
+              apiPost({ action: "parentPlanDecide", k: approvalKey, ptoken: ssGet(parentSessionKey(approvalKey)) || "", ym: pym, approve: approve, memo: pmemo }).then(function (res) {
+                if (approvalKey !== myKey()) return;
                 busy = false;
-                if (res.error) { toast(res.error); render(); return; }
+                if (res.error) { if (res.parentAuthRequired || res.badCode) { clearParentSession(approvalKey); parentNotice = res.error; } else toast(res.error); render(); return; }
                 P = res.data; render(); toast(approve ? "承認しました。ありがとうございます" : "先生に伝えました");
-              }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
+              }).catch(function () { if (approvalKey !== myKey()) return; busy = false; toast("通信に失敗しました"); render(); });
               break;
             case "gohome": location.hash = "#home"; break;
             case "gmode": gradeMode = btn.getAttribute("data-m"); render(); break;
@@ -1019,6 +1093,7 @@
         });
 
         /* ---------- 起動 ---------- */
+        ssDel("sw_pt"); // 旧方式の、全生徒で共通だった端末内セッションを破棄する。
         try {
           var qs = new URLSearchParams(location.search);
           var qk = qs.get("k"), qp = qs.get("preview");
@@ -1027,6 +1102,14 @@
           else if (qs.toString()) history.replaceState(null, "", location.pathname);
         } catch (e) {}
         window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; render(); window.scrollTo(0, 0); });
+        window.addEventListener("storage", function (ev) {
+          if (previewK || (ev.key !== "sw_k" && ev.key !== null) || (ev.key !== null && ev.oldValue === ev.newValue)) return;
+          // 別タブで専用リンクを切り替えたら、前の生徒の保護者情報をすぐに消す。
+          P = null; S = null; G = null; GX = []; parentStep = "pass"; parentNotice = ""; busy = false;
+          pending = null; selMode = ""; selDays = {}; tabs.innerHTML = "";
+          app.innerHTML = '<div class="loading"><div class="spinner"></div>専用リンクを確認しています…</div>';
+          loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。再読み込みしてください。</div>'; });
+        });
         loadState().catch(function () {
           app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>';
         });

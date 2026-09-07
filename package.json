@@ -1,0 +1,13 @@
+{
+  "name": "stepwise-eisu-checks",
+  "private": true,
+  "scripts": {
+    "build:crypto": "node scripts/build-parent-crypto.mjs",
+    "check": "node scripts/check-syntax.cjs",
+    "test": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "@noble/hashes": "1.8.0",
+    "esbuild": "0.25.9"
+  }
+}
