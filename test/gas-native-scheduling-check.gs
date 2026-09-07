@@ -65,6 +65,8 @@ function stepwiseNativeSchedulingCheck() {
     check(call('offer',offer).ok,'consecutive_others_not_overcounted');
     emptySlots();slot({studentId:ids[1],deliveryMode:''});
     check(call('offer',offer).errorCode==='deliveryModeRequired','unknown_overlapping_mode_fails_closed');
+    emptySlots();slot({studentId:ids[1],deliveryMode:'online',subject:'',start:'08:00',min:90});
+    check(call('offer',offer).ok,'unrelated_legacy_blank_subject_keeps_valid_capacity');
     emptySlots();slot({studentId:ids[1],date:addDays_(ym+'-15',7),deliveryMode:'online'});
     before=JSON.stringify(readRows_('slots'));
     check(!!call('offer',Object.assign({},offer,{repeat:3,force:true})).error,'repeat_preflight_checks_later_week');refresh();

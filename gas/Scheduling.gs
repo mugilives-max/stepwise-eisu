@@ -11,6 +11,11 @@ function schedulingMode_(value) { return value==='in_person'||value==='online'?v
 function schedulingError_(message,code) { return {error:message,errorCode:code||'validation'}; }
 function schedulingOccupied_(s) { return s.status==='offered'||s.status==='booked'; }
 function schedulingMinutes_(s) { return Number(String(s.start).slice(0,2))*60+Number(String(s.start).slice(3)); }
+function schedulingIntervalValid_(s) {
+  // Occupancy depends on time, not the legacy subject label. Reuse the strict
+  // interval bounds without rewriting an existing lesson's missing subject.
+  return billingSlotValid_({date:s.date,start:s.start,min:s.min,subject:'授業'});
+}
 
 // 数え方は「重なる件数」ではなく、候補の時間内の各瞬間の人数。終了時刻を先に処理する。
 function schedulingCapacityError_(candidate,allSlots,excludeId) {
@@ -20,7 +25,7 @@ function schedulingCapacityError_(candidate,allSlots,excludeId) {
   var begin=schedulingMinutes_(candidate),end=begin+Number(candidate.min),events=[],problem=null;
   (allSlots||readRows_('slots')).forEach(function(s){
     if(problem||!schedulingOccupied_(s)||String(s.id)===String(excludeId||'')||s.date!==candidate.date)return;
-    if(!billingSlotValid_(s)){problem=schedulingError_('同じ日の授業データに不正な時刻があります。先生が確認してください','capacity');return;}
+    if(!schedulingIntervalValid_(s)){problem=schedulingError_('同じ日の授業データに不正な時刻があります。先生が確認してください','capacity');return;}
     var from=schedulingMinutes_(s),to=from+Number(s.min);
     if(from>=end||to<=begin)return;
     if(!schedulingMode_(s.deliveryMode)){problem=schedulingError_('重なる授業の形式が未設定です。先生が確認してください','deliveryModeRequired');return;}
@@ -74,10 +79,20 @@ function schedulingSetSlotDeliveryMode_(req) {
   var desired=Object.assign({},r.slot,{deliveryMode:mode});
   gate=schedulingCapacityError_(desired,undefined,desired.id);if(gate)return gate;
   // 先に Calendar を目的の状態へ収束させる。失敗時は元の形式を保持し、同じ指定で再送できる。
-  if(r.slot.eventId){
-    try{desired.meetUrl=schedulingUpdateCalendarMode_(desired,findStudent_(r.slot.studentId));}
-    catch(e){return schedulingError_('カレンダーの形式変更を確認できませんでした。同じ内容で再試行してください','pending');}
-  } else if(mode==='in_person')desired.meetUrl='';
+  var student=findStudent_(r.slot.studentId);
+  try {
+    if(r.slot.eventId)desired.meetUrl=schedulingUpdateCalendarMode_(desired,student);
+    else if(r.slot.status==='booked'&&getConfig_('calendarSync')==='on'&&!isTestStudent_(student)){
+      // Legacy bookings may have no event after an old Calendar failure or while
+      // sync was off. This per-slot key recovers an ambiguous create without
+      // requiring a new student confirmation or creating duplicate events.
+      var calendar=schedulingCalendarFor_({studentId:String(r.slot.studentId),requestId:'slot-mode-'+String(r.slot.id)},desired,student);
+      desired.eventId=calendar.eventId;desired.meetUrl=calendar.meetUrl;
+      // The teacher may select the original mode after a pending online change.
+      // Reuse the same event and converge its title/conference to that choice.
+      if(desired.eventId)desired.meetUrl=schedulingUpdateCalendarMode_(desired,student);
+    } else if(mode==='in_person')desired.meetUrl='';
+  } catch(e){return schedulingError_('カレンダーの形式変更を確認できませんでした。同じ内容で再試行してください','pending');}
   r.slot=desired;writeSlotRow_(r);
   return {ok:true,deliveryMode:mode,admin:adminState_()};
 }
@@ -129,31 +144,49 @@ function schedulingCalendarMeet_(event) {
   for(var i=0;i<points.length;i++)if(points[i].entryPointType==='video')return String(points[i].uri||'');
   return '';
 }
+function schedulingConferenceStatus_(event) {
+  var request=event.conferenceData&&event.conferenceData.createRequest;
+  return String(request&&request.status&&request.status.statusCode||'');
+}
+function schedulingConferenceRequest_(id,event) {
+  return {createRequest:{requestId:'st'+schedulingHash_(id+'|online|'+String(event.etag||event.updated||'')),conferenceSolutionKey:{type:'hangoutsMeet'}}};
+}
+function schedulingRequireMeet_(event) {
+  var meet=schedulingCalendarMeet_(event),status=schedulingConferenceStatus_(event);
+  if(!meet||status==='pending'||status==='failure')throw new Error('オンライン授業のMeetを確認できませんでした。同じ操作で再試行してください');
+  return meet;
+}
 function schedulingCalendarMissing_(err) { return /\b404\b|not found/i.test(String(err)); }
 function schedulingCalendarConflict_(err) { return /\b409\b|already exists|identifier.*exists/i.test(String(err)); }
 function schedulingCalendarFor_(write,slot,student) {
   if(isTestStudent_(student)||getConfig_('calendarSync')!=='on')return {eventId:'',meetUrl:''};
-  var id=schedulingEventId_(write,slot),event;
-  try{event=Calendar.Events.get('primary',id);}catch(e){if(!schedulingCalendarMissing_(e))throw e;}
+  var id=schedulingEventId_(write,slot),event,existing=false;
+  try{event=Calendar.Events.get('primary',id);existing=true;}catch(e){if(!schedulingCalendarMissing_(e))throw e;}
   if(!event){
     try{event=Calendar.Events.insert(schedulingCalendarBody_(slot,student,id),'primary',{conferenceDataVersion:1,sendUpdates:'all'});}
-    catch(e){if(!schedulingCalendarConflict_(e))throw e;event=Calendar.Events.get('primary',id);}
+    catch(e){if(!schedulingCalendarConflict_(e))throw e;event=Calendar.Events.get('primary',id);existing=true;}
   }
   var identity=event.extendedProperties&&event.extendedProperties.private||{};
   if(event.status==='cancelled'||String(identity.stepwiseSlot)!==String(slot.id)||String(identity.stepwiseStudent)!==String(student.id))throw new Error('Calendar event identity mismatch');
-  return {eventId:String(event.iCalUID||event.id+'@google.com'),meetUrl:slot.deliveryMode==='online'?schedulingCalendarMeet_(event):''};
+  if(slot.deliveryMode==='online'&&existing&&(!event.conferenceData||schedulingConferenceStatus_(event)==='failure')){
+    // Failed requests cannot be reused. The event etag yields a fresh request ID;
+    // an ambiguous patch is recovered by reading that same event on the next try.
+    event=Calendar.Events.patch({conferenceData:schedulingConferenceRequest_(id,event)},'primary',id,{conferenceDataVersion:1,sendUpdates:'all'});
+  }
+  return {eventId:String(event.iCalUID||event.id+'@google.com'),meetUrl:slot.deliveryMode==='online'?schedulingRequireMeet_(event):''};
 }
 function schedulingUpdateCalendarMode_(slot,student) {
   if(!slot.eventId||isTestStudent_(student))return slot.deliveryMode==='online'?String(slot.meetUrl||''):'';
-  var id=String(slot.eventId).split('@')[0],current=Calendar.Events.get('primary',id),body={summary:CAL_TITLE_PREFIX+student.name+'さん '+(slot.subject||'授業')+' ('+(slot.deliveryMode==='online'?'オンライン':'対面')+')'};
+  var id=String(slot.eventId).split('@')[0],current=Calendar.Events.get('primary',id),body={},summary=CAL_TITLE_PREFIX+student.name+'さん '+(slot.subject||'授業')+' ('+(slot.deliveryMode==='online'?'オンライン':'対面')+')';
+  if(String(current.summary)!==summary)body.summary=summary;
   if(slot.deliveryMode==='online'){
     // Existing or pending conference survives retries. A later in-person -> online
     // change uses the new event etag, allowing a fresh conference after removal.
-    if(!current.conferenceData)body.conferenceData={createRequest:{requestId:'st'+schedulingHash_(slot.id+'|online|'+String(current.etag||current.updated||'')),conferenceSolutionKey:{type:'hangoutsMeet'}}};
+    if(!current.conferenceData||schedulingConferenceStatus_(current)==='failure')body.conferenceData=schedulingConferenceRequest_(id,current);
   }
-  else body.conferenceData=null;
-  var event=Calendar.Events.patch(body,'primary',id,{conferenceDataVersion:1,sendUpdates:'all'});
-  return slot.deliveryMode==='online'?schedulingCalendarMeet_(event):'';
+  else if(current.conferenceData||current.hangoutLink)body.conferenceData=null;
+  var event=Object.keys(body).length?Calendar.Events.patch(body,'primary',id,{conferenceDataVersion:1,sendUpdates:'all'}):current;
+  return slot.deliveryMode==='online'?schedulingRequireMeet_(event):'';
 }
 
 function schedulingWrite_(w) {

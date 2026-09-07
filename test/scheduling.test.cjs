@@ -45,13 +45,27 @@ for (const [name, existing, candidate, accepted, code = 'capacity'] of [
   ['open unassigned slots do not hold capacity', [{ studentId: '', status: 'open', deliveryMode: '' }], { deliveryMode: 'online' }, true],
   ['unknown overlapping mode blocks acceptance', [{ studentId: 'test-b', deliveryMode: '' }], {}, false, 'deliveryModeRequired'],
   ['unknown non-overlapping mode does not block the day', [{ studentId: 'test-b', deliveryMode: '', start: '18:00' }], {}, true],
-  ['malformed active interval fails closed', [{ studentId: 'test-b', min: 'broken' }], {}, false]
+  ['blank legacy subject at a distant time does not block new offers', [{ studentId: 'test-b', deliveryMode: 'online', subject: '', start: '08:00', min: 90 }], {}, true],
+  ['blank legacy subject still occupies one in-person seat', [{ studentId: 'test-b', subject: '' }], {}, true],
+  ['blank legacy subject counts toward the two-person limit', [{ studentId: 'test-b', subject: '' }, { studentId: 'test-c' }], {}, false],
+  ['blank legacy subject still blocks overlapping online capacity', [{ studentId: 'test-b', subject: '', deliveryMode: 'online' }], {}, false],
+  ['malformed active duration fails closed even with a blank subject', [{ studentId: 'test-b', subject: '', min: 'broken' }], {}, false],
+  ['malformed active start fails closed even with a blank subject', [{ studentId: 'test-b', subject: '', start: 'broken' }], {}, false]
 ]) test(name, () => {
   const h = createSchedulingHarness(); existing.forEach(s => h.seedSlot(s));
   const before = h.rows('slots');
   const result = h.offer(candidate);
   if (accepted) { ok(result); assert.equal(h.rows('slots').length, before.length + 1); }
   else { reject(result, code); assert.deepEqual(h.rows('slots'), before); }
+});
+
+test('new lesson candidates still require a valid subject', () => {
+  const h = createSchedulingHarness();
+  reject(h.offer({ subject: '' }), 'validation');
+  assert.deepEqual(h.rows('slots'), []);
+  h.approve(); const legacy = h.seedSlot({ subject: '' });
+  reject(h.accept(legacy.id), 'validation');
+  assert.equal(h.rows('slots')[0].status, 'offered');
 });
 
 test('weekly offer validates every occurrence before one write and force cannot bypass capacity', () => {
