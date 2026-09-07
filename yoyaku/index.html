@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>マイページ | ステップワイズ英数教室・個別指導部</title>
-    <meta name="description" content="ステップワイズ個別指導 生徒のマイページ。授業の予定表、授業登録の確定、希望日程の送信ができます。" />
+    <meta name="description" content="ステップワイズ個別指導 生徒のマイページ。今月の授業・やること・次の授業(ホーム)、予定表と希望日程の送信(予定)、成績、授業の記録、保護者ページ。" />
     <style>
       :root {
         --ink: #19212a; --muted: #64717f; --line: #dbe3ea; --paper: #fbfcfd; --soft: #eef4fb;
@@ -203,11 +203,11 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function route() { var h = location.hash || "#home"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function route() { var h = location.hash || "#home"; return { "#schedule": "schedule", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         function renderTabs() {
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
           var p = route();
-          tabs.innerHTML = [["#home", "home", "予定"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#parent", "parent", "保護者"]]
+          tabs.innerHTML = [["#home", "home", "ホーム"], ["#schedule", "schedule", "予定"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#parent", "parent", "保護者"]]
             .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '">' + t[2] + "</a>"; }).join("");
         }
 
@@ -296,7 +296,7 @@
         }
 
         /* ---------- 予定表 ---------- */
-        function renderCal(info, today) {
+        function renderCal(info, today, showToff) {
           var label = calY + "年" + (calM + 1) + "月";
           var minIdx = calNow.getFullYear() * 12 + calNow.getMonth() - 2, curIdx = calY * 12 + calM, maxIdx = minIdx + 5;
           var h = '<div class="card cal"><div class="calhead">';
@@ -314,7 +314,7 @@
             if (wd === 0) cls += " sun"; if (wd === 6) cls += " sat";
             if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
             var hasItems = !!(it && it.labels && it.labels.length);
-            if (it && it.toff && !past) cls += " toff";
+            if (showToff && it && it.toff && !past) cls += " toff";
             var marks = '<span class="calmarks">';
             if (it && !past) {
               if (it.mine) cls += " mine";
@@ -324,8 +324,8 @@
             if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
             marks += "</span>";
             if (it && it.ngT && !past) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
-            if (it && it.toff && !past) marks += '<span class="callbl to">先生休み</span>';
-            if (it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">先生休み' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
+            if (showToff && it && it.toff && !past) marks += '<span class="callbl to">先生休み</span>';
+            if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">先生休み' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -346,7 +346,7 @@
           h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
           h += '<span><span class="callbl ts" style="display:inline">テスト</span> テスト・模試</span>';
           h += '<span><span class="calmark">×</span> 授業できない日</span>';
-          h += '<span><span class="callbl to" style="display:inline">先生休み</span> 先生の休み(授業なし)</span>';
+          if (showToff) h += '<span><span class="callbl to" style="display:inline">先生休み</span> 先生の休み(授業なし)</span>';
           h += "</div></div>";
           return h;
         }
@@ -360,20 +360,8 @@
         }
 
         /* ---------- 画面: 生徒のマイページ ---------- */
-        function renderStudent() {
-          renderTabs();
-          if (!S || !S.me) { renderGuard(); return; }
-          var page = route();
-          if (page !== "home") {
-            var hh = "";
-            if (previewK) hh += '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー)</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
-            if (page === "grades") hh += renderGradesPage();
-            else if (page === "history") hh += renderHistoryPage();
-            else hh += renderParentPage();
-            hh += '<footer class="app"><span></span><span></span></footer>';
-            app.innerHTML = hh;
-            return;
-          }
+        // ホーム・予定ページで共通に使う予定データ
+        function schedData() {
           var today = S.today;
           var now = new Date();
           var nowStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
@@ -385,14 +373,195 @@
           var events = (S.events || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
           var evDays = [];
           events.forEach(function (e) { var d = e.date; for (var i = 0; i < 61 && d <= e.dateTo; i++) { evDays.push({ date: d, title: e.title, id: e.id, st: "event", kind: e.kind }); d = addDaysStr(d, 1); } });
-          var html = "";
-
-          if (previewK) {
-            html += '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー。ここでの操作は本人として反映されます)</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
+          var byDate = {}, dates = [];
+          slots.forEach(function (s) { if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); } byDate[s.date].push(s); });
+          hist.forEach(function (s) { (byDate[s.date] = byDate[s.date] || []).push(s); });
+          evDays.forEach(function (e) { (byDate[e.date] = byDate[e.date] || []).push(e); });
+          function hasVisible(d) { return (byDate[d] || []).some(function (s) { return s.st === "offer" || s.st === "mine"; }); }
+          if (selDate === null || (!selManual && !hasVisible(selDate))) {
+            var found = null;
+            for (var di = 0; di < dates.length; di++) if (hasVisible(dates[di])) { found = dates[di]; break; }
+            selDate = found || today;
+            var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
+          var info = {};
+          slots.concat(hist).concat(evDays.map(function (e) { return { date: e.date, subject: e.title, st: "event", start: "99:99", kind: e.kind }; })).forEach(function (s) {
+            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] });
+            if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev++; else it[s.st]++;
+            it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, kind: s.kind });
+          });
+          blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else it.ngAll = 1; });
+          (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
+          var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
+          return { today: today, slots: slots, mine: mine, offers: offers, hist: hist, blocked: blocked, events: events, byDate: byDate, info: info, upcoming: upcoming, next: upcoming[0] };
+        }
+
+        function previewBanner(long) {
+          if (!previewK) return "";
+          return '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー' + (long ? '。ここでの操作は本人として反映されます' : '') + ')</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
+        }
+
+        // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)、showToff=false なら先生の休みを出さない(ホーム)
+        function renderDayDetail(D, withActions, showToff) {
+          var today = D.today;
+          var ds2 = (D.byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
+          var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
+          var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
+          var dayToff = dayOffs.some(function (o) { return !o.start; });
+          var html = '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
+          if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
+          else {
+            html += '<div class="chips">';
+            dayOffs.forEach(function (o) { html += '<span class="chip toff">' + (o.start ? '先生の休み ' + o.start + '〜' + o.end : '先生の休み(終日・授業なし)') + '</span>'; });
+            ds2.forEach(function (s) {
+              if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
+              var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
+              if (s.st === "mine") html += '<span class="chip mine">✓ ' + label + "</span>";
+              else if (s.st === "done") html += '<span class="chip done">実施済 ' + label + "</span>";
+              else if (s.st === "past") html += '<span class="chip past">' + label + "</span>";
+              else if (s.st === "offer") html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
+            });
+            dayNg.forEach(function (b) { html += '<span class="chip ng">× 授業できない' + (b.start ? " " + b.start + "〜" + b.end : "") + (b.note ? " " + esc(b.note) : "") + '</span>'; });
+            html += '</div>';
+          }
+          if (selDate >= today) {
+            if (withActions) {
+              html += '<div class="row" style="margin-top:10px;gap:6px"><span class="small muted">この日に:</span>' +
+                (dayToff ? "" : '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>') +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button>' +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">' + (dayNg.length ? "授業できない日を解除" : "授業できない日にする") + '</button></div>';
+            } else {
+              html += '<div class="small muted" style="margin-top:8px">授業の希望・予定の共有・授業できない日の登録は <a href="#schedule">「予定」ページ</a> から</div>';
+            }
+          }
+          return html + '</div>';
+        }
+
+        function renderNextLesson(D) {
+          var today = D.today, next = D.next;
+          var html = '<h2>次の授業</h2>';
+          if (next) {
+            var untilTxt = next.date === today ? "今日" : next.date === addDaysStr(today, 1) ? "明日" : Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) + "日後";
+            html += '<div class="card next"><div class="in">' + untilTxt + '</div><div class="when">' + fmtDateW(next.date) + " " + next.start + "〜" + endTime(next.start, next.min) + '</div>';
+            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">取消を依頼中</span>' : "") + '</div>';
+            html += '<div class="row" style="margin-top:10px">';
+            if (next.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(next.meet) + '">Meetに参加</a>';
+            html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
+            html += cancelControl(next) + '</div></div>';
+          } else {
+            html += '<div class="empty">次の授業はまだ決まっていません。' + (D.offers.length ? '下の「授業登録」から確定してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
+          }
+          return html;
+        }
+
+        function renderOffers(D) {
+          var offers = D.offers, html = "";
+          if (!offers.length) return html;
+          html += '<h2>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
+          offers.forEach(function (s) {
+            html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
+            html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
+          });
+          html += '</div><div class="note">「確定」を押すと授業が決まり、カレンダー登録とMeetリンクの発行が行われます。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>';
+          return html;
+        }
+
+        function renderUpcoming(D, hasNextCard) {
+          var upcoming = D.upcoming, next = D.next;
+          var html = '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2>';
+          if (upcoming.length > 1 || (upcoming.length === 1 && !(hasNextCard && next))) {
+            html += '<div class="card">';
+            upcoming.forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + (s.req ? ' <span class="tag red">取消を依頼中</span>' : "") + "</span>";
+              if (s.meet) html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meet</a>';
+              html += cancelControl(s) + "</div>";
+            });
+            html += '</div>';
+          } else if (upcoming.length === 1) {
+            html += '<div class="empty">上の「次の授業」の1件だけです</div>';
+          } else {
+            html += '<div class="empty">確定している授業はありません</div>';
+          }
+          html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。直前の変更はLINEで直接連絡してください。</div>';
+          return html;
+        }
+
+        // 画面下の確認バー(確定・再調整・取消依頼・取り下げ)。ホーム・予定ページ共通
+        function renderPendingBar(D) {
+          if (!pending) return "";
+          var s = null, slots = D.slots;
+          for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
+          if (!s) return "";
+          var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
+          var html = '<div class="confirmbar"><div class="inner">';
+          if (pending.kind === "accept") {
+            html += '<div class="msg">' + when + " の授業を確定しますか?</div>";
+            html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+          } else if (pending.kind === "decline") {
+            html += '<div class="msg">' + when + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
+            html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+          } else if (pending.kind === "cancel") {
+            html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span class='small muted'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
+            html += '<input type="text" id="f-creason" maxlength="200" placeholder="理由(任意。例: 学校行事のため)" style="width:100%;margin:6px 0 8px">';
+            html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "取消を依頼する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+          } else if (pending.kind === "withdraw") {
+            html += '<div class="msg">' + when + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
+            html += '<div class="row"><button class="btn-primary" data-action="dowithdraw"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "依頼を取り下げる") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+          }
+          return html + "</div></div>";
+        }
+
+        // 予定ページの画面下: 日付を選択中のバー(授業できない日・希望・予定共有)
+        function renderSelBar(D) {
+          if (!selMode) return "";
+          var blocked = D.blocked;
+          var selDates = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
+          var selTxt = selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し)";
+          var html = '<div class="confirmbar selbar ' + selMode + '"><div class="inner">';
+          if (selMode === "ng") {
+            var ngByDate = {};
+            blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
+            var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
+            html += '<div class="msg">授業できない日: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
+            html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。×が付いている日をタップすると解除") + '</div>';
+            html += '<div class="row" style="margin-bottom:6px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-ngstart" step="900"><span class="muted">〜</span><input type="time" id="b-ngend" step="900"></div>';
+            html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+          } else if (selMode === "wish") {
+            html += '<div class="msg">授業の希望: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
+            html += '<div class="row" style="margin-bottom:8px"><span class="seg"><button data-action="wkind" data-k="want" class="' + (wishKind === "want" ? "on" : "") + '">この日時に授業をしたい</button><button data-action="wkind" data-k="ok" class="' + (wishKind === "ok" ? "on" : "") + '">この時間帯のどこかで</button></span></div>';
+            if (wishKind === "want") html += '<div class="row"><input type="time" id="b-wstart" value="17:00" step="900"><select id="b-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "希望を送る") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+            else html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "時間帯を送る") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+          } else if (selMode === "event") {
+            var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
+            html += '<div class="msg">予定を共有: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
+            html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-etest"> テスト・模試</label><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-eblock"> 授業できない日にもする</label><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "先生に共有") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+          }
+          return html + '</div></div>';
+        }
+
+        function renderStudent() {
+          renderTabs();
+          if (!S || !S.me) { renderGuard(); return; }
+          var page = route();
+          if (page !== "home" && page !== "schedule") {
+            var hh = previewBanner(false);
+            if (page === "grades") hh += renderGradesPage();
+            else if (page === "history") hh += renderHistoryPage();
+            else hh += renderParentPage();
+            hh += '<footer class="app"><span></span><span></span></footer>';
+            app.innerHTML = hh;
+            return;
+          }
+          app.innerHTML = page === "schedule" ? renderSchedulePage() : renderHomePage();
+        }
+
+        /* ---------- ホーム: 今月の授業・やること・予定表(先生の休みなし)・次の授業・授業登録・今後の予定 ---------- */
+        function renderHomePage() {
+          var D = schedData(), today = D.today, mine = D.mine, events = D.events;
+          var html = previewBanner(true);
 
           // 見出し + 今月の授業
-          html += '<h1>' + esc(S.me.name) + 'さんの予定</h1><p class="sub">授業の予定表と、先生とのやりとり</p>';
+          html += '<h1>' + esc(S.me.name) + 'さんのマイページ</h1><p class="sub">今月の授業・やること・次の授業</p>';
           (function () {
             var ym = today.slice(0, 7);
             var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
@@ -413,7 +582,7 @@
               html += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + have + (goal ? '<span class="muted">/' + goal + '</span>' : "") + '回</span><span class="small muted">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>';
             });
             var stTag = S.planStatus === "approved" ? '<span class="tag green">保護者承認済み</span>' : S.planStatus === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : "";
-            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。「予定管理」から希望日を送れます。</div>' : "") + '</div>';
+            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。<a href="#schedule">「予定」ページ</a>から希望日を送れます。</div>' : "") + '</div>';
           })();
 
           // テストまでのカウントダウン + やること(宿題・持ち物)
@@ -430,7 +599,7 @@
                 var days = Math.round((new Date(e.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5);
                 html += '<div class="cd"><div class="small muted">' + esc(e.title) + ' <span class="muted">' + fmtDateW(e.date) + '</span></div><div class="n" style="color:#7a4fc9">' + (days === 0 ? "今日" : days + '<small>日後</small>') + '</div></div>';
               });
-              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。「予定管理 → 予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
+              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。「予定」ページの「予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
               html += '</div>';
             }
             html += '<div class="card">';
@@ -444,58 +613,31 @@
             html += '</div>';
           })();
 
-          // 予定表(最上部)
-          var byDate = {}, dates = [];
-          slots.forEach(function (s) { if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); } byDate[s.date].push(s); });
-          hist.forEach(function (s) { (byDate[s.date] = byDate[s.date] || []).push(s); });
-          evDays.forEach(function (e) { (byDate[e.date] = byDate[e.date] || []).push(e); });
-          function hasVisible(d) { return (byDate[d] || []).some(function (s) { return s.st === "offer" || s.st === "mine"; }); }
-          if (selDate === null || (!selManual && !hasVisible(selDate))) {
-            var found = null;
-            for (var di = 0; di < dates.length; di++) if (hasVisible(dates[di])) { found = dates[di]; break; }
-            selDate = found || today;
-            var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
-          }
-          var info = {};
-          slots.concat(hist).concat(evDays.map(function (e) { return { date: e.date, subject: e.title, st: "event", start: "99:99", kind: e.kind }; })).forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] });
-            if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev++; else it[s.st]++;
-            it.labels.push({ text: s.subject || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, kind: s.kind });
-          });
-          blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else it.ngAll = 1; });
-          (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
+          // 予定表(見るだけ。先生の休みは表示しない)
+          html += '<h2>予定表 <a href="#schedule" class="small" style="font-weight:500;margin-left:6px">希望・共有・授業できない日の登録 →</a></h2>';
+          html += renderCal(D.info, today, false);
+          html += renderDayDetail(D, false, false);
+
+          html += renderNextLesson(D);
+          html += renderOffers(D);
+          html += renderUpcoming(D, true);
+
+          html += '<div class="note" style="margin-top:18px">授業の希望・予定の共有・授業できない日は「予定」、実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者」タブにあります。</div>';
+          html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
+          html += renderPendingBar(D);
+          return html;
+        }
+
+        /* ---------- 予定: 予定表(先生の休みも表示)・予定管理・授業登録・今後の予定 ---------- */
+        function renderSchedulePage() {
+          var D = schedData(), today = D.today;
+          var html = previewBanner(true);
+          html += '<h1>予定</h1><p class="sub">授業の希望・予定の共有・授業できない日の登録</p>';
+
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "希望する日をタップ(複数可)。時間は画面下で", event: "予定の日をタップ(複数可)。内容は画面下で" };
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : "") + '</h2>';
-          html += renderCal(info, today);
-          if (!selMode) {
-            var ds2 = (byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
-            var dayNg = blocked.filter(function (b) { return b.date === selDate; });
-            var dayOffs = (S.teacherOff || []).filter(function (o) { return o.date === selDate; });
-            var dayToff = dayOffs.some(function (o) { return !o.start; });
-            html += '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
-            if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
-            else {
-              html += '<div class="chips">';
-              dayOffs.forEach(function (o) { html += '<span class="chip toff">' + (o.start ? '先生の休み ' + o.start + '〜' + o.end : '先生の休み(終日・授業なし)') + '</span>'; });
-              ds2.forEach(function (s) {
-                if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
-                var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "");
-                if (s.st === "mine") html += '<span class="chip mine">✓ ' + label + "</span>";
-                else if (s.st === "done") html += '<span class="chip done">実施済 ' + label + "</span>";
-                else if (s.st === "past") html += '<span class="chip past">' + label + "</span>";
-                else if (s.st === "offer") html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
-              });
-              dayNg.forEach(function (b) { html += '<span class="chip ng">× 授業できない' + (b.start ? " " + b.start + "〜" + b.end : "") + (b.note ? " " + esc(b.note) : "") + '</span>'; });
-              html += '</div>';
-            }
-            if (selDate >= today) {
-              html += '<div class="row" style="margin-top:10px;gap:6px"><span class="small muted">この日に:</span>' +
-                (dayToff ? "" : '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>') +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button>' +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">' + (dayNg.length ? "授業できない日を解除" : "授業できない日にする") + '</button></div>';
-            }
-            html += '</div>';
-          }
+          html += renderCal(D.info, today, true);
+          if (!selMode) html += renderDayDetail(D, true, true);
 
           // 予定管理(予定表の直下)
           html += '<h2>予定管理</h2><div class="actions">';
@@ -504,105 +646,15 @@
           html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
           html += '</div><div class="note">ボタンを押して、上の予定表で日付をタップ。選んだら画面下の内容を確認して送ります。</div>';
           if (panel === "wish") html += renderWishPanel(today);
-          if (panel === "event") html += renderEventPanel(today, events);
-          if (panel === "ng") html += renderNgPanel(today, blocked);
+          if (panel === "event") html += renderEventPanel(today, D.events);
+          if (panel === "ng") html += renderNgPanel(today, D.blocked);
 
-
-          // 次の授業
-          var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
-          var next = upcoming[0];
-          html += '<h2>次の授業</h2>';
-          if (next) {
-            var untilTxt = next.date === today ? "今日" : next.date === addDaysStr(today, 1) ? "明日" : Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) + "日後";
-            html += '<div class="card next"><div class="in">' + untilTxt + '</div><div class="when">' + fmtDateW(next.date) + " " + next.start + "〜" + endTime(next.start, next.min) + '</div>';
-            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">取消を依頼中</span>' : "") + '</div>';
-            html += '<div class="row" style="margin-top:10px">';
-            if (next.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(next.meet) + '">Meetに参加</a>';
-            html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
-            html += cancelControl(next) + '</div></div>';
-          } else {
-            html += '<div class="empty">次の授業はまだ決まっていません。' + (offers.length ? '下の「授業登録」から確定してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
-          }
-
-          // 先生からの案内
-          if (offers.length) {
-            html += '<h2>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
-            offers.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + "</span>";
-              html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
-            });
-            html += '</div><div class="note">「確定」を押すと授業が決まり、カレンダー登録とMeetリンクの発行が行われます。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>';
-          }
-
-          // 今後の予定
-          html += '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2>';
-          if (upcoming.length > 1 || (upcoming.length === 1 && !next)) {
-            html += '<div class="card">';
-            upcoming.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + (s.req ? ' <span class="tag red">取消を依頼中</span>' : "") + "</span>";
-              if (s.meet) html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meet</a>';
-              html += cancelControl(s) + "</div>";
-            });
-            html += '</div>';
-          } else if (upcoming.length === 1) {
-            html += '<div class="empty">上の「次の授業」の1件だけです</div>';
-          } else {
-            html += '<div class="empty">確定している授業はありません</div>';
-          }
-          html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。直前の変更はLINEで直接連絡してください。</div>';
-
-          html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者」タブにあります。</div>';
+          html += renderOffers(D);
+          html += renderUpcoming(D, false);
 
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
-
-          // 下部バー
-          if (selMode) {
-            var selDates = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
-            var selTxt = selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し)";
-            html += '<div class="confirmbar selbar ' + selMode + '"><div class="inner">';
-            if (selMode === "ng") {
-              var ngByDate = {};
-              blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
-              var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
-              html += '<div class="msg">授業できない日: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
-              html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。×が付いている日をタップすると解除") + '</div>';
-              html += '<div class="row" style="margin-bottom:6px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-ngstart" step="900"><span class="muted">〜</span><input type="time" id="b-ngend" step="900"></div>';
-              html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
-            } else if (selMode === "wish") {
-              html += '<div class="msg">授業の希望: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
-              html += '<div class="row" style="margin-bottom:8px"><span class="seg"><button data-action="wkind" data-k="want" class="' + (wishKind === "want" ? "on" : "") + '">この日時に授業をしたい</button><button data-action="wkind" data-k="ok" class="' + (wishKind === "ok" ? "on" : "") + '">この時間帯のどこかで</button></span></div>';
-              if (wishKind === "want") html += '<div class="row"><input type="time" id="b-wstart" value="17:00" step="900"><select id="b-wmin"><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "希望を送る") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
-              else html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "時間帯を送る") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
-            } else if (selMode === "event") {
-              var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
-              html += '<div class="msg">予定を共有: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
-              html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-etest"> テスト・模試</label><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-eblock"> 授業できない日にもする</label><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "先生に共有") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
-            }
-            html += '</div></div>';
-          } else if (pending) {
-            var s = null;
-            for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
-            if (s) {
-              var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
-              html += '<div class="confirmbar"><div class="inner">';
-              if (pending.kind === "accept") {
-                html += '<div class="msg">' + when + " の授業を確定しますか?</div>";
-                html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-              } else if (pending.kind === "decline") {
-                html += '<div class="msg">' + when + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
-                html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-              } else if (pending.kind === "cancel") {
-                html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span class='small muted'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
-                html += '<input type="text" id="f-creason" maxlength="200" placeholder="理由(任意。例: 学校行事のため)" style="width:100%;margin:6px 0 8px">';
-                html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "取消を依頼する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-              } else if (pending.kind === "withdraw") {
-                html += '<div class="msg">' + when + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
-                html += '<div class="row"><button class="btn-primary" data-action="dowithdraw"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "依頼を取り下げる") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-              }
-              html += "</div></div>";
-            }
-          }
-          app.innerHTML = html;
+          html += selMode ? renderSelBar(D) : renderPendingBar(D);
+          return html;
         }
 
         function cancelControl(s) {
