@@ -180,7 +180,8 @@ function billingPlanPropose_(req) {
   a.approvedAt='';a.approvedVia='';a.consentDate='';a.memo='';a.proposedAt=billingStamp_();billingWriteAgreement_(a);
   var res=planSetStatus_(id,ym,'proposed','','',true);if(res.error)return res;
   a.status='proposed';billingWriteAgreement_(a);billingAudit_(a,'proposed',a.id+':'+a.revision+':proposed');
-  return {ok:true,revision:a.revision};
+  var notice=billingNotifyResult_('planProposed',id,a.id+':'+a.revision+':proposed',{ym:ym,revision:a.revision});
+  return Object.assign({ok:true,revision:a.revision},notice);
 }
 function billingApprove_(req,id,parent) {
   var ym=String(req.ym||'');if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
@@ -209,9 +210,12 @@ function billingApproveTeacher_(req) {
 }
 function billingParentDecide_(req) {
   var auth=parentRequire_(req);if(auth.error)return auth;
-  var res=billingApprove_(req,String(auth.student.id),true);if(res.error)return res;
-  if(!res.replayed && !isTestStudent_(auth.student))notify_('【月間計画の回答】'+auth.student.name+'さん '+req.ym,'保護者ページから月間計画への回答がありました。管理画面でご確認ください。');
-  return {ok:true,data:parentData_(req).data};
+  return billingParentDecideForStudent_(auth.student,req);
+}
+function billingParentDecideForStudent_(student,req) {
+  var res=billingApprove_(req,String(student.id),true);if(res.error)return res;
+  if(!res.replayed && !isTestStudent_(student))notify_('【月間計画の回答】'+student.name+'さん '+req.ym,'保護者ページから月間計画への回答がありました。管理画面でご確認ください。');
+  return {ok:true,data:parentDataForStudent_(student).data};
 }
 function billingSlotAllowed_(slot) {
   if(!billingSlotValid_(slot))return billingError_('授業の日付・時刻・分数・科目を確認してください');
@@ -285,7 +289,8 @@ function billingAddInvoice_(req) {
     if(String(old['生徒ID'])!==id||String(old['年月'])!==ym||(req.amount!=null&&Number(req.amount)!==Number(old['請求額'])))return billingError_('同じ処理IDで内容を変更できません','conflict');
     var originalAgreement=billingAgreement_(id,ym);
     if(originalAgreement && Number(originalAgreement.revision)===Number(old['承認版']))billingAudit_(originalAgreement,'invoiced',String(old['請求ID'])+':issued',{invoiceId:String(old['請求ID']),amount:Number(old['請求額']),minutes:Number(old['実施分数'])});
-    return {ok:true,invoice:billingInvoiceView_(old),replayed:true};
+    var oldNotice=!old['取消日時']&&old['状態']!=='取消'?billingNotifyResult_('invoiceCreated',id,String(old['請求ID'])+':issued',{ym:ym,revision:old['承認版']}):{};
+    return Object.assign({ok:true,invoice:billingInvoiceView_(old),replayed:true},oldNotice);
   }
   var preview=billingPreview_(id,ym);if(preview.error)return preview;
   if(!preview.canBill)return billingError_(preview.reason,preview.invoice?'invoiceExists':'approvalRequired');
@@ -298,7 +303,8 @@ function billingAddInvoice_(req) {
   // 請求の根拠・処理IDを1行に保存。後続ログが失敗しても再送はこの行を見つける。
   ledgerAppend_('入金管理',o);
   billingAudit_(a,'invoiced',invoiceId+':issued',{invoiceId:invoiceId,amount:preview.amount,minutes:preview.minutes});
-  return {ok:true,invoice:billingInvoiceView_(o)};
+  var notice=billingNotifyResult_('invoiceCreated',id,invoiceId+':issued',{ym:ym,revision:a.revision});
+  return Object.assign({ok:true,invoice:billingInvoiceView_(o)},notice);
 }
 function billingFindInvoice_(req) {
   if(!req.invoiceId)return null;
@@ -311,13 +317,16 @@ function billingWriteInvoiceRow_(row,values) {
 function billingVoidInvoice_(req) {
   var p=billingFindInvoice_(req),reason=String(req.reason||'').trim();
   if(!p)return billingError_('請求が見つかりません。最新の画面を読み直してください','notFound');
-  if(p['取消日時']||p['状態']==='取消')return {ok:true,replayed:true};
+  if(p['取消日時']||p['状態']==='取消'){
+    return Object.assign({ok:true,replayed:true},billingNotifyResult_('invoiceVoided',req.studentId,String(p['請求ID'])+':void',{ym:p['年月'],revision:p['承認版']}));
+  }
   if(p['状態']==='入金済'||p['入金日'])return billingError_('入金済みの請求は取り消せません。入金の誤登録なら理由付きで訂正してください');
   if(!reason||reason.length>500)return billingError_('取消理由を500文字以内で入力してください');
   var a=billingAgreement_(req.studentId,String(p['年月']))||{studentId:req.studentId,ym:p['年月'],revision:p['承認版'],memo:reason};
   billingAudit_(a,'invoiceVoided',String(p['請求ID'])+':void',{reason:reason,invoiceId:req.invoiceId});
   var sh=ledgerSheet_('入金管理'),vals=sh.getRange(p._row,1,1,BILLING_PAYMENT_COLS_.length).getValues()[0];
-  vals[7]='取消';vals[17]=billingStamp_();vals[18]=reason;billingWriteInvoiceRow_(p._row,vals);return {ok:true};
+  vals[7]='取消';vals[17]=billingStamp_();vals[18]=reason;billingWriteInvoiceRow_(p._row,vals);
+  return Object.assign({ok:true},billingNotifyResult_('invoiceVoided',req.studentId,String(p['請求ID'])+':void',{ym:p['年月'],revision:p['承認版']}));
 }
 function billingSetPaid_(req) {
   var p=billingFindInvoice_(req);if(!p)return billingError_('請求が見つかりません。最新の画面を読み直してください','notFound');
@@ -337,17 +346,22 @@ function billingSetPaid_(req) {
   vals[5]=paid;vals[6]=method;vals[7]=unpaid?'未入金':'入金済';vals[20]=revision+1;
   billingWriteInvoiceRow_(p._row,vals);return {ok:true};
 }
+function billingNotifyResult_(kind,id,key,detail) {
+  if(typeof familyNotifySafe_!=='function')return {};
+  var r=familyNotifySafe_(kind,id,key,detail);
+  return !r.ok||(r.statuses||[]).some(function(s){return ['failed','pending','uncertain'].indexOf(s)>=0;})?{notificationWarning:'保存は完了しましたが、保護者へのメール通知を確認してください'}:{};
+}
 function billingMutationResult_(req,res) {
   if(res.error)return res;
   var out=kanriStudentOp_({studentId:req.studentId,view:req.view});
-  if(res.invoice)out.invoice=res.invoice;if(res.replayed)out.replayed=true;return out;
+  if(res.invoice)out.invoice=res.invoice;if(res.replayed)out.replayed=true;if(res.notificationWarning)out.notificationWarning=res.notificationWarning;return out;
 }
 
 // 新版公開前にエディタから一度実行。既存デプロイはバージョン固定のまま準備する。
 function prepareStepwise20260908() {
   var lock=LockService.getScriptLock();lock.waitLock(10000);
   try {
-    CacheService.getScriptCache().remove('schemaOk15');memoClear_();ensureSchema_();
+    CacheService.getScriptCache().remove('schemaOk16');memoClear_();ensureSchema_();
     var summary={reservation:ss_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};}),ledger:ledger_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};})};
     Logger.log(JSON.stringify(summary));return summary;
   } finally {lock.releaseLock();}

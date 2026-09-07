@@ -6,6 +6,8 @@
 
 授業記録と月間承認・請求は公開済み。GAS現行版はv47で、月間計画の途中保存・再送の復旧も反映した。隔離台帳での実GAS検証、配信内容照合、本番のテスト生徒による授業記録から請求までの動作確認を実施した。版ごとの反映範囲、画面で確認した操作と公開APIで補完した操作は [6-1節](#6-1-v46の反映と検証) に区別して記録し、運用上の残件はFUTURE_WORKを参照する。
 
+授業形式と同時人数、案内の一括確定、兄弟姉妹の家族アカウント、保護者メール通知は**実装・検証中で、公開はこれから**。この追加仕様は [5-2節](#5-2-授業形式と一括確定)・[5-3節](#5-3-家族アカウントと保護者通知) に集約する。以下の `deliveryMode` 列・`acceptWrites`・`family*` シートと家族画面は今回の反映対象であり、本番v47の機能とは区別する。
+
 ## 1. 一言でいうと
 
 - 画面(HTML)は **GitHub Pages**、ロジック(API)は **Google Apps Script**、データは **Google Drive のスプレッドシート2つ** にあります。
@@ -43,8 +45,10 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 |---|---|---|
 | config | key, value | 設定と先生のログイン情報。`passHash`/`passSalt`(パスワードのハッシュ)、`adminToken`/`adminTokenExp`(ログイン中トークン。1か所のみ有効)、`teacherEmail`、`calendarSync`、`emailNotify`、`reset*`(パスワード再設定コード)、`failCount`/`lockUntil` |
 | parents | 列順・保存仕様は [PARENT_AUTH.md](PARENT_AUTH.md#認証と保存) | 生徒別の保護者認証（v45追加）。旧students.parentToken/parentExpは使用しない |
-| students | id, name, active, email, code, rate30, monthly, parentToken, parentExp | 生徒。`code` が専用リンク(`/yoyaku/?k=code`)の鍵。`rate30` は30分単価、`monthly` は月謝(あれば定額)。`active=false` は停止中 |
-| slots | id, date, start, min, status, studentId, done, eventId, meetUrl, subject, req | 授業枠。`status` は open(空き)/offered(案内中=承認待ち)/booked(確定)。`done=true` で実施済み。`eventId`/`meetUrl` はカレンダー連携。`req` は取消依頼のJSON |
+| students | id, name, active, email, code, rate30, monthly, parentToken, parentExp, deliveryMode | 生徒。`code` が専用リンク(`/yoyaku/?k=code`)の鍵。`rate30` は30分単価、`monthly` は月謝(あれば定額)。`active=false` は停止中。10列目の `deliveryMode` は新規案内に使う普段の形式 |
+| slots | id, date, start, min, status, studentId, done, eventId, meetUrl, subject, req, deliveryMode | 授業枠。`status` は open(空き)/offered(案内中=承認待ち)/booked(確定)。`done=true` で実施済み。`eventId`/`meetUrl` はカレンダー連携。`req` は取消依頼のJSON。12列目の `deliveryMode` はその授業の形式 |
+| acceptWrites | id, studentId, requestId, slotsJson, completedJson, status, notificationState, createdAt, updatedAt, lastError | 単件・一括確定の保存と再送の正本。途中処理は同じ生徒・選択内容・処理IDで復旧する |
+| familyAccounts / familyLinks / familyChallenges / familyOutbox | 正確な列順は `gas/FamilyPortal.gs` の定数。認証仕様は [PARENT_AUTH.md](PARENT_AUTH.md) | 家族アカウント、先生が確認した子どもの紐付け、メール確認・再設定の記録、保護者通知の送信記録。既存 `parents` と独立 |
 | blocked | id, studentId, date, note, start, end | 生徒の「授業できない日」。start/end が空なら終日、入っていればその時間帯だけ |
 | teacherOff | id, date, note, start, end | 先生の休み。1行=1日。start/end が空なら終日、入っていればその時間帯だけ。管理画面のホーム(日付タップ)か授業ページから登録。生徒にはメモを見せない |
 | wishes | id, studentId, date, start, end, note, createdAt, kind | 生徒の希望日程。`kind` は want(この日時に授業をしたい)/ok(この時間帯のどこかで) |
@@ -75,14 +79,18 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 | URL | 誰が | 中身 |
 |---|---|---|
 | `/yoyaku/?k=<code>` | 生徒(LINEで専用リンクを配布) | マイページ。タブ: ホーム(今月の授業・やること・予定表(見るだけ、先生の休みは出さない)・次の授業・授業登録の確定/再調整・今後の予定)/ 予定(予定表(先生の休みも表示)・予定管理: 授業の希望・予定の共有・授業できない日 / 授業登録 / 今後の予定)/ 成績(模試・成績推移)/ 授業の記録 / 保護者(パスワード制。今月の授業・お支払い・授業回数の承認) |
+| `/yoyaku/#family`（公開準備中） | メール確認を終えた家族の保護者 | 1回のログインで先生が紐付けた子どもを切り替え、予定・料金承認・請求を確認する。子ども別の専用リンクを持ち替える必要はない |
 | `/kanri/` | 先生(メール+パスワードでログイン。PIN は廃止、再設定は登録メール宛の6桁コード) | ホーム(取消依頼・共有予定・希望、今日/今週、全体の予定表、生徒カード)/ 授業(案内フォーム・承認待ち・カレンダー・NG日・実施記録と請求文面)/ 生徒(追加・停止中)/ 生徒カルテ `#s=<id>`(予定表、基本情報、リンク設定、今月の授業と請求、月の授業回数と承認、成績推移、模試、今後の予定、履歴、入金、面談)/ 設定 |
 
 保護者は先生と別の専用認証を使用する。利用の流れ・認証仕様は [PARENT_AUTH.md](PARENT_AUTH.md)。月間承認の本運用と契約条項の確定は認証実装とは別の課題。
+
+今回の先生画面には、生徒の普段の授業形式、その回の形式変更、家族への子どもの紐付け・招待・通知結果の確認を追加する。生徒画面では案内を個別選択・全選択し、確認一覧からまとめて確定できる。
 
 ## 5. API(Apps Script)
 
 - 呼び出しは `POST /exec` に JSON。`action` で分岐。生徒側は `k`(専用リンクのコード)で本人確認、先生側は `action:"admin"` + `token`(ログイン時に発行)+ `op`。
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades。保護者actionと先生のコード発行opは [PARENT_AUTH.md API](PARENT_AUTH.md#api)。
+- 今回追加するAPIは、生徒側 `acceptMany`、先生側 `setDeliveryMode` / `setSlotDeliveryMode`、家族認証・子ども切替・通知管理の `family*`。予約の契約は5-2節、家族APIの詳細は [PARENT_AUTH.md](PARENT_AUTH.md) に置く。
 - 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / addOff / delOff(先生の休み) / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
 - 確定授業の取消は生徒からの「依頼」で先生が承認（締切は授業の24時間前 `CANCEL_DEADLINE_H`）。月間承認と請求の制御は次節。
 - 授業記録の先生専用op・返却範囲は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md)。通常のカルテ・予定・MCPには内部メモや下書き本文を含めない。
@@ -102,11 +110,34 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 請求後はその月の計画・予約・実施状態を変更できない。未入金なら `kanriVoidInvoice` に請求IDと理由を渡して取消を記録し、新しい要求IDで再発行できる。取消済みも履歴に残す。
 - `kanriSetPaid` は行番号ではなく `studentId,invoiceId,date,method,expectedPaymentRevision` を使う。画面の入金版が古い変更は拒否し、訂正の再送で新しい入金を消さない。誤入金登録を戻す場合は `unpaid:true,reason` が必要。入金済み請求の取消と入金管理行の直接削除は拒否する。実際の送金・返金を行う機能ではない。
 
+### 5-2. 授業形式と一括確定
+
+今回の実装・検証対象。人数の判断、予約の保存・再送は [Scheduling.gs](../gas/Scheduling.gs) に集約し、`Code.gs` から呼び出す。
+
+- 形式は `in_person`（対面）/ `online`（オンライン）。生徒の普段の形式は新規案内の初期値で、変更しても既存の予定・過去の授業には連動しない。案内時の指定でその回だけ変更できる。過去の形式が不明な記録は空のまま保持し、実名や当時の形式を公開資料で推測補完しない。
+- 時間区間のどの瞬間も対面は2人まで。オンラインは対面を含む他の授業と重ねない。同じ生徒の授業も重複不可。終了と次の開始が同時刻なら重複しない。`offered` と `booked` は席を確保し、取消依頼中も確保を続ける。
+- 案内、単件・一括確定、返事のない案内の実施処理、未実施から実施済みへの変更、その回の形式変更に共通判定を適用する。候補または重なる授業の形式が不明な場合は拒否し、先生が確認する。同じ日の有効な授業に不正な時刻がある場合も確認を要する。
+- `offer` の `deliveryMode` 省略時は生徒の普段の形式を使う。毎週の案内は最大12回を全日事前確認し、不可の日があれば1件も追加せず理由を返す。生徒のNG日・先生の休みへの `force` 指定で、人数・重複・請求凍結を迂回することはできない。
+- `setDeliveryMode` は `studentId,deliveryMode`。`setSlotDeliveryMode` は `studentId,slotId,deliveryMode,expectedMode` を受け、画面が見た形式との一致を確認する。実施済み・請求確定月は変更不可。確定授業のCalendar・Meetも形式に追従させ、外部処理を確認できなければ元の形式を保って再試行を促す。
+- `acceptMany` は `k,slotIds,requestId`。1〜31件の重複しない案内を受け付け、本人・時間帯・対象月・科目別の承認回数を選択全体で検証する。案内日時の確定は保護者の月間料金承認とは別の操作で、後者を代替しない。通常の `accept` も同じ保存・再送処理を使う。
+- 保存途中では `pending`、完了件数、授業別の結果を返す。画面は同じ `requestId` と選択内容を保持して再送し、最後の状態取得をまとめる。再読込や別端末でも、本人の状態APIに返す `pendingAccepts` から元の処理を復元する。全件の予約が保存済みで最後の処理記録だけが未完了の場合も復旧できる。処理中の授業の削除・予約解除・形式変更などは復旧まで保留する。事前検証で不可の選択があれば予約と処理記録を新規保存しない。
+- Calendarは処理IDと授業IDから決めたイベントIDで登録し、応答が失われても既存イベントを再利用する。対面ではMeetを発行しない。先生向けの確定通知は選択分を1通にまとめる。送信結果が不明なら予約完了と区別して警告し、重複を避けるため自動再送しない。テスト生徒の実メール・Calendar連携は抑止する。
+
+### 5-3. 家族アカウントと保護者通知
+
+今回の実装・検証対象。業務上の区分は本節、認証・メール確認・復旧・APIの詳細は [PARENT_AUTH.md](PARENT_AUTH.md)、処理の正本は [FamilyPortal.gs](../gas/FamilyPortal.gs)。
+
+- 兄弟姉妹は別々の生徒として登録し、予定・授業記録・宿題・月間承認・請求を子ども別に保つ。先生が家族アカウントに子どもを明示的に紐付け、招待する。同姓・同一メール・既存の生徒別保護者ログインだけでは家族の閲覧権限を付与しない。
+- 保護者が登録し、確認メールで受信を確認したアドレスを家族のログインID・通知先に使う。`students.email` の生徒宛て連絡先とは独立する。メール未確認のアカウントには子どもの情報を返さない。旧 `parents` は維持し、家族への自動統合は行わない。
+- 家族画面は紐付いた子どもを切り替えて予定・料金承認・請求を確認する。各読取・承認で対象の子どもへの権限を確認し、先生の内部メモ、未公開下書き、専用リンクの鍵を返さない。子どもの停止・紐付け変更・アカウント停止では既存セッションの権限を失効する。
+- 保護者への業務メールは月間回数・料金の提案、請求記録、請求取消が対象。メールにはログイン案内を置き、詳細は保護者画面で確認する。同じ業務イベントの再送は `familyOutbox` の記録を使い、先生が送信状態を確認できる。未送信と確認できたものだけ再送し、結果不明のメールは自動再送しない。送信障害で料金承認・請求の保存を取り消さない。
+- 家族を登録しただけで既存の授業や料金を承認しない。実際の兄弟の追加登録、先生からの招待、保護者本人の実メール登録・確認が本運用に必要。家族合算の請求発行は今回に含めず、[別の検討事項](FUTURE_WORK.md#家族合算の請求) とする。
+
 ## 6. 更新・デプロイ手順
 
 1. Gitの差分と対象の本番版を確認し、変更範囲に応じて検証する。JS/GASは `npm run check`、認証変更は `npm test` と [認証の検証条件](PARENT_AUTH.md#今後の再反映時の順序と確認)。文書だけなら参照の整合確認でよい。
 2. GASを変更する場合は、実稼働ソースを退避してローカル基準と比較する。データ移行・構造変更では対象台帳もコピーし、内容・構造を比較してから進める。`ensureSchema_` / `LEDGER_COLS` の自動追加任せにせず、既存列との互換性と準備手順を確認する。初期設定用 `setup()` を移行のために再実行しない。
-3. Apps Scriptエディタに `gas/Code.gs`・`gas/LessonCycle.gs`・`gas/BillingApproval.gs` を別ファイルで反映・保存し、読み戻した全文を改行正規化後に照合する。「保存しています」等の表示だけで判断しない。構造変更時は既存版の公開を維持したまま `prepareStepwise20260908` で列を準備する。一時検証ファイルは削除し、既存の「デプロイを管理」→鉛筆→「新バージョン」で公開する（既存URLを維持）。Codexでもブラウザ経由の反映を実施済み。`clasp` 導入は [未着手の課題](FUTURE_WORK.md#apps-script-の反映を自動化clasp)。
+3. Apps Scriptエディタに対象の `gas/*.gs` を別ファイルで反映・保存し、読み戻した全文を改行正規化後に照合する。今回の対象は `Code.gs`・`LessonCycle.gs`・`BillingApproval.gs`・`Scheduling.gs`・`FamilyPortal.gs` の5ファイル。「保存しています」等の表示だけで判断しない。構造変更時は既存版の公開を維持したまま `prepareStepwise20260908` で列を準備する。授業形式の既存値補完は対象と差分を確認して別に行い、過去の不明値は保持する。一時検証ファイル（`test/gas-native-*.gs` など）は削除し、既存の「デプロイを管理」→鉛筆→「新バージョン」で公開する（既存URLを維持）。Codexでもブラウザ経由の反映を実施済み。`clasp` 導入は [未着手の課題](FUTURE_WORK.md#apps-script-の反映を自動化clasp)。
 4. mainへ `git commit` → `git push origin main` でGitHub/Pagesを更新する。**新APIに依存する画面はGAS→HTMLの順**にし、旧画面との互換性も確認する。独立した画面・文書変更ではGASの再デプロイは不要。
 5. Pagesのビルド完了と対象ファイルの公開内容を確認する。GAS更新時は `/exec` の応答（この版の `release` は `2026-09-08-lessons-billing-r2`）と、変更機能のテスト生徒による疎通を確認する。通知・カレンダーを動かす検証は対象と設定を確認し、作成したテストデータを片付ける。
 
@@ -139,7 +170,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 ## 8. 別チャット・他のAIから参照するとき
 
 - 共通入口は [AGENTS.md](../AGENTS.md)。GitHubの `docs/` を文書の正本とし、Driveの00〜04は対応する正本へのリンクにする。本文を二重保守しない。
-- 共通処理は [gas/Code.gs](../gas/Code.gs)、授業記録は [gas/LessonCycle.gs](../gas/LessonCycle.gs)、月間承認・請求は [gas/BillingApproval.gs](../gas/BillingApproval.gs)、画面は [kanri/index.html](../kanri/index.html) / [yoyaku/index.html](../yoyaku/index.html)。機能を変更するときは対象コードも確認する。
+- 共通処理は [gas/Code.gs](../gas/Code.gs)、授業記録は [gas/LessonCycle.gs](../gas/LessonCycle.gs)、月間承認・請求は [gas/BillingApproval.gs](../gas/BillingApproval.gs)、授業形式・一括確定は [gas/Scheduling.gs](../gas/Scheduling.gs)、家族・保護者メールは [gas/FamilyPortal.gs](../gas/FamilyPortal.gs)、画面は [kanri/index.html](../kanri/index.html) / [yoyaku/index.html](../yoyaku/index.html)。機能を変更するときは対象コードも確認する。
 - [Driveの05引き継ぎ](https://drive.google.com/file/d/1N3KMqRqJAC6vT294lFhB1aQEHA3bIMmt/view)は2026-09-07の履歴。過去の編集手段（ClaudeのMonaco操作）、当時の環境やメモリの所在を調べる場合だけ参照する。そこでの「毎回読む順序」「Codexの反映未確認」「v44」「専用検証環境なし」は現行の指示・状態ではない。
 
 ## 8-2. 関連ドキュメント

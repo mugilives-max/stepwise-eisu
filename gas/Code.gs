@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-lessons-billing-r2' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-operations-family' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -62,8 +62,10 @@ function doPost(e) {
     ensureSchema_();
     var req = JSON.parse(e.postData.contents);
     var res;
-    switch (req.action) {
+    if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
+    else switch (req.action) {
       case 'accept':  res = accept_(req.slotId, req.k); break;
+      case 'acceptMany': res = schedulingAcceptMany_(req); break;
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
       case 'cancelReq': res = cancelReq_(req); break;
@@ -116,7 +118,7 @@ function studentState_(code) {
       var st = s.status === 'offered' ? 'offer' : 'mine';
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
-        subject: String(s.subject || ''),
+        subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
         meet: st === 'mine' ? String(s.meetUrl || '') : '',
         req: st === 'mine' ? parseReq_(s.req) : null,
         hours: Math.round(hoursUntil_(s.date, s.start) * 10) / 10
@@ -126,7 +128,7 @@ function studentState_(code) {
   var since = addDays_(today, -120);
   var history = all
     .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked'; })
-    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''),
+    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
       done: String(s.done) === 'true' || s.done === true }; });
   var blocked = blockedRows_()
     .filter(function (b) {
@@ -141,7 +143,7 @@ function studentState_(code) {
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
   var tasks = tasksFor_(me.id, 45);
-  return { me: { name: me.name }, slots: slots, blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -282,6 +284,7 @@ function findStudentByCode_(code) {
 }
 
 function accept_(slotId, code) {
+  if (typeof schedulingAccept_ === 'function') return schedulingAccept_(slotId, code);
   var student = findStudentByCode_(code);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var r = findSlotRow_(slotId);
@@ -309,6 +312,7 @@ function decline_(slotId, code) {
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var r = findSlotRow_(slotId);
   if (!r) return { error: 'この案内は見つかりません', refresh: true };
+  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   if (r.slot.status !== 'offered' || String(r.slot.studentId) !== String(student.id)) {
     return { error: 'この案内は操作できません', refresh: true };
   }
@@ -405,6 +409,7 @@ function cancelReq_(req) {
 function adminResolveCancel_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r || r.slot.status !== 'booked') return { error: '予定が見つかりません' };
+  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   var student = systemStudent_(r.slot.studentId);
   var name = student ? student.name : '(不明)';
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
@@ -741,6 +746,7 @@ function parentPasswordHash_(pass, salt) {
 function parentClearSession_(p) { p.tokenHash = ''; p.tokenExpiresAt = ''; }
 function parentClearSetup_(p) { p.setupHash = ''; p.setupExpiresAt = ''; p.setupFailCount = 0; }
 function parentInvalidate_(studentId) {
+  if (typeof familyInvalidateStudent_ === 'function') familyInvalidateStudent_(studentId);
   var p = parentRecord_(studentId);
   if (!p) return;
   parentClearSession_(p); parentClearSetup_(p); parentWrite_(p);
@@ -874,7 +880,10 @@ function parentLogin_(req) {
 function parentData_(req) {
   var auth = parentRequire_(req);
   if (auth.error) return auth;
-  var student = auth.student;
+  return parentDataForStudent_(auth.student);
+}
+// 呼び出し側で生徒への閲覧権限を確認してから、保護者向けの項目だけ返す。
+function parentDataForStudent_(student) {
   var d = kanriStudent_(student.id);
   if (d.error) return d;
   var months = {}, keys = [];
@@ -886,7 +895,10 @@ function parentData_(req) {
   });
   var prows = planRows_();
   var planMonths = d.plan.months.filter(function (x) { return x.status !== 'none' && x.status !== 'draft'; });
-  return { ok: true, data: { name: d.name, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
+  var upcoming = readRows_('slots').filter(function(s){return String(s.studentId)===String(student.id)&&s.date>=todayStr_()&&(s.status==='offered'||s.status==='booked');})
+    .sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);})
+    .map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),status:s.status,subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||''),meetUrl:String(s.meetUrl||'')};});
+  return { ok: true, data: { name: d.name, deliveryMode:String(student.deliveryMode||''), upcoming:upcoming, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
     billing: {amount:d.billing.amount,mode:d.billing.mode,rate30:d.billing.rate30,monthly:d.billing.monthly,provisional:d.billing.provisional,invoice:d.billing.invoice?{amount:d.billing.invoice.amount,status:d.billing.invoice.status}:null},
     payments: d.payments.map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate, paidDate: p.paidDate, method: p.method, status: p.status }; }),
     grades: d.grades.map(function (g) { return { date: g.date, test: g.test, subject: g.subject, score: g.score, max: g.max, dev: g.dev, rank: g.rank }; }),
@@ -1271,10 +1283,10 @@ var LITE_ = false; // true のとき adminState_ を省略(管理画面からの
 function kanriWrap_(req, res, studentId) {
   if (!res || res.error || req.from !== 'kanri') return res;
   if (req.view === 'lessons') return res; // 授業ページは admin 全データをそのまま使う
-  if (req.view === 'home') return { ok: true, id: String(studentId || ''), dash: kanriDashboard_() };
+  if (req.view === 'home') return Object.assign({ ok: true, id: String(studentId || ''), dash: kanriDashboard_() },res.notificationWarning?{notificationWarning:res.notificationWarning}:{});
   var d = kanriStudent_(String(studentId || req.studentId || ''));
   if (d.error) return d;
-  return { ok: true, id: String(studentId || req.studentId || ''), data: d };
+  return Object.assign({ ok: true, id: String(studentId || req.studentId || ''), data: d },res.notificationWarning?{notificationWarning:res.notificationWarning}:{});
 }
 
 function admin_(req) {
@@ -1285,11 +1297,14 @@ function admin_(req) {
   if (req.op === 'resetConfirm') return adminResetConfirm_(req);
   if (req.mcpKey !== undefined) return mcpEntry_(req); // MCP(ChatGPT/Codex)からの呼び出し。先生のログインとは別系統
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
+  if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
   if (['lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
     case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
     case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));
     case 'state':       return { ok: true, admin: adminState_() };
+    case 'setDeliveryMode': return kanriWrap_(req, schedulingSetDeliveryMode_(req));
+    case 'setSlotDeliveryMode': return kanriWrap_(req, schedulingSetSlotDeliveryMode_(req));
     case 'parentIssueSetupCode': return adminParentIssueSetupCode_(req);
     case 'offer': {
       var ro = adminOffer_(req);
@@ -1346,7 +1361,7 @@ function adminState_() {
       status: s.status, studentId: String(s.studentId || ''),
       studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
-      subject: String(s.subject || ''),
+      subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
       meetUrl: String(s.meetUrl || ''),
       lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus,
       lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus,
@@ -1355,7 +1370,7 @@ function adminState_() {
   });
   var students = readRows_('students').map(function (s) {
     return {
-      id: s.id, name: s.name, email: String(s.email || ''),
+      id: s.id, name: s.name, email: String(s.email || ''), deliveryMode: String(s.deliveryMode || ''),
       code: String(s.code || ''),
       rate30: Number(s.rate30 || 0),
       monthly: Number(s.monthly || 0),
@@ -1381,6 +1396,7 @@ function adminState_() {
 }
 
 function adminOffer_(req) {
+  if (typeof schedulingAdminOffer_ === 'function') return schedulingAdminOffer_(req);
   var student = null;
   var rows = readRows_('students');
   for (var i = 0; i < rows.length; i++) {
@@ -1455,6 +1471,7 @@ function offerMailToStudent_(student, dates, start, min, subject) {
 function adminDeleteSlot_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r) return { error: '枠が見つかりません' };
+  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   if (r.slot.status === 'booked') return { error: '予約が入っている枠です。先に予約を解除してください' };
   var gate = billingSlotMutable_(r.slot); if (gate) return gate;
   sheet_('slots').deleteRow(r.rowIndex);
@@ -1464,6 +1481,7 @@ function adminDeleteSlot_(req) {
 function adminUnbook_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r || r.slot.status !== 'booked') return { error: '予約が見つかりません' };
+  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   var gate = billingSlotMutable_(r.slot); if (gate) return gate;
   var name = studentName_(r.slot.studentId);
   deleteCalEvent_(r.slot);
@@ -1480,10 +1498,12 @@ function adminUnbook_(req) {
 function adminToggleDone_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r || r.slot.status !== 'booked') return { error: '確定した授業を選んでください' };
+  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   var gate = billingSlotMutable_(r.slot); if (gate) return gate;
   var done = req.done == null ? !(String(r.slot.done) === 'true' || r.slot.done === true) : (req.done === true || String(req.done) === 'true');
   if (done) {
     gate = billingSlotAllowed_(r.slot); if (gate) return gate;
+    gate = typeof schedulingCapacityError_ === 'function' ? schedulingCapacityError_(r.slot, undefined, r.slot.id) : null; if (gate) return gate;
     if (hoursUntil_(r.slot.date,r.slot.start) > 0) return {error:'開始前の授業は実施済みにできません'};
   }
   r.slot.done = done; writeSlotRow_(r);
@@ -1494,9 +1514,11 @@ function adminToggleDone_(req) {
 function adminFinishOffered_(req) {
   var r = findSlotRow_(req.slotId);
   if (!r) return { error: '枠が見つかりません' };
+  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   if (r.slot.status !== 'offered') return { error: 'この枠は承認待ちではありません。画面を更新してください', refresh: true };
   if (hoursUntil_(r.slot.date, r.slot.start) > 0) return { error: 'まだ開始前の案内です。過ぎてから記録してください' };
   var gate = billingSlotAllowed_(r.slot); if (gate) return gate;
+  gate = typeof schedulingCapacityError_ === 'function' ? schedulingCapacityError_(r.slot, undefined, r.slot.id) : null; if (gate) return gate;
   r.slot.status = 'booked';
   r.slot.done = true;
   writeSlotRow_(r);
@@ -1511,8 +1533,10 @@ function adminAddStudent_(req) {
     return s.name === name && !(String(s.active) === 'false' || s.active === false);
   });
   if (dup) return { error: '同じ名前の生徒がいます' };
+  var mode = req.deliveryMode === undefined ? 'in_person' : String(req.deliveryMode);
+  if (mode !== 'in_person' && mode !== 'online') return {error:'対面・オンラインを選んでください'};
   var id = uid_();
-  sheet_('students').appendRow([id, name, true, normEmail_(req.email), newCode_(), 1500, '']);
+  sheet_('students').appendRow([id, name, true, normEmail_(req.email), newCode_(), 1500, '', '', '', mode]);
   return { ok: true, id: id, admin: adminState_() };
 }
 
@@ -1794,7 +1818,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk15')) return;
+  if (cache.get('schemaOk16')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1815,7 +1839,9 @@ function ensureSchema_() {
   ensureSubjectHeader_();
   ensureLessonSchema_();
   ensureBillingSchema_();
-  cache.put('schemaOk15', '1', 21600);
+  if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
+  if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
+  cache.put('schemaOk16', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1846,8 +1872,8 @@ function findSlotRow_(slotId) {
 
 function writeSlotRow_(r) {
   var s = r.slot;
-  sheet_('slots').getRange(r.rowIndex, 1, 1, 10)
-    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '', s.subject || '']]);
+  sheet_('slots').getRange(r.rowIndex, 1, 1, 12)
+    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '', s.subject || '', s.req || '', s.deliveryMode || '']]);
 }
 
 function findStudent_(sid) {
@@ -1985,7 +2011,7 @@ function kanriDashboard_() {
   students.forEach(function (s) { nameOf[String(s.id)] = s.name; });
   var slim = function (s) {
     return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
-      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''),
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
       studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId),
       meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus };
   };
@@ -2016,7 +2042,7 @@ function kanriDashboard_() {
     var minutes = 0; doneMonth.forEach(function (x) { minutes += Number(x.min) || 0; });
     var next = mine.filter(function (x) { return x.status === 'booked' && x.date >= today; }).sort(slotSort_)[0];
     var pr = profiles[id] || {};
-    return { id: id, name: s.name, grade: pr['学年'] || '', school: pr['学校'] || '', status: pr['状態'] || '在籍',
+    return { id: id, name: s.name, deliveryMode: String(s.deliveryMode || ''), grade: pr['学年'] || '', school: pr['学校'] || '', status: pr['状態'] || '在籍',
       doneThisMonth: doneMonth.length, minutesThisMonth: minutes, feeThisMonth: studentFee_(id, minutes).amount,
       bookedThisMonth: mine.filter(function (x) { return x.status === 'booked' && x.date.slice(0, 7) === month; }).length,
       plannedThisMonth: (function () { var p = planFor_(id, month, planRowsAll).plan, n = 0; Object.keys(p).forEach(function (k) { n += p[k]; }); return n; })(),
@@ -2069,7 +2095,7 @@ function kanriStudent_(studentId) {
   if (profile) delete profile._row;
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
     .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
-      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });
@@ -2087,7 +2113,7 @@ function kanriStudent_(studentId) {
   var fee = studentFee_(id, minutes, month), billingMonths = billingMonths_(id);
   return {
     billing:billingPreview_(id,month), billingMonths:billingMonths,
-    id: id, name: sys.name, email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
+    id: id, name: sys.name, deliveryMode: String(sys.deliveryMode || ''), email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     parentAuth: parentStatus_(id),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
@@ -2286,7 +2312,7 @@ function mcpDate_(v, dflt) { var s = String(v || ''); return /^\d{4}-\d{2}-\d{2}
 function mcpSlot_(s, nameOf) {
   var rq = parseReq_(s.req);
   return { slotId: String(s.id), date: s.date, start: s.start, end: hmAdd_(s.start, s.min), min: Number(s.min) || 0, status: s.status,
-    done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''),
+    done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
     student: s.studentId ? { id: String(s.studentId), name: nameOf[String(s.studentId)] || studentName_(s.studentId) } : null,
     cancelRequest: rq ? { reason: String(rq.reason || ''), at: String(rq.at || '') } : null };
 }

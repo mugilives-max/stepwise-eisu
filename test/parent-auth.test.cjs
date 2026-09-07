@@ -41,7 +41,10 @@ test('schema initializes idempotently without changing legacy students or unrela
   const before = h.rows('students');
   authRejected(h.parent('parentData'));
   authRejected(h.parent('parentData'));
-  assert.deepEqual(h.rows('students'), before);
+  // Scheduling appends an unknown deliveryMode; every pre-existing value must
+  // remain identical and schema setup must not infer a family's lesson format.
+  assert.deepEqual(h.rows('students'), before.map(row => ({ ...row, deliveryMode: '' })));
+  assert.equal(h.spreadsheet.getSheetByName('students').values[0][9], 'deliveryMode');
   assert.deepEqual(h.spreadsheet.getSheetByName('parents').values[0], [
     'studentId', 'passSalt', 'passHash', 'setAt', 'lastLogin', 'failCount', 'lockUntil',
     'setupHash', 'setupExpiresAt', 'setupFailCount', 'tokenHash', 'tokenExpiresAt'

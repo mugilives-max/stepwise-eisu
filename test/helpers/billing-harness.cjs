@@ -9,6 +9,9 @@ function createBillingHarness(options = {}) {
   const h = createHarness({ iterations: 10, ...options });
   const initialized = h.admin('state');
   if (!initialized.ok) throw new Error('Cannot initialize billing fixture: ' + JSON.stringify(initialized));
+  // These synthetic billing scenarios have a known lesson format. Legacy blank
+  // values are tested separately by scheduling; do not bypass its live gate.
+  for (const student of h.rows('students')) h.setRow('students', 'id', student.id, { deliveryMode: 'in_person' });
   let sequence = 0;
 
   function append(name, record, target = h.spreadsheet) {
@@ -26,7 +29,7 @@ function createBillingHarness(options = {}) {
     return append('slots', {
       id: 'synthetic-billing-slot-' + (++sequence), date: '2026-09-15', start: '16:00',
       min: 60, status: 'offered', studentId: 'test-a', done: '', eventId: '',
-      meetUrl: '', subject: '数学', req: '', ...overrides
+      meetUrl: '', subject: '数学', req: '', deliveryMode: 'in_person', ...overrides
     });
   }
 
