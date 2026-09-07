@@ -124,6 +124,21 @@
       .callegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
       .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .callbl.tm { font-weight: 600; opacity: .85; }
+      .calrow { display: flex; align-items: stretch; gap: 0; width: 100%; padding: 0 2px; box-sizing: border-box; font-size: 10px; line-height: 1.25; text-align: left; }
+      .calrow .cl { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--primary); font-weight: 700; }
+      .calrow .cl b { font-weight: 600; opacity: .8; margin-right: 2px; }
+      .calrow .cl.of { color: var(--amber); } .calrow .cl.rq { color: var(--danger); } .calrow .cl.dn { color: var(--muted); }
+      .calrow.pair .cl + .cl { border-left: 1px solid var(--line); padding-left: 3px; margin-left: 3px; }
+      .calday.sel .calrow .cl { color: var(--white); } .calday.sel .calrow.pair .cl + .cl { border-left-color: rgba(255,255,255,.5); }
+      .calday.hasrows { min-height: 56px; }
+      .calgrid > * { min-width: 0; } .calday { max-width: 100%; overflow: hidden; }
+      @media (max-width: 640px) {
+        .calrow { font-size: 9px; padding: 0 1px; }
+        .calrow.pair { flex-direction: column; }
+        .calrow.pair .cl { flex: none; width: 100%; box-sizing: border-box; border-left: 2px solid currentColor; padding-left: 2px; margin-left: 0; }
+        .calrow.pair .cl + .cl { border-left: 2px solid currentColor; padding-left: 2px; margin-left: 0; }
+        .calday.sel .calrow.pair .cl { border-left-color: rgba(255,255,255,.7); }
+      }
       .callbl.of { color: var(--amber); } .callbl.dn { color: var(--muted); } .callbl.ev { color: var(--coral); font-weight: 600; } .callbl.more { color: var(--muted); font-weight: 500; }
       .calday.sel .callbl { color: var(--white); }
       .callegend span { display: inline-flex; align-items: center; gap: 4px; }
@@ -238,6 +253,25 @@
         function offWhen(o) { return o.start ? o.start + "〜" + o.end : "終日"; }
         function offLine(o) { return '<div class="line"><span class="w"><span class="tag gray">先生の休み</span> ' + offWhen(o) + ' <span class="small muted">' + esc(o.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>'; }
         function offMark(it, o) { if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; }
+        // 予定表のセル用に名前を短くする: 空白があれば姓、【テスト】などの角括弧は外す。空白がなければ5文字以上は3文字、それ以外は2文字
+        function shortName(n) {
+          n = String(n || "").replace(/【[^】]*】/g, "").trim();
+          var sp = n.split(/[ 　]+/);
+          if (sp.length > 1) return sp[0];
+          if (!/[\u3040-\u30ff\u4e00-\u9fff]/.test(n)) return n.slice(0, 6);
+          return n.length >= 5 ? n.slice(0, 3) : n.slice(0, 2);
+        }
+        // 時刻順に並べ、時間帯が重なる授業(同時授業)をひとつのグループにする → [[l], [l1, l2], ...]
+        function groupOverlap(list) {
+          var sorted = list.slice().sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : String(a.studentName) < String(b.studentName) ? -1 : 1; });
+          var out = [], cur = null, curEnd = "";
+          sorted.forEach(function (l) {
+            var en = endTime(l.start, l.min);
+            if (cur && l.start < curEnd) { cur.push(l); if (en > curEnd) curEnd = en; }
+            else { cur = [l]; curEnd = en; out.push(cur); }
+          });
+          return out;
+        }
         function ngMark(it, b) { if (b.start) (it.ngT = it.ngT || []).push(b); else it.ng++; }
         function ngWhen(b) { return b.start ? ' ' + b.start + '〜' + b.end : ''; }
         function evRange(e) { return e.date === e.dateTo ? fmtD(e.date) : fmtD(e.date) + "〜" + fmtD(e.dateTo); }
@@ -461,10 +495,11 @@
           (d.teacherOff || []).forEach(function (o) { offMark(hit(o.date), o); });
           (d.wishes || []).forEach(function (x) { hit(x.date).wish++; });
           (d.allEvents || []).forEach(function (e) { var dd = e.date; for (var ei = 0; ei < 61 && dd <= e.dateTo; ei++) { hit(dd).ev++; dd = addDaysStr(dd, 1); } });
+          (function () { var byD = {}; hs.forEach(function (s) { (byD[s.date] = byD[s.date] || []).push(s); }); Object.keys(byD).forEach(function (dd) { hit(dd).rows = groupOverlap(byD[dd]); }); })();
           if (!selDate || selDate < d.today) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
           html += '<h2>全体の予定表 <a class="btn-quiet btn-sm" href="#lessons" style="margin-left:auto">授業を案内する・変更する</a></h2>';
-          html += renderCal(hinfo, d.today);
-          var hday = hs.filter(function (s) { return s.date === selDate; });
+          html += renderCal(hinfo, d.today, { noNg: true, rowsHint: true });
+          var hday = hs.filter(function (s) { return s.date === selDate; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
           var hOff = (d.teacherOff || []).filter(function (o) { return o.date === selDate; });
           var hAllDay = hOff.some(function (o) { return !o.start; });
           html += '<h2>' + fmtD(selDate) + 'の予定 <span class="cnt">' + hday.length + '件</span>' + (selDate >= d.today ? '<span style="margin-left:auto;display:inline-flex;gap:6px">' + (hOff.length ? '<button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(hOff.map(function (o) { return o.id; }).join(",")) + '"' + (busy ? ' disabled' : '') + '>先生の休みを解除</button>' : '') + (hAllDay ? '' : '<button class="btn-ghost btn-sm" data-action="homeoff" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>' + (homeOffOpen === selDate ? 'やめる' : '先生の休みにする') + '</button>') + '</span>' : '') + '</h2>';
@@ -875,7 +910,8 @@
           app.innerHTML = html;
         }
 
-        function renderCal(info, today) {
+        function renderCal(info, today, opts) {
+          opts = opts || {};
           var label = calY + "年" + (calM + 1) + "月";
           var minIdx = calNow.getFullYear() * 12 + calNow.getMonth() - 1, curIdx = calY * 12 + calM, maxIdx = minIdx + 4;
           var h = '<div class="card cal"><div class="calhead">';
@@ -900,12 +936,23 @@
               if (it.req) marks += '<span class="caldot rq"></span>';
               if (it.wish) marks += '<span class="caldot ws"></span>';
               if (it.ev) marks += '<span class="caldot ev"></span>';
-              if (it.ng) marks += '<span class="calmark">×</span>';
+              if (it.ng && !opts.noNg) marks += '<span class="calmark">×</span>';
             }
             marks += "</span>";
             if (it && it.toff) marks += '<span class="callbl to">休</span>';
             if (it && it.toffT) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">休' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
-            if (it && it.ngT) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
+            if (it && it.ngT && !opts.noNg) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
+            if (it && it.rows && it.rows.length) {
+              cls += " hasrows";
+              var rows = it.rows, maxRows = 3;
+              rows.slice(0, maxRows).forEach(function (g) {
+                marks += '<span class="calrow' + (g.length > 1 ? ' pair' : '') + '">' + g.map(function (l) {
+                  var lc = l.status === "offered" ? " of" : l.req ? " rq" : l.done ? " dn" : "";
+                  return '<span class="cl' + lc + '" title="' + esc(l.start + '〜' + endTime(l.start, l.min) + ' ' + l.studentName + (l.subject ? ' ' + l.subject : '')) + '"><b>' + cT(l.start) + '</b>' + esc(shortName(l.studentName)) + (l.subject ? esc(String(l.subject).charAt(0)) : '') + '</span>';
+                }).join('') + '</span>';
+              });
+              if (rows.length > maxRows) marks += '<span class="callbl more">+' + rows.slice(maxRows).reduce(function (a, g) { return a + g.length; }, 0) + '</span>';
+            }
             if (it && it.labels && it.labels.length) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -917,7 +964,7 @@
             }
             h += '<button class="' + cls + (ds < today && !it ? " off" : "") + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
-          h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="caldot ev"></span> 共有予定(大会など)</span><span><span class="calmark">×</span> 授業できない生徒あり</span><span><span class="callbl to" style="display:inline">休</span> 先生の休み</span></div></div>';
+          h += '</div><div class="callegend"><span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="caldot ev"></span> 共有予定(大会など)</span>' + (opts.noNg ? '' : '<span><span class="calmark">×</span> 授業できない生徒あり</span>') + '<span><span class="callbl to" style="display:inline">休</span> 先生の休み</span>' + (opts.rowsHint ? '<span class="muted">セル内: 時刻 名前 科目(黄=承認待ち、赤=取消依頼)。縦線でつないであるものは同じ時間帯の授業(2人同時)</span>' : '') + '</div></div>';
           return h;
         }
 
