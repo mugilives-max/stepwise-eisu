@@ -1,11 +1,15 @@
 # StepWise個別
 
-StepWise個別のホームページです。
+ステップワイズ個別指導のホームページと、生徒マイページ・先生の管理システムです。
 
-公開URL: https://www.stepwise-education.jp/
+公開URL: [ホームページ](https://www.stepwise-education.jp/)
 
 GitHub Pages (main ブランチ / root) で配信しています。
 
-## 予約・管理システムについて
+## 作業と資料の入口
 
-生徒マイページ(`/yoyaku/`)、管理画面(`/kanri/`)、Apps Script(`gas/Code.gs`)の構成とデータの置き場所は [docs/SYSTEM.md](docs/SYSTEM.md) にまとめています。残っている課題・今後の予定は [docs/FUTURE_WORK.md](docs/FUTURE_WORK.md) に書き溜めています。
+- AI共通の制約と、作業別の資料案内: [AGENTS.md](AGENTS.md)（Claudeも同じ指示を使用）
+- 現行の構成・台帳・API・反映手順: [SYSTEM.md](docs/SYSTEM.md)
+- 未完了事項と判断待ち: [FUTURE_WORK.md](docs/FUTURE_WORK.md)
+
+文書の正本はこのリポジトリ。Driveの同名資料は正本への案内と、日付付きの原案・過去の記録を残す。すべての資料を毎回読む必要はありません。
