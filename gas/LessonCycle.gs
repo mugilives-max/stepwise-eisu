@@ -434,6 +434,16 @@ function lessonDraftTemplate_(r) {
   return ['授業内容\n'+r.content,r.progress ? '取り組みの様子\n'+r.progress : '',r.homework.length ? '宿題\n'+r.homework.map(function (x) { return x.title+(x.dueMode === 'nextLesson' ? '（次回の同じ科目の授業まで）' : x.due ? '（'+x.due+'）' : ''); }).join('\n') : '',r.nextFocus ? '次回の焦点\n'+r.nextFocus : ''].filter(Boolean).join('\n\n');
 }
 function lessonPreparationKey_(studentId,slotId) { return JSON.stringify([String(studentId),String(slotId)]); }
+function lessonPairContext_(req) {
+  lessonOnly_(req,['action','op','token','from','view','slotId','otherSlotId']);
+  var a=findSlotRow_(lessonId_(req.slotId));
+  if(!a||a.slot.status!=='booked'||a.slot.deliveryMode!=='in_person'||!schedulingIntervalValid_(a.slot))lessonFail_('notFound','対面の確定授業を選んでください');
+  var anchor=a.slot,from=schedulingMinutes_(anchor),to=from+Number(anchor.min);
+  var choices=readRows_('slots').filter(function(s){return s.status==='booked'&&s.deliveryMode==='in_person'&&String(s.studentId)!==String(anchor.studentId)&&s.date===anchor.date&&schedulingIntervalValid_(s)&&schedulingMinutes_(s)<to&&schedulingMinutes_(s)+Number(s.min)>from;}).sort(slotSort_);
+  var selected=req.otherSlotId?choices.filter(function(s){return String(s.id)===String(req.otherSlotId);})[0]:choices.length===1?choices[0]:null;
+  if(req.otherSlotId&&!selected)lessonFail_('conflict','同時受講の予定が変わっています。授業を選び直してください');
+  return {ok:true,contexts:[anchor].concat(selected?[selected]:[]).map(function(s){return lessonContextData_(String(s.studentId),String(s.id),'');}),choices:choices.map(function(s){return {slotId:String(s.id),studentId:String(s.studentId),name:studentName_(s.studentId),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||'')};})};
+}
 function lessonPreparationView_(studentId,slotId) {
   var p=lessonFind_('lessonPreparations','id',lessonPreparationKey_(studentId,slotId));
   if (!p || String(p.studentId)!==String(studentId)) return null;
@@ -496,6 +506,7 @@ function lessonAdmin_(req) {
     if (!req || req.mcpKey !== undefined || !req.token || authMode_() !== 'account' || !authOk_(req)) return {error:'先生としてログインし直してください',badAuth:true};
     if (getConfig_('lessonCycleEnabled') === 'off') return {error:'授業記録は準備中です',errorCode:'disabled'};
     memoClear_(); ensureLessonSchema_();
+    if (req.op === 'lessonPairContext') return lessonPairContext_(req);
     if (req.op === 'lessonContext') {
       lessonOnly_(req,['action','op','token','from','view','studentId','slotId','recordId']);
       return {ok:true,context:lessonContextData_(lessonId_(req.studentId),req.slotId === undefined || req.slotId === '' ? '' : lessonId_(req.slotId),req.recordId === undefined || req.recordId === '' ? '' : lessonId_(req.recordId))};

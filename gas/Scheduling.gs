@@ -10,6 +10,69 @@ function ensureSchedulingSchema_() {
   memoClear_();
 }
 function schedulingMode_(value) { return value==='in_person'||value==='online'?value:''; }
+
+// Student-facing availability exposes only an aggregate result, never another student's rows or reasons.
+function schedulingWishAvailability_(req) {
+  var student=findStudentByCode_(req.k);
+  if(!student)return {error:'専用リンクからひらき直してください',badCode:true};
+  var dates=req.dates===undefined?[req.date]:req.dates, kind=req.kind==='want'?'want':'ok';
+  if(!Array.isArray(dates)||!dates.length||dates.length>20)return schedulingError_('希望日は1〜20日で選んでください');
+  dates=dates.map(String).filter(function(d,i,a){return a.indexOf(d)===i;}).sort();
+  try { if(dates.some(function(d){return !lessonDate_(d)||d<todayStr_();}))return schedulingError_('今日以降の実在する日付を選んでください'); }
+  catch(e){return schedulingError_('今日以降の実在する日付を選んでください');}
+  var start=String(req.start||''),min=Number(req.min===undefined&&kind==='ok'?60:req.min),mode=schedulingMode_(req.deliveryMode===undefined?student.deliveryMode:req.deliveryMode);
+  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)||[30,45,60,90,120].indexOf(min)<0)return schedulingError_('開始時刻と授業の長さを確認してください');
+  if(!mode)return schedulingError_('対面・オンラインを選んでください');
+  var begin=toMin_(start),end=kind==='want'?begin+min:toMin_(String(req.end||''));
+  if(kind==='ok'&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(req.end||'')))return schedulingError_('終了時刻を確認してください');
+  if(end>1440||end-begin<min)return schedulingError_('希望時間帯の中に授業の長さを確保してください');
+  var slots=readRows_('slots'),pending=[],pendingInvalid=false;
+  readRows_('offerEdits').filter(function(w){return w.status!=='done';}).forEach(function(w){try{pending.push(JSON.parse(w.afterJson).slot);}catch(e){pendingInvalid=true;}});
+  var blocks=blockedRows_().filter(function(b){return String(b.studentId)===String(student.id);});
+  var days=dates.map(function(date){
+    var off=teacherOff_(date,true).filter(function(o){return o.date===date;}),ng=blocks.filter(function(b){return b.date===date;});
+    var starts=[begin];
+    if(kind==='ok'){
+      slots.concat(pending).filter(function(s){return s&&s.date===date&&schedulingOccupied_(s)&&schedulingIntervalValid_(s);}).forEach(function(s){starts.push(schedulingMinutes_(s)+Number(s.min));});
+      off.concat(ng).forEach(function(o){if(o.end)starts.push(toMin_(o.end));});
+    }
+    starts=starts.filter(function(n,i,a){return n>=begin&&n+min<=end&&a.indexOf(n)===i;}).sort(function(a,b){return a-b;});
+    var unknown=pendingInvalid,capacity=false;
+    for(var i=0;i<starts.length;i++){
+      var time=('0'+Math.floor(starts[i]/60)).slice(-2)+':'+('0'+starts[i]%60).slice(-2);
+      var candidate={date:date,start:time,min:min,subject:'授業',studentId:String(student.id),deliveryMode:mode};
+      var error=schedulingCapacityError_(candidate,slots);
+      if(error){if(error.errorCode==='pending'||error.errorCode==='deliveryModeRequired')unknown=true;else capacity=true;continue;}
+      if(off.concat(ng).some(function(o){return offHits_(o,date,time,min);}))continue;
+      return {date:date,status:'available',firstStart:time};
+    }
+    return {date:date,status:unknown?'unknown':capacity?'full':'unavailable'};
+  });
+  return {ok:true,kind:kind,deliveryMode:mode,min:min,start:start,end:kind==='want'?endTime_(start,min):String(req.end),days:days};
+}
+
+// Wishes do not reserve seats. Recheck under doPost's lock before saving the displayed status.
+function schedulingWishSave_(req) {
+  var check=schedulingWishAvailability_(req);if(check.error)return check;
+  var student=findStudentByCode_(req.k),mine=wishRows_().filter(function(w){return w.studentId===String(student.id)&&w.date>=todayStr_();});
+  var note=String(req.note||'').trim().slice(0,100);
+  function sameWish(w,d){return w.date===d.date&&w.start===check.start&&w.end===check.end&&w.kind===check.kind&&w.deliveryMode===check.deliveryMode&&w.duration===check.min;}
+  if(check.days.some(function(d){return mine.some(function(w){return sameWish(w,d)&&w.note!==note;});}))return schedulingError_('同じ日時の希望がすでにあります。メモを変更する場合は、元の希望を取り消してから送ってください');
+  var added=check.days.filter(function(d){return !mine.some(function(w){return sameWish(w,d);});});
+  if(!added.length)return {ok:true,replayed:true,state:studentState_(req.k)};
+  if(mine.length+added.length>20)return schedulingError_('希望は合計20件までです。不要なものを取り消してください');
+  if(req.availabilitySeen!==undefined&&JSON.stringify(req.availabilitySeen)!==JSON.stringify(check.days.map(function(d){return {date:d.date,status:d.status};})))return {error:'空き状況が変わりました。最新の状態を確認してから送ってください',errorCode:'availabilityChanged',availability:check};
+  var sh=sheet_('wishes');
+  var rows=added.map(function(d){return [uid_(),String(student.id),d.date,check.start,check.end,note,new Date(),check.kind,check.deliveryMode,check.min,d.status].map(lessonSafeCell_);});
+  var first=sh.getLastRow()+1;
+  sh.getRange(first,1,rows.length,11).setValues(rows);
+  sh.getRange(first,2,rows.length,1).setNumberFormat('@');sh.getRange(first,4,rows.length,2).setNumberFormat('@');
+  var adjustment=added.some(function(d){return d.status!=='available';});
+  var label=added.map(function(d){return fmtDateJa_(d.date)+(d.status==='available'?'':'（要調整）');}).join('、')+' '+check.start+'〜'+check.end+' / '+check.min+'分 / '+(check.deliveryMode==='online'?'オンライン':'対面');
+  addLog_(student.name+'さんが授業希望を登録: '+label);
+  if(!isTestStudent_(student))notify_('【授業希望'+(adjustment?'・要調整':'')+'】'+student.name+'さん',student.name+'さんから授業希望が届きました。\n'+label+(note?'\nメモ: '+note:'')+'\n希望は予約確定ではありません。案内時に最新の定員を確認してください。');
+  return {ok:true,state:studentState_(req.k)};
+}
 function schedulingError_(message,code) { return {error:message,errorCode:code||'validation'}; }
 function schedulingOccupied_(s) { return s.status==='offered'||s.status==='booked'; }
 function schedulingMinutes_(s) { return Number(String(s.start).slice(0,2))*60+Number(String(s.start).slice(3)); }

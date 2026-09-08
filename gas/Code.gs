@@ -72,6 +72,7 @@ function doPost(e) {
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
       case 'cancelReq': res = cancelReq_(req); break;
+      case 'wishAvailability': res = schedulingWishAvailability_(req); break;
       case 'wish':    res = wish_(req); break;
       case 'unwish':  res = unwish_(req); break;
       case 'wishMany': res = wishMany_(req); break;
@@ -140,7 +141,7 @@ function studentState_(code) {
     })
     .map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; });
   var wishes = wishRows_().filter(function (x) { return String(x.studentId) === String(me.id) && x.date >= today; })
-    .map(function (x) { return { id: x.id, date: x.date, start: x.start, end: x.end, note: x.note, kind: x.kind }; });
+    .map(function (x) { return { id: x.id, date: x.date, start: x.start, end: x.end, note: x.note, kind: x.kind, deliveryMode:x.deliveryMode, duration:x.duration, availability:x.availability }; });
   var evSince = addDays_(today, -60);
   var events = eventRows_().filter(function (x) { return x.studentId === String(me.id) && x.dateTo >= evSince; })
     .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title, kind: x.kind }; });
@@ -521,8 +522,7 @@ function ensureWishesSheet_() {
 
 // wishes.kind 列: 'want'=この日時に授業をしたい(開始〜終了がそのまま授業時間) / 'ok'=この時間帯のどこかで調整してほしい
 function ensureWishKindHeader_() {
-  var sh = sheet_('wishes');
-  if (sh && sh.getRange(1, 8).getValue() !== 'kind') sh.getRange(1, 8).setValue('kind');
+  billingEnsureColumns_(ss_(),'wishes',['id','studentId','date','start','end','note','createdAt','kind','deliveryMode','duration','availability']);
 }
 
 // wishes を正規化して返す(date yyyy-MM-dd / start,end HH:mm / kind want|ok)
@@ -531,79 +531,12 @@ function wishRows_() {
   return readRows_('wishes').map(function (x) {
     return { id: x.id, studentId: String(x.studentId || ''), date: x.date, start: x.start,
       end: normTime_(x.end), note: String(x.note || ''), createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '',
-      kind: String(x.kind || '') === 'want' ? 'want' : 'ok' };
+      kind: String(x.kind || '') === 'want' ? 'want' : 'ok', deliveryMode:schedulingMode_(x.deliveryMode), duration:Number(x.duration)||0, availability:String(x.availability || '') };
   }).filter(function (x) { return x.id && x.date; });
 }
 
-function wish_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var kind = String(req.kind || '') === 'want' ? 'want' : 'ok';
-  var date = String(req.date || ''), start = normTime_(req.start), end;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < todayStr_()) return { error: '今日以降の日付をえらんでください' };
-  if (!/^\d{2}:\d{2}$/.test(start)) return { error: '開始時刻を入れてください' };
-  if (kind === 'want') {
-    var mins = Number(req.min) || 0;
-    if ([30, 45, 60, 90, 120].indexOf(mins) < 0) return { error: '長さをえらんでください' };
-    end = endTime_(start, mins);
-  } else {
-    end = normTime_(req.end);
-    if (!/^\d{2}:\d{2}$/.test(end) || start >= end) return { error: '時間帯は「開始 < 終了」で入れてください' };
-  }
-  var mine = wishRows_().filter(function (x) { return x.studentId === String(student.id) && x.date >= todayStr_(); });
-  if (mine.length >= 20) return { error: '希望は20件までです。不要なものを取り消してください' };
-  if (mine.some(function (x) { return x.date === date && x.start === start && x.end === end && x.kind === kind; })) return { error: '同じ希望がすでにあります' };
-  var note = String(req.note || '').trim().slice(0, 100);
-  var sh = sheet_('wishes');
-  sh.appendRow([uid_(), String(student.id), date, start, end, note, new Date(), kind]);
-  var rr = sh.getLastRow();
-  sh.getRange(rr, 2).setNumberFormat('@'); sh.getRange(rr, 4, 1, 2).setNumberFormat('@');
-  var when = fmtDateJa_(date) + ' ' + start + '〜' + end + (kind === 'want' ? '(この日時を希望)' : '(この時間帯のどこかで)');
-  addLog_(student.name + 'さんが' + (kind === 'want' ? '希望日時' : '授業できる時間帯') + 'を登録: ' + when + (note ? '(' + note + ')' : ''));
-  if (!isTestStudent_(student)) notify_('【' + (kind === 'want' ? '希望日時' : '授業できる時間帯') + '】' + student.name + 'さん',
-    student.name + 'さんから' + (kind === 'want' ? '授業の希望日時' : '授業できる時間帯') + 'が届きました。\n' + when + (note ? '\nメモ: ' + note : '') +
-    '\n\n管理画面の「授業」ページから、この希望で案内できます。\nhttps://www.stepwise-education.jp/kanri/#lessons');
-  return { ok: true, state: studentState_(req.k) };
-}
-
-// 予定表で選んだ複数日に同じ内容の希望をまとめて登録
-function wishMany_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var kind = String(req.kind || '') === 'want' ? 'want' : 'ok';
-  var today = todayStr_();
-  var seen = {};
-  var dates = (req.dates || []).map(String).filter(function (d) { if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < today || seen[d]) return false; seen[d] = true; return true; }).sort();
-  if (!dates.length) return { error: '日付をえらんでください' };
-  var start = normTime_(req.start), end;
-  if (!/^\d{2}:\d{2}$/.test(start)) return { error: '開始時刻を入れてください' };
-  if (kind === 'want') {
-    var mins = Number(req.min) || 0;
-    if ([30, 45, 60, 90, 120].indexOf(mins) < 0) return { error: '長さをえらんでください' };
-    end = endTime_(start, mins);
-  } else {
-    end = normTime_(req.end);
-    if (!/^\d{2}:\d{2}$/.test(end) || start >= end) return { error: '時間帯は「開始 < 終了」で入れてください' };
-  }
-  var mine = wishRows_().filter(function (x) { return x.studentId === String(student.id) && x.date >= today; });
-  if (mine.length + dates.length > 20) return { error: '希望は合計20件までです。不要なものを取り消してください' };
-  var note = String(req.note || '').trim().slice(0, 100);
-  var sh = sheet_('wishes');
-  var added = [];
-  dates.forEach(function (d) {
-    if (mine.some(function (x) { return x.date === d && x.start === start && x.end === end && x.kind === kind; })) return;
-    sh.appendRow([uid_(), String(student.id), d, start, end, note, new Date(), kind]);
-    var rr = sh.getLastRow();
-    sh.getRange(rr, 2).setNumberFormat('@'); sh.getRange(rr, 4, 1, 2).setNumberFormat('@');
-    added.push(d);
-  });
-  if (!added.length) return { error: '同じ希望がすでにあります' };
-  var label = (kind === 'want' ? '希望日時' : '授業できる時間帯') + ': ' + added.map(fmtDateJa_).join('、') + ' ' + start + '〜' + end + (note ? '(' + note + ')' : '');
-  addLog_(student.name + 'さんが' + label + 'を登録');
-  if (!isTestStudent_(student)) notify_('【' + (kind === 'want' ? '希望日時' : '授業できる時間帯') + '】' + student.name + 'さん(' + added.length + '日)',
-    student.name + 'さんから' + label + (kind === 'want' ? '(この日時を希望)' : '(この時間帯のどこかで)') + '\n\n管理画面の「授業」ページから案内できます。\nhttps://www.stepwise-education.jp/kanri/#lessons');
-  return { ok: true, state: studentState_(req.k) };
-}
+function wish_(req) { return schedulingWishSave_(Object.assign({},req,{dates:[req.date]})); }
+function wishMany_(req) { return schedulingWishSave_(req); }
 
 function unwish_(req) {
   var student = findStudentByCode_(req.k);
@@ -1353,7 +1286,7 @@ function admin_(req) {
   if(['state','kanriStudent','kanriDashboard','studentEmailNotifications'].indexOf(req.op)>=0)slotCancellationRecoverNotices_(req.studentId);
   if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
   if (String(req.op || '').indexOf('studentEmail') === 0) return studentEmailAdmin_(req);
-  if (['lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
+  if (['lessonPairContext','lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
     case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
     case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));
@@ -1843,7 +1776,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk18')) return;
+  if (cache.get('schemaOk19')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1868,7 +1801,7 @@ function ensureSchema_() {
   if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
-  cache.put('schemaOk18', '1', 21600);
+  cache.put('schemaOk19', '1', 21600);
 }
 
 function readRows_(name) {
