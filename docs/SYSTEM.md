@@ -120,8 +120,8 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / addOff / delOff(先生の休み) / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
 - 確定授業の取消は生徒からの「依頼」で先生が承認（締切は授業の24時間前 `CANCEL_DEADLINE_H`）。月間承認と請求の制御は次節。
 - 授業記録の先生専用op・返却範囲は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md)。通常のカルテ・予定・MCPには内部メモや下書き本文を含めない。
-- エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`、`mcpRotateKey`(MCP 用キーの発行・更新)、`mcpDisable`(MCP 停止)。
-- MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(現在は空)のホワイトリストのみ。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。
+- エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`、`mcpRotateKey`(MCP 用キーの発行・更新)、`mcpDisable`(MCP 停止)、`mcpEnableWrites` / `mcpRestrictWritesToTest`(MCP 登録の範囲切替)。
+- MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(v52〜: mcpOfferLessons / mcpAddTeacherOff / mcpAddStudentNg / mcpAddStudentWishes。項目ごとの検証と結果、既存と同じ日時は登録済み扱い)のホワイトリストのみ。書き込み範囲は Script Properties `MCP_WRITE_SCOPE`(test/all。エディタの `mcpEnableWrites` / `mcpRestrictWritesToTest`)。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。仕様は [MCP_OPERATIONS.md 2章](MCP_OPERATIONS.md#2-いま使える機能)。
 
 ### 5-1. 月間承認と請求
 
@@ -242,6 +242,11 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 22:14 JSTの整理後に予約30シート・管理5シートを期待差分と照合し、全35シートが一致。実生徒4人・授業17件、実生徒の成績・記録・家族・設定・授業不可時間を保持した。「一覧」は派生値の変化を許容し、見出し・数式を照合した。復元用の退避・対象一覧・証跡は非公開の `.verification/cleanup-20260908/` に保存する。
 - 構文確認と取消・通知・請求・定員の97検証が通過。変更したCode.gsは本番v50から退避しGit基準と一致、変更後も保存・再読み込み後に全文照合。一時整理関数を除いた本体6ファイルで公開した。テスト生徒の停止・履歴保持だけだった過去の検証記録は当時の結果として残し、今回その履歴を退避先へ移した。
 
+### 6-6. v52・MCP 登録ツール
+
+- 2026-09-08 22:51 JST、既存URL・デプロイIDを維持して GAS v52 へ更新。`release: 2026-09-08-mcp-writes`。変更は `Code.gs`(MCP 更新系 op と書き込み範囲)と `Scheduling.gs`(先生の代理登録では先生宛ての希望メールを送らない `req.proxy`)の2ファイル。公開前にエディタ6ファイルのハッシュが Git HEAD(`dc56fae`)と一致することを確認し、置換適用後・保存・再読み込み後にローカルと全文ハッシュ一致を確認した。他4ファイルは変更なし。
+- ローカル検証: `test/mcp-writes.test.cjs` 11件を追加し全体 396件が通過(`npm run check` も通過)。本番は health の release、`mcpPing` の writeOps / writeScope、範囲制限(`scope`)と不在生徒の拒否を確認。実生徒への登録は行っていない。MCP サーバー側は `stepwise-mcp` 0.2.0(Worker Version ec4f2bf5)。
+
 ## 7. 運用メモ
 
 - 検証は隔離台帳を優先する。本番で専用テスト生徒を使った場合は、復元用の退避と実データの差分照合を行い、検証用の関連データ・家族・操作ログも通常環境から片付ける。停止だけで家族の選択肢や「最近の動き」に残さない。実生徒の記録・監査履歴はこの整理対象にしない。
@@ -268,6 +273,8 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - MCPサーバー本体は別のprivateリポジトリ `mugilives-max/stepwise-mcp`。接続先・環境・配置手順は [MCP_OPERATIONS.md](MCP_OPERATIONS.md) に集約する。
 
 ## 9. 変更履歴(要点)
+
+- 2026-09-08 MCP 登録ツール(案内の一括登録・先生の休み・生徒NG/希望の代理登録)を GAS v52 と stepwise-mcp 0.2.0 へ公開。書き込み範囲は `MCP_WRITE_SCOPE`。記録は [6-6節](#6-6-v52mcp-登録ツール)、仕様は [MCP_OPERATIONS.md 2章](MCP_OPERATIONS.md#2-いま使える機能)。
 
 - 2026-09-08 授業記録と月間承認・請求をGAS v46へ公開し、月間計画の途中保存・再送の復旧をv47へ追加公開。実GAS検証・移行・配信確認の記録は [6-1節](#6-1-v46の反映と検証)。
 

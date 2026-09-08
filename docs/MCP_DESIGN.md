@@ -3,11 +3,14 @@
 作成: 2026-09-06 / 整理: 2026-09-08。
 この文書は最新の実装合意・設計理由・旧候補・導入時の検証記録です。予定登録の初回実装は [2026-09-08合意](#schedule-write-scope) を参照してください。**接続、鍵変更、停止、再配置、トラブル対応の正本は [MCP_OPERATIONS.md](MCP_OPERATIONS.md)**。全体構成は [SYSTEM.md](SYSTEM.md)、未完了の作業は [FUTURE_WORK.md](FUTURE_WORK.md) を参照してください。
 
-照合基準は `stepwise-eisu` の `1f0f522` と、別リポジトリ `stepwise-mcp` の `c3fc9e0`。読み取り用GAS入口とMCP閲覧ツール7本を実装済みです。以下の更新系ツール、`confirm_token`、書き込みの冪等処理、`MCP_WRITE_SCOPE` は**未実装の設計候補**であり、この文書を読んだだけで追加・公開・実データへの実行を進める指示にはなりません。過去の「完了」は当時の検証記録で、現在の認証・接続状態を保証しません。
+読み取り用GAS入口とMCP閲覧ツール7本に加え、**2026-09-08 合意の登録ツール4本(下記)を GAS v52 / Worker に実装・公開済み**。それ以外の更新系(取消・確定・実施記録・請求など)は未実装の設計候補で、この文書を読んだだけで追加・公開を進める指示にはなりません。現在の使い方・停止・範囲切替は [MCP_OPERATIONS.md 2-2節](MCP_OPERATIONS.md#2-2-登録4ツール2026-09-08-gas-v52worker-version-ec4f2bf5)。過去の「完了」は当時の検証記録で、現在の認証・接続状態を保証しません。
 
 <a id="schedule-write-scope"></a>
 
-## 2026-09-08合意：予定登録の初回実装（担当Claude・未実装）
+## 2026-09-08合意：予定登録の初回実装（担当Claude・2026-09-08 実装済み）
+
+**実装結果(2026-09-08 22:51 JST、GAS v52 `release: 2026-09-08-mcp-writes`、stepwise-mcp Worker Version ec4f2bf5)**: `offer_lessons` / `add_teacher_off` / `add_student_unavailable` / `add_student_wishes` の4ツールと GAS op `mcpOfferLessons` / `mcpAddTeacherOff` / `mcpAddStudentNg` / `mcpAddStudentWishes`。方式は「明確な依頼 → サーバー側で項目ごとに業務検証 → 可能な分だけ登録 → 項目別の結果を返す」。`confirm_token` は採用せず、`dry_run` を任意の下見手段として用意。再送の安全性は生徒×日時の自然キー(既存の案内/確定・NG・先生の休み・同一内容の希望は登録済み扱い)で担保し、処理IDのジャーナルは持たない。書き込み範囲は Script Properties `MCP_WRITE_SCOPE`(test/all)。検証は隔離した GAS ハーネス(`test/mcp-writes.test.cjs` 11件: 一括登録・再送・部分失敗・force・定員・請求確定月・先生の休み・NG・希望の要調整/再送/通知抑止・範囲制限)と、本番の health / ping / scope 拒否 / 不在生徒の拒否で確認。本番にテスト生徒が無いため実登録の本番検証は未実施(初回の実利用時に結果を確認する)。
+
 
 目的は、先生が会話やLINEの文章から予定をまとめて登録でき、日程を1件ずつ転記する負担を減らすこと。利用者は以下の3機能すべてを希望し、実装はClaudeが担当すると指定した。Codexは今回この合意の記録のみを担当する。この節を初回実装の要件の正本とし、下記の旧候補表・一律の2段階確認案と異なる点はこちらを優先する。未実装の機能を利用可能と案内しない。
 

@@ -66,11 +66,11 @@
 - **関連**: [月間承認と請求](SYSTEM.md#5-1-月間承認と請求)、[家族アカウントと保護者通知](SYSTEM.md#5-3-家族アカウントと保護者通知)。
 - **追加日**: 2026-09-08
 
-### MCP 段階4以降(更新系ツール)
-- **状態・担当**: 2026-09-08に初回の実装範囲を合意。実装はClaudeが担当。Codexは要件を記録済みで、MCPの実装・公開は今回行っていない。
-- **やること**: 授業案内の一括登録、先生の授業不可時間の登録、生徒の希望・NG日時の代理登録の3機能を実装する。目的は会話・LINEからの一括入力による日程登録の負担軽減。要件・確認を必要とする条件・再送/部分失敗への対応・完了条件は [MCP_DESIGN.mdの最新合意](MCP_DESIGN.md#schedule-write-scope) を正本とする。旧案の一律2段階確認をそのまま必須にしない。
-- **関連**: `stepwise-mcp/src/tools.ts`、`gas/Code.gs` のMCP入口。配置は [MCP_OPERATIONS.md](MCP_OPERATIONS.md#5-ツールを追加変更する手順)。
-- **追加日**: 2026-09-07 / 合意更新: 2026-09-08
+### MCP 登録ツールの本番初回確認と残件
+- **背景**: 2026-09-08 に登録4ツール(案内一括・先生の休み・生徒NG/希望の代理)を GAS v52 / Worker に公開した。本番にテスト生徒が無いため、実登録の本番確認は初回の実利用時に行う。
+- **やること**: 初回利用時に `mcpLog` と管理画面で結果を確認する。次の候補機能は合意してから: 案内の変更・取り下げ(`editOffered` / `deleteSlot`)、宿題の追加(`taskAdd`)、生徒の希望・NG の削除。処理IDのジャーナル(現在は自然キーの重複判定のみ)は必要になったら追加。ChatGPT / Codex 側で新ツールが見えない場合は接続の再読み込み(ChatGPT はプラグインの再読込、Codex は再起動)。
+- **関連**: `stepwise-mcp/src/writeTools.ts`、`src/recurrence.ts`、`gas/Code.gs` の `mcpOfferLessons_` 以下、`test/mcp-writes.test.cjs`。
+- **追加日**: 2026-09-08
 
 ### MCP: Google ログイン化・独自ドメイン
 - **背景**: いまはパスフレーズ方式(GCP の OAuth クライアント設定を避けるため)。将来、保護者や別の先生が使うなら Google アカウントでの本人確認の方が管理しやすい。ドメインは workers.dev のまま。
@@ -153,5 +153,6 @@
 
 ## 済み(記録用)
 
+- 2026-09-08 MCP 登録ツール4本(offer_lessons / add_teacher_off / add_student_unavailable / add_student_wishes)を実装・公開(GAS v52 `2026-09-08-mcp-writes`、Worker Version ec4f2bf5、stepwise-mcp 0.2.0)。日付展開(毎週/隔週/毎月/曜日/期間/除外)、項目別検証と結果、再送安全、`MCP_WRITE_SCOPE`(mcpEnableWrites / mcpRestrictWritesToTest)。ローカル検証 11件+日付展開 5件通過。詳細は MCP_DESIGN.md 合意節と MCP_OPERATIONS.md 2-2節
 - 2026-09-08 Codex の MCP をリモート版(Cloudflare `/mcp`、OAuth)に一本化。`~/.codex/config.toml` を `url` 指定に変更(旧 stdio はコメントアウトで予備)、Worker は `mcpLog` の client 列に OAuth の client_name を記録するよう変更して再配置(Version 91cbe92d)。初回の `codex mcp login stepwise` は先生が実施(MCP_OPERATIONS.md 1章)
 完了した変更の要点・日付・版は [SYSTEM.md 変更履歴](SYSTEM.md#9-変更履歴要点) に集約する。機能固有の検証・設計判断は該当文書に残し、ここに複製しない。

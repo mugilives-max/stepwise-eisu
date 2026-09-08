@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-cleanup' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-mcp-writes' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -2219,7 +2219,10 @@ function kanriSelfTest() {
 // 設計: docs/MCP_DESIGN.md。MCP サーバーは mcpKey(Script Properties の MCP_KEY)を付けて admin action を呼ぶ。
 // 先生のログイントークンとは独立。実行できる op はホワイトリストのみ。すべて mcpLog シートに記録する。
 var MCP_READ_OPS = ['mcpPing', 'mcpStudents', 'mcpSchedule', 'mcpStudent', 'mcpPending', 'mcpBilling', 'mcpTeacherOff', 'mcpWishes'];
-var MCP_WRITE_OPS = []; // 段階4で追加(offer / addOff / delOff / resolveCancel / finishOffered / setDone / taskAdd など)
+// 更新系(2026-09-08 合意の初回範囲): 授業案内の一括登録・先生の授業不可時間・生徒のNG/希望の代理登録。
+// いずれも「項目ごとの結果」を返し、既存データとの重複は登録済み(exists)として扱うので再送しても二重登録・二重通知にならない。
+// 取消・削除・確定・実施記録・請求・生徒/料金/認証の変更は MCP に出さない(docs/MCP_DESIGN.md)。
+var MCP_WRITE_OPS = ['mcpOfferLessons', 'mcpAddTeacherOff', 'mcpAddStudentNg', 'mcpAddStudentWishes'];
 
 function mcpKey_() { return String(PropertiesService.getScriptProperties().getProperty('MCP_KEY') || ''); }
 
@@ -2239,9 +2242,11 @@ function ensureMcpLogSheet_() {
 function mcpLog_(req, res, t0) {
   try {
     // 記録対象を許可リストにする。誤って付加された認証情報も残さない。
-    var p = {}; ['op', 'studentId', 'slotId', 'query', 'from', 'to', 'ym', 'includeInactive'].forEach(function (k) {
+    var p = {}; ['op', 'studentId', 'slotId', 'query', 'from', 'to', 'ym', 'includeInactive', 'dryRun', 'force', 'kind', 'start', 'end', 'min', 'subject', 'deliveryMode'].forEach(function (k) {
       if (typeof req[k] === 'string' || typeof req[k] === 'number' || typeof req[k] === 'boolean') p[k] = req[k];
     });
+    ['items', 'dates'].forEach(function (k) { if (Array.isArray(req[k])) p[k + 'Count'] = req[k].length; });
+    if (res && Array.isArray(res.results)) p.added = res.added || 0;
     sheet_('mcpLog').appendRow([new Date(), String(req.requestId || ''), String(req.client || ''), String(req.op || ''),
       String(req.studentId || req.slotId || ''), JSON.stringify(p).slice(0, 500), res && res.error ? 'error: ' + res.error : 'ok', Date.now() - t0]);
   } catch (e) {}
@@ -2272,7 +2277,7 @@ function mcpEntry_(req) {
 
 function mcpDispatch_(op, req) {
   switch (op) {
-    case 'mcpPing':       return { ok: true, service: 'stepwise-yoyaku', today: todayStr_(), readOps: MCP_READ_OPS, writeOps: MCP_WRITE_OPS };
+    case 'mcpPing':       return { ok: true, service: 'stepwise-yoyaku', today: todayStr_(), readOps: MCP_READ_OPS, writeOps: MCP_WRITE_OPS, writeScope: mcpWriteScope_() };
     case 'mcpStudents':   return mcpStudents_(req);
     case 'mcpSchedule':   return mcpSchedule_(req);
     case 'mcpStudent':    return mcpStudent_(req);
@@ -2280,6 +2285,10 @@ function mcpDispatch_(op, req) {
     case 'mcpBilling':    return mcpBilling_(req);
     case 'mcpTeacherOff': return mcpTeacherOff_(req);
     case 'mcpWishes':     return mcpWishes_(req);
+    case 'mcpOfferLessons':     return mcpOfferLessons_(req);
+    case 'mcpAddTeacherOff':    return mcpAddTeacherOff_(req);
+    case 'mcpAddStudentNg':     return mcpAddStudentNg_(req);
+    case 'mcpAddStudentWishes': return mcpAddStudentWishes_(req);
     default: return { error: 'unknown op' };
   }
 }
@@ -2389,6 +2398,178 @@ function mcpTeacherOff_(req) {
 function mcpWishes_(req) {
   var sid = String(req.studentId || '');
   return { ok: true, wishes: wishesForAdmin_().filter(function (x) { return !sid || x.studentId === sid; }) };
+}
+
+/* ---------- MCP 更新系(2026-09-08 合意の初回範囲) ---------- */
+// 書き込み範囲: Script Properties MCP_WRITE_SCOPE = 'test'(既定。名前が【テスト】で始まる生徒だけ) | 'all'(全生徒・先生の休み)
+function mcpWriteScope_() { return String(PropertiesService.getScriptProperties().getProperty('MCP_WRITE_SCOPE') || 'test') === 'all' ? 'all' : 'test'; }
+// 【エディタから実行】MCP からの登録を全生徒・先生の休みに開放する
+function mcpEnableWrites() { PropertiesService.getScriptProperties().setProperty('MCP_WRITE_SCOPE', 'all'); addLog_('MCP の登録機能を全生徒に開放(mcpEnableWrites)'); Logger.log('MCP_WRITE_SCOPE=all'); }
+// 【エディタから実行】MCP からの登録をテスト生徒だけに戻す(閲覧は影響なし)
+function mcpRestrictWritesToTest() { PropertiesService.getScriptProperties().setProperty('MCP_WRITE_SCOPE', 'test'); addLog_('MCP の登録機能をテスト生徒に限定(mcpRestrictWritesToTest)'); Logger.log('MCP_WRITE_SCOPE=test'); }
+function mcpWriteAllowed_(student) {
+  if (mcpWriteScope_() === 'all') return null;
+  if (student && isTestStudent_(student)) return null;
+  return { error: 'MCP からの登録はいまテスト生徒(名前が【テスト】で始まる生徒)に限定されています。先生が Apps Script エディタで mcpEnableWrites を実行すると全生徒に開放されます', errorCode: 'scope' };
+}
+function mcpValidDate_(d) {
+  d = String(d || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  var p = new Date(d + 'T00:00:00Z');
+  return isFinite(p.getTime()) && p.toISOString().slice(0, 10) === d;
+}
+function mcpItems_(req, max) {
+  var items = req.items;
+  if (!Array.isArray(items) || !items.length || items.length > max) return { error: '登録する項目は 1〜' + max + ' 件で指定してください', errorCode: 'validation' };
+  return { items: items.map(function (x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }) };
+}
+function mcpPick_(item, req, key) { return item[key] === undefined ? req[key] : item[key]; }
+function mcpSummary_(results) {
+  var c = {}; results.forEach(function (r) { c[r.status] = (c[r.status] || 0) + 1; }); return c;
+}
+function mcpModeJa_(m) { return m === 'online' ? 'オンライン' : m === 'in_person' ? '対面' : '形式未設定'; }
+// その日時(終日なら日全体)に重なる案内中・確定の授業。先生の休み/生徒NGの登録時に「影響を受ける授業」として返す
+function mcpAffectedLessons_(date, start, end, studentId, nameOf) {
+  var o = { date: date, start: start || '', end: end || '' };
+  return readRows_('slots').filter(function (s) {
+    return s.date === date && schedulingOccupied_(s) && (!studentId || String(s.studentId) === String(studentId)) && schedulingIntervalValid_(s) && offHits_(o, s.date, s.start, s.min);
+  }).map(function (s) { return { slotId: String(s.id), start: s.start, end: endTime_(s.start, s.min), status: s.status, subject: String(s.subject || ''), student: { id: String(s.studentId), name: nameOf[String(s.studentId)] || '' } }; });
+}
+
+// 授業案内の一括登録。items: [{date, start, min, subject, deliveryMode}](start/min/subject/deliveryMode は req 側の既定値も可)。
+// 画面の案内(schedulingAdminOffer_)と同じ検証(請求確定月・定員・形式・生徒NG・先生の休み)を項目ごとに行い、可能な分だけ登録する。
+// 既存の同じ生徒・同じ日時の案内/確定は exists として登録しない(再送に安全)。dryRun=true なら判定だけ返す。
+function mcpOfferLessons_(req) {
+  var student = findStudent_(req.studentId);
+  if (!student) return schedulingError_('在籍している生徒が見つかりません', 'notFound');
+  var scope = mcpWriteAllowed_(student); if (scope) return scope;
+  var it = mcpItems_(req, 60); if (it.error) return it;
+  var today = todayStr_(), dryRun = !!req.dryRun, force = !!req.force;
+  var existing = readRows_('slots'), blocks = blockedRows_().filter(function (b) { return String(b.studentId) === String(student.id); }), offs = teacherOff_(today, true);
+  var results = [], candidates = [], seen = {};
+  it.items.forEach(function (item, idx) {
+    var mode = schedulingMode_(mcpPick_(item, req, 'deliveryMode') === undefined ? student.deliveryMode : mcpPick_(item, req, 'deliveryMode'));
+    var s = { id: uid_(), date: String(item.date || ''), start: normTime_(mcpPick_(item, req, 'start') || ''), min: Number(mcpPick_(item, req, 'min')), status: 'offered',
+      studentId: String(student.id), done: '', eventId: '', meetUrl: '', subject: String(mcpPick_(item, req, 'subject') || '').trim(), req: '', deliveryMode: mode };
+    var r = { index: idx, date: s.date, start: s.start, min: s.min, subject: s.subject, deliveryMode: mode };
+    var done = function (status, reason, code) { r.status = status; if (reason) r.reason = reason; if (code) r.code = code; results.push(r); };
+    if (!mcpValidDate_(s.date) || !billingSlotValid_(s)) return done('invalid', '日付(YYYY-MM-DD)・開始時刻(HH:MM)・分数(1〜480)・科目(20文字まで)を確認してください', 'validation');
+    if (s.date < today) return done('invalid', '過去の日付には案内できません', 'validation');
+    if (!mode) return done('invalid', '授業形式(対面/オンライン)が生徒にも依頼にも設定されていません', 'deliveryModeRequired');
+    var key = s.date + ' ' + s.start;
+    if (seen[key]) return done('duplicate', '同じ依頼の中に同じ日時があります', 'validation'); seen[key] = 1;
+    var same = existing.filter(function (x) { return String(x.studentId) === String(student.id) && x.date === s.date && x.start === s.start && schedulingOccupied_(x); })[0];
+    if (same) { r.slotId = String(same.id); return done('exists', (same.status === 'booked' ? '確定済み' : '案内済み') + 'の授業がすでにあります(登録しません)', same.status); }
+    var gate = billingMonthUnlocked_(student.id, s.date.slice(0, 7)) || schedulingCapacityError_(s, existing.concat(candidates));
+    if (gate) return done('conflict', gate.error, gate.errorCode);
+    if (!force) {
+      var warn = [];
+      blocks.forEach(function (b) { if (offHits_(b, s.date, s.start, s.min)) warn.push('生徒の授業できない日時(' + (b.start ? b.start + '〜' + b.end : '終日') + (b.note ? '・' + b.note : '') + ')'); });
+      offs.forEach(function (o) { if (offHits_(o, s.date, s.start, s.min)) warn.push('先生の休み(' + (o.start ? o.start + '〜' + o.end : '終日') + (o.note ? '・' + o.note : '') + ')'); });
+      if (warn.length) return done('needsConfirm', warn.join('、') + 'に重なります。それでも案内するなら force=true で再実行してください', 'needsForce');
+    }
+    r.slotId = s.id; r.end = endTime_(s.start, s.min); candidates.push(s);
+    done(dryRun ? 'wouldAdd' : 'added');
+  });
+  var out = { ok: true, dryRun: dryRun, student: { id: String(student.id), name: student.name }, added: dryRun ? 0 : candidates.length, summary: mcpSummary_(results), results: results, notificationStatus: 'none' };
+  if (dryRun || !candidates.length) return out;
+  var sh = sheet_('slots');
+  var values = candidates.map(function (s) { return [s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl, s.subject, s.req, s.deliveryMode].map(lessonSafeCell_); });
+  sh.getRange(sh.getLastRow() + 1, 1, values.length, 12).setValues(values);
+  addLog_('先生が(MCP経由で)' + student.name + 'さんに' + candidates.length + '件案内(' + candidates.map(function (s) { return fmtDateJa_(s.date) + ' ' + s.start; }).join('、') + '・' + mcpModeJa_(candidates[0].deliveryMode) + ')');
+  try {
+    var notice = typeof studentEmailNotifyOffered_ === 'function' ? studentEmailNotifyOffered_(student, 'offered:' + schedulingHash_(candidates.map(function (s) { return s.id; }).sort().join('|')), candidates) : { status: 'skipped' };
+    out.notificationStatus = notice.status; if (notice.warning) out.notificationWarning = notice.warning;
+  } catch (e) { out.notificationStatus = 'uncertain'; out.notificationWarning = '案内は保存しました。通知の送信結果を確認できませんでした'; }
+  return out;
+}
+
+// 先生の授業不可時間の登録。items: [{date, start, end, note}](start/end 空=終日)。既存と同じ登録は exists。影響を受ける案内中・確定の授業も返す(登録は止めない)。
+function mcpAddTeacherOff_(req) {
+  var scope = mcpWriteAllowed_(null); if (scope) return scope;
+  var it = mcpItems_(req, 62); if (it.error) return it;
+  var today = todayStr_(), dryRun = !!req.dryRun, nameOf = mcpNameMap_();
+  var existing = readRows_('teacherOff').map(function (x) { return { date: x.date, start: normTime_(x.start || ''), end: normTime_(x.end || '') }; });
+  var results = [], rows = [], seen = {};
+  it.items.forEach(function (item, idx) {
+    var date = String(item.date || ''), tr = timeRange_({ start: mcpPick_(item, req, 'start'), end: mcpPick_(item, req, 'end') });
+    var note = String(mcpPick_(item, req, 'note') || '').slice(0, 50);
+    var r = { index: idx, date: date, start: tr.start || '', end: tr.end || '', note: note };
+    var done = function (status, reason, code) { r.status = status; if (reason) r.reason = reason; if (code) r.code = code; results.push(r); };
+    if (!mcpValidDate_(date)) return done('invalid', '日付は YYYY-MM-DD で指定してください', 'validation');
+    if (date < today) return done('invalid', '過去の日付は登録しません', 'validation');
+    if (tr.error) return done('invalid', tr.error, 'validation');
+    var key = date + '|' + tr.start + '|' + tr.end;
+    if (seen[key]) return done('duplicate', '同じ依頼の中に同じ日時があります', 'validation'); seen[key] = 1;
+    r.affectedLessons = mcpAffectedLessons_(date, tr.start, tr.end, '', nameOf);
+    if (existing.some(function (x) { return x.date === date && (!x.start || (x.start === tr.start && x.end === tr.end)); })) return done('exists', 'この日時はすでに先生の休みに登録されています');
+    rows.push([uid_(), date, note, tr.start, tr.end]); existing.push({ date: date, start: tr.start, end: tr.end });
+    done(dryRun ? 'wouldAdd' : 'added');
+  });
+  var out = { ok: true, dryRun: dryRun, added: dryRun ? 0 : rows.length, summary: mcpSummary_(results), results: results };
+  if (dryRun || !rows.length) return out;
+  var sh = sheet_('teacherOff');
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, 5).setValues(rows.map(function (row) { return row.map(lessonSafeCell_); }));
+  addLog_('先生が(MCP経由で)先生の休みを' + rows.length + '件登録(' + rows.map(function (row) { return fmtDateJa_(row[1]) + (row[3] ? ' ' + row[3] + '〜' + row[4] : ''); }).join('、') + ')');
+  return out;
+}
+
+// 生徒の授業できない日時の代理登録(LINE などで受けた連絡を先生が登録)。items: [{date, start, end}]、note は共通(例: LINE連絡(9/8))。
+function mcpAddStudentNg_(req) {
+  var student = findStudent_(req.studentId);
+  if (!student) return schedulingError_('在籍している生徒が見つかりません', 'notFound');
+  var scope = mcpWriteAllowed_(student); if (scope) return scope;
+  var it = mcpItems_(req, 62); if (it.error) return it;
+  var today = todayStr_(), dryRun = !!req.dryRun, nameOf = mcpNameMap_();
+  var note = String(req.note || '').slice(0, 50);
+  var existing = blockedRows_().filter(function (b) { return String(b.studentId) === String(student.id); });
+  var results = [], rows = [], seen = {};
+  it.items.forEach(function (item, idx) {
+    var date = String(item.date || ''), tr = timeRange_({ start: mcpPick_(item, req, 'start'), end: mcpPick_(item, req, 'end') });
+    var r = { index: idx, date: date, start: tr.start || '', end: tr.end || '' };
+    var done = function (status, reason, code) { r.status = status; if (reason) r.reason = reason; if (code) r.code = code; results.push(r); };
+    if (!mcpValidDate_(date)) return done('invalid', '日付は YYYY-MM-DD で指定してください', 'validation');
+    if (date < today) return done('invalid', '過去の日付は登録しません', 'validation');
+    if (tr.error) return done('invalid', tr.error, 'validation');
+    var key = date + '|' + tr.start + '|' + tr.end;
+    if (seen[key]) return done('duplicate', '同じ依頼の中に同じ日時があります', 'validation'); seen[key] = 1;
+    r.affectedLessons = mcpAffectedLessons_(date, tr.start, tr.end, student.id, nameOf);
+    if (existing.some(function (b) { return b.date === date && (!b.start || (b.start === tr.start && b.end === tr.end)); })) return done('exists', 'この日時はすでに授業できない日時に登録されています');
+    rows.push([uid_(), String(student.id), date, note, tr.start, tr.end]); existing.push({ date: date, start: tr.start, end: tr.end });
+    done(dryRun ? 'wouldAdd' : 'added');
+  });
+  var out = { ok: true, dryRun: dryRun, student: { id: String(student.id), name: student.name }, added: dryRun ? 0 : rows.length, summary: mcpSummary_(results), results: results };
+  if (dryRun || !rows.length) return out;
+  var sh = sheet_('blocked');
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, 6).setValues(rows.map(function (row) { return row.map(lessonSafeCell_); }));
+  addLog_('先生が(MCP経由で)' + student.name + 'さんの授業できない日時を' + rows.length + '件登録(' + rows.map(function (row) { return fmtDateJa_(row[2]) + (row[4] ? ' ' + row[4] + '〜' + row[5] : ''); }).join('、') + ')' + (note ? '(' + note + ')' : ''));
+  return out;
+}
+
+// 生徒の希望日時の代理登録。生徒ページの「授業の希望」と同じ処理(schedulingWishSave_)を先生の代理として呼ぶ。
+// kind: want(この日時に授業をしたい。start+min)/ ok(この時間帯のどこかで。start〜end)。満員の日も「要調整」として登録される。
+// 同じ内容の希望は再送しても増えない(replayed)。先生自身の登録なので先生宛ての希望メールは送らない(proxy)。
+function mcpAddStudentWishes_(req) {
+  var student = findStudent_(req.studentId);
+  if (!student) return schedulingError_('在籍している生徒が見つかりません', 'notFound');
+  var scope = mcpWriteAllowed_(student); if (scope) return scope;
+  var dates = Array.isArray(req.dates) ? req.dates.map(String) : [];
+  if (!dates.length || dates.length > 20) return schedulingError_('希望日は 1〜20 日で指定してください');
+  var kind = req.kind === 'want' ? 'want' : 'ok';
+  var body = { k: String(student.code || ''), dates: dates, kind: kind, start: String(req.start || ''), note: String(req.note || ''), proxy: true };
+  if (req.deliveryMode !== undefined) body.deliveryMode = req.deliveryMode;
+  if (kind === 'want') body.min = req.min === undefined ? 90 : Number(req.min); else { body.end = String(req.end || ''); if (req.min !== undefined) body.min = Number(req.min); }
+  if (!body.k) return schedulingError_('この生徒の専用リンクが未発行のため代理登録できません(管理画面で発行してください)', 'notFound');
+  var check = schedulingWishAvailability_(body);
+  if (check.error) return check;
+  var out = { ok: true, dryRun: !!req.dryRun, student: { id: String(student.id), name: student.name }, kind: check.kind, start: check.start, end: check.end, min: check.min, deliveryMode: check.deliveryMode,
+    days: check.days.map(function (d) { return { date: d.date, status: d.status, firstStart: d.firstStart || '' }; }) };
+  if (req.dryRun) return out;
+  var saved = schedulingWishSave_(body);
+  if (saved.error) return saved;
+  out.replayed = !!saved.replayed;
+  out.added = saved.replayed ? 0 : out.days.length;
+  return out;
 }
 
 /* ================= 日付ヘルパー ================= */

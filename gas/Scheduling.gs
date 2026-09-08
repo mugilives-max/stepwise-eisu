@@ -70,7 +70,7 @@ function schedulingWishSave_(req) {
   var adjustment=added.some(function(d){return d.status!=='available';});
   var label=added.map(function(d){return fmtDateJa_(d.date)+(d.status==='available'?'':'（要調整）');}).join('、')+' '+check.start+'〜'+check.end+' / '+check.min+'分 / '+(check.deliveryMode==='online'?'オンライン':'対面');
   addLog_(student.name+'さんが授業希望を登録: '+label);
-  if(!isTestStudent_(student))notify_('【授業希望'+(adjustment?'・要調整':'')+'】'+student.name+'さん',student.name+'さんから授業希望が届きました。\n'+label+(note?'\nメモ: '+note:'')+'\n希望は予約確定ではありません。案内時に最新の定員を確認してください。');
+  if(!isTestStudent_(student)&&!req.proxy)notify_('【授業希望'+(adjustment?'・要調整':'')+'】'+student.name+'さん',student.name+'さんから授業希望が届きました。\n'+label+(note?'\nメモ: '+note:'')+'\n希望は予約確定ではありません。案内時に最新の定員を確認してください。');
   return {ok:true,state:studentState_(req.k)};
 }
 function schedulingError_(message,code) { return {error:message,errorCode:code||'validation'}; }
