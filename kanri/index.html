@@ -160,8 +160,8 @@
       .lesson-pair-pane { min-width:0; border-top:5px solid var(--primary); padding-top:8px; }
       .lesson-pair-pane:nth-child(2) { border-top-color:#92712b; }
       .lesson-pair-pane .grid2 { grid-template-columns:1fr; }
-      .lesson-pair-pane .head { position:sticky; top:0; background:var(--bg,#f6f8fb); z-index:2; padding:8px; }
-      @media(max-width:900px) { .lesson-pair-grid { grid-template-columns:1fr; } }
+      .lesson-pair-pane .head { position:sticky; top:64px; background:var(--bg,#f6f8fb); z-index:2; padding:8px; }
+      @media(max-width:900px) { .lesson-pair-grid { grid-template-columns:1fr; } .lesson-pair-pane .head { position:static; } }
     </style>
   </head>
   <body>
