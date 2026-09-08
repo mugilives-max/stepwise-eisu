@@ -150,3 +150,22 @@ test('teacher email status permits explicit retries only for safe queued message
   ui.click('sm-send'); const req = ui.requests.at(-1).body; assert.equal(req.op, 'studentEmailRetryNotification'); assert.equal(req.studentId, 'test-a'); assert.equal(req.notificationId, 'failed-notice');
   assert.equal(ui.confirms(), 0);
 });
+
+test('offered edit survives teacher re-login with its request identity and input intact', async () => {
+  const ui = await editing(); changeLesson(ui); ui.click('se-save'); const original = structuredClone(ui.requests.at(-1).body);
+  ui.requests.at(-1).reply({badAuth:true,error:'ログインし直してください'}); await flush();
+  assert.ok(ui.el('a-email')); assert.equal(ui.beforeUnload(),true);
+  ui.input('a-email','teacher@example.invalid'); ui.input('a-pass','test-password'); ui.click('login');
+  ui.requests.at(-1).reply({ok:true,token:'new-teacher-token'}); await flush();
+  ui.requests.at(-1).reply({data:card({lessons:[offered()]})}); await flush();
+  assert.equal(ui.el('se-subject').value,'化学'); ui.click('se-retry');
+  assert.deepEqual(ui.requests.at(-1).body,{...original,token:'new-teacher-token'});
+});
+
+test('an old-token edit response cannot block recovery after another tab refreshed teacher login', async () => {
+  const ui = await editing(); changeLesson(ui); ui.click('se-save'); const first=ui.requests.at(-1),original=structuredClone(first.body);
+  ui.local.set('sw_admt','new-teacher-token'); ui.click('reload'); ui.requests.at(-1).reply({data:card({lessons:[offered()]})}); await flush();
+  first.reply({badAuth:true,error:'old authentication'}); await flush();
+  assert.equal(ui.local.get('sw_admt'),'new-teacher-token'); assert.equal(ui.el('se-subject').value,'化学'); ui.click('se-retry');
+  assert.deepEqual(ui.requests.at(-1).body,{...original,token:'new-teacher-token'});
+});

@@ -287,6 +287,7 @@
           var r = route(), auth = token(); e.busy = true; e.error = ""; render();
           post(Object.assign({ action: "admin", token: auth, from: "kanri", view: viewOf() }, e.pending)).then(function (res) {
             if (slotEdit !== e || auth !== token()) return; e.busy = false;
+            if (res.badAuth) { e.error = "ログインし直して、同じ変更の結果を確認してください。"; lsDel("sw_admt"); authM = "login"; render(); return; }
             if (res.error) {
               e.error = res.error;
               if (!res.pending && res.errorCode !== "pending" && res.errorCode !== "busy" && !res.retryable) { e.pending = null; e.force = !!res.needForce; }
@@ -1269,7 +1270,10 @@
           else if (r.page === "students" && D) renderStudents();
           else if (r.page === "home" && D) renderHome();
           else renderLoading();
-          if (authM === "ok") app.innerHTML = slotEditHtml() + app.innerHTML;
+          if (authM === "ok") {
+            if (slotEdit && slotEdit.auth !== token() && token()) { slotEdit.auth = token(); slotEdit.busy = false; slotEdit.error = "ログインが更新されました。保持した変更内容を確認してください。"; }
+            app.innerHTML = slotEditHtml() + app.innerHTML;
+          }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
         }
 
