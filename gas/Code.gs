@@ -63,10 +63,12 @@ function doPost(e) {
     ensureSchema_();
     var afterSchema=Date.now();
     var req = JSON.parse(e.postData.contents);
+    Object.defineProperty(req, '_receivedAt', {value:t0, enumerable:false}); // Server entry time, before lock/schema waits; never trust a client timestamp.
     var res;
     if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
     else if (String(req.action || '').indexOf('studentEmail') === 0) res = studentEmailDispatch_(req);
     else switch (req.action) {
+      case 'learningService': res = servicePublic_(req); break;
       case 'accept':  res = accept_(req.slotId, req.k, req.expectedSnapshot); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;
       case 'decline': res = decline_(req.slotId, req.k); break;
@@ -383,25 +385,15 @@ function cancelReq_(req) {
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   var name = student.name;
   if (req.withdraw) {
+    var prior=parseReq_(r.slot.req);
+    if(prior&&prior.id){var receipt=serviceRows_('cancellationRequests').filter(function(x){return x.id===prior.id;})[0];if(receipt){receipt.status='withdrawn';receipt.decidedAt=new Date().toISOString();serviceWrite_('cancellationRequests',receipt);}}
     sheet_('slots').getRange(r.rowIndex, 11).setValue('');
     addLog_(name + 'さんが ' + when + ' の取消依頼を取り下げ');
     if (!isTestStudent_(student)) notify_('【取消依頼の取り下げ】' + name + 'さん', name + 'さんが ' + when + ' の取消依頼を取り下げました。予定どおり行います。');
     return { ok: true, state: studentState_(req.k) };
   }
-  if (hoursUntil_(r.slot.date, r.slot.start) < CANCEL_DEADLINE_H) {
-    return { error: '授業の' + CANCEL_DEADLINE_H + '時間前を過ぎているため、ここからは依頼できません。先生にLINEで連絡してください', refresh: true };
-  }
-  var reason = String(req.reason || '').trim().slice(0, 200);
-  var obj = { kind: 'cancel', reason: reason, at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') };
-  var cell = sheet_('slots').getRange(r.rowIndex, 11);
-  cell.setNumberFormat('@');
-  cell.setValue(JSON.stringify(obj));
-  addLog_(name + 'さんが ' + when + ' の取消を依頼' + (reason ? '(' + reason + ')' : ''));
-  if (!isTestStudent_(student)) notify_('【取消依頼】' + name + 'さん',
-    name + 'さんから ' + when + ' の授業の取消依頼が届きました。\n' +
-    (reason ? '理由: ' + reason + '\n' : '') +
-    '\n管理画面で「取消を承認」または「予定どおり行う」を選んでください。\nhttps://www.stepwise-education.jp/kanri/');
-  return { ok: true, state: studentState_(req.k) };
+  var result=serviceCancelRequest_(Object.assign({},req,{_receivedAt:req._receivedAt,requestId:req.requestId||'legacy-'+schedulingHash_(String(req.slotId)+'|'+String(req.reason))}),{student:student,role:'student',senderId:String(student.id)});
+  return result.error?result:Object.assign(result,{state:studentState_(req.k)});
 }
 
 // 先生が取消依頼に回答(approve: true=取消する / false=予定どおり行う)
@@ -430,6 +422,7 @@ function slotCancellationPending_(slotId){
   })?{error:'先生がこの授業の取消を処理中です。同じ取消操作を再送してください',errorCode:'pending'}:null;
 }
 function slotCancellationNotice_(w){
+  if(typeof serviceCancelDecided_==='function')serviceCancelDecided_(w);
   var before=JSON.parse(w.beforeJson),student=systemStudent_(w.studentId),notice;
   if(!student||!before.studentId)notice={status:'skipped',recorded:true};
   else notice=w.operation==='cancelDeclined'?studentEmailNotifyCancelDeclined_(student,'slot-change:'+w.id,before):studentEmailNotifyCancelled_(student,'slot-change:'+w.id,before);
@@ -1279,6 +1272,7 @@ function admin_(req) {
   if (req.mcpKey !== undefined) return mcpEntry_(req); // MCP(ChatGPT/Codex)からの呼び出し。先生のログインとは別系統
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
   if(['state','kanriStudent','kanriDashboard','studentEmailNotifications'].indexOf(req.op)>=0)slotCancellationRecoverNotices_(req.studentId);
+  if (String(req.op || '').indexOf('service') === 0) return serviceAdmin_(req);
   if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
   if (String(req.op || '').indexOf('studentEmail') === 0) return studentEmailAdmin_(req);
   if (['lessonPairContext','lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
@@ -2006,6 +2000,7 @@ function kanriDashboard_() {
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
   return { today: today, pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
+    contactPendingCount: readRows_('contactMessages').filter(function(m){return m.status==='received'||m.status==='failed';}).length,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
     slots: upcomingAll, blocked: blockedUp, teacherOff: teacherOff_(today, true), allEvents: eventsForAdmin_(0) };

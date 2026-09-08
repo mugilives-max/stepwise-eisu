@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
+new vm.Script(fs.readFileSync('assets/learning-services.js','utf8'),{filename:'assets/learning-services.js'});
 for (const file of [...fs.readdirSync('gas').filter(f=>f.endsWith('.gs')).map(f=>'gas/'+f),...fs.readdirSync('test').filter(f=>/^gas-native-.*\.gs$/.test(f)).map(f=>'test/'+f)]) {
   new vm.Script(fs.readFileSync(file,'utf8'), {filename:file});
 }

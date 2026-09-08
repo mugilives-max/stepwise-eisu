@@ -185,6 +185,7 @@
     </div>
     <div id="toast" role="status" aria-live="polite"></div>
 
+    <script src="../assets/learning-services.js"></script>
     <script>
       (function () {
         "use strict";
@@ -689,7 +690,7 @@
           } else {
             html += '<div class="empty">確定している授業はありません</div>';
           }
-          html += '<div class="note">確定した授業の取消は先生への依頼制です(授業の' + (S.cancelDeadlineH || 24) + '時間前まで)。直前の変更はLINEで直接連絡してください。</div>';
+          html += '<div class="note">取消には理由と先生の承認が必要です。24時間前までは通常申請、それ以降は病気・大幅な電車遅延などの例外申請です。承認までは予定を保持します。受付時刻で期限を判定します。</div>';
           return html;
         }
 
@@ -709,7 +710,7 @@
             html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "cancel") {
             html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span class='small muted'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
-            html += '<input type="text" id="f-creason" maxlength="200" placeholder="理由(任意。例: 学校行事のため)" style="width:100%;margin:6px 0 8px">';
+            html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px"><p>24時間前を過ぎた申請は原則取消不可のため、例外として認められる事情を記入してください。</p>';
             html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "取消を依頼する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "withdraw") {
             html += '<div class="msg">' + when + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
@@ -869,7 +870,7 @@
 
         function cancelControl(s) {
           if (s.req) return '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">依頼を取り下げる</button>';
-          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<span class="small muted">変更・取消はLINEで先生へ</span>';
+          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">例外取消を申請</button>';
           return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取消を依頼</button>';
         }
 
@@ -1217,7 +1218,18 @@
           }
         }
 
-        function render() { renderStudent(); if(wishReview && wishReview.key===myKey()) app.innerHTML=wishReviewHTML(); }
+        function render() {
+          renderStudent(); if(wishReview && wishReview.key===myKey()) app.innerHTML=wishReviewHTML();
+          if(!window.StepwiseServices)return;
+          var page=route(),auth=null;
+          if(!wishReview&&!previewK){
+            if(page==='family'&&F.home&&F.step==='home'&&F.data&&F.studentId)auth={ftoken:familyToken(),studentId:F.studentId};
+            else if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
+            else if(['home','schedule','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
+          }
+          if(!auth){window.StepwiseServices.clear();return;}
+          window.StepwiseServices.mount(app,{key:JSON.stringify(auth),teacher:false,call:function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));}});
+        }
 
         function loadParent(ptoken) {
           var k = myKey();
@@ -1352,10 +1364,12 @@
               b.review = [Object.assign({}, selectedSlot)]; b.rows = b.review; b.results = []; pending = null; batchSend(); break;
             case "askdecline": pending = { kind: "decline", slotId: id }; render(); break;
             case "dodecline": studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "再調整をお願いしました"); break;
-            case "askcancel": pending = { kind: "cancel", slotId: id }; render(); break;
+            case "askcancel": pending = { kind: "cancel", slotId: id, requestId:crypto.randomUUID() }; render(); break;
             case "docancel":
               var reason = val("f-creason");
-              studentAction({ action: "cancelReq", slotId: pending.slotId, k: myKey(), reason: reason }, "先生に取消を依頼しました"); break;
+              if(!reason.trim()){toast('取消の理由を入力してください');return;}
+              pending.reason=reason;
+              studentAction({ action: "cancelReq", slotId: pending.slotId, requestId:pending.requestId, k: myKey(), reason: reason }, "取消未確定・先生の確認待ちです"); break;
             case "askwithdraw": pending = { kind: "withdraw", slotId: id }; render(); break;
             case "dowithdraw": studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました"); break;
             case 'wish-confirm': wishSend(); break;

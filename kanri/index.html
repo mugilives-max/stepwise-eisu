@@ -172,6 +172,7 @@
     <div class="wrap" id="app"><div class="loading"><div class="spinner"></div>読み込んでいます…</div></div>
     <div id="toast" role="status"></div>
 
+    <script src="../assets/learning-services.js"></script>
     <script>
       (function () {
         "use strict";
@@ -581,7 +582,7 @@
             cr.forEach(function (s) {
               html += '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span>';
               html += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + '</a>' + (s.subject ? ' <span class="muted small">' + esc(s.subject) + '</span>' : '') +
-                '<div class="small">' + (s.req && s.req.reason ? '理由: ' + esc(s.req.reason) : '<span class="muted">理由なし</span>') + (s.req && s.req.at ? ' <span class="muted">(' + esc(s.req.at) + ')</span>' : '') + '</div></span>';
+                '<div class="small"><strong>' + (s.req && s.req.requestType === 'exception' ? '期限後の例外申請' : s.req && s.req.requestType === 'normal' ? '24時間前までの通常申請' : '取消依頼') + '</strong> ' + (s.req && s.req.reason ? '理由: ' + esc(s.req.reason) : '<span class="muted">理由なし</span>') + (s.req && s.req.at ? ' <span class="muted">受付: ' + esc(fmtAuthTime(s.req.at)) + '</span>' : '') + '</div></span>';
               html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>取消を承認</button>';
               html += '<button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>予定どおり行う</button></div>';
             });
@@ -1314,6 +1315,16 @@
             app.innerHTML = slotEditHtml() + app.innerHTML;
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
+          if (window.StepwiseServices) {
+            if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && ['overview','progress'].indexOf(r.section || 'overview') >= 0)) {
+              var serviceSid=r.page==='student'?String(cur.id):'',serviceToken=token();
+              window.StepwiseServices.mount(app,{key:serviceToken+'|'+serviceSid,teacher:true,inbox:!serviceSid,pendingCount:D&&D.contactPendingCount||0,studentId:serviceSid,call:function(op,payload){
+                if(token()!==serviceToken)return Promise.reject(new Error('ログインが変更されました'));
+                var ops={list:'serviceList',inbox:'serviceInbox',pdf:'servicePdf',examSave:'serviceExamSave',messageReply:'serviceMessageReply'};
+                return admin(ops[op],Object.assign({studentId:serviceSid},payload));
+              }});
+            } else window.StepwiseServices.clear();
+          }
         }
 
 
