@@ -242,7 +242,7 @@ offer_lesson({ student: "【テスト】サンプル", date: "2026-09-09", start
 <a id="message-consumer-handoff"></a>
 ## 連絡欄の定期処理への引き継ぎ（2026-09-09、Claude担当・未実装）
 
-ローカル側で連絡の受付・返信・状態管理を追加した。[データと画面の正本](SYSTEM.md#local-learning-services)、列定義 `gas/LearningServices.gs` の `SERVICE_COLS_` を参照。`contactMessages` の `id`、`studentId`、`senderRole`、`senderId`、`body`、`category`、`replyTo`、`receivedAt` は受付時の記録。`status`、`reply`、`revision`、`updatedAt` は先生による処理状況。先生用APIのMCPアクセスはまだ許可していない。
+GAS v53・Pagesへ連絡の受付・返信・状態管理を公開した（2026-09-09）。[データと画面の正本](SYSTEM.md#local-learning-services)、列定義 `gas/LearningServices.gs` の `SERVICE_COLS_` を参照。`contactMessages` の `id`、`studentId`、`senderRole`、`senderId`、`body`、`category`、`replyTo`、`receivedAt` は受付時の記録。`status`、`reply`、`revision`、`updatedAt` は先生による処理状況。先生用APIのMCPアクセスはまだ許可していない。
 
 将来の取得・処理APIでは保存済みの送信者と生徒の関係をサーバーで確認する。本文で対象を上書きさせず、非公開の先生メモを利用者向け処理へ渡さない。相対日付と取消期限は原文のサーバー受付時刻で判定する。ブラウザやワーカー指定の時刻を信用する入口を作らない。現行 `cancelRequest` は直接申請用であり、後日のAI処理が同じAPIを呼ぶだけでは元の受付時刻を引き継げない。
 
