@@ -1495,12 +1495,12 @@
             h += '<h2>最新の記録との比較</h2><div class="grid2"><div class="card"><strong>サーバーの最新</strong><div class="note">第' + esc(e.latest.record ? e.latest.record.revision : 0) + '版</div>';
             var latestForm = lessonForm(e.latest.record);
             ["content", "progress", "nextFocus", "teacherNote"].forEach(function (k) { h += '<div class="small muted">' + ({ content: "授業内容", progress: "取り組み", nextFocus: "次回の焦点", teacherNote: "先生だけのメモ" }[k]) + '</div>' + lessonText(latestForm[k]); });
-            h += '<div class="small muted">宿題の下書き</div>' + lessonText(latestForm.homework.map(function (x) { return x.title + " " + x.due; }).join("\n")) + '<div class="small muted">報告下書き</div>' + lessonText(e.latest.draft && e.latest.draft.body) + '</div><div class="card"><strong>手元の入力は下の欄に保持しています</strong><p class="small">差分を確認してから選んでください。手元の入力を使う場合も、選択後に保存ボタンを押すまで更新しません。</p><div class="row">' + lessonAction("rebase", "手元の入力で編集を続ける", blocked, "btn-primary") + lessonAction("adopt", "最新の内容に入れ替える", blocked) + '</div></div></div>';
+            h += '<div class="small muted">宿題</div>' + lessonText(latestForm.homework.map(function (x) { return x.title + " " + x.due; }).join("\n")) + '<div class="small muted">報告下書き</div>' + lessonText(e.latest.draft && e.latest.draft.body) + '</div><div class="card"><strong>手元の入力は下の欄に保持しています</strong><p class="small">差分を確認してから選んでください。手元の入力を使う場合も、選択後に保存ボタンを押すまで更新しません。</p><div class="row">' + lessonAction("rebase", "手元の入力で編集を続ける", blocked, "btn-primary") + lessonAction("adopt", "最新の内容に入れ替える", blocked) + '</div></div></div>';
           }
-          h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題の下書き</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
+          h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
           e.form.homework.forEach(function (x, i) {
             var dis = readonly ? " disabled" : "";
-            h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "下書きから外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
+            h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "記録の宿題から外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
           });
           h += '<div class="row" style="margin-top:12px">' + lessonAction("add", "宿題欄を追加", readonly || e.form.homework.length >= 10) + lessonAction("save", e.busy ? "保存中…" : "保存して生徒・保護者へ公開", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容・取り組み・次回の焦点・宿題を保存時に公開します。先生だけのメモは非公開です。入力はこのタブの間だけ保持します。</p></div>';
           if (r) {
@@ -1518,14 +1518,14 @@
         }
 
         function renderLessonHomework(e) {
-          var labels = { new: "未反映", changed: "変更あり", applied: "反映済み", held: "完了済み・変更を保留", withdrawn: "取り下げ済み", removed: "下書きから除去・公開中" };
+          var labels = { new: "未反映", changed: "変更あり", applied: "反映済み", held: "完了済み・変更を保留", withdrawn: "取り下げ済み", removed: "記録から除去・やることに残存" };
           var c = e.context, blocked = e.busy || !!e.pending || !!c.pending;
           return (c.homeworkState || []).length ? c.homeworkState.map(function (x) {
             var h = '<div class="line"><span class="w"><strong>' + esc(x.title) + '</strong><span class="small muted"> ' + taskDueText(x) + '</span><div><span class="tag ' + (x.status === "held" || x.status === "removed" ? "amber" : "gray") + '">' + esc(labels[x.status] || x.status) + '</span>' + (x.done ? ' <span class="small">完了済み</span>' : "") + '</div></span>';
             if (x.taskId && x.status !== "withdrawn" && !x.withdrawn) h += lessonAction("withdraw", "取り下げ", blocked, "btn-danger", ' data-item="' + esc(x.itemId) + '"');
             if ((x.done || x.status === "withdrawn") && c.record.status !== "void") h += lessonAction("reissue", "新しい宿題として再出題", blocked || e.form.homework.length >= 10 || c.slotChanged || (c.student || {}).active === false, "", ' data-item="' + esc(x.itemId) + '"');
             return h + '</div>';
-          }).join("") : '<div class="empty">宿題の下書きはありません。</div>';
+          }).join("") : '<div class="empty">宿題はありません。</div>';
         }
         function lessonClick(a, btn) {
           var e = lessonEditor(), c = e.context, r = c && c.record;
