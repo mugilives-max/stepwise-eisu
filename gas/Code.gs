@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-operations-family' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-learning-updates' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -63,8 +63,9 @@ function doPost(e) {
     var req = JSON.parse(e.postData.contents);
     var res;
     if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
+    else if (String(req.action || '').indexOf('studentEmail') === 0) res = studentEmailDispatch_(req);
     else switch (req.action) {
-      case 'accept':  res = accept_(req.slotId, req.k); break;
+      case 'accept':  res = accept_(req.slotId, req.k, req.expectedSnapshot); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
@@ -143,7 +144,7 @@ function studentState_(code) {
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
   var tasks = tasksFor_(me.id, 45);
-  return { me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -283,8 +284,8 @@ function findStudentByCode_(code) {
   return null;
 }
 
-function accept_(slotId, code) {
-  if (typeof schedulingAccept_ === 'function') return schedulingAccept_(slotId, code);
+function accept_(slotId, code, expectedSnapshot) {
+  if (typeof schedulingAccept_ === 'function') return schedulingAccept_(slotId, code, expectedSnapshot);
   var student = findStudentByCode_(code);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var r = findSlotRow_(slotId);
@@ -367,11 +368,9 @@ function hoursUntil_(date, start) {
 }
 
 function mailStudent_(student, subject, body) {
-  if (!student || isTestStudent_(student)) return;
-  var email = normEmail_(student.email);
-  if (!email) return;
-  try { MailApp.sendEmail(email, '[ステップワイズ] ' + subject, body); }
-  catch (err) { addLog_('生徒へのメール送信に失敗: ' + err); }
+  // Compatibility name for old editor-only helpers. Business callers must use
+  // the verified-address outbox with a stable event key and public slot fields.
+  return {ok:false,status:'skipped',warning:'生徒への通知は確認済みメールの通知処理から実行してください'};
 }
 
 function cancelReq_(req) {
@@ -381,6 +380,7 @@ function cancelReq_(req) {
   if (!r || r.slot.status !== 'booked' || String(r.slot.studentId) !== String(student.id)) {
     return { error: 'この予定は見つかりません', refresh: true };
   }
+  var pending=typeof schedulingPendingSlotMutation_==='function'?schedulingPendingSlotMutation_(r.slot.id):null;if(pending)return pending;
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   var name = student.name;
   if (req.withdraw) {
@@ -407,26 +407,72 @@ function cancelReq_(req) {
 
 // 先生が取消依頼に回答(approve: true=取消する / false=予定どおり行う)
 function adminResolveCancel_(req) {
-  var r = findSlotRow_(req.slotId);
-  if (!r || r.slot.status !== 'booked') return { error: '予定が見つかりません' };
-  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
-  var student = systemStudent_(r.slot.studentId);
-  var name = student ? student.name : '(不明)';
-  var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
-  if (req.approve === true || String(req.approve) === 'true') {
-    var gate = billingSlotMutable_(r.slot); if (gate) return gate;
-    deleteCalEvent_(r.slot);
-    sheet_('slots').deleteRow(r.rowIndex);
-    addLog_('先生が ' + name + 'さんの ' + when + ' の取消を承認');
-    mailStudent_(student, when + ' の授業は取消になりました',
-      name + 'さん\n\n' + when + ' の授業の取消依頼を承認しました。この授業は行いません。\n次の予定は先生から案内します。\n' + SITE_URL + '?k=' + String(student ? student.code : ''));
-  } else {
-    sheet_('slots').getRange(r.rowIndex, 11).setValue('');
-    addLog_('先生が ' + name + 'さんの ' + when + ' を予定どおり実施に(取消依頼を取り下げ)');
-    mailStudent_(student, when + ' の授業は予定どおり行います',
-      name + 'さん\n\n' + when + ' の授業の取消依頼を確認しましたが、この授業は予定どおり行います。\n事情がある場合は先生にLINEで相談してください。\n' + SITE_URL + '?k=' + String(student ? student.code : ''));
-  }
-  return { ok: true };
+  return slotCancellation_(req,req.approve===true||String(req.approve)==='true'?'resolveCancel':'cancelDeclined');
+}
+
+// A small durable receipt keeps a cancelled slot's original notification scope
+// after its row disappears. Only teacher handlers may resume a mutation. Normal
+// teacher reads may finish notification preparation after the slot change is
+// already durable; they never finish an unperformed calendar/slot mutation.
+var SLOT_CHANGE_NOTICE_COLS_=['id','studentId','slotId','operation','beforeJson','afterJson','status','createdAt','updatedAt'];
+function ensureSlotChangeNotices_(){billingEnsureColumns_(ss_(),'slotChangeNotices',SLOT_CHANGE_NOTICE_COLS_);}
+function slotCancellationSnapshot_(s){return Object.assign(schedulingSnapshot_(s),{status:String(s.status||''),done:String(s.done||''),eventId:String(s.eventId||''),meetUrl:String(s.meetUrl||''),req:String(s.req||'')});}
+function slotCancellationMatches_(a,b){return a===null?b===null:!!b&&JSON.stringify(slotCancellationSnapshot_(a))===JSON.stringify(slotCancellationSnapshot_(b));}
+function slotCancellationWrite_(w){
+  var rows=readRows_('slotChangeNotices'),index=rows.findIndex(function(r){return String(r.id)===String(w.id);}),sh=sheet_('slotChangeNotices');
+  w.updatedAt=new Date().toISOString();
+  sh.getRange(index<0?sh.getLastRow()+1:index+2,1,1,SLOT_CHANGE_NOTICE_COLS_.length).setNumberFormat('@').setValues([SLOT_CHANGE_NOTICE_COLS_.map(function(k){return billingText_(String(w[k]||''));})]);
+}
+function slotCancellationCurrent_(w){var r=findSlotRow_(w.slotId);return r?r.slot:null;}
+function slotCancellationPending_(slotId){
+  return readRows_('slotChangeNotices').some(function(w){
+    if(w.status==='done'||String(w.slotId)!==String(slotId))return false;
+    return slotCancellationMatches_(JSON.parse(w.beforeJson),slotCancellationCurrent_(w));
+  })?{error:'先生がこの授業の取消を処理中です。同じ取消操作を再送してください',errorCode:'pending'}:null;
+}
+function slotCancellationNotice_(w){
+  var before=JSON.parse(w.beforeJson),student=systemStudent_(w.studentId),notice;
+  if(!student||!before.studentId)notice={status:'skipped',recorded:true};
+  else notice=w.operation==='cancelDeclined'?studentEmailNotifyCancelDeclined_(student,'slot-change:'+w.id,before):studentEmailNotifyCancelled_(student,'slot-change:'+w.id,before);
+  var result={ok:true,notificationStatus:notice.status};
+  if(notice.warning)result.notificationWarning=notice.warning;
+  if(notice.recorded){w.status='done';slotCancellationWrite_(w);}
+  else result.notificationWarning='取消の保存は完了しました。生徒へのメール通知の準備を確認できませんでした。画面を更新して再確認してください';
+  return result;
+}
+function slotCancellationRecoverNotices_(studentId){
+  readRows_('slotChangeNotices').filter(function(w){return w.status!=='done'&&(!studentId||String(w.studentId)===String(studentId));}).forEach(function(w){
+    try{if(slotCancellationMatches_(JSON.parse(w.afterJson),slotCancellationCurrent_(w)))slotCancellationNotice_(w);}catch(e){/* Keep the original snapshot and retry on the next teacher read. */}
+  });
+}
+function slotCancellation_(req,operation){
+  try{
+    ensureSlotChangeNotices_();var r=findSlotRow_(req.slotId),current=r?r.slot:null;
+    var history=readRows_('slotChangeNotices').filter(function(w){return String(w.slotId)===String(req.slotId)&&w.operation===operation;}).reverse();
+    var w=history.filter(function(x){return x.status!=='done';})[0]||history.filter(function(x){return slotCancellationMatches_(JSON.parse(x.afterJson),current);})[0];
+    if(w&&req.studentId&&String(req.studentId)!==String(w.studentId))return {error:'対象の生徒が一致しません',errorCode:'conflict'};
+    if(!w){
+      if(!current)return {error:'予定が見つかりません'};
+      if(req.studentId&&String(req.studentId)!==String(current.studentId))return {error:'対象の生徒が一致しません',errorCode:'conflict'};
+      if(operation==='deleteSlot'?current.status==='booked':current.status!=='booked')return {error:operation==='deleteSlot'?'予約が入っている枠です。先に予約を解除してください':'確定した授業が見つかりません'};
+      var pending=typeof schedulingPendingSlotMutation_==='function'?schedulingPendingSlotMutation_(current.id):null;if(pending)return pending;
+      var gate=operation==='cancelDeclined'?null:billingSlotMutable_(current);if(gate)return gate;
+      if(operation==='cancelDeclined'&&!parseReq_(current.req))return {error:'取消依頼が見つかりません'};
+      var before=slotCancellationSnapshot_(current),after=operation==='deleteSlot'||operation==='resolveCancel'?null:Object.assign({},before,operation==='unbook'?{status:'open',studentId:'',done:'',eventId:'',meetUrl:'',req:''}:{req:''});
+      w={id:schedulingHash_(operation+'|'+JSON.stringify(before)),studentId:String(before.studentId),slotId:String(before.id),operation:operation,beforeJson:JSON.stringify(before),afterJson:JSON.stringify(after),status:'pending',createdAt:new Date().toISOString()};
+      slotCancellationWrite_(w);
+    }
+    var original=JSON.parse(w.beforeJson),desired=JSON.parse(w.afterJson);
+    if(!slotCancellationMatches_(desired,current)){
+      if(!slotCancellationMatches_(original,current))return {error:'元の授業が変更されています。取消処理を確認してください',errorCode:'conflict'};
+      var freeze=operation==='cancelDeclined'?null:billingSlotMutable_(current);if(freeze)return freeze;
+      if(current.status==='booked'&&operation!=='cancelDeclined')deleteCalEvent_(current);
+      if(desired===null)sheet_('slots').deleteRow(r.rowIndex);
+      else {r.slot=desired;writeSlotRow_(r);}
+      addLog_('先生が '+studentName_(w.studentId)+'さんの '+original.date+' '+original.start+(operation==='cancelDeclined'?' の取消依頼を取り下げ':' の授業を取消'));
+    }
+    var result=slotCancellationNotice_(w);result.admin=adminState_();return result;
+  }catch(e){return e.billingCode?{error:e.message,errorCode:e.billingCode}:{error:'処理が途中です。同じ取消操作を再送してください',errorCode:'pending'};}
 }
 
 /* ================= 希望日程(生徒→先生) ================= */
@@ -898,7 +944,7 @@ function parentDataForStudent_(student) {
   var upcoming = readRows_('slots').filter(function(s){return String(s.studentId)===String(student.id)&&s.date>=todayStr_()&&(s.status==='offered'||s.status==='booked');})
     .sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);})
     .map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),status:s.status,subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||''),meetUrl:String(s.meetUrl||'')};});
-  return { ok: true, data: { name: d.name, deliveryMode:String(student.deliveryMode||''), upcoming:upcoming, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
+  return { ok: true, data: { name: d.name, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(student.id) : [], deliveryMode:String(student.deliveryMode||''), upcoming:upcoming, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
     billing: {amount:d.billing.amount,mode:d.billing.mode,rate30:d.billing.rate30,monthly:d.billing.monthly,provisional:d.billing.provisional,invoice:d.billing.invoice?{amount:d.billing.invoice.amount,status:d.billing.invoice.status}:null},
     payments: d.payments.map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate, paidDate: p.paidDate, method: p.method, status: p.status }; }),
     grades: d.grades.map(function (g) { return { date: g.date, test: g.test, subject: g.subject, score: g.score, max: g.max, dev: g.dev, rank: g.rank }; }),
@@ -931,9 +977,9 @@ function ensureTasksSheet_() {
 function taskRows_() {
   if (!ss_().getSheetByName('tasks')) return [];
   return readRows_('tasks').filter(function (x) { return !x.withdrawnAt; }).map(function (x) {
-    return { id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), title: String(x.title || ''),
+    return Object.assign({ id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), title: String(x.title || ''),
       due: normDate_(x.due) || '', createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '', createdBy: String(x.createdBy || ''),
-      done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' };
+      done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' }, typeof lessonTaskDueView_ === 'function' ? lessonTaskDueView_(x) : {});
   }).filter(function (x) { return x.id && x.title; });
 }
 function tasksFor_(studentId, sinceDays) {
@@ -941,20 +987,24 @@ function tasksFor_(studentId, sinceDays) {
   return taskRows_().filter(function (t) { return t.studentId === String(studentId) && (!t.done || (t.due || todayStr_()) >= since); })
     .sort(function (a, b) { return (a.due || '9999') < (b.due || '9999') ? -1 : 1; });
 }
-function taskAddCore_(studentId, type, title, due, by) {
+function taskAddCore_(studentId, type, title, due, by, req) {
   type = ['宿題', '持ち物', 'メモ'].indexOf(type) >= 0 ? type : '宿題';
   title = String(title || '').trim().slice(0, 80);
   if (!title) return { error: '内容を入れてください' };
   due = /^\d{4}-\d{2}-\d{2}$/.test(String(due || '')) ? String(due) : '';
-  var sh = sheet_('tasks');
-  sh.appendRow([uid_(), String(studentId), type, title, due, new Date(), by, '']);
+  var fields = null;
+  try { if (typeof lessonTaskAddFields_ === 'function') fields = lessonTaskAddFields_(Object.assign({due:due},req||{}),String(studentId)); }
+  catch (e) { return lessonError_(e); }
+  var sh = sheet_('tasks'), values = [uid_(), String(studentId), type, title, fields ? fields.due : due, new Date(), by, ''];
+  if (fields) values = values.concat(['','','','',fields.dueMode,fields.dueSubject,fields.dueAfter,fields.dueTime]);
+  sh.appendRow(values);
   sh.getRange(sh.getLastRow(), 2).setNumberFormat('@');
   return { ok: true };
 }
 function taskAdd_(req) {
   var student = findStudentByCode_(req.k);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var res = taskAddCore_(student.id, req.type, req.title, req.due, 'student');
+  var res = taskAddCore_(student.id, req.type, req.title, req.due, 'student', req);
   if (res.error) return res;
   return { ok: true, state: studentState_(req.k) };
 }
@@ -964,7 +1014,7 @@ function taskDone_(req) {
   var rows = readRows_('tasks');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(student.id) && !rows[i].withdrawnAt) {
-      sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : '');
+      try { if (typeof lessonSetTaskDone_ === 'function') lessonSetTaskDone_(rows[i],req.done === true || String(req.done) === 'true'); else sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); } catch (e) { return lessonError_(e); }
       return { ok: true, state: studentState_(req.k) };
     }
   }
@@ -988,7 +1038,7 @@ function adminTaskAdd_(req) {
   var id = String(req.studentId || '');
   var st = systemStudent_(id);
   if (!st) return { error: '生徒が見つかりません' };
-  var res = taskAddCore_(id, req.type, req.title, req.due, 'teacher');
+  var res = taskAddCore_(id, req.type, req.title, req.due, 'teacher', req);
   if (res.error) return res;
   addLog_('先生が ' + st.name + 'さんに' + (req.type || '宿題') + 'を登録: ' + String(req.title || '').slice(0, 30));
   return { ok: true };
@@ -1005,7 +1055,7 @@ function adminTaskDel_(req) {
 function adminTaskDone_(req) {
   var rows = readRows_('tasks');
   for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(req.studentId) && !rows[i].withdrawnAt) { sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; }
+    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(req.studentId) && !rows[i].withdrawnAt) { try { if (typeof lessonSetTaskDone_ === 'function') return lessonSetTaskDone_(rows[i],req.done === true || String(req.done) === 'true'); sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; } catch (e) { return lessonError_(e); } }
   }
   return { error: '見つかりません' };
 }
@@ -1297,7 +1347,9 @@ function admin_(req) {
   if (req.op === 'resetConfirm') return adminResetConfirm_(req);
   if (req.mcpKey !== undefined) return mcpEntry_(req); // MCP(ChatGPT/Codex)からの呼び出し。先生のログインとは別系統
   if (!authOk_(req)) return { error: 'ログインし直してください', badAuth: true };
+  if(['state','kanriStudent','kanriDashboard','studentEmailNotifications'].indexOf(req.op)>=0)slotCancellationRecoverNotices_(req.studentId);
   if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
+  if (String(req.op || '').indexOf('studentEmail') === 0) return studentEmailAdmin_(req);
   if (['lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
     case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
@@ -1305,6 +1357,7 @@ function admin_(req) {
     case 'state':       return { ok: true, admin: adminState_() };
     case 'setDeliveryMode': return kanriWrap_(req, schedulingSetDeliveryMode_(req));
     case 'setSlotDeliveryMode': return kanriWrap_(req, schedulingSetSlotDeliveryMode_(req));
+    case 'editOffered': return kanriWrap_(req, schedulingEditOffered_(req), req.studentId);
     case 'parentIssueSetupCode': return adminParentIssueSetupCode_(req);
     case 'offer': {
       var ro = adminOffer_(req);
@@ -1389,6 +1442,7 @@ function adminState_() {
       };
     });
   return {
+    pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [],
     slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(todayStr_(), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
     billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
@@ -1451,48 +1505,17 @@ function adminOffer_(req) {
   return { ok: true, added: added, admin: adminState_() };
 }
 
-// メール登録済みの生徒には案内の連絡を送る(専用リンク付き)
+// Compatibility name only. Raw dates and a stored email are not delivery proof.
 function offerMailToStudent_(student, dates, start, min, subject) {
-  if (isTestStudent_(student)) return;
-  var email = normEmail_(student.email);
-  if (!email) return;
-  try {
-    var link = SITE_URL + '?k=' + String(student.code || '');
-    MailApp.sendEmail(email,
-      '[ステップワイズ] 授業のご案内が届いています',
-      student.name + 'さん\n\n先生から授業のご案内が届いています。' + (subject ? '(' + subject + ')' : '') + '\n\n' +
-      dates.map(function (d) { return '・' + d + ' ' + start + '〜' + endTime_(start, min); }).join('\n') +
-      '\n\n下のあなた専用リンクをひらいて、承認するか、「この日時は難しい」かを選んでください。\n' + link);
-  } catch (err) {
-    addLog_('案内メールの送信に失敗: ' + err);
-  }
+  return {ok:false,status:'skipped',warning:'生徒への案内通知は確認済みメールの通知処理から実行してください'};
 }
 
 function adminDeleteSlot_(req) {
-  var r = findSlotRow_(req.slotId);
-  if (!r) return { error: '枠が見つかりません' };
-  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
-  if (r.slot.status === 'booked') return { error: '予約が入っている枠です。先に予約を解除してください' };
-  var gate = billingSlotMutable_(r.slot); if (gate) return gate;
-  sheet_('slots').deleteRow(r.rowIndex);
-  return { ok: true, admin: adminState_() };
+  return slotCancellation_(req,'deleteSlot');
 }
 
 function adminUnbook_(req) {
-  var r = findSlotRow_(req.slotId);
-  if (!r || r.slot.status !== 'booked') return { error: '予約が見つかりません' };
-  var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
-  var gate = billingSlotMutable_(r.slot); if (gate) return gate;
-  var name = studentName_(r.slot.studentId);
-  deleteCalEvent_(r.slot);
-  r.slot.status = 'open';
-  r.slot.studentId = '';
-  r.slot.done = '';
-  r.slot.eventId = '';
-  r.slot.meetUrl = '';
-  writeSlotRow_(r);
-  addLog_('先生が ' + name + 'さんの ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を解除');
-  return { ok: true, admin: adminState_() };
+  return slotCancellation_(req,'unbook');
 }
 
 function adminToggleDone_(req) {
@@ -1630,6 +1653,7 @@ function adminNewCode_(req) {
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.studentId)) {
       parentInvalidate_(rows[i].id);
+      if (typeof studentEmailInvalidate_ === 'function') studentEmailInvalidate_(rows[i].id, false);
       var cell = sheet_('students').getRange(i + 2, 5);
       cell.setNumberFormat('@');
       cell.setValue(newCode_());
@@ -1667,6 +1691,7 @@ function adminSetEmail_(req) {
   var rows = readRows_('students');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.studentId)) {
+      if (normEmail_(rows[i].email) !== normEmail_(req.email) && typeof studentEmailInvalidate_ === 'function') studentEmailInvalidate_(rows[i].id, true);
       var cell = sheet_('students').getRange(i + 2, 4);
       cell.setNumberFormat('@');
       cell.setValue(normEmail_(req.email));
@@ -1693,6 +1718,7 @@ function adminHideStudent_(req) {
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.studentId)) {
       parentInvalidate_(rows[i].id);
+      if (typeof studentEmailInvalidate_ === 'function') studentEmailInvalidate_(rows[i].id, false);
       sheet_('students').getRange(i + 2, 3).setValue(false);
     }
   }
@@ -1712,25 +1738,18 @@ function createCalEvent_(slot, student) {
   try {
     var start = dateTimeOf_(slot.date, slot.start);
     var end = new Date(start.getTime() + Number(slot.min) * 60000);
-    var opts = {};
-    var email = normEmail_(student.email);
-    if (email) {
-      // 生徒のメールが登録されていればカレンダー招待を自動送信
-      opts.guests = email;
-      opts.sendInvites = true;
-    }
-    var ev = CalendarApp.getDefaultCalendar()
-      .createEvent(CAL_TITLE_PREFIX + student.name + 'さん ' + (slot.subject || '授業'), start, end, opts);
-    ev.addPopupReminder(60);
+    var body={summary:CAL_TITLE_PREFIX+student.name+'さん '+(slot.subject||'授業'),start:{dateTime:start.toISOString(),timeZone:TZ},end:{dateTime:end.toISOString(),timeZone:TZ},reminders:{useDefault:false,overrides:[{method:'popup',minutes:60}]}};
+    var ev=Calendar.Events.insert(body,'primary',{sendUpdates:'none'});
+    var eventId=String(ev.iCalUID||ev.id+'@google.com');
     var meetUrl = '';
     try {
-      meetUrl = addMeet_(ev.getId());
+      if (slot.deliveryMode==='online') meetUrl = addMeet_(eventId);
     } catch (e2) {
-      addLog_('Meet作成に失敗: ' + e2);
+      addLog_('Meet作成に失敗しました。授業の予定を確認してください');
     }
-    return { eventId: ev.getId(), meetUrl: meetUrl };
+    return { eventId: eventId, meetUrl: meetUrl };
   } catch (err) {
-    addLog_('カレンダー登録に失敗: ' + err);
+    addLog_('カレンダー登録に失敗しました。授業の予定を確認してください');
     return { eventId: '', meetUrl: '' };
   }
 }
@@ -1749,7 +1768,7 @@ function addMeet_(calEventId) {
         }
       }
     },
-    'primary', id, { conferenceDataVersion: 1 });
+    'primary', id, { conferenceDataVersion: 1, sendUpdates: 'none' });
   if (res.hangoutLink) return res.hangoutLink;
   var eps = (res.conferenceData && res.conferenceData.entryPoints) || [];
   for (var i = 0; i < eps.length; i++) {
@@ -1774,11 +1793,13 @@ function ensureSubjectHeader_() {
 
 function deleteCalEvent_(slot) {
   if (!slot.eventId) return;
+  var student=systemStudent_(slot.studentId);
+  if (isTestStudent_(student)) return;
   try {
-    var ev = CalendarApp.getDefaultCalendar().getEventById(slot.eventId);
-    if (ev) ev.deleteEvent();
+    Calendar.Events.remove('primary',String(slot.eventId).split('@')[0],{sendUpdates:'none'});
   } catch (err) {
-    addLog_('カレンダー削除に失敗: ' + err);
+    if (/\b404\b|\b410\b|not found|already deleted/i.test(String(err))) return;
+    throw new Error('カレンダーの取消を確認できませんでした。同じ操作で再試行してください');
   }
 }
 
@@ -1818,7 +1839,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk16')) return;
+  if (cache.get('schemaOk17')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1838,10 +1859,12 @@ function ensureSchema_() {
   ensureBlockedSheet_();
   ensureSubjectHeader_();
   ensureLessonSchema_();
+  ensureSlotChangeNotices_();
   ensureBillingSchema_();
   if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
-  cache.put('schemaOk16', '1', 21600);
+  if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
+  cache.put('schemaOk17', '1', 21600);
 }
 
 function readRows_(name) {
@@ -2050,7 +2073,7 @@ function kanriDashboard_() {
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
-  return { today: today, month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired,
+  return { today: today, pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
     slots: upcomingAll, blocked: blockedUp, teacherOff: teacherOff_(today, true), allEvents: eventsForAdmin_(0) };
@@ -2068,7 +2091,7 @@ function kanriSetActive_(req) {
         });
         if (dup) return { error: '同じ名前の生徒がすでに在籍中です' };
       }
-      if (!on) parentInvalidate_(rows[i].id);
+      if (!on) { parentInvalidate_(rows[i].id); if (typeof studentEmailInvalidate_ === 'function') studentEmailInvalidate_(rows[i].id, false); }
       sheet_('students').getRange(i + 2, 3).setValue(on);
       return { ok: true };
     }
@@ -2114,6 +2137,8 @@ function kanriStudent_(studentId) {
   return {
     billing:billingPreview_(id,month), billingMonths:billingMonths,
     id: id, name: sys.name, deliveryMode: String(sys.deliveryMode || ''), email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
+    emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(id) : null,
+    pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_(id) : [],
     parentAuth: parentStatus_(id),
     code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),

@@ -55,7 +55,11 @@ function createBillingHarness(options = {}) {
   return Object.assign(h, {
     seedSlot: slot, seedPlan: plan, seedPayment: payment,
     payments: () => h.rows('入金管理', h.ledger),
-    accept: (slotId, k = 'synthetic-link-a') => h.request({ action: 'accept', slotId, k }),
+    accept: (slotId, k = 'synthetic-link-a') => {
+      const shown = h.rows('slots').find(slot => String(slot.id) === String(slotId));
+      const expectedSnapshot = shown && Object.fromEntries(['id','date','start','min','subject','deliveryMode'].map(key => [key, shown[key]]));
+      return h.request({ action: 'accept', slotId, k, expectedSnapshot });
+    },
     mcp: (op, args = {}) => h.request({ action: 'admin', op, mcpKey: MCP_KEY, ...args })
   });
 }

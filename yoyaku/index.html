@@ -191,7 +191,7 @@
         var API = "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec";
         var app = document.getElementById("app");
         var WD = ["日", "月", "火", "水", "木", "金", "土"];
-        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
+        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "化学": "#087e8b", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
 
         /* ---------- 状態 ---------- */
         var S = null;            // 生徒の状態(サーバーから)
@@ -211,12 +211,12 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function route() { var h = location.hash || "#home"; if (h === "#family" || h.indexOf("#family?") === 0) return "family"; return { "#schedule": "schedule", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function route() { var h = location.hash || "#home"; if (h === "#family" || h.indexOf("#family?") === 0) return "family"; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#schedule": "schedule", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         function renderTabs() {
           if (route() === "family") { tabs.innerHTML = '<a href="#family" class="on">家族の保護者ページ</a>' + (myKey() ? '<a href="#home">生徒ページ</a>' : ''); return; }
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
           var p = route();
-          tabs.innerHTML = [["#home", "home", "ホーム"], ["#schedule", "schedule", "予定"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#parent", "parent", "保護者"]]
+          tabs.innerHTML = [["#home", "home", "ホーム"], ["#schedule", "schedule", "予定"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#parent", "parent", "保護者"], ["#student-email", "student-email", "メール通知"]]
             .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '">' + t[2] + "</a>"; }).join("");
         }
 
@@ -238,6 +238,81 @@
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
         function deliveryLabel(mode) { return mode === "in_person" ? "対面" : mode === "online" ? "オンライン" : "形式は先生に確認"; }
         function deliveryTag(s) { return ' <span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>'; }
+        function slotSnapshot(s) { return { id: String(s.id), date: s.date, start: s.start, min: Number(s.min), subject: s.subject || '', deliveryMode: s.deliveryMode || '' }; }
+        function taskDueText(t) {
+          if (t.dueMode === 'nextLesson') return '次回の' + (t.dueSubject || '同じ科目の') + '授業' + (t.due ? '（' + fmtDY(t.due) + (t.dueStart ? ' ' + t.dueStart : '') + '）まで' : '（予定未定）');
+          return t.due ? fmtDY(t.due) + 'まで' : '期限なし';
+        }
+        var taskDrafts = Object.create(null);
+        function taskDraft() {
+          var k = myKey(), next = S && schedData().next;
+          if (!taskDrafts[k]) taskDrafts[k] = { type:'宿題', title:'', dueMode:'nextLesson', due:next ? next.date : '', dueSubject:next ? next.subject || '' : '', open:false };
+          return taskDrafts[k];
+        }
+        function taskDraftInput(el) {
+          var field = { 'f-ttype':'type', 'f-ttitle':'title', 'f-tdue-mode':'dueMode', 'f-tdue':'due', 'f-tdue-subject':'dueSubject' }[el && el.id];
+          if (!field) return false;
+          var d = taskDraft(); d[field] = el.value; d.open = true; return true;
+        }
+        function renderTaskAdd() {
+          var d = taskDraft(), dis = busy ? ' disabled' : '', subjects = [];
+          ((S.slots || []).concat(S.history || [])).forEach(function (s) { if (s.subject && subjects.indexOf(s.subject) < 0) subjects.push(s.subject); });
+          var h = '<details' + (d.open ? ' open' : '') + ' style="margin-top:8px"><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">自分で追加する</summary><div class="row" style="margin-top:8px"><label>種類 <select id="f-ttype"' + dis + '>' + ['宿題','持ち物','メモ'].map(function (t) { return '<option' + (d.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></label><input type="text" id="f-ttitle" aria-label="宿題・持ち物・メモの内容" placeholder="内容(例: ワークp.12〜15、単語帳を持っていく)" maxlength="80" value="' + esc(d.title) + '" style="flex:1;min-width:180px"' + dis + '></div><div class="row" style="margin-top:8px"><label>期限 <select id="f-tdue-mode"' + dis + '>' + [['nextLesson','次回の同じ科目の授業まで'],['date','日付を指定'],['none','期限なし']].map(function (x) { return '<option value="' + x[0] + '"' + (d.dueMode === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>';
+          if (d.dueMode === 'nextLesson') h += '<label>科目 <input type="text" id="f-tdue-subject" list="task-subjects" maxlength="80" placeholder="例: 英語" value="' + esc(d.dueSubject) + '"' + dis + '></label><datalist id="task-subjects">' + subjects.map(function (s) { return '<option value="' + esc(s) + '"></option>'; }).join('') + '</datalist>';
+          if (d.dueMode === 'date') h += '<label>期限の日付 <input type="date" id="f-tdue" value="' + esc(d.due) + '"' + dis + '></label>';
+          h += '<button class="btn-primary btn-sm" data-action="taskadd"' + dis + '>追加</button></div>';
+          if (d.dueMode === 'nextLesson') h += '<p class="note">選んだ科目の次の確定授業が期限です。まだ決まっていないときは「予定未定」と表示し、授業が決まると期限が入ります。</p>';
+          return h + '<div class="note">先生から出た宿題・持ち物は自動でここに入ります。自分用のメモにも使えます。</div></details>';
+        }
+        function renderPublishedRecords(records) {
+          var list = records || [], h = '<h2>先生からの授業記録</h2>';
+          if (!list.length) return h + '<p class="empty">公開された授業記録はまだありません。</p>';
+          return h + list.map(function (r) { return '<details class="card"><summary>' + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(r.subject) + '</summary><h3>授業内容</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }).join('');
+        }
+
+        var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
+        function studentEmailReadChallenge() {
+          if (location.hash.indexOf('#student-email?') !== 0) return;
+          SE.challenge = new URLSearchParams(location.hash.slice(15)).get('verify') || ''; SE.message = ''; SE.error = ''; SE.busy = false; ++SE.seq;
+          history.replaceState(null, '', location.pathname + '#student-email');
+        }
+        function studentEmailMailMessage(status) {
+          return status === 'suppressed' ? 'テストのためメール送信を省略しました。' : status === 'failed' ? '登録内容は保存しましたが、確認メールを送れませんでした。時間を置いて「確認メールを再送」を押してください。' : status === 'uncertain' ? '確認メールの送信結果を確認できませんでした。まず受信箱を確認してください。届かない場合は、時間を置いて新しい確認メールを申し込めます。' : '確認メールのリンクを開いてください。';
+        }
+        function renderStudentEmail() {
+          var h = '<h1>生徒のメール通知</h1><p class="sub">授業の案内・変更・取消をメールで受け取れます。</p>', dis = SE.busy || previewK ? ' disabled' : '', s = S && S.emailStatus || {};
+          if (previewK) h += '<p class="note">先生のプレビューでは確認のみできます。メールアドレスの登録・変更は生徒専用ページから行ってください。</p>';
+          if (SE.error) h += '<p class="parent-error" role="alert">' + esc(SE.error) + '</p>';
+          if (SE.message) h += '<p class="card" role="status">' + esc(SE.message) + '</p>';
+          if (SE.challenge) { app.innerHTML = h + '<p>このメールアドレスで受信できることを確認します。</p><button class="btn-primary" data-action="se-verify"' + dis + '>メールアドレスを確認する</button> <button class="btn-quiet" data-action="se-back"' + dis + '>登録画面に戻る</button><p class="note">リンクは30分間有効です。期限が切れた場合は、元の生徒専用ページから確認メールを送り直してください。</p>'; return; }
+          if (!S || !S.me) { app.innerHTML = h + '<p>登録・変更は、先生から届いた生徒専用リンクを開いて「メール通知」から行ってください。</p>'; return; }
+          h += '<div class="card"><p>' + (s.verified ? '通知先：' + esc(s.email) + '（確認済み）' : '確認済みの通知先はありません。') + '</p>';
+          if (s.pendingEmail) h += '<p>確認待ち：' + esc(s.pendingEmail) + '</p>' + (!SE.message && ['failed','uncertain','suppressed'].indexOf(s.mailStatus) >= 0 ? '<p role="status">' + studentEmailMailMessage(s.mailStatus) + '</p>' : '') + '<button class="btn-quiet" data-action="se-resend"' + dis + '>確認メールを再送</button>';
+          h += '<form id="student-email-form"><label for="se-email">自分のメールアドレス</label><input type="email" id="se-email" autocomplete="email" maxlength="254" required value="' + esc(SE.email || s.pendingEmail || s.email || '') + '"' + dis + '><p class="note">確認メールのリンクを開くと通知先になります。変更の確認が終わるまでは、現在の確認済みアドレスを使います。</p><button class="btn-primary" type="submit"' + dis + '>確認メールを送る</button></form>';
+          if (s.email || s.pendingEmail) h += SE.removeConfirm ? '<p>メール通知を解除します。</p><button class="btn-quiet" data-action="se-remove"' + dis + '>解除する</button> <button class="btn-quiet" data-action="se-cancel"' + dis + '>やめる</button>' : '<p><button class="btn-quiet" data-action="se-askremove"' + dis + '>通知先を解除する</button></p>';
+          app.innerHTML = h + '</div>';
+        }
+        function studentEmailSend(action) {
+          if (SE.busy || previewK || ['studentEmailVerify','studentEmailRequest','studentEmailResend','studentEmailRemove'].indexOf(action) < 0) return;
+          var k = myKey(), seq = ++SE.seq, payload = action === 'studentEmailVerify' ? {action:action,challenge:SE.challenge} : {action:action,k:k};
+          if (action === 'studentEmailRequest') { SE.email = val('se-email'); payload.email = SE.email; }
+          SE.busy = true; SE.error = ''; SE.message = ''; render();
+          apiPost(payload).then(function (res) {
+            if (seq !== SE.seq || (action !== 'studentEmailVerify' && k !== myKey())) return;
+            SE.busy = false;
+            if (res.error) SE.error = res.error;
+            else {
+              if (res.emailStatus && S) S.emailStatus = res.emailStatus;
+              if (res.verified) SE.challenge = '';
+              if (action === 'studentEmailRemove') SE.email = '';
+              SE.removeConfirm = false;
+              var status = res.mailStatus || res.emailStatus && res.emailStatus.mailStatus;
+              SE.message = res.message || (action === 'studentEmailRemove' ? 'メール通知を解除しました。' : studentEmailMailMessage(status));
+              if (res.verified && myKey()) return loadState().catch(function () { SE.error = '通知先の最新情報を読み込めませんでした。元の生徒専用ページを開き直してください。'; if (route() === 'student-email') render(); });
+            }
+            if (route() === 'student-email') render();
+          }).catch(function () { if (seq !== SE.seq) return; SE.busy = false; SE.error = '結果を確認できませんでした。メールが届いているか確認し、時間を置いて再試行してください。'; if (route() === 'student-email') render(); });
+        }
         function gcalUrl(s) {
           var d = s.date.replace(/-/g, ""), st = s.start.replace(":", ""), en = endTime(s.start, s.min).replace(":", "");
           var u = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("塾の授業" + (s.subject ? "(" + s.subject + ")" : "(ステップワイズ)")) +
@@ -297,9 +372,10 @@
             stateKey = k; S = res; render();
           });
         }
-        function studentAction(body, okMsg) {
+        function studentAction(body, okMsg, onSuccess) {
           if (busy) return;
           if (acceptBatch().pending) { toast("先に一括確定の結果を確認してください"); return; }
+          if (acceptBatch().refreshRequired) { toast('先に最新の案内を再読み込みしてください'); return; }
           var actionKey = myKey();
           busy = true; render();
           apiPost(body).then(function (res) {
@@ -311,7 +387,7 @@
               if (res.refresh) return loadState();
               render(); return;
             }
-            stateKey = actionKey; S = res.state; render();
+            stateKey = actionKey; S = res.state; if (onSuccess) onSuccess(); render();
             if (okMsg) toast(okMsg);
           }).catch(function () { if (actionKey !== myKey()) return; busy = false; toast("通信に失敗しました。電波の良いところでもう一度お試しください"); render(); });
         }
@@ -325,8 +401,8 @@
         function acceptBatch() {
           var k = myKey(), b = acceptBatches[k];
           if (!b) {
-            b = acceptBatches[k] = { selected: Object.create(null), review: null, pending: null, results: [], busy: false, message: "" };
-            try { var saved = JSON.parse(ssGet(batchSessionKey(k)) || 'null'); if (batchValid(saved)) { b.pending = { action: 'acceptMany', k: k, requestId: saved.requestId, slotIds: saved.slotIds }; b.review = saved.slots || []; b.rows = b.review; b.message = '前回の確定処理を確認します。同じ処理を再試行してください。'; } } catch (e) { ssDel(batchSessionKey(k)); }
+            b = acceptBatches[k] = { selected: Object.create(null), review: null, pending: null, results: [], busy: false, refreshRequired: false, message: "" };
+            try { var saved = JSON.parse(ssGet(batchSessionKey(k)) || 'null'); if (batchValid(saved)) { b.pending = { action: 'acceptMany', k: k, requestId: saved.requestId, slotIds: saved.slotIds, expectedSnapshots: saved.slots.map(slotSnapshot) }; b.review = saved.slots || []; b.rows = b.review; b.message = '前回の確定処理を確認します。同じ処理を再試行してください。'; } } catch (e) { ssDel(batchSessionKey(k)); }
           }
           var server = stateKey === k && S && (S.pendingAccepts || []).filter(batchValid)[0];
           if (server && !b.busy) {
@@ -339,16 +415,16 @@
           return b;
         }
         function batchReview() {
-          var b = acceptBatch(); if (b.busy || b.pending || busy) return;
+          var b = acceptBatch(); if (b.busy || b.pending || b.refreshRequired || busy) return;
           var selected = schedData().offers.filter(function (s) { return b.selected[s.id]; });
           if (!selected.length || selected.length > 31) { toast("1〜31件の案内を選んでください"); return; }
           b.review = selected.map(function (s) { return Object.assign({}, s); }); b.rows = b.review; b.results = []; b.message = ""; render();
         }
         function batchSend() {
-          var b = acceptBatch(), k = myKey(); if (b.busy || busy) return;
+          var b = acceptBatch(), k = myKey(); if (b.busy || b.refreshRequired || busy) return;
           if (!b.pending) {
             if (!b.review || !b.review.length) return;
-            b.pending = { action: "acceptMany", k: k, slotIds: b.review.map(function (s) { return s.id; }), requestId: window.crypto.randomUUID() };
+            b.pending = { action: "acceptMany", k: k, slotIds: b.review.map(function (s) { return s.id; }), expectedSnapshots: b.review.map(slotSnapshot), requestId: window.crypto.randomUUID() };
           }
           batchRemember(k, b);
           b.busy = true; b.message = "確定しています…"; render();
@@ -361,12 +437,33 @@
             else if (!res.pending && res.errorCode !== 'pending') { b.pending = null; b.review = null; }
             batchRemember(k, b);
             if (k !== myKey()) return;
+            if (res.refresh && !res.pending && res.errorCode !== 'pending') {
+              b.selected = Object.create(null); b.results = []; pending = null;
+              return batchRefresh(k, b);
+            }
             if (res.state) { ++stateSeq; stateKey = k; S = res.state; }
             render();
           }).catch(function () { b.busy = false; b.message = "通信に失敗しました。確定済みの日時があっても、同じ処理を再試行できます。"; if (k === myKey()) render(); });
         }
+        function batchRefresh(k, b) {
+          if (k !== myKey() || b.pending || b.busy) return;
+          b.refreshRequired = true; b.busy = true; b.message = '案内が更新されたため、最新の予定を読み込んでいます…'; render();
+          var seq = ++stateSeq;
+          return apiGet({ action:'state', k:k }).then(function (res) {
+            b.busy = false;
+            if (k !== myKey() || seq !== stateSeq) return;
+            if (res.error) throw new Error(res.error);
+            b.refreshRequired = false; b.message = '最新の案内を表示しました。日時・科目・形式を確認して、もう一度選んでください。';
+            stateKey = k; S = res; render();
+          }).catch(function () {
+            b.busy = false;
+            if (k !== myKey() || seq !== stateSeq) return;
+            b.message = '最新の案内を読み込めませんでした。再読み込みしてから、日時を選び直してください。'; render();
+          });
+        }
         function renderBatch(b) {
           var h = b.message ? '<p class="parent-error" role="status">' + esc(b.message) + '</p>' : '';
+          if (b.refreshRequired) h += '<button class="btn-primary" data-action="batchrefresh"' + (b.busy ? ' disabled' : '') + '>' + (b.busy ? '読み込み中…' : '最新の案内を再読み込み') + '</button>';
           if (b.review) h += '<div class="card" role="region" aria-label="確定する日時の確認"><strong>次の' + b.review.length + '件を確定します</strong>' + b.review.map(function (s) { return '<p>' + fmtDateW(s.date) + ' ' + esc(s.start) + '〜' + endTime(s.start, s.min) + ' ' + esc(s.subject) + '・' + deliveryLabel(s.deliveryMode) + '</p>'; }).join('') + '<p class="note">月間計画の承認と定員を確認します。カレンダー登録と通知を行い、オンライン授業にはMeetを発行します。</p>' + (b.pending ? '' : '<button class="btn-primary" data-action="batchsend">この日時で確定する</button> <button class="btn-quiet" data-action="batchcancel">選び直す</button>') + '</div>';
           if (b.results.length) h += '<ul>' + b.results.map(function (x) { var s = (b.review || b.rows || []).filter(function (r) { return sameId(r.id, x.slotId); })[0] || (S.slots || []).filter(function (r) { return sameId(r.id, x.slotId); })[0]; return '<li>' + (s ? fmtDateW(s.date) + ' ' + esc(s.start) : '選択した授業') + '：' + ({ booked: '確定済み', pending: '未完了', error: '確認が必要' }[x.status] || '確認中') + (x.error ? '・' + esc(x.error) : '') + '</li>'; }).join('') + '</ul>';
           if (b.pending) h += '<button class="btn-primary" data-action="batchsend"' + (b.busy ? ' disabled' : '') + '>' + (b.busy ? '処理中…' : '同じ処理を再試行') + '</button><p class="note">完了するまでこのタブを閉じないでください。</p>';
@@ -536,12 +633,12 @@
           var offers = D.offers, b = acceptBatch(), html = renderBatch(b);
           if (!offers.length) return html;
           html += '<h2>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
-          html += '<div class="row"><button class="btn-quiet btn-sm" data-action="batchall"' + (b.pending || b.busy ? ' disabled' : '') + '>全件選択（31件まで）</button><button class="btn-quiet btn-sm" data-action="batchclear"' + (b.pending || b.busy ? ' disabled' : '') + '>選択を解除</button></div>';
+          html += '<div class="row"><button class="btn-quiet btn-sm" data-action="batchall"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>全件選択（31件まで）</button><button class="btn-quiet btn-sm" data-action="batchclear"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選択を解除</button></div>';
           offers.forEach(function (s) {
-            html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + deliveryTag(s) + "</span>";
-            html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '">確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
+            html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + deliveryTag(s) + "</span>";
+            html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
           });
-          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから確定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>';
+          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから確定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>';
           return html;
         }
 
@@ -620,6 +717,7 @@
         }
 
         function renderStudent() {
+          if (route() === 'student-email') { renderTabs(); renderStudentEmail(); return; }
           renderTabs();
           if (route() === "family") { renderFamily(); return; }
           if (!S || !S.me) { renderGuard(); return; }
@@ -687,10 +785,10 @@
             if (!open.length) html += '<div class="empty">いま登録されている宿題・持ち物はありません</div>';
             open.forEach(function (t) {
               var over = t.due && t.due < today;
-              html += '<label class="task"><input type="checkbox" data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + esc(t.title) + (t.due ? ' <span class="due' + (over ? " over" : "") + '">' + (t.type === "持ち物" ? fmtDateW(t.due) + 'に持っていく' : fmtDateW(t.due) + 'まで') + (over ? '(期限切れ)' : '') + '</span>' : '') + (t.createdBy === "teacher" ? ' <span class="small muted">先生から</span>' : '') + '</span>' + (t.createdBy === "student" ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '">削除</button>' : '') + '</label>';
+              html += '<label class="task"><input type="checkbox" data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + esc(t.title) + ' <span class="due' + (over ? " over" : "") + '">' + esc(taskDueText(t)) + (over ? '(期限切れ)' : '') + '</span>' + (t.createdBy === "teacher" ? ' <span class="small muted">先生から</span>' : '') + '</span>' + (t.createdBy === "student" ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '">削除</button>' : '') + '</label>';
             });
-            html += '<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">自分で追加する</summary><div class="row" style="margin-top:8px"><select id="f-ttype"><option>宿題</option><option>持ち物</option><option>メモ</option></select><input type="text" id="f-ttitle" placeholder="内容(例: ワークp.12〜15、単語帳を持っていく)" maxlength="80" style="flex:1;min-width:180px"><input type="date" id="f-tdue" value="' + (nextL ? nextL.date : "") + '" min="' + today + '"><button class="btn-primary btn-sm" data-action="taskadd"' + (busy ? " disabled" : "") + '>追加</button></div><div class="note">先生から出た宿題・持ち物は自動でここに入ります。自分用のメモにも使えます。</div></details>';
-            if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
+            html += renderTaskAdd();
+            if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(taskDueText(t)) + '・' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
             html += '</div>';
           })();
 
@@ -827,6 +925,7 @@
 
         function renderHistoryPage() {
           var h = '<h1>' + esc(S.me.name) + 'さんの授業の記録</h1><p class="sub">実施済みの授業(直近120日)</p>';
+          h += renderPublishedRecords(S.lessonRecords);
           var done = (S.history || []).filter(function (x) { return x.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
           var bySub = {}, order = [];
           done.forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = 0; order.push(k); } bySub[k]++; });
@@ -967,6 +1066,7 @@
             });
             html += '<div class="note">承認いただいた月の回数と料金で授業を確定・実施・請求します。回数や料金を変更する場合は、あらためて承認をお願いします。請求済みの金額は履歴に残ります。</div></div>';
           }
+          html += renderPublishedRecords(d.lessonRecords);
           if (!family) html += '<div class="note">テストの結果は「成績」タブで見られます。</div>';
 
           var months = d.months || [];
@@ -1143,6 +1243,7 @@
         }
 
         app.addEventListener("submit", function (ev) {
+          if (ev.target && ev.target.id === 'student-email-form') { ev.preventDefault(); studentEmailSend('studentEmailRequest'); return; }
           if (ev.target && ev.target.id === "family-auth-form") { ev.preventDefault(); familySubmit(); return; }
           if (!ev.target || ev.target.id !== "parent-auth-form") return;
           ev.preventDefault(); submitParentAuth();
@@ -1154,12 +1255,14 @@
           if (!btn || btn.disabled) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
           if (act.indexOf("fa-") === 0) { ev.preventDefault(); familyClick(act, btn); return; }
+          if (act.indexOf('se-') === 0) { ev.preventDefault(); if (act === 'se-askremove') { SE.removeConfirm = true; render(); } else if (act === 'se-cancel') { SE.removeConfirm = false; render(); } else if (act === 'se-back') { ++SE.seq; SE.challenge = ''; SE.error = ''; SE.message = ''; render(); if (myKey() && !S) loadState().catch(function () { toast('元の生徒専用ページを開き直してください'); }); } else studentEmailSend({'se-verify':'studentEmailVerify','se-resend':'studentEmailResend','se-remove':'studentEmailRemove'}[act]); return; }
           switch (act) {
             case "batchall": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); acceptBatch().review = null; schedData().offers.slice(0, 31).forEach(function (s) { acceptBatch().selected[s.id] = true; }); render(); } break;
             case "batchclear": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); render(); } break;
             case "batchreview": batchReview(); break;
             case "batchcancel": if (!acceptBatch().pending) { acceptBatch().review = null; render(); } break;
             case "batchsend": batchSend(); break;
+            case "batchrefresh": batchRefresh(myKey(), acceptBatch()); break;
             case "closebar": pending = null; render(); break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
@@ -1212,7 +1315,7 @@
               break;
             case "askaccept": pending = { kind: "accept", slotId: id }; render(); break;
             case "doaccept":
-              var b = acceptBatch(); if (b.pending || b.busy || busy || !pending) return;
+              var b = acceptBatch(); if (b.pending || b.busy || b.refreshRequired || busy || !pending) return;
               var selectedSlot = (S.slots || []).filter(function (s) { return sameId(s.id, pending.slotId) && s.st === 'offer'; })[0];
               if (!selectedSlot) { toast('最新の案内を確認してください'); return; }
               b.review = [Object.assign({}, selectedSlot)]; b.rows = b.review; b.results = []; pending = null; batchSend(); break;
@@ -1241,9 +1344,12 @@
               studentAction({ action: "eventAdd", k: myKey(), date: ed, dateTo: ed2 || ed, title: et, alsoBlock: eb, kind: fkind }, "先生に共有しました"); break;
             case "delevent": studentAction({ action: "eventDel", k: myKey(), eventId: id }, "予定を取り消しました"); break;
             case "taskadd":
-              var tt = val("f-ttitle"), ty = val("f-ttype"), td = val("f-tdue");
+              var tt = val("f-ttitle"), ty = val("f-ttype"), dm = val("f-tdue-mode"), td = dm === 'date' ? val("f-tdue") : '', ds = dm === 'nextLesson' ? val("f-tdue-subject") : '', taskKey = myKey();
               if (!tt) { toast("内容を入れてください"); return; }
-              studentAction({ action: "taskAdd", k: myKey(), type: ty, title: tt, due: td }, "追加しました"); break;
+              if (['date','nextLesson','none'].indexOf(dm) < 0) { toast('期限の種類を選んでください'); return; }
+              if (dm === 'date' && !td) { toast('期限の日付を入れてください'); return; }
+              if (dm === 'nextLesson' && !ds) { toast('期限にする授業の科目を入れてください'); return; }
+              studentAction({ action: "taskAdd", k: taskKey, type: ty, title: tt, due: td, dueMode: dm, dueSubject: ds }, "追加しました", function () { delete taskDrafts[taskKey]; }); break;
             case "taskdel": studentAction({ action: "taskDel", k: myKey(), taskId: id }, "削除しました"); break;
             case "addblock":
               var bd = val("f-bdate"), bdto = val("f-bdate2"), bn = val("f-bnote"), bst = val("f-bstart"), ben = val("f-bend");
@@ -1285,34 +1391,38 @@
         app.addEventListener("change", function (ev) {
           var el = ev.target;
           if (el && el.id === "fa-child") { familyLoadChild(el.value); return; }
-          if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; } return; }
+          if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
+          if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; } return; }
           if (!el || el.getAttribute("data-action") !== "taskdone") return;
           studentAction({ action: "taskDone", k: myKey(), taskId: el.getAttribute("data-id"), done: el.checked }, el.checked ? "できた! ✓" : "未完了に戻しました");
         });
 
-        app.addEventListener("input", function (ev) { var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) { if (route() === 'family') { F.memos[F.studentId + ':' + ym] = ev.target.value; F.confirm = null; } else parentPlanMemos[myKey() + ":" + ym] = ev.target.value; } if (ev.target && ev.target.id === 'fa-email') F.email = ev.target.value; });
+        app.addEventListener("input", function (ev) { if (taskDraftInput(ev.target)) return; var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) { if (route() === 'family') { F.memos[F.studentId + ':' + ym] = ev.target.value; F.confirm = null; } else parentPlanMemos[myKey() + ":" + ym] = ev.target.value; } if (ev.target && ev.target.id === 'fa-email') F.email = ev.target.value; if (ev.target && ev.target.id === 'se-email') SE.email = ev.target.value; });
 
         /* ---------- 起動 ---------- */
         window.addEventListener("beforeunload", function (ev) { if (Object.keys(acceptBatches).some(function (k) { return !!acceptBatches[k].pending; })) { ev.preventDefault(); ev.returnValue = ""; } });
         ssDel("sw_pt"); // 旧方式の、全生徒で共通だった端末内セッションを破棄する。
         familyReadChallenge();
+        studentEmailReadChallenge();
         try {
           var qs = new URLSearchParams(location.search);
           var qk = qs.get("k"), qp = qs.get("preview");
-          if (qk) { lsSet("sw_k", qk); history.replaceState(null, "", location.pathname); }
-          else if (qp) { if (lsGet("sw_admt")) previewK = qp; history.replaceState(null, "", location.pathname); }
-          else if (qs.toString()) history.replaceState(null, "", location.pathname);
+          if (qk) { lsSet("sw_k", qk); history.replaceState(null, "", location.pathname + location.hash); }
+          else if (qp) { if (lsGet("sw_admt")) previewK = qp; history.replaceState(null, "", location.pathname + location.hash); }
+          else if (qs.toString()) history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
-        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; familyReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && familyToken()) familyLoadHome(); } else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
+        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
         window.addEventListener("storage", function (ev) {
           if (previewK || (ev.key !== "sw_k" && ev.key !== null) || (ev.key !== null && ev.oldValue === ev.newValue)) return;
           // 別タブで専用リンクを切り替えたら、前の生徒の保護者情報をすぐに消す。
           P = null; S = null; G = null; GX = []; parentStep = "pass"; parentNotice = ""; busy = false;
+          ++SE.seq; SE.busy = false; SE.email = ''; SE.removeConfirm = false; SE.message = ''; SE.error = '';
           pending = null; selMode = ""; selDays = {}; tabs.innerHTML = "";
           app.innerHTML = '<div class="loading"><div class="spinner"></div>専用リンクを確認しています…</div>';
           loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。再読み込みしてください。</div>'; });
         });
         if (route() === 'family') { render(); if (!F.challenge && familyToken()) familyLoadHome(); }
+        else if (route() === 'student-email' && SE.challenge) render();
         else loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>'; });
       })();
     </script>

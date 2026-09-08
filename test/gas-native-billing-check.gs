@@ -26,7 +26,7 @@ function stepwiseNativeBillingCheck() {
     timings.push({operation:op,elapsedMS:Date.now()-begin});
     return res;
   }
-  function accept(id){refresh();return accept_(id,studentCode);}
+  function accept(id){refresh();var shown=findSlotRow_(id);return accept_(id,studentCode,shown?schedulingPublicSnapshot_(shown.slot):undefined);}
   function payments(){refresh();return billingInvoiceRows_(studentId);}
   function books(){return {app:app?{id:app.getId(),url:app.getUrl()}:null,ledger:ledger?{id:ledger.getId(),url:ledger.getUrl()}:null};}
   function noFormulas(book,name){return !book.getSheetByName(name).getDataRange().getFormulas().some(function(row){return row.some(Boolean);});}

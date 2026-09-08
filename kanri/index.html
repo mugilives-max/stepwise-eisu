@@ -173,7 +173,8 @@
         var app = document.getElementById("app");
         var nav = document.getElementById("nav");
         var WD = ["日","月","火","水","木","金","土"];
-        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
+        var LESSON_SUBJECTS = ["英語", "数学", "英数", "国語", "理科", "化学", "社会"];
+        var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "化学": "#087e8b", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
         var FALLBACK_COLORS = ["#6b7280", "#4b5563"];
         var D = null;      // ダッシュボード
         var cur = null;    // 表示中の生徒カルテ
@@ -183,6 +184,28 @@
         var editProfile = false;
         var editEmail = false, editFee = false;
         var notificationNotice = "";
+        var studentMail = null;
+
+        function studentMailLoad(notificationId) {
+          if (!cur || (studentMail && studentMail.busy)) return;
+          var s = cur.id, auth = token(), seq = studentMail ? studentMail.seq + 1 : 1;
+          studentMail = { id: s, auth: auth, seq: seq, busy: true, data: null, error: "", confirm: null }; render();
+          admin(notificationId ? "studentEmailRetryNotification" : "studentEmailNotifications", { studentId: s, notificationId: notificationId || "" }).then(function (res) {
+            if (!studentMail || studentMail.seq !== seq || auth !== token() || studentMail.id !== s) return;
+            studentMail.busy = false; studentMail.data = res; if (res.notificationWarning) studentMail.error = res.notificationWarning; render();
+          }).catch(function (er) { if (!studentMail || studentMail.seq !== seq || auth !== token()) return; studentMail.busy = false; studentMail.error = er.message; render(); });
+        }
+        function studentMailHtml(s) {
+          var status = s.emailStatus || {}, m = studentMail && studentMail.id === s.id && studentMail.auth === token() ? studentMail : null;
+          var h = '<p class="small">' + (status.verified ? '受信確認済み：授業の案内・変更・取消を通知します。' : '受信未確認：生徒ページの「メール通知」で本人が登録・確認すると通知が始まります。') + (status.pendingEmail ? ' 確認待ち：' + esc(status.pendingEmail) : '') + '</p><button class="btn-quiet btn-sm" data-action="sm-load"' + (m && m.busy ? ' disabled' : '') + '>生徒メールの送信状況</button>';
+          if (!m) return h; if (m.error) h += '<p role="alert">' + esc(m.error) + '</p>'; if (m.busy) return h + '<p>確認中…</p>';
+          if (m.confirm) h += '<div class="lc-notice">現在の確認済み連絡先 ' + esc((m.data.emailStatus || {}).email || '') + ' へ再送信します。<button class="btn-primary btn-sm" data-action="sm-send">確認して再送信</button> <button class="btn-quiet btn-sm" data-action="sm-cancel">やめる</button></div>';
+          var labels = { sent: '送信済み', pending: '送信待ち', failed: '送信失敗', uncertain: '送信結果不明', suppressed: '送信省略', cancelled: '送信取消' }, kinds = { verify: 'メール受信確認', offered: '授業案内', changed: '授業変更', cancelled: '授業取消', cancelDeclined: '取消依頼への回答' };
+          var items = m.data && m.data.notifications || [];
+          if (!items.length) h += '<p class="note">送信履歴はありません。</p>';
+          items.forEach(function (n) { h += '<div class="line"><span class="w">' + esc(kinds[n.kind] || '授業の連絡') + '・' + esc(fmtAuthTime(n.createdAt)) + '<div class="small">' + esc(labels[n.status] || n.status) + (n.error ? '：' + esc(n.error) : '') + '</div></span>' + (n.retryable ? '<button class="btn-quiet btn-sm" data-action="sm-retry" data-id="' + esc(n.id) + '">再送信を確認</button>' : '') + '</div>'; });
+          return h + '<p class="note">結果不明のメールは重複を避けるため再送信しません。確認メールは生徒ページから再発行できます。</p>';
+        }
 
         function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -196,6 +219,10 @@
         function endTime(start, min) { var p = start.split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
         function today() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+        function taskDueText(t) { if (t.dueMode === "nextLesson") return '次の' + esc(t.dueSubject || '同じ科目') + '授業：' + (t.due ? fmtDY(t.due) + (t.dueStart ? ' ' + esc(t.dueStart) : '') : '予定未定'); return t.due ? fmtDY(t.due) : '期限なし'; }
+        function deadlineOptions(mode) { return [{v:'nextLesson',t:'次の同じ科目の授業'}, {v:'date',t:'日付を指定'}, {v:'none',t:'期限なし'}].map(function (x) { return '<option value="' + x.v + '"' + (mode === x.v ? ' selected' : '') + '>' + x.t + '</option>'; }).join(''); }
+        function taskDeadlineInputs(subject) { return '<label>期限<select id="tk-due-mode">' + deadlineOptions('nextLesson') + '</select></label><label>次回授業の科目<select id="tk-due-subject">' + [''].concat(LESSON_SUBJECTS).map(function (s) { return '<option value="' + esc(s) + '"' + (s === subject ? ' selected' : '') + '>' + esc(s || '選択してください') + '</option>'; }).join('') + '</select></label><label>指定日<input type="date" id="tk-due" disabled></label>'; }
+        document.addEventListener('change', function (ev) { if (ev.target.id !== 'tk-due-mode') return; document.getElementById('tk-due').disabled = ev.target.value !== 'date'; document.getElementById('tk-due-subject').disabled = ev.target.value !== 'nextLesson'; });
         function thisYm() { return today().slice(0, 7); }
         var toastTimer = null;
         function toast(m) { var t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800); }
@@ -217,9 +244,61 @@
         function deliveryOptions(mode) { return '<option value="">選択してください</option>' + ["in_person", "online"].map(function (m) { return '<option value="' + m + '"' + (m === mode ? ' selected' : '') + '>' + deliveryLabel(m) + '</option>'; }).join(""); }
         function slotDelivery(s, sid) {
           var h = '<span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>';
-          if (!s.done && (s.status === "booked" || s.status === "offered")) h += '<details><summary class="small">形式を変更</summary><label for="slot-mode-' + esc(s.id) + '">この回の形式</label><select id="slot-mode-' + esc(s.id) + '">' + deliveryOptions(s.deliveryMode) + '</select><p class="note">確定済みの授業はカレンダーとMeetも更新します。請求済みの月は変更できません。</p><button class="btn-quiet btn-sm" data-action="slotmode" data-id="' + esc(s.id) + '" data-sid="' + esc(sid || s.studentId) + '" data-mode="' + esc(s.deliveryMode || '') + '"' + (busy ? ' disabled' : '') + '>この回の形式を変更する</button></details>';
+          var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(sid || s.studentId) + '" data-snapshot="' + esc(JSON.stringify(slotEditSnapshot(s))) + '"' + (busy ? ' disabled' : '');
+          if (!s.done && s.status === "offered") h += '<button class="btn-quiet btn-sm" data-action="slotedit"' + attrs + '>案内を修正</button>';
+          if (!s.done && s.status === "booked") h += '<button class="btn-quiet btn-sm" data-action="slotmode"' + attrs + '>この回の形式を変更</button>';
           return h;
         }
+
+        var slotEdit = null;
+        function slotEditSnapshot(s) { return { id: String(s.id), date: s.date, start: s.start, min: Number(s.min), subject: s.subject || "", deliveryMode: s.deliveryMode || "" }; }
+        function slotEditPending() { var r = route(), data = r.page === "student" ? cur : isLessons(r) ? A : D; return data && data.pendingEdits || []; }
+        function slotEditPayload(p) { var q = { op: p.op, studentId: p.studentId, slotId: p.slotId, requestId: p.requestId, deliveryMode: p.after.deliveryMode }; if (p.op === "editOffered") Object.assign(q, { expectedSnapshot: p.before, date: p.after.date, start: p.after.start, min: p.after.min, subject: p.after.subject }); else q.expectedMode = p.before.deliveryMode; return q; }
+        function slotEditResume(p) { slotEdit = { auth: token(), op: p.op, studentId: p.studentId, before: p.before, form: Object.assign({}, p.after), pending: slotEditPayload(p), busy: false, error: "" }; render(); }
+        function slotEditOpen(btn, op) {
+          if (slotEdit && (slotEdit.busy || slotEdit.pending)) { toast("前の変更結果を先に確認してください"); return; }
+          var existing = slotEditPending().filter(function (p) { return String(p.slotId) === btn.getAttribute("data-id"); })[0];
+          if (existing) { slotEditResume(existing); return; }
+          var s; try { s = JSON.parse(btn.getAttribute("data-snapshot")); } catch (e) { load(true); return; }
+          slotEdit = { auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: s, form: Object.assign({}, s), pending: null, busy: false, error: "" }; render();
+        }
+        function slotEditHtml() {
+          var h = "", e = slotEdit, pending = slotEditPending();
+          pending.forEach(function (p) { if (e && e.pending && e.pending.requestId === p.requestId) return; h += '<div class="lc-notice">確認が必要な授業変更：' + fmtDY(p.after.date) + ' ' + esc(p.after.start) + ' ' + esc(p.after.subject) + ' <button class="btn-quiet btn-sm" data-action="se-resume" data-request="' + esc(p.requestId) + '">変更の続きを確認</button></div>'; });
+          if (!e || e.auth !== token()) return h;
+          var dis = e.busy || e.pending ? ' disabled' : '', modeOnly = e.op === "setSlotDeliveryMode", f = e.form;
+          h += '<div class="card" role="region" aria-label="授業変更" style="margin:16px 0"><h2>' + (modeOnly ? 'この回の授業形式を変更' : '送信済みの案内を修正') + '</h2><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
+          if (e.error) h += '<p class="lc-notice" role="alert">' + esc(e.error) + '</p>';
+          if (!modeOnly) h += '<div class="row"><label>日付<input type="date" id="se-date" data-slot-edit="date" value="' + esc(f.date) + '"' + dis + '></label><label>開始<input type="time" id="se-start" data-slot-edit="start" value="' + esc(f.start) + '"' + dis + '></label><label>授業時間（分）<input type="number" id="se-min" data-slot-edit="min" min="30" max="240" step="30" value="' + esc(f.min) + '"' + dis + '></label><label>科目<select id="se-subject" data-slot-edit="subject"' + dis + '>' + [""].concat(LESSON_SUBJECTS.indexOf(f.subject) < 0 && f.subject ? [f.subject] : [], LESSON_SUBJECTS).map(function (s) { return '<option value="' + esc(s) + '"' + (s === f.subject ? ' selected' : '') + '>' + esc(s || '選択してください') + '</option>'; }).join('') + '</select></label></div>';
+          h += '<label for="se-mode">授業形式</label><select id="se-mode" data-slot-edit="deliveryMode"' + dis + '>' + deliveryOptions(f.deliveryMode) + '</select><p class="note">確認済みの生徒メールへ変更を通知します。対面は2人まで、オンラインは1人までです。</p>';
+          if (e.pending) h += '<p>変更結果を確認するまで、同じ内容を保持しています。</p><button class="btn-primary" data-action="se-retry"' + (e.busy ? ' disabled' : '') + '>' + (e.busy ? '保存中…' : '同じ内容で結果を確認') + '</button>';
+          else if (e.force) h += '<p class="lc-notice">上記の休み・希望時間との重なりを確認したうえで保存します。</p><button class="btn-primary" data-action="se-force">確認して保存</button> <button class="btn-quiet" data-action="se-edit">入力に戻る</button>';
+          else h += '<button class="btn-primary" data-action="se-save">変更を保存</button>';
+          if (!e.pending && !e.busy) h += ' <button class="btn-quiet" data-action="se-close">閉じる</button>';
+          return h + '</div>';
+        }
+        function slotEditSend(force) {
+          var e = slotEdit; if (!e || e.busy || e.auth !== token()) return;
+          if (!e.pending) {
+            if (!e.form.deliveryMode || (e.op === "editOffered" && (!e.form.date || !e.form.start || !e.form.subject || !Number(e.form.min)))) { e.error = "日時・時間・科目・形式を確認してください。"; render(); return; }
+            e.pending = slotEditPayload({ op: e.op, studentId: e.studentId, slotId: e.before.id, requestId: lessonId(), before: e.before, after: e.form });
+            if (force) e.pending.force = true;
+          }
+          var r = route(), auth = token(); e.busy = true; e.error = ""; render();
+          post(Object.assign({ action: "admin", token: auth, from: "kanri", view: viewOf() }, e.pending)).then(function (res) {
+            if (slotEdit !== e || auth !== token()) return; e.busy = false;
+            if (res.error) {
+              e.error = res.error;
+              if (!res.pending && res.errorCode !== "pending" && res.errorCode !== "busy" && !res.retryable) { e.pending = null; e.force = !!res.needForce; }
+              if (res.errorCode === "conflict") { e.error += " この入力を閉じ、最新の案内から修正し直してください。"; load(true); return; }
+              render(); return;
+            }
+            if (!res.ok) { e.error = "変更結果を確認できませんでした。同じ内容で確認してください。"; render(); return; }
+            slotEdit = null; toast("授業の変更を保存しました"); if (res.notificationWarning) notificationNotice = res.notificationWarning;
+            if (applyResult(res, r)) render(); else load(true);
+          }).catch(function () { if (slotEdit !== e || auth !== token()) return; e.busy = false; e.error = "通信に失敗しました。変更結果が不明なため、同じ内容で確認してください。"; render(); });
+        }
+        document.addEventListener("input", function (ev) { var prop = ev.target.getAttribute("data-slot-edit"); if (prop && slotEdit && !slotEdit.pending && !slotEdit.busy) { slotEdit.form[prop] = prop === "min" ? Number(ev.target.value) : ev.target.value; slotEdit.force = false; } });
 
         function post(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
         function admin(op, extra) {
@@ -287,6 +366,15 @@
           });
           return out;
         }
+        function calendarTimedRows(info, lessonBox) {
+          var rows = [], html = "", group = null, parts = [];
+          (info.toffT || []).forEach(function (o) { rows.push({ start: o.start, order: rows.length, group: null, html: '<span class="cbox to">休 ' + cT(o.start) + '-' + cT(o.end) + '</span>' }); });
+          (info.rows || []).forEach(function (g, i) { g.forEach(function (l) { rows.push({ start: l.start, order: rows.length, group: g.length > 1 ? i : null, html: lessonBox(l) }); }); });
+          rows.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : a.order - b.order; });
+          function flush() { if (parts.length) html += group === null ? parts.join('') : '<span class="cgrp" title="時間が重なる授業">' + parts.join('') + '</span>'; parts = []; }
+          rows.forEach(function (r) { if (r.group !== group || r.group === null) flush(); group = r.group; parts.push(r.html); }); flush();
+          return html;
+        }
         function ngMark(it, b) { if (b.start) (it.ngT = it.ngT || []).push(b); else it.ng++; }
         function ngWhen(b) { return b.start ? ' ' + b.start + '〜' + b.end : ''; }
         function evRange(e) { return e.date === e.dateTo ? fmtD(e.date) : fmtD(e.date) + "〜" + fmtD(e.dateTo); }
@@ -314,7 +402,7 @@
           var h = '<div class="card"><div class="form">';
           if (fixedStudent) h += '<input type="hidden" id="f-student" value="' + esc(fixedStudent.id) + '">';
           else h += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>' + students.map(function (x) { return '<option value="' + esc(x.id) + '"' + (sameId(d.studentId, x.id) ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>';
-          h += '<label for="f-subject">科目（必須）</label><select id="f-subject" required aria-required="true"><option value="">科目を選択</option>' + ["英語", "数学", "英数", "国語", "理科", "社会"].map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
+          h += '<label for="f-subject">科目（必須）</label><select id="f-subject" required aria-required="true"><option value="">科目を選択</option>' + LESSON_SUBJECTS.map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
           h += '<label for="f-delivery">この回の形式</label><select id="f-delivery" required>' + deliveryOptions(d.deliveryMode || student.deliveryMode) + '</select>';
           h += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + (d.date || today) + '">';
           h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" step="300">';
@@ -473,7 +561,7 @@
               html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>取消を承認</button>';
               html += '<button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>予定どおり行う</button></div>';
             });
-            html += '<div class="note">承認するとカレンダーから削除され、生徒にメールで伝わります(メール登録時)。「予定どおり行う」は依頼を取り下げて生徒に伝えます。いずれもLINEでのひと言があると丁寧です。</div></div>';
+            html += '<div class="note">承認するとカレンダーから削除され、生徒にメールで伝わります(メール受信確認済みの場合)。「予定どおり行う」は依頼を取り下げて生徒に伝えます。いずれもLINEでのひと言があると丁寧です。</div></div>';
           }
 
           html += expiredCard(d.expired || [], true);
@@ -734,10 +822,11 @@
           html += '<h2>予約ページの設定</h2><div class="card">';
           html += '<div class="line"><span class="t">専用リンク</span><span class="w small">' + (s.code ? '<span class="muted">' + esc(studentLink(s.code)) + '</span>' : '<span class="muted">未発行</span>') + '</span>' +
             (s.code ? '<button class="btn-ghost btn-sm" data-action="copylink">リンクをコピー</button>' : "") + '<button class="btn-quiet btn-sm" data-action="relink"' + (busy ? " disabled" : "") + '>再発行</button></div>';
+          html += studentMailHtml(s);
           if (editEmail) {
-            html += '<div class="line"><span class="t">通知メール</span><span class="w"><input type="email" id="e-email" value="' + esc(s.email) + '" placeholder="生徒・保護者のメール" style="width:min(100%,260px)"></span><button class="btn-primary btn-sm" data-action="saveemail"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editemail">やめる</button></div>';
+            html += '<div class="line"><span class="t">通知メール</span><span class="w"><input type="email" id="e-email" value="' + esc(s.email) + '" placeholder="生徒本人のメール" style="width:min(100%,260px)"></span><button class="btn-primary btn-sm" data-action="saveemail"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editemail">やめる</button></div>';
           } else {
-            html += '<div class="line"><span class="t">通知メール</span><span class="w">' + (s.email ? esc(s.email) : '<span class="muted">未登録(案内・確定の通知メールなし)</span>') + '</span><button class="btn-quiet btn-sm" data-action="editemail">変更</button></div>';
+            html += '<div class="line"><span class="t">通知メール</span><span class="w">' + (s.email ? esc(s.email) : '<span class="muted">未登録（生徒への通知メールなし）</span>') + '</span><button class="btn-quiet btn-sm" data-action="editemail">変更</button></div>';
           }
           if (editFee) {
             html += '<div class="line"><span class="t">料金</span><span class="w row"><label class="small muted">30分あたり</label><input type="number" id="e-rate" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円 <label class="small muted">月謝(任意)</label><input type="number" id="e-monthly" value="' + (s.monthly || "") + '" min="0" step="500" placeholder="0" style="width:100px">円</span><button class="btn-primary btn-sm" data-action="savefee"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editfee">やめる</button></div>';
@@ -779,7 +868,7 @@
           html += '<details class="add"><summary>成績を記録</summary><div class="card"><div class="form">' +
             '<label>日付</label><input type="date" id="g-date" value="' + today() + '">' +
             '<label>テスト名</label><input type="text" id="g-test" placeholder="定期テスト・北辰・模試など">' +
-            '<label>科目</label><select id="g-subject">' + ["英語", "数学", "国語", "理科", "社会", "その他"].map(function (o) { return "<option>" + o + "</option>"; }).join("") + '</select>' +
+            '<label>科目</label><select id="g-subject">' + ["英語", "数学", "国語", "理科", "化学", "社会", "その他"].map(function (o) { return "<option>" + o + "</option>"; }).join("") + '</select>' +
             '<label>点数</label><div class="row"><input type="number" id="g-score" style="width:90px"> <span class="muted">/</span> <input type="number" id="g-max" placeholder="満点" value="100" style="width:90px"></div>' +
             '<label>偏差値</label><input type="number" id="g-dev" step="0.1" style="width:110px" placeholder="任意">' +
             '<label>順位</label><input type="text" id="g-rank" style="width:140px" placeholder="例: 12/180">' +
@@ -864,11 +953,11 @@
           html += '<h2>宿題・持ち物 <span class="cnt">未完了 ' + tOpen.length + '件</span></h2><div class="card">';
           if (!tOpen.length) html += '<div class="empty">未完了の宿題・持ち物はありません</div>';
           tOpen.concat(tDone.slice(0, 10)).forEach(function (t) {
-            html += '<div class="line' + (t.done ? ' muted' : '') + '"><span class="t">' + (t.due ? fmtD(t.due) : '<span class="muted">期限なし</span>') + '</span><span class="w"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + (t.done ? '<s>' + esc(t.title) + '</s> <span class="small muted">完了 ' + esc(t.doneAt) + '</span>' : esc(t.title)) + (t.createdBy === "student" ? ' <span class="small muted">(生徒が登録)</span>' : '') + '</span>';
+            html += '<div class="line' + (t.done ? ' muted' : '') + '"><span class="t">' + taskDueText(t) + '</span><span class="w"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + (t.done ? '<s>' + esc(t.title) + '</s> <span class="small muted">完了 ' + esc(t.doneAt) + '</span>' : esc(t.title)) + (t.createdBy === "student" ? ' <span class="small muted">(生徒が登録)</span>' : '') + '</span>';
             html += '<button class="btn-quiet btn-sm" data-action="taskdone" data-id="' + esc(t.id) + '" data-done="' + (t.done ? "0" : "1") + '">' + (t.done ? "未完了に戻す" : "完了にする") + '</button><button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" data-source="' + esc(t.sourceRecordId || '') + '">' + (t.sourceRecordId ? '取り下げ' : '削除') + '</button></div>';
           });
-          html += '<div class="row" style="margin-top:10px"><select id="tk-type"><option>宿題</option><option>持ち物</option><option>メモ</option></select><input type="text" id="tk-title" placeholder="内容(例: ワークp.12〜15 / 次回は英単語帳を持参)" maxlength="80" style="flex:1;min-width:200px"><input type="date" id="tk-due" value="' + (nextLesson ? nextLesson.date : "") + '"><button class="btn-primary btn-sm" data-action="taskadd"' + (busy ? " disabled" : "") + '>出す</button></div>';
-          html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。期限は次の授業日が初期値です。</div></div>';
+          html += '<div class="row" style="margin-top:10px"><select id="tk-type"><option>宿題</option><option>持ち物</option><option>メモ</option></select><input type="text" id="tk-title" placeholder="内容(例: ワークp.12〜15 / 次回は英単語帳を持参)" maxlength="80" style="flex:1;min-width:200px">' + taskDeadlineInputs(nextLesson ? nextLesson.subject : '') + '<button class="btn-primary btn-sm" data-action="taskadd"' + (busy ? " disabled" : "") + '>出す</button></div>';
+          html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。次回授業を選ぶと、指定科目の確定済み授業に期限が連動します。予定がなければ「予定未定」と表示します。</div></div>';
 
           html += renderBilling(s);
 
@@ -916,10 +1005,9 @@
             if (it && it.toff) cls += " toff";
             var marks = "";
             if (boxes) {
-              // Box 表示(ホーム): 先生の休み → 授業(時刻順。時間が重なる授業は左の太線でまとめる) → 生徒の希望 → 共有予定。全件を直列に並べ、省略しない
+              // 終日休みを先頭に置き、時間指定の休みと授業を開始時刻順に並べる。
               if (it && it.toff) marks += '<span class="cbox to">休み(終日)</span>';
-              if (it && it.toffT) it.toffT.forEach(function (o) { marks += '<span class="cbox to">休 ' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
-              if (it && it.rows) it.rows.forEach(function (g) { var inner = g.map(lessonBox).join(""); marks += g.length > 1 ? '<span class="cgrp" title="時間が重なる授業">' + inner + '</span>' : inner; });
+              if (it) marks += calendarTimedRows(it, lessonBox);
               if (it && it.wishL) it.wishL.forEach(function (x) { marks += '<span class="cbox ws" title="' + esc(x.studentName + ' ' + (x.kind === "want" ? 'この日時を希望' : 'この時間帯のどこかで') + ' ' + x.start + '〜' + x.end + (x.note ? ' ' + x.note : '')) + '">希 ' + esc(shortName(x.studentName)) + ' ' + cT(x.start) + '-' + cT(x.end) + '</span>'; });
               if (it && it.evL) it.evL.forEach(function (e) { marks += '<span class="cbox ev" title="' + esc(e.studentName + ' ' + e.title) + '">' + esc(shortName(e.studentName)) + ' ' + esc(e.title) + '</span>'; });
               if (it && !opts.noNg && (it.ng || it.ngT)) marks += '<span class="cbox ng">× 授業できない生徒 ' + ((it.ng || 0) + (it.ngT ? it.ngT.length : 0)) + '人</span>';
@@ -1181,6 +1269,7 @@
           else if (r.page === "students" && D) renderStudents();
           else if (r.page === "home" && D) renderHome();
           else renderLoading();
+          if (authM === "ok") app.innerHTML = slotEditHtml() + app.innerHTML;
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
         }
 
@@ -1280,7 +1369,7 @@
         function lessonId() { return "lc-" + (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)); }
         function lessonForm(record) {
           record = record || {};
-          return { content: record.content || "", progress: record.progress || "", nextFocus: record.nextFocus || "", teacherNote: record.teacherNote || "", homework: (record.homework || []).map(function (x) { return { itemId: x.itemId, title: x.title || "", due: x.due || "", type: x.type || "宿題" }; }) };
+          return { content: record.content || "", progress: record.progress || "", nextFocus: record.nextFocus || "", teacherNote: record.teacherNote || "", homework: (record.homework || []).map(function (x) { return { itemId: x.itemId, title: x.title || "", due: x.dueMode === "nextLesson" ? "" : x.due || "", dueMode: x.dueMode || (x.due ? "date" : "none"), type: x.type || "宿題" }; }) };
         }
         function lessonAdopt(e, c, mode) {
           e.context = c;
@@ -1371,7 +1460,7 @@
         function renderLesson() {
           renderNav();
           var e = lessonEditor(), c = e.context, r = c && c.record;
-          var h = '<div class="head"><div><h1>授業記録</h1><p class="sub">先生専用・報告は未公開</p></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
+          var h = '<div class="head"><div><h1>授業記録</h1><p class="sub">保存した授業記録を生徒・保護者と共有</p></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
           if (e.error) h += '<div class="card lc-notice" role="alert">' + esc(e.error) + '</div>';
           if (e.message) h += '<p role="status">' + esc(e.message) + '</p>';
           if (e.pending) h += '<div class="card lc-notice">保存結果の確認が必要です。' + lessonAction("retry", e.busy ? "確認中…" : "同じ処理を再試行", e.busy, "btn-primary") + '</div>';
@@ -1380,7 +1469,7 @@
           if (!c.slot) { app.innerHTML = h + '<div class="card" style="margin-top:14px">記録できる確定授業はまだありません。授業を確定してから開いてください。</div>'; return; }
           var slot = r ? Object.assign({}, c.slot, { date: r.date || c.slot.date, start: r.start || c.slot.start, min: r.min || c.slot.min, subject: r.subject || c.slot.subject }) : c.slot;
           h += '<div class="card" style="margin-top:14px"><strong>' + esc((c.student || {}).name) + '</strong>　' + fmtDY(slot.date) + ' ' + esc(slot.start) + '　' + esc(slot.subject || "科目なし") + '　' + esc(slot.min || "") + '分 <span class="tag ' + (slot.done ? "gray" : "blue") + '">' + (slot.done ? "実施済み" : "未実施") + '</span>';
-          h += '<div class="note">' + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : "授業記録は未入力です") + '</div></div>';
+          h += '<div class="note">' + (r && r.status !== 'void' ? (r.publishedRevision ? '生徒・保護者へ公開済み（第' + esc(r.publishedRevision) + '版）・' : '未公開（次の保存で公開）・') : '') + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : "授業記録は未入力です") + '</div></div>';
           if (c.slotChanged) h += '<p class="lc-notice">元の予約が取消／変更されています。内容の保存はできません。宿題の取り下げは別に行えます。</p>';
           if (c.student && c.student.active === false) h += '<p class="lc-notice">停止中の生徒です。既存記録は訂正できますが、新しい宿題は反映できません。</p>';
           if (c.pending && !e.pending) h += '<div class="card lc-notice">前の処理が完了していません。' + lessonAction("resume", e.busy ? "再開中…" : "前の処理を再開", e.busy, "btn-primary") + '</div>';
@@ -1396,7 +1485,7 @@
           if ((c.otherPrevious || []).length) h += '<details class="add"><summary>他科目の記録を確認</summary>' + c.otherPrevious.map(function (x) { return '<p><a href="' + esc(lessonHref(e.studentId, x.slotId, x.id)) + '">' + fmtDY(x.date) + ' ' + esc(x.subject) + '</a></p>'; }).join("") + '</details>';
           h += '</div><div class="card">';
           var openTasks = (c.openTasks || []).filter(function (x) { return !x.done && !x.withdrawnAt && !x.withdrawn; });
-          h += openTasks.length ? openTasks.map(function (x) { return '<div class="line"><span class="w">' + esc(x.title) + '</span><span class="small ' + (x.due && x.due < today() ? "lc-overdue" : "muted") + '">' + (x.due ? fmtDY(x.due) + (x.due < today() ? "・期限超過" : "") : "期限なし") + '</span></div>'; }).join("") : '<div class="empty">未完了の宿題はありません。</div>';
+          h += openTasks.length ? openTasks.map(function (x) { return '<div class="line"><span class="w">' + esc(x.title) + '</span><span class="small ' + (x.due && x.due < today() ? "lc-overdue" : "muted") + '">' + (taskDueText(x) + (x.due && x.due < today() ? "・期限超過" : "")) + '</span></div>'; }).join("") : '<div class="empty">未完了の宿題はありません。</div>';
           h += '</div></div>';
           if (e.latest) {
             h += '<h2>最新の記録との比較</h2><div class="grid2"><div class="card"><strong>サーバーの最新</strong><div class="note">第' + esc(e.latest.record ? e.latest.record.revision : 0) + '版</div>';
@@ -1404,12 +1493,12 @@
             ["content", "progress", "nextFocus", "teacherNote"].forEach(function (k) { h += '<div class="small muted">' + ({ content: "授業内容", progress: "取り組み", nextFocus: "次回の焦点", teacherNote: "先生だけのメモ" }[k]) + '</div>' + lessonText(latestForm[k]); });
             h += '<div class="small muted">宿題の下書き</div>' + lessonText(latestForm.homework.map(function (x) { return x.title + " " + x.due; }).join("\n")) + '<div class="small muted">報告下書き</div>' + lessonText(e.latest.draft && e.latest.draft.body) + '</div><div class="card"><strong>手元の入力は下の欄に保持しています</strong><p class="small">差分を確認してから選んでください。手元の入力を使う場合も、選択後に保存ボタンを押すまで更新しません。</p><div class="row">' + lessonAction("rebase", "手元の入力で編集を続ける", blocked, "btn-primary") + lessonAction("adopt", "最新の内容に入れ替える", blocked) + '</div></div></div>';
           }
-          h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題の下書き</h3><div class="note">ここに保存しただけでは生徒に届きません。公開済みの宿題は欄を消しても残ります。</div>';
+          h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題の下書き</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
           e.form.homework.forEach(function (x, i) {
             var dis = readonly ? " disabled" : "";
-            h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-' + i + '">期限</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + dis + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "下書きから外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
+            h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "下書きから外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
           });
-          h += '<div class="row" style="margin-top:12px">' + lessonAction("add", "宿題欄を追加", readonly || e.form.homework.length >= 10) + lessonAction("save", e.busy ? "保存中…" : "記録と宿題下書きを保存", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容と先生メモは先生だけが閲覧できます。入力はこのタブの間だけ保持します。ページを閉じる前に保存してください。</p></div>';
+          h += '<div class="row" style="margin-top:12px">' + lessonAction("add", "宿題欄を追加", readonly || e.form.homework.length >= 10) + lessonAction("save", e.busy ? "保存中…" : "保存して生徒・保護者へ公開", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容・取り組み・次回の焦点・宿題を保存時に公開します。先生だけのメモは非公開です。入力はこのタブの間だけ保持します。</p></div>';
           if (r) {
             h += '<h2>保存済み宿題を生徒へ反映</h2><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
             h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
@@ -1418,7 +1507,7 @@
             h += '</div><h2>保護者への報告下書き <span class="tag amber">未公開</span></h2><div class="card"><p class="small">先生画面内だけの下書きです。保存しても送信・公開されません。先生だけのメモは定型文に含めません。</p>';
             if (c.draft && c.draft.sourceRevision !== r.revision) h += '<p class="lc-notice">記録更新あり。下書きの元は第' + esc(c.draft.sourceRevision) + '版です。</p>';
             h += '<div class="row">' + lessonAction("generate", "保存済み記録から定型文を作る", readonly || e.dirty) + '</div><label class="lc-label" for="lc-body">報告本文（4,000文字まで）</label><textarea id="lc-body" data-lc-body rows="8" maxlength="4000"' + (readonly ? " disabled" : "") + '>' + esc(e.body) + '</textarea><div class="row" style="margin-top:8px">' + lessonAction("report", "下書きを保存", readonly || e.conflict, "btn-primary") + '<span class="small muted">' + (c.draft ? '下書き第' + esc(c.draft.revision) + '版・' + esc(fmtAuthTime(c.draft.updatedAt)) : "まだ保存されていません") + '</span></div></div>';
-            if (r.status !== "void") h += '<details class="add"><summary>記録の無効化</summary><div class="card"><p class="small">本文の履歴を残して無効化します。公開済み宿題、予約、実施状態、請求は変わりません。</p><label for="lc-void">無効化する理由</label><input id="lc-void" data-lc-reason value="' + esc(e.voidReason || "") + '" maxlength="200">' + lessonAction("void", "この記録を無効化", blocked || e.dirty || e.draftDirty, "btn-danger") + '</div></details>';
+            if (r.status !== "void") h += '<details class="add"><summary>記録の無効化</summary><div class="card"><p class="small">本文の履歴を残して授業記録の公開を取り消します。「やること」に反映した宿題、予約、実施状態、請求は変わりません。</p><label for="lc-void">無効化する理由</label><input id="lc-void" data-lc-reason value="' + esc(e.voidReason || "") + '" maxlength="200">' + lessonAction("void", "この記録を無効化", blocked || e.dirty || e.draftDirty, "btn-danger") + '</div></details>';
             else h += '<p>' + lessonAction("new", "この授業の記録を新しく作る", blocked || c.slotChanged, "btn-primary") + '</p>';
           }
           app.innerHTML = h;
@@ -1428,7 +1517,7 @@
           var labels = { new: "未反映", changed: "変更あり", applied: "反映済み", held: "完了済み・変更を保留", withdrawn: "取り下げ済み", removed: "下書きから除去・公開中" };
           var c = e.context, blocked = e.busy || !!e.pending || !!c.pending;
           return (c.homeworkState || []).length ? c.homeworkState.map(function (x) {
-            var h = '<div class="line"><span class="w"><strong>' + esc(x.title) + '</strong><span class="small muted"> ' + (x.due ? fmtDY(x.due) : "期限なし") + '</span><div><span class="tag ' + (x.status === "held" || x.status === "removed" ? "amber" : "gray") + '">' + esc(labels[x.status] || x.status) + '</span>' + (x.done ? ' <span class="small">完了済み</span>' : "") + '</div></span>';
+            var h = '<div class="line"><span class="w"><strong>' + esc(x.title) + '</strong><span class="small muted"> ' + taskDueText(x) + '</span><div><span class="tag ' + (x.status === "held" || x.status === "removed" ? "amber" : "gray") + '">' + esc(labels[x.status] || x.status) + '</span>' + (x.done ? ' <span class="small">完了済み</span>' : "") + '</div></span>';
             if (x.taskId && x.status !== "withdrawn" && !x.withdrawn) h += lessonAction("withdraw", "取り下げ", blocked, "btn-danger", ' data-item="' + esc(x.itemId) + '"');
             if ((x.done || x.status === "withdrawn") && c.record.status !== "void") h += lessonAction("reissue", "新しい宿題として再出題", blocked || e.form.homework.length >= 10 || c.slotChanged || (c.student || {}).active === false, "", ' data-item="' + esc(x.itemId) + '"');
             return h + '</div>';
@@ -1447,13 +1536,13 @@
           switch (a) {
             case "lc-add":
               if (e.form.homework.length >= 10) return;
-              e.form.homework.push({ itemId: lessonId(), title: "", due: "", type: "宿題" }); e.dirty = true; break;
+              e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: "宿題" }); e.dirty = true; break;
             case "lc-remove":
               e.form.homework = e.form.homework.filter(function (x) { return x.itemId !== itemId; }); e.dirty = true; break;
             case "lc-reissue":
               var task = (c.homeworkState || []).filter(function (x) { return x.itemId === itemId; })[0];
               if (!task || e.form.homework.length >= 10) return;
-              e.form.homework.push({ itemId: lessonId(), title: task.title, due: "", type: task.type || "宿題" });
+              e.form.homework.push({ itemId: lessonId(), title: task.title, due: "", dueMode: task.dueMode || "nextLesson", type: task.type || "宿題" });
               e.dirty = true; e.message = "新しい宿題欄を追加しました。期限を確認して記録を保存後、生徒へ反映してください。"; break;
             case "lc-save":
               var validation = lessonValidate(e.form);
@@ -1507,14 +1596,15 @@
           if (field && Object.prototype.hasOwnProperty.call(e.form, field) && field !== "homework") { e.form[field] = el.value; e.dirty = true; e.preview = false; }
           if (itemId) {
             var prop = el.getAttribute("data-lc-prop");
-            e.form.homework.forEach(function (x) { if (x.itemId === itemId && ["title", "due", "type"].indexOf(prop) >= 0) x[prop] = el.value; });
+            e.form.homework.forEach(function (x) { if (x.itemId === itemId && ["title", "due", "dueMode", "type"].indexOf(prop) >= 0) x[prop] = el.value; });
             e.dirty = true; e.preview = false;
+            if (prop === "dueMode") { e.form.homework.forEach(function (x) { if (x.itemId === itemId && x.dueMode !== "date") x.due = ""; }); lessonRender(e); }
           }
           if (el.hasAttribute("data-lc-body")) { e.body = el.value; e.draftDirty = true; }
           if (el.hasAttribute("data-lc-reason")) e.voidReason = el.value;
         });
         window.addEventListener("beforeunload", function (ev) {
-          if (Object.keys(lessonEditors).some(function (k) { var e = lessonEditors[k]; return e.dirty || e.draftDirty || e.pending || e.busy; }) || Object.keys(billingEditors).some(function (k) { return billingEditors[k].pending || billingEditors[k].busy; })) { ev.preventDefault(); ev.returnValue = ""; }
+          if ((slotEdit && (slotEdit.pending || slotEdit.busy)) || Object.keys(lessonEditors).some(function (k) { var e = lessonEditors[k]; return e.dirty || e.draftDirty || e.pending || e.busy; }) || Object.keys(billingEditors).some(function (k) { return billingEditors[k].pending || billingEditors[k].busy; })) { ev.preventDefault(); ev.returnValue = ""; }
         });
 
 
@@ -1555,7 +1645,7 @@
             }
             h += '</div>';
           });
-          h += '<details class="add"><summary>月の授業回数を登録・変更</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + ["英語","数学","英数","国語","理科","社会"].map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"><label for="pl-scope">適用</label><select id="pl-scope"><option value="month">指定した月</option><option value="default">毎月の既定</option></select><label for="pl-target">対象月</label><input type="month" id="pl-target" value="' + esc(s.month) + '"></div><p><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>回数を保存</button></p><p class="note">過去月も指定できます。0回で科目を削除します。変更・削除するとその月全体の承認が失効し、再提案が必要です。請求済みの月は先に未入金請求を取り消してください。</p></details>';
+          h += '<details class="add"><summary>月の授業回数を登録・変更</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"><label for="pl-scope">適用</label><select id="pl-scope"><option value="month">指定した月</option><option value="default">毎月の既定</option></select><label for="pl-target">対象月</label><input type="month" id="pl-target" value="' + esc(s.month) + '"></div><p><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>回数を保存</button></p><p class="note">過去月も指定できます。0回で科目を削除します。変更・削除するとその月全体の承認が失効し、再提案が必要です。請求済みの月は先に未入金請求を取り消してください。</p></details>';
           if ((p.defaultRows || []).length) h += '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(x.subject) + ' ' + esc(x.count) + '回'; }).join("、") + '</p>';
           return h + '</div>';
         }
@@ -1683,6 +1773,23 @@
           var btn = ev.target.closest("[data-action]");
           if (!btn || btn.disabled) return;
           var a = btn.getAttribute("data-action");
+          if (a.indexOf("sm-") === 0) {
+            ev.preventDefault();
+            if (a === "sm-load") studentMailLoad();
+            else if (studentMail && !studentMail.busy && cur && studentMail.id === cur.id && studentMail.auth === token()) {
+              if (a === "sm-retry") { studentMail.confirm = btn.getAttribute("data-id"); render(); }
+              else if (a === "sm-cancel") { studentMail.confirm = null; render(); }
+              else if (a === "sm-send" && studentMail.confirm) studentMailLoad(studentMail.confirm);
+            }
+            return;
+          }
+          if (a.indexOf("se-") === 0) {
+            ev.preventDefault();
+            if (a === "se-resume") { var pendingEdit = slotEditPending().filter(function (p) { return p.requestId === btn.getAttribute("data-request"); })[0]; if (pendingEdit && !(slotEdit && (slotEdit.pending || slotEdit.busy))) slotEditResume(pendingEdit); }
+            else if (a === "se-save" || a === "se-retry" || a === "se-force") slotEditSend(a === "se-force");
+            else if (slotEdit && !slotEdit.pending && !slotEdit.busy) { if (a === "se-close") slotEdit = null; else if (a === "se-edit") slotEdit.force = false; render(); }
+            return;
+          }
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }
           if (a.indexOf("lc-") === 0) { ev.preventDefault(); lessonClick(a, btn); return; }
           if (a.indexOf("billing-") === 0) { ev.preventDefault(); billingClick(a, btn); return; }
@@ -1728,7 +1835,7 @@
             case "logout":
               ev.preventDefault();
               post({ action: "admin", token: token(), op: "logout" }).catch(function () {});
-              lsDel("sw_admt"); cacheClear(); lessonEditors = Object.create(null); billingEditors = Object.create(null); planInputs = Object.create(null); ++FT.seq; FT.data = null; FT.invite = null; FT.edit = null; FT.confirm = null; authM = "login"; D = null; cur = null; render(); break;
+              lsDel("sw_admt"); slotEdit = null; studentMail = null; cacheClear(); lessonEditors = Object.create(null); billingEditors = Object.create(null); planInputs = Object.create(null); ++FT.seq; FT.data = null; FT.invite = null; FT.edit = null; FT.confirm = null; authM = "login"; D = null; cur = null; render(); break;
             case "reload": editProfile = false; load(true); break;
             case "editprofile": editProfile = !editProfile; render(); break;
             case "saveprofile":
@@ -1839,10 +1946,8 @@
               var defaultMode = val("student-delivery");
               if (["in_person", "online"].indexOf(defaultMode) < 0) { toast("形式を選んでください"); return; }
               act("setDeliveryMode", { studentId: cur.id, deliveryMode: defaultMode }, "標準形式を保存しました"); break;
-            case "slotmode":
-              var slotMode = val("slot-mode-" + btn.getAttribute("data-id"));
-              if (["in_person", "online"].indexOf(slotMode) < 0) { toast("形式を選んでください"); return; }
-              (route().page === "student" ? act : actA)("setSlotDeliveryMode", { studentId: sid, slotId: btn.getAttribute("data-id"), deliveryMode: slotMode, expectedMode: btn.getAttribute("data-mode") || "" }, "この回の形式を変更しました"); break;
+            case "slotedit": slotEditOpen(btn, "editOffered"); break;
+            case "slotmode": slotEditOpen(btn, "setSlotDeliveryMode"); break;
             case "setactive":
               var on = btn.getAttribute("data-on") === "1";
               if (!on && !confirm(cur.name + "さんを予約ページから外しますか?\n(記録は残ります。あとで戻せます)")) return;
@@ -1996,7 +2101,7 @@
             case "taskadd":
               var tkt = val("tk-title");
               if (!tkt) { toast("内容を入れてください"); return; }
-              act("taskAdd", { studentId: sid, type: val("tk-type"), title: tkt, due: val("tk-due") }, "登録しました");
+              act("taskAdd", { studentId: sid, type: val("tk-type"), title: tkt, due: val("tk-due-mode") === "date" ? val("tk-due") : "", dueMode: val("tk-due-mode"), dueSubject: val("tk-due-subject") }, "登録しました");
               break;
             case "taskdone":
               act("taskDone", { studentId: sid, taskId: btn.getAttribute("data-id"), done: btn.getAttribute("data-done") === "1" }, "更新しました");

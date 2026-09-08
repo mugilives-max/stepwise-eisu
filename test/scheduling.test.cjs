@@ -93,7 +93,7 @@ test('12 selected offers become booked with one final student state and replay d
   const h = createSchedulingHarness(); h.approve();
   const ids = Array.from({ length: 12 }, (_, i) => h.seedSlot({ date: '2026-09-' + String(i + 10).padStart(2, '0') }).id);
   let stateCalls = 0;
-  const req = { action: 'acceptMany', k: 'synthetic-link-a', slotIds: ids, requestId: 'twelve-offer-request' };
+  const req = { action: 'acceptMany', k: 'synthetic-link-a', slotIds: ids, requestId: 'twelve-offer-request', expectedSnapshots: ids.map(h.snapshot) };
   const result = ok(h.requestWith(req, ctx => { const original = ctx.studentState_; ctx.studentState_ = code => { stateCalls++; return original(code); }; }));
   assert.equal(stateCalls, 1); assert.equal(result.completed, 12); assert.equal(result.pending, false);
   assert.equal(result.notification, 'skipped'); assert.ok(result.results.every(r => r.status === 'booked'));
@@ -148,7 +148,7 @@ test('pending batch protects its lessons from another key and teacher/student mu
   reject(h.acceptMany([second.id], 'different-batch-key'), 'pending');
   for (const [op, args] of [
     ['unbook', { slotId: first.id }], ['deleteSlot', { slotId: second.id }],
-    ['setSlotDeliveryMode', { slotId: second.id, expectedMode: 'in_person', deliveryMode: 'online' }]
+    ['setSlotDeliveryMode', { slotId: second.id, requestId: 'synthetic-mode-pending', expectedMode: 'in_person', deliveryMode: 'online' }]
   ]) reject(h.admin(op, { studentId: 'test-a', ...args }), 'pending');
   reject(h.request({ action: 'decline', k: 'synthetic-link-a', slotId: second.id }), 'pending');
   ok(h.acceptMany([first.id, second.id]));
@@ -156,7 +156,7 @@ test('pending batch protects its lessons from another key and teacher/student mu
 
 test('lesson override requires current mode, checks occupancy and keeps completed lesson form fixed', () => {
   const h = createSchedulingHarness(), a = h.seedSlot(), b = h.seedSlot({ studentId: 'test-b' });
-  const req = { studentId: 'test-a', slotId: a.id, expectedMode: 'in_person', deliveryMode: 'online' };
+  const req = { studentId: 'test-a', slotId: a.id, requestId: 'synthetic-mode-change', expectedMode: 'in_person', deliveryMode: 'online' };
   reject(h.admin('setSlotDeliveryMode', req), 'capacity');
   reject(h.admin('setSlotDeliveryMode', { ...req, expectedMode: '' }), 'conflict');
   reject(h.admin('setSlotDeliveryMode', { ...req, studentId: 'test-b' }), 'notFound');
@@ -199,7 +199,7 @@ test('student state restores only its own pending request without exposing journ
 
 test('reload recovers an unfinished receipt even when all selected lessons are already booked', () => {
   const h = createSchedulingHarness(); h.approve(); const a = h.seedSlot();
-  const interrupted = h.requestWith({ action: 'acceptMany', k: 'synthetic-link-a', slotIds: [a.id], requestId: 'last-receipt-pending' }, ctx => {
+  const interrupted = h.requestWith({ action: 'acceptMany', k: 'synthetic-link-a', slotIds: [a.id], requestId: 'last-receipt-pending', expectedSnapshots: [h.snapshot(a.id)] }, ctx => {
     const original = ctx.schedulingWrite_;
     ctx.schedulingWrite_ = w => { if (w.status === 'done') throw new Error('Synthetic last receipt unavailable'); return original(w); };
   });

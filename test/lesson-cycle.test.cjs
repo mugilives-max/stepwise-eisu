@@ -33,11 +33,11 @@ function failWrite(h,name,predicate,after=false) {
   return ()=>{sh.getRange=original;};
 }
 
-test('schema appends four task columns, preserves old rows, is idempotent and preflights mismatches',()=>{
+test('schema appends eight task columns, preserves old rows, is idempotent and preflights mismatches',()=>{
   const h=createHarness({iterations:10}), c=h.context(); c.ensureTasksSheet_();
   const sh=h.spreadsheet.getSheetByName('tasks'); sh.appendRow(['legacy-task','test-a','宿題','既存課題','',new Date(),'teacher','done-value']);
   const before=clone(sh.values[1]); c.ensureLessonSchema_(); c.ensureLessonSchema_();
-  assert.deepEqual(clone(sh.values[1]),before); assert.equal(sh.values[0].length,12);
+  assert.deepEqual(clone(sh.values[1]),before); assert.equal(sh.values[0].length,16);
   assert.equal(h.spreadsheet.getSheetByName('lessonRecords').values.length,1);
   const broken=createHarness(), bc=broken.context(); bc.ensureTasksSheet_(); broken.spreadsheet.getSheetByName('tasks').values[0][2]='unexpected';
   assert.throws(()=>bc.ensureLessonSchema_(),/シート構成/);
@@ -226,8 +226,11 @@ test('HTTP teacher dispatch preserves isolation and public/MCP outputs exclude p
   const issue=ok(h.admin('parentIssueSetupCode',{studentId:'test-a'}));
   const parent=ok(h.parent('parentSetup',{setupCode:issue.setupCode,pass:'TestParentPassword!'}));
   const output=[h.get({action:'state',k:'synthetic-link-a'}),ok(h.parent('parentData',{ptoken:parent.ptoken})),ok(h.admin('kanriStudent',{studentId:'test-a'}))];
-  for (const op of ['mcpStudents','mcpStudent','mcpPending','mcpBilling','mcpSchedule']) output.push(ok(h.request({action:'admin',op,studentId:'test-a',mcpKey:MCP_KEY})));
-  const json=JSON.stringify(output); assert.equal(json.includes('PRIVATE_SENTINEL'),false); assert.equal(json.includes('一次関数のグラフ'),false); assert.equal(json.includes('sourceRecordId'),false);
+  const mcpOutput=[];
+  for (const op of ['mcpStudents','mcpStudent','mcpPending','mcpBilling','mcpSchedule']) mcpOutput.push(ok(h.request({action:'admin',op,studentId:'test-a',mcpKey:MCP_KEY})));
+  const json=JSON.stringify(output.concat(mcpOutput)); assert.equal(json.includes('PRIVATE_SENTINEL'),false); assert.equal(json.includes('sourceRecordId'),false);
+  assert.equal(output[0].lessonRecords[0].content,'一次関数のグラフ'); assert.equal(output[1].data.lessonRecords[0].content,'一次関数のグラフ');
+  assert.equal(JSON.stringify(mcpOutput).includes('一次関数のグラフ'),false);
   assert.equal(h.request({action:'admin',op:'lessonContext',studentId:'test-a',slotId:'slot-a',mcpKey:MCP_KEY}).ok,undefined);
   assert.equal(h.request({action:'admin',op:'lessonContext',studentId:'test-a',slotId:'slot-a',token:parent.ptoken}).badAuth,true);
   assert.ok(h.admin('taskDel',{studentId:'test-b',taskId:task.id}).error);

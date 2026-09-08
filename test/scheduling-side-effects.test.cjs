@@ -23,7 +23,7 @@ function fixture() {
       get(calendar, id) { calls.get++; if (!events.has(id)) throw new Error('Google Calendar 404 Not Found'); return structuredClone(events.get(id)); },
       insert(body, calendar, options) {
         calls.insert++; assert.equal(calendar, 'primary'); assert.match(body.id, /^[0-9a-v]{5,1024}$/);
-        assert.equal(options.conferenceDataVersion, 1);
+        assert.equal(options.conferenceDataVersion, 1); assert.equal(options.sendUpdates, 'none'); assert.equal(body.attendees, undefined);
         if (events.has(body.id)) throw new Error('409 The requested identifier already exists');
         const event = structuredClone({ ...body, iCalUID: body.id + '@google.com', etag: 'etag-1', status: 'confirmed' });
         if (body.conferenceData) { applyConferenceResult(event, conferenceResult); calls.conferenceRequests.push(body.conferenceData.createRequest.requestId); }
@@ -31,7 +31,8 @@ function fixture() {
         if (loseInsert) { loseInsert = false; throw new Error('Synthetic timeout after committed Calendar insert'); }
         return structuredClone(event);
       },
-      patch(body, calendar, id) {
+      patch(body, calendar, id, options) {
+        assert.equal(options.sendUpdates, 'none'); assert.equal(body.attendees, undefined);
         calls.patch++; const prior = events.get(id); if (!prior) throw new Error('404 Not Found');
         const event = structuredClone({ ...prior, ...body, etag: 'etag-' + (calls.patch + 1) });
         if (body.conferenceData === null) { delete event.conferenceData; delete event.hangoutLink; }
@@ -45,7 +46,7 @@ function fixture() {
   }
   return Object.assign(h, { events, calls, configure,
     send: req => h.requestWith(req, configure),
-    batch: (ids, id = 'calendar-batch-request') => h.requestWith({ action: 'acceptMany', k: 'synthetic-link-a', slotIds: ids, requestId: id }, configure),
+    batch: (ids, id = 'calendar-batch-request') => h.requestWith({ action: 'acceptMany', k: 'synthetic-link-a', slotIds: ids, requestId: id, expectedSnapshots: ids.map(h.snapshot) }, configure),
     loseInsert: () => { loseInsert = true; }, losePatch: () => { losePatch = true; }, failMail: () => { failMail = true; },
     nextConferenceResult: status => { conferenceResult = status; },
     finishConference: (id, status = 'success') => { const event = events.get(id); applyConferenceResult(event, status); event.etag = 'provider-update-' + (++providerUpdate); }
@@ -114,9 +115,9 @@ test('mode change converges after a lost Calendar response and supports repeated
   assert.equal(h.send(req).ok, true);
   assert.equal(h.rows('slots')[0].deliveryMode, 'online');
   assert.equal(h.calls.conferenceRequests.length, 1);
-  assert.equal(h.send({ ...req, expectedMode: 'online', deliveryMode: 'in_person' }).ok, true);
+  assert.equal(h.send({ ...req, requestId: 'synthetic-mode-back', expectedMode: 'online', deliveryMode: 'in_person' }).ok, true);
   assert.equal(h.rows('slots')[0].meetUrl, '');
-  assert.equal(h.send(req).ok, true);
+  assert.equal(h.send({ ...req, requestId: 'synthetic-mode-again' }).ok, true);
   assert.equal(h.calls.conferenceRequests.length, 2);
   assert.notEqual(h.calls.conferenceRequests[0], h.calls.conferenceRequests[1]);
 });
@@ -206,11 +207,13 @@ test('legacy mode repair reuses its event after the Calendar insert response is 
   assert.equal(h.send(req).ok, true); assert.equal(h.calls.insert, 1); assert.equal(h.events.size, 1);
 });
 
-test('changing the choice after a pending legacy repair converges the same event to in-person', () => {
+test('pending mode edits require the original payload; a later new request can change back', () => {
   const h = fixture(), slot = h.seedSlot({ status: 'booked', eventId: '', meetUrl: '' });
   const req = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'in_person', deliveryMode: 'online' });
   h.nextConferenceResult('pending'); assert.equal(h.send(req).errorCode, 'pending');
-  assert.equal(h.send({ ...req, deliveryMode: 'in_person' }).ok, true);
+  assert.equal(h.send({ ...req, deliveryMode: 'in_person' }).errorCode, 'conflict');
+  h.finishConference([...h.events.keys()][0]); assert.equal(h.send(req).ok, true);
+  assert.equal(h.send({ ...req, requestId: 'synthetic-mode-back', expectedMode: 'online', deliveryMode: 'in_person' }).ok, true);
   assert.equal(h.rows('slots')[0].deliveryMode, 'in_person'); assert.equal(h.rows('slots')[0].meetUrl, '');
   const event = [...h.events.values()][0]; assert.equal(event.conferenceData, undefined); assert.match(event.summary, /対面/);
   assert.equal(h.calls.insert, 1); assert.equal(h.events.size, 1);

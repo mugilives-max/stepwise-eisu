@@ -11,8 +11,9 @@ function stepwiseNativeSchedulingCheck() {
   function check(ok,name){checks[name]=!!ok;if(!ok){var e=new Error(name);e.nativeCheck=name;throw e;}}
   function forbidden(){effects++;throw new Error('forbidden_external_effect');}
   function refresh(){memoClear_();}
-  function call(op,args){refresh();var req={action:'admin',token:token,op:op,studentId:ids[0]};Object.keys(args||{}).forEach(function(k){req[k]=args[k];});return admin_(req);}
-  function batch(slotIds,key){refresh();return schedulingAcceptMany_({k:code,slotIds:slotIds,requestId:key});}
+  function call(op,args){refresh();var req={action:'admin',token:token,op:op,studentId:ids[0]};if(op==='setSlotDeliveryMode')req.requestId='native-mode-'+billingId_();Object.keys(args||{}).forEach(function(k){req[k]=args[k];});return admin_(req);}
+  function snapshot(id){var r=findSlotRow_(id);return r?schedulingPublicSnapshot_(r.slot):{id:id};}
+  function batch(slotIds,key){refresh();return schedulingAcceptMany_({k:code,slotIds:slotIds,requestId:key,expectedSnapshots:slotIds.map(snapshot)});}
   function slot(patch){var s={id:billingId_(),date:ym+'-15',start:'13:00',min:60,status:'offered',studentId:ids[0],done:'',eventId:'',meetUrl:'',subject:'数学',req:'',deliveryMode:'in_person'};
     Object.keys(patch||{}).forEach(function(k){s[k]=patch[k];});
     var sh=sheet_('slots');sh.getRange(sh.getLastRow()+1,1,1,12).setNumberFormat('@').setValues([[s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode]]);return s;}
@@ -40,7 +41,7 @@ function stepwiseNativeSchedulingCheck() {
     var legacyBeforeSchema=JSON.stringify(app.getSheetByName('slots').getRange(2,1,1,11).getValues()[0]);
     var config={passHash:'native-placeholder-hash',passSalt:'native-placeholder-salt',adminToken:token,adminTokenExp:String(Date.now()+3600000),calendarSync:'on',emailNotify:'on',teacherEmail:''};
     Object.keys(config).forEach(function(k){setConfig_(k,config[k]);});
-    ensureSchedulingSchema_();ensureBillingSchema_();ensureLessonSchema_();refresh();
+    ensureSchedulingSchema_();ensureBillingSchema_();ensureLessonSchema_();if(typeof ensureStudentEmailSchema_==='function')ensureStudentEmailSchema_();if(typeof ensureSlotChangeNotices_==='function')ensureSlotChangeNotices_();refresh();
     check(JSON.stringify(app.getSheetByName('slots').getRange(2,1,1,11).getValues()[0])===legacyBeforeSchema,'legacy_past_values_preserved');
     check(readRows_('slots')[0].deliveryMode===''&&readRows_('students')[0].deliveryMode==='','unknown_legacy_mode_not_guessed');
     check(app.getSheetByName('slots').getLastColumn()===12&&app.getSheetByName('students').getLastColumn()===10,'mode_schema_added');
@@ -77,7 +78,7 @@ function stepwiseNativeSchedulingCheck() {
     // acceptMany sorts IDs before writing. Stable a < b IDs ensure the injected
     // second-slot failure occurs after exactly one durable booking.
     var a=slot({id:'native-schedule-batch-a',date:ym+'-10'}),b=slot({id:'native-schedule-batch-b',date:ym+'-11'});
-    refresh();check(accept_(a.id,code).errorCode==='approvalRequired','single_accept_preserves_approval_gate');
+    refresh();check(accept_(a.id,code,snapshot(a.id)).errorCode==='approvalRequired','single_accept_preserves_approval_gate');
     check(call('planSet',{ym:ym,subject:'数学',count:12}).ok&&call('planPropose',{ym:ym,rate30:1500,monthly:0}).ok,'synthetic_plan_prepared');
     var rev=call('billingPreview',{ym:ym}).billing.revision;
     check(call('planApproveTeacher',{ym:ym,expectedRevision:rev,via:'電話',consentDate:todayStr_(),memo:'架空の検証用承諾'}).ok,'synthetic_plan_approved');
@@ -105,6 +106,24 @@ function stepwiseNativeSchedulingCheck() {
     check(readRows_('students')[0].deliveryMode==='in_person','lesson_override_keeps_student_default');
     check(call('setSlotDeliveryMode',{slotId:a.id,expectedMode:'in_person',deliveryMode:'online'}).errorCode==='conflict','stale_mode_change_rejected');
     check(!app.getSheetByName('acceptWrites').getDataRange().getFormulas().some(function(row){return row.some(Boolean); }),'journal_has_no_formulas');
+
+    stage='offered_edit';
+    var editable=slot({id:'native-editable-offer',date:ym+'-22',subject:''});refresh();
+    var edit={slotId:editable.id,requestId:'native-offer-edit-request',expectedSnapshot:snapshot(editable.id),date:ym+'-23',start:'15:00',min:90,subject:'化学',deliveryMode:'in_person'};
+    var failEditOnce=true;writeSlotRow_=function(r){if(String(r.slot.id)===editable.id&&failEditOnce){failEditOnce=false;throw new Error('intentional_native_edit_failure');}return original.write(r);};
+    check(call('editOffered',edit).pending,'offer_edit_interruption_reported');refresh();
+    var pendingEdits=schedulingPendingEdits_(ids[0]);
+    check(pendingEdits.length===1&&pendingEdits[0].requestId===edit.requestId&&pendingEdits[0].before.subject===''&&pendingEdits[0].after.subject==='化学','offer_edit_recovery_projection');
+    check(schedulingPendingEdits_(ids[1]).length===0,'offer_edit_projection_scoped');
+    check(call('deleteSlot',{slotId:editable.id}).errorCode==='pending','pending_offer_edit_protects_slot');
+    writeSlotRow_=original.write;
+    check(call('editOffered',edit).ok,'offer_edit_retry_completes');refresh();
+    check(snapshot(editable.id).subject==='化学'&&snapshot(editable.id).date===edit.date&&snapshot(editable.id).min===90,'offer_edit_fields_saved_same_id');
+    check(accept_(editable.id,code,edit.expectedSnapshot).errorCode==='conflict','stale_student_snapshot_rejected');
+    var savedEditRows=JSON.stringify(readRows_('offerEdits'));
+    check(call('editOffered',edit).replayed,'offer_edit_replay_success');refresh();
+    check(JSON.stringify(readRows_('offerEdits'))===savedEditRows&&schedulingPendingEdits_().length===0,'offer_edit_replay_no_duplicate_or_pending');
+    check(app.getSheetByName('offerEdits').getLastColumn()===9&&!app.getSheetByName('offerEdits').getDataRange().getFormulas().some(function(row){return row.some(Boolean); }),'offer_edit_journal_schema_and_literal_cells');
     check(readRows_('slots').every(function(s){return !s.eventId&&!s.meetUrl;})&&effects===0,'no_real_mail_calendar_effects');
     var result={ok:true,elapsedMS:Date.now()-started,checks:checks,testSpreadsheets:books()};Logger.log(JSON.stringify(result));return result;
   } catch(err) {

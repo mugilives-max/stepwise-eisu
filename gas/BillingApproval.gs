@@ -361,7 +361,7 @@ function billingMutationResult_(req,res) {
 function prepareStepwise20260908() {
   var lock=LockService.getScriptLock();lock.waitLock(10000);
   try {
-    CacheService.getScriptCache().remove('schemaOk16');memoClear_();ensureSchema_();
+    CacheService.getScriptCache().remove('schemaOk17');memoClear_();ensureSchema_();
     var summary={reservation:ss_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};}),ledger:ledger_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};})};
     Logger.log(JSON.stringify(summary));return summary;
   } finally {lock.releaseLock();}

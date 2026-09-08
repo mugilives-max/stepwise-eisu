@@ -1,12 +1,14 @@
-/** Teacher-only lesson records. Code.gs dispatches these operations while holding
- * ScriptLock. Never add these objects to studentState, parentData or MCP output.
+/** Teacher-owned lesson records. Code.gs dispatches writes while holding
+ * ScriptLock. Only lessonPublishedForStudent_ may project public lesson content;
+ * raw records, notes, report drafts and journals are never public response data.
  * No operation here changes slots, plans, billing, Calendar or notifications. */
 var LESSON_HEADERS_ = {
   lessonRecords: ['id','studentId','slotId','lessonDate','lessonStart','lessonMin','subject','content','progress','nextFocus','homeworkJson','revision','status','createdBy','updatedBy','createdAt','updatedAt','voidReason','lastRequestId','lastRequestHash'],
   lessonPrivateNotes: ['recordId','teacherNote'],
   lessonReportDrafts: ['recordId','body','sourceRevision','revision','updatedAt'],
   lessonWrites: ['requestId','operation','payloadHash','payloadJson','status','resultJson','createdAt','updatedAt'],
-  tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt']
+  lessonPublicSnapshots: ['id','recordId','studentId','slotId','revision','lessonDate','lessonStart','lessonMin','subject','content','progress','nextFocus','homeworkJson','publishedAt','sourceRequestId'],
+  tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime']
 };
 var LESSON_SCHEMA_BOOK_ = null; // Per-execution only; never CacheService.
 
@@ -75,13 +77,70 @@ function lessonHomework_(items) {
   if (!Array.isArray(items) || items.length > 10) lessonFail_('validation', '宿題は10件以内で入力してください');
   var ids = Object.create(null);
   return items.map(function (x) {
-    lessonOnly_(x,['itemId','title','due','type']);
+    lessonOnly_(x,['itemId','title','due','type','dueMode']);
     var id = lessonId_(x.itemId);
     if (ids[id]) lessonFail_('validation','宿題の項目IDが重複しています'); ids[id] = true;
     var type = x.type === undefined ? '宿題' : x.type;
     if (['宿題','持ち物','メモ'].indexOf(type) < 0) lessonFail_('validation','宿題の種類が正しくありません');
-    return { itemId:id, title:lessonText_(x.title,80,true), due:lessonDate_(x.due), type:type };
+    var due=lessonDate_(x.due), out={itemId:id,title:lessonText_(x.title,80,true),due:due,type:type};
+    // Preserve the normalized shape of legacy requests: their persisted hash
+    // must remain reusable after this release, including unfinished saves.
+    if (x.dueMode !== undefined) { out.dueMode=lessonDueMode_(x.dueMode,due); out.due=out.dueMode === 'date' ? due : ''; }
+    return out;
   });
+}
+function lessonDueMode_(mode,due) {
+  if (mode === undefined || mode === '') return due ? 'date' : 'none';
+  if (['date','nextLesson','none'].indexOf(mode) < 0 || (mode === 'date' && !due)) lessonFail_('validation','宿題の期限を確認してください');
+  return mode;
+}
+function lessonDueFields_(item,studentId,subject,anchor) {
+  var mode=lessonDueMode_(item.dueMode,item.due);
+  if (mode === 'nextLesson' && (!subject || !/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(anchor))) lessonFail_('validation','次回授業の科目・起点を確認してください');
+  return {due:mode === 'date' ? item.due : '',dueMode:mode,dueSubject:mode === 'nextLesson' ? subject : '',dueAfter:mode === 'nextLesson' ? anchor : '',dueTime:''};
+}
+// Generic taskAdd hook. Auth/ownership is checked by the caller. Never accept a
+// client timestamp; an optional booked source slot or this server time anchors it.
+function lessonTaskAddFields_(req,studentId) {
+  var due=lessonDate_(req.due), mode=lessonDueMode_(req.dueMode,due), subject='', anchor='';
+  if (mode === 'nextLesson') {
+    subject=lessonText_(req.dueSubject,80,true).trim();
+    if (req.afterSlotId !== undefined && req.afterSlotId !== '') {
+      var slot=lessonCurrentSlot_(String(studentId),lessonId_(req.afterSlotId),null);
+      if (String(slot.subject || '') !== subject) lessonFail_('validation','起点の授業と宿題の科目が一致しません');
+      anchor=slot.date+'T'+slot.start;
+    } else anchor=Utilities.formatDate(new Date(),'Asia/Tokyo','yyyy-MM-dd')+'T'+Utilities.formatDate(new Date(),'Asia/Tokyo','HH:mm');
+  }
+  return lessonDueFields_({due:due,dueMode:mode},String(studentId),subject,anchor);
+}
+// Read-only projection: no clock-relative filtering and no materialized writes.
+// A completed task keeps the deadline captured atomically with its doneAt.
+function lessonTaskDueView_(task) {
+  var mode=lessonDueMode_(task.dueMode,normDate_(task.due)||''), due=mode === 'date' ? normDate_(task.due)||'' : '', start='';
+  if (mode === 'nextLesson') {
+    if (task.doneAt) { due=normDate_(task.due)||''; start=String(task.dueTime || ''); }
+    else {
+      var subject=String(task.dueSubject || ''), anchor=String(task.dueAfter || '');
+      var next=subject && /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(anchor) ? readRows_('slots').filter(function (s) {
+        return String(s.studentId) === String(task.studentId) && s.status === 'booked' && String(s.subject || '') === subject && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(s.start) && s.date+'T'+s.start > anchor;
+      }).sort(function (a,b) { var aa=a.date+'T'+a.start, bb=b.date+'T'+b.start; return aa === bb ? String(a.id).localeCompare(String(b.id)) : aa < bb ? -1 : 1; })[0] : null;
+      if (next) { due=String(next.date); start=String(next.start); }
+    }
+  }
+  return {due:due,dueMode:mode,dueSubject:mode === 'nextLesson' ? String(task.dueSubject || '') : '',dueStart:start,nextLessonPending:mode === 'nextLesson' && !due};
+}
+// Called under the root request lock after task ownership is verified. Reread
+// before a whole-row write so a completion never erases homework metadata.
+function lessonSetTaskDone_(task,done) {
+  if (typeof done !== 'boolean') lessonFail_('validation','完了状態が正しくありません');
+  ensureLessonSchema_();
+  var latest=lessonFind_('tasks','id',String(task.id));
+  if (!latest || String(latest.studentId) !== String(task.studentId) || latest.withdrawnAt) lessonFail_('notFound','課題が見つかりません');
+  if (!!latest.doneAt === done) return {ok:true};
+  var next=lessonCopy_(latest), resolved=lessonTaskDueView_(latest);
+  if (done && resolved.dueMode === 'nextLesson') { next.due=resolved.due; next.dueTime=resolved.dueStart; }
+  next.doneAt=done ? new Date().toISOString() : '';
+  lessonPut_('tasks','id',next.id,next); return {ok:true};
 }
 function lessonPayload_(req) {
   var base = ['action','op','token','from','view','studentId','requestId'];
@@ -163,7 +222,10 @@ function lessonTask_(recordId,itemId,studentId) {
   if (all[0] && String(all[0].studentId) !== studentId) lessonFail_('notFound','宿題の対象が一致しません');
   return all[0] || null;
 }
-function lessonTaskSame_(task,item) { return String(task.title) === item.title && (normDate_(task.due) || '') === item.due && String(task.type) === item.type; }
+function lessonTaskSame_(task,item) {
+  var mode=lessonDueMode_(item.dueMode,item.due), taskMode=lessonDueMode_(task.dueMode,normDate_(task.due)||'');
+  return String(task.title) === item.title && mode === taskMode && (mode !== 'date' || (normDate_(task.due)||'') === item.due) && String(task.type) === item.type;
+}
 
 function lessonPlan_(p,requestId,hash) {
   var student = lessonStudent_(p.studentId), now = new Date().toISOString(), r, slot;
@@ -193,7 +255,11 @@ function lessonPlan_(p,requestId,hash) {
     var saved = r ? lessonCopy_(r) : { id:plan.recordId, studentId:p.studentId, slotId:p.slotId, lessonDate:slot.date, lessonStart:slot.start, lessonMin:Number(slot.min), subject:String(slot.subject || ''), createdBy:plan.actor, createdAt:now, status:'active', voidReason:'' };
     saved.content=p.record.content; saved.progress=p.record.progress; saved.nextFocus=p.record.nextFocus; saved.homeworkJson=JSON.stringify(p.record.homework);
     saved.revision=p.expectedRevision+1; saved.updatedBy=plan.actor; saved.updatedAt=now; saved.lastRequestId=requestId; saved.lastRequestHash=hash;
+    p.record.homework.forEach(function (item) { lessonDueFields_(item,p.studentId,String(saved.subject || ''),String(saved.lessonDate)+'T'+String(saved.lessonStart)); });
     plan.record=saved; plan.note={recordId:plan.recordId,teacherNote:p.record.teacherNote};
+    // Only newly accepted saves opt into publication. Old pending journals do
+    // not gain this field on resume; old report drafts never become public.
+    plan.publicSnapshot={id:plan.recordId+':'+saved.revision,recordId:plan.recordId,studentId:p.studentId,slotId:p.slotId,revision:saved.revision,lessonDate:saved.lessonDate,lessonStart:saved.lessonStart,lessonMin:saved.lessonMin,subject:saved.subject,content:saved.content,progress:saved.progress,nextFocus:saved.nextFocus,homeworkJson:saved.homeworkJson,publishedAt:now,sourceRequestId:requestId};
   } else if (p.operation === 'lessonHomeworkApply') {
     plan.items = lessonHomeworkItems_(r).map(function (item) {
       var t = lessonTask_(String(r.id),item.itemId,p.studentId);
@@ -224,6 +290,12 @@ function lessonExecute_(plan) {
     if (existing && (String(existing.studentId) !== plan.studentId || String(existing.slotId) !== plan.slotId)) lessonFail_('pending','記録の対象が変更されたため再開を停止しました');
     lessonPut_('lessonPrivateNotes','recordId',plan.recordId,plan.note);
     lessonPut_('lessonRecords','id',plan.recordId,plan.record); result.revision=plan.record.revision;
+    if (plan.publicSnapshot) {
+      var prior=lessonFind_('lessonPublicSnapshots','id',plan.publicSnapshot.id);
+      if (prior && LESSON_HEADERS_.lessonPublicSnapshots.some(function (key) { return String(prior[key]) !== String(plan.publicSnapshot[key]); })) lessonFail_('conflict','公開版の内容が一致しません');
+      if (!prior) lessonPut_('lessonPublicSnapshots','id',plan.publicSnapshot.id,plan.publicSnapshot);
+      result.publishedRevision=plan.record.revision; result.publishedAt=plan.now;
+    }
   } else if (plan.operation === 'lessonHomeworkApply') {
     var r=lessonOwnedRecord_(plan.recordId,plan.studentId);
     result.added=[]; result.updated=[]; result.held=[]; result.unchanged=[]; result.withdrawn=[];
@@ -242,7 +314,11 @@ function lessonExecute_(plan) {
       if (task && task.doneAt && !lessonTaskSame_(task,item)) { result.held.push(item.itemId); return; }
       if (task && lessonTaskSame_(task,item) && Number(task.sourceRevision) === plan.sourceRevision) { result.unchanged.push(item.itemId); return; }
       var next=task ? lessonCopy_(task) : { id:entry.taskId,studentId:plan.studentId,createdAt:plan.now,createdBy:'teacher',doneAt:'',withdrawnAt:'',sourceRecordId:plan.recordId,sourceItemId:item.itemId };
-      next.title=item.title; next.due=item.due; next.type=item.type; next.sourceRevision=plan.sourceRevision;
+      next.title=item.title; next.type=item.type; next.sourceRevision=plan.sourceRevision;
+      if (!task || !task.doneAt) {
+        var deadline=lessonDueFields_(item,plan.studentId,String(r.subject || ''),String(r.lessonDate)+'T'+String(r.lessonStart));
+        Object.keys(deadline).forEach(function (key) { next[key]=deadline[key]; });
+      }
       lessonPut_('tasks','id',next.id,next); (task ? result.updated : result.added).push(item.itemId);
     });
     result.revision=plan.sourceRevision;
@@ -293,18 +369,51 @@ function lessonWrite_(req) {
   return lessonResume_(journal);
 }
 
+// Returns only committed snapshots. Reading the current record cannot reveal an
+// in-progress revision: it is used solely for ownership and void status. The
+// journal payload (which contains teacher notes) is never parsed here.
+function lessonCommittedPublic_(studentId) {
+  var active=Object.create(null), receipts=Object.create(null), latest=Object.create(null);
+  lessonRows_('lessonRecords').forEach(function (r) { if (String(r.studentId) === String(studentId) && r.status === 'active') active[String(r.id)]=true; });
+  lessonRows_('lessonWrites').forEach(function (w) { if (w.operation === 'lessonRecordSave' && w.status === 'applied') receipts[String(w.requestId)]=true; });
+  lessonRows_('lessonPublicSnapshots').forEach(function (r) {
+    var id=String(r.recordId);
+    if (String(r.studentId) !== String(studentId) || !active[id] || !receipts[String(r.sourceRequestId)]) return;
+    if (!latest[id] || Number(latest[id].revision) < Number(r.revision)) latest[id]=r;
+  });
+  return Object.keys(latest).map(function (id) { return latest[id]; });
+}
+function lessonHomeworkDueView_(item,r,task) {
+  var fields=lessonDueFields_(item,String(r.studentId),String(r.subject || ''),String(r.lessonDate)+'T'+String(r.lessonStart));
+  fields.studentId=String(r.studentId);
+  return lessonTaskDueView_(task && lessonTaskSame_(task,item) ? task : fields);
+}
+// The common projection for authenticated student, parent-v2 and family routes.
+// Callers resolve studentId from their own verified scope, never a public ID.
+function lessonPublishedForStudent_(studentId) {
+  if (getConfig_('lessonCycleEnabled') === 'off' || !lessonActive_(systemStudent_(String(studentId)))) return [];
+  return lessonCommittedPublic_(String(studentId)).map(function (r) {
+    return {recordId:String(r.recordId),revision:Number(r.revision),date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),content:String(r.content || ''),progress:String(r.progress || ''),nextFocus:String(r.nextFocus || ''),publishedAt:String(r.publishedAt),homework:lessonHomeworkItems_(r).map(function (item) {
+      var due=lessonHomeworkDueView_(item,r,lessonTask_(String(r.recordId),item.itemId,String(studentId)));
+      return {itemId:item.itemId,title:item.title,type:item.type,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending};
+    })};
+  }).sort(function (a,b) { return a.date+'T'+a.start < b.date+'T'+b.start ? 1 : -1; });
+}
 function lessonRecordView_(r,includePrivate) {
   if (!r) return null;
   var out={id:String(r.id),studentId:String(r.studentId),slotId:String(r.slotId),date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),revision:Number(r.revision),status:String(r.status),content:String(r.content || ''),progress:String(r.progress || ''),nextFocus:String(r.nextFocus || ''),homework:lessonHomeworkItems_(r),updatedAt:String(r.updatedAt || ''),voidReason:String(r.voidReason || '')};
+  var published=lessonCommittedPublic_(String(r.studentId)).filter(function (p) { return String(p.recordId) === String(r.id); })[0];
+  out.publishedRevision=published ? Number(published.revision) : 0; out.publishedAt=published ? String(published.publishedAt) : '';
   if (includePrivate) { var note=lessonFind_('lessonPrivateNotes','recordId',r.id); out.teacherNote=note ? String(note.teacherNote || '') : ''; }
   return out;
 }
 function lessonTaskView_(t) {
-  return {id:String(t.id),title:String(t.title || ''),due:normDate_(t.due) || '',type:String(t.type || '宿題'),done:!!t.doneAt,doneAt:t.doneAt ? String(t.doneAt) : '',sourceRecordId:String(t.sourceRecordId || ''),sourceItemId:String(t.sourceItemId || '')};
+  var due=lessonTaskDueView_(t);
+  return {id:String(t.id),title:String(t.title || ''),due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:String(t.type || '宿題'),done:!!t.doneAt,doneAt:t.doneAt ? String(t.doneAt) : '',sourceRecordId:String(t.sourceRecordId || ''),sourceItemId:String(t.sourceItemId || '')};
 }
 function lessonDraftTemplate_(r) {
   if (!r) return '';
-  return ['授業内容\n'+r.content,r.progress ? '取り組みの様子\n'+r.progress : '',r.homework.length ? '宿題\n'+r.homework.map(function (x) { return x.title+(x.due ? '（'+x.due+'）' : ''); }).join('\n') : '',r.nextFocus ? '次回の焦点\n'+r.nextFocus : ''].filter(Boolean).join('\n\n');
+  return ['授業内容\n'+r.content,r.progress ? '取り組みの様子\n'+r.progress : '',r.homework.length ? '宿題\n'+r.homework.map(function (x) { return x.title+(x.dueMode === 'nextLesson' ? '（次回の同じ科目の授業まで）' : x.due ? '（'+x.due+'）' : ''); }).join('\n') : '',r.nextFocus ? '次回の焦点\n'+r.nextFocus : ''].filter(Boolean).join('\n\n');
 }
 function lessonContextData_(studentId,slotId,recordId) {
   var student=lessonStudent_(studentId), all=lessonRows_('lessonRecords').filter(function (x) { return String(x.studentId) === studentId; });
@@ -338,10 +447,13 @@ function lessonContextData_(studentId,slotId,recordId) {
   if (current) {
     var ids={};
     current.homework.forEach(function (item) {
-      ids[item.itemId]=true; var t=lessonTask_(current.id,item.itemId,studentId);
-      state.push({itemId:item.itemId,taskId:t ? String(t.id) : '',title:item.title,due:item.due,type:item.type,done:!!(t && t.doneAt),withdrawn:!!(t && t.withdrawnAt),status:!t ? 'new' : t.withdrawnAt ? 'withdrawn' : t.doneAt && !lessonTaskSame_(t,item) ? 'held' : lessonTaskSame_(t,item) ? 'applied' : 'changed'});
+      ids[item.itemId]=true; var t=lessonTask_(current.id,item.itemId,studentId), due=lessonHomeworkDueView_(item,r,t);
+      state.push({itemId:item.itemId,taskId:t ? String(t.id) : '',title:item.title,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:item.type,done:!!(t && t.doneAt),withdrawn:!!(t && t.withdrawnAt),status:!t ? 'new' : t.withdrawnAt ? 'withdrawn' : t.doneAt && !lessonTaskSame_(t,item) ? 'held' : lessonTaskSame_(t,item) ? 'applied' : 'changed'});
     });
-    lessonRawTasks_(current.id).forEach(function (t) { if (!ids[String(t.sourceItemId)] && String(t.studentId) === studentId) state.push({itemId:String(t.sourceItemId),taskId:String(t.id),title:String(t.title),due:normDate_(t.due)||'',type:String(t.type),done:!!t.doneAt,withdrawn:!!t.withdrawnAt,status:t.withdrawnAt ? 'withdrawn' : 'removed'}); });
+    lessonRawTasks_(current.id).forEach(function (t) { if (!ids[String(t.sourceItemId)] && String(t.studentId) === studentId) {
+      var due=lessonTaskDueView_(t);
+      state.push({itemId:String(t.sourceItemId),taskId:String(t.id),title:String(t.title),due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:String(t.type),done:!!t.doneAt,withdrawn:!!t.withdrawnAt,status:t.withdrawnAt ? 'withdrawn' : 'removed'});
+    } });
   }
   var choices=readRows_('slots').filter(function (x) { return String(x.studentId) === studentId && x.status === 'booked'; }).map(function (x) {
     var record=all.filter(function (z) { return z.status === 'active' && String(z.slotId) === String(x.id); })[0];
