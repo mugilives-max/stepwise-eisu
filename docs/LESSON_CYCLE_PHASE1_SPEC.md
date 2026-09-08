@@ -4,6 +4,19 @@
 
 導入順・採否は [REDESIGN_MASTER_PLAN.md](REDESIGN_MASTER_PLAN.md)、現在の稼働仕様は [SYSTEM.md](SYSTEM.md)、認証仕様は [PARENT_AUTH.md](PARENT_AUTH.md)、作業の進捗は [FUTURE_WORK.md](FUTURE_WORK.md) で管理します。
 
+<a id="local-lesson-preparation"></a>
+
+## ローカル追加: 授業準備（本番未反映）
+
+2026-09-08のローカル実装。公開済みのv49とは区別する。
+
+- `lessonContext` にJSTの `today` と先生専用の `preparation` を追加。翌日以降は準備の編集画面、当日以降は公開する記録の編集欄も表示する。既存の記録APIの日付制約は変更しない。
+- 準備は最大4,000文字、空文字で内容を消せる。`lessonPreparationSave` は教師認証、在籍、現在の確定授業の所有者、日時・分数・科目の一致、`expectedRevision` を検証する。`expectedSlot` は `date/start/min/subject`。既存の `lessonWrites` を使い、同一requestIdの再送と中断後の再開で重複保存を防ぐ。
+- 新規シート `lessonPreparations` の列順: `id, slotId, studentId, body, revision, updatedAt, lessonDate, lessonStart, lessonMin, subject`。idは `JSON.stringify([studentId,slotId])`。授業枠を別生徒へ割り当て直しても以前の準備を上書き・転用しない。日時・科目が変わった場合は保存時の情報との差異を表示し、内容の再確認を促す。
+- 準備とその保存ジャーナルは先生専用。公開スナップショット、先生の実施記録、宿題、実施状態、承認・請求、Calendar、通知を変更しない。記録への自動コピー・公開もしない。生徒・保護者・MCPの閲覧用応答には準備本文を追加しない。
+- 準備の入力はタブのメモリだけに保持し、端末の永続キャッシュへ保存しない。未保存時はページ離脱を警告する。通信失敗時は入力と同じ要求を保持して再試行、版競合時は最新の準備と比較し、明示的に採用または手元の内容で編集を継続する。
+- 初回反映では台帳退避・見出しの事前照合・旧セル保持の確認が必要。新規シートを準備してからGAS・画面をまとめて切り替える。本番の追加シートはまだ作成していない。
+
 ## 1. できるようにすること
 
 先生がカルテまたは今日の授業から対象の確定授業を選び、前回の内容と未完了宿題を確認して、その授業の記録を残します。保存した授業内容・取り組みの様子・宿題欄・次回の焦点は、対象の生徒と保護者へ公開します。先生だけのメモと別の報告下書きは非公開です。宿題欄から既存の「やること」へ明示的に反映し、次回の準備で再利用します。

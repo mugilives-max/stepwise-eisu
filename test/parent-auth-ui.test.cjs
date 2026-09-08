@@ -62,7 +62,7 @@ function createUI(kind = 'parent', shared = {}) {
     document: { getElementById: id => elements.get(id) || null,
       addEventListener: (name, handler) => events.set('document:' + name, handler) },
     window: { scrollTo() {}, addEventListener: (name, handler) => events.set('window:' + name, handler) },
-    location: { hash: kind === 'admin' ? '#s=test-id' : '#parent', search: '',
+    location: { hash: kind === 'admin' ? '#s=test-id&tab=settings' : '#parent', search: '',
       pathname: kind === 'admin' ? '/kanri/' : '/yoyaku/', href: 'https://example.invalid/kanri/' },
     history: { replaceState() {} }, URL, URLSearchParams, navigator: {},
     localStorage: storage(local, false), sessionStorage: storage(session, true),
@@ -202,7 +202,7 @@ test('admin issued code preserves zeroes, never enters cache, and disappears on 
     parentAuth: { configured: false, setAt: '', lastLogin: '', setupExpiresAt: Date.now() + 86400000 } });
   await flush();
   assert.match(ui.el('parent-setup-issued').innerHTML, /001234/);
-  const cached = ui.local.get('sw_kanri_c'); assert.ok(cached);
+  const cached = ui.local.get('sw_kanri_sections_v1'); assert.ok(cached);
   assert.equal(cached.includes('001234'), false); assert.equal(cached.includes('setupCode'), false);
   ui.click('parentissue'); // A new render must remove the previous code immediately.
   assert.equal(ui.el('parent-setup-issued').innerHTML, '');

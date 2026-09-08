@@ -301,9 +301,16 @@
         }
         document.addEventListener("input", function (ev) { var prop = ev.target.getAttribute("data-slot-edit"); if (prop && slotEdit && !slotEdit.pending && !slotEdit.busy) { slotEdit.form[prop] = prop === "min" ? Number(ev.target.value) : ev.target.value; slotEdit.force = false; } });
 
-        function post(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
+        function post(body) {
+          var started = Date.now();
+          return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (res) {
+            try { console.log('[kanri timing]', body.op || body.action, { totalMs: Date.now() - started, serverMs: res.ms, stages: res.timings }); } catch (e) {}
+            return res;
+          });
+        }
         function admin(op, extra) {
           var body = { action: "admin", token: token(), op: op, from: "kanri", view: viewOf() };
+          if (route().page === "student") body.section = route().section;
           Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
           var t0 = Date.now();
           return post(body).then(function (res) {
@@ -316,12 +323,13 @@
         }
 
         /* ---------- 端末内キャッシュ(前回の内容を先に表示し、裏で最新に差し替える) ---------- */
-        var CK = "sw_kanri_c";
+        var CK = "sw_kanri_sections_v1";
+        lsDel("sw_kanri_c"); // Retire the old full-card cache, including on shared devices.
         function cacheAll() { try { return JSON.parse(lsGet(CK) || "{}") || {}; } catch (e) { return {}; } }
         function cacheGet(key) { var c = cacheAll()[key]; return c && c.data ? c.data : null; }
         function cachePut(key, data) { var c = cacheAll(); c[key] = { at: Date.now(), data: data }; lsSet(CK, JSON.stringify(c)); }
         function cacheClear() { lsDel(CK); }
-        function keyOf(r) { return r.page === "student" ? "s:" + r.id : (r.page === "lessons" || r.page === "settings") ? "lessons" : "home"; }
+        function keyOf(r) { return r.page === "student" ? "s:" + r.id + ":" + (r.section || "overview") : (r.page === "lessons" || r.page === "settings") ? "lessons" : "home"; }
         var syncMsg = "";   // 右上に出す「更新中…」「保存中…」
         var skipLoad = false; // addstudent 後に hash を変えるとき、再取得しない
 
@@ -433,7 +441,7 @@
         function route() {
           var h = location.hash || "#home";
           if (h.indexOf("#lesson?") === 0) { var q = new URLSearchParams(h.slice(8)); return { page: "lesson", id: q.get("student") || "", slotId: q.get("slot") || "", recordId: q.get("record") || "" }; }
-          if (h.indexOf("#s=") === 0) return { page: "student", id: decodeURIComponent(h.slice(3)) };
+          if (h.indexOf("#s=") === 0) { var sq = new URLSearchParams(h.slice(1)), section = sq.get("tab") || "overview"; return { page: "student", id: sq.get("s") || "", section: ["overview","settings","progress","billing"].indexOf(section) >= 0 ? section : "overview" }; }
           if (h === "#students") return { page: "students" };
           if (h === "#families") return { page: "families" };
           if (h === "#lessons") return { page: "lessons" };
@@ -536,6 +544,10 @@
         }
 
         /* ---------- ホーム(ダッシュボード) ---------- */
+        function unrecordedCard(list,withNames,student) {
+          if (!list.length) return '';
+          return '<section class="card lc-notice" aria-label="実施状況の確認が必要"><h2>実施状況の確認が必要 <span class="cnt">'+list.length+'件</span></h2><p>前日以前の確定授業で、実施済みの登録がありません。授業記録の保存とは別に確認してください。</p>'+list.map(function(l){return '<div class="line"><span class="t">'+fmtDY(l.date)+' '+esc(l.start)+'</span><span class="w">'+(withNames?esc(l.studentName)+' ':'')+esc(l.subject || '科目未登録')+'</span><button class="btn-primary btn-sm" data-action="toggledone" data-done="1" data-id="'+esc(l.id)+'" data-sid="'+esc(l.studentId || (student || {}).id)+'"'+(busy?' disabled':'')+'>実施にする</button><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(l.studentId || (student || {}).id)+'">予定を確認</a></div>';}).join('')+'</section>';
+        }
         function lessonLine(s, withDate) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(s.subject) + "</span>" : "") + "</span>";
@@ -552,6 +564,7 @@
           var html = '<div class="head"><div><h1>今日 ' + fmtD(d.today) + '</h1><p class="sub">ステップワイズ個別指導の運営ダッシュボード</p></div>' +
             '<div class="row"><a class="btn-primary btn-sm" href="#lessons">授業を案内する</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
+          html += unrecordedCard(d.unrecordedLessons || [], true);
           var cr = d.cancelReqs || [];
           if (cr.length) {
             html += '<h2 style="margin-top:16px">取消依頼 <span class="cnt">' + cr.length + '件・返事が必要です</span></h2><div class="card" style="border-color:var(--danger)">';
@@ -755,11 +768,14 @@
         function renderStudent() {
           renderNav();
           var s = cur;
-          var p = s.profile || {};
+          var p = s.profile || {}, section = route().section || "overview";
           var html = '<div class="head"><div><a href="#students" class="small">← 生徒一覧</a><h1>' + esc(s.name) + '</h1>' +
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
             '<div class="row">' + (s.code ? '<a class="btn-quiet btn-sm" href="' + YOYAKU + '?preview=' + esc(s.code) + '" target="_blank" rel="noopener">生徒画面を見る ↗</a>' : "") + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
+          html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定・宿題'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
+          if (section === 'overview') {
+          html += unrecordedCard(s.unrecordedLessons || (s.lessons || []).filter(function(l){return l.status==='booked' && !l.done && l.date<(s.today || today());}),false,s);
           // この生徒の予定表
           (function () {
             var tdy = s.today || today();
@@ -792,7 +808,9 @@
             html += '</div>';
           })();
 
-          html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業記録・前回の確認を開く</a></p>';
+          html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業準備・記録を開く</a></p>';
+          }
+          if (section === 'settings') {
           html += '<h2>授業の標準形式</h2><div class="card"><label for="student-delivery">新しい案内の初期値</label> <select id="student-delivery">' + deliveryOptions(s.deliveryMode) + '</select> <button class="btn-ghost btn-sm" data-action="studentmode"' + (busy ? ' disabled' : '') + '>標準形式を保存</button><p class="note">現在：' + deliveryLabel(s.deliveryMode) + '。登録済みの各回の形式は変わりません。</p></div>';
 
           // 基本情報
@@ -850,12 +868,17 @@
           if (s.active === false || !s.code) html += '<p class="note">設定コードを発行するには、有効な生徒の専用リンクが必要です。</p>';
           html += '<div id="parent-setup-issued" aria-live="polite"></div></div>';
 
+          html += '<h2>家族設定</h2><div class="card"><p>兄弟を同じ家族へ紐付け、保護者の招待・通知先を管理します。</p><a class="btn-quiet btn-sm" href="#families">家族・通知を開く</a></div>';
+          }
+          if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する
           var tm = s.thisMonth || {}, currentBilling = s.billing;
           html += '<h2>今月の授業と請求 <span class="cnt">' + esc(s.month) + '</span></h2><div class="grid2"><div class="card"><div class="muted small">実施済み</div><div class="stat">' + esc(tm.count || 0) + '<small>回 / ' + esc(tm.minutes || 0) + '分</small></div></div><div class="card"><div class="muted small">今月の授業料</div>' + (currentBilling && (currentBilling.canBill || currentBilling.invoice) ? '<div class="stat">' + yen(currentBilling.invoice ? currentBilling.invoice.amount : currentBilling.amount) + '</div>' : '<div class="stat">未確定</div><div class="small">' + esc(currentBilling && currentBilling.reason || '下の「請求内容を確認」から計算してください') + '</div>') + '</div></div><p class="note">実施状態と授業記録の保存は別操作です。請求は下の「請求・入金管理」で確認してください。</p>';
 
           html += renderPlanCard(s);
 
+          }
+          if (section === 'progress') {
           // 成績
           html += '<h2>成績推移 <span class="cnt">' + s.grades.length + '件</span>' + (s.grades.some(function (g) { return g.dev !== null; }) ? '<span class="seg" style="margin-left:auto"><button class="' + (gradeMode === "score" ? "on" : "") + '" data-action="gmode" data-m="score">点数</button><button class="' + (gradeMode === "dev" ? "on" : "") + '" data-action="gmode" data-m="dev">偏差値</button></span>' : "") + '</h2>';
           html += '<div class="card">' + gradeChart(s.grades, gradeMode);
@@ -897,6 +920,8 @@
             '<label>備考</label><input type="text" id="ex-note" maxlength="200">' +
             '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addexam"' + (busy ? " disabled" : "") + '>記録する</button><span class="small muted">空欄の科目は「—」になります</span></div></div></details></div>';
 
+          }
+          if (section === 'overview') {
           // 今後の予定(確定・承認待ち)と案内
           var tdy = s.today || today();
           var upcoming = (s.lessons || []).filter(function (l) { return l.date >= tdy && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
@@ -960,7 +985,9 @@
           html += '<div class="row" style="margin-top:10px"><select id="tk-type"><option>宿題</option><option>持ち物</option><option>メモ</option></select><input type="text" id="tk-title" placeholder="内容(例: ワークp.12〜15 / 次回は英単語帳を持参)" maxlength="80" style="flex:1;min-width:200px">' + taskDeadlineInputs(nextLesson ? nextLesson.subject : '') + '<button class="btn-primary btn-sm" data-action="taskadd"' + (busy ? " disabled" : "") + '>出す</button></div>';
           html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。次回授業を選ぶと、指定科目の確定済み授業に期限が連動します。予定がなければ「予定未定」と表示します。</div></div>';
 
-          html += renderBilling(s);
+          }
+          if (section === 'billing') html += renderBilling(s);
+          if (section === 'progress') {
 
           // 面談
           html += '<h2>面談・連絡の記録 <span class="cnt">' + s.meetings.length + '件</span></h2><div class="card">';
@@ -977,6 +1004,7 @@
             '<label>次のアクション</label><input type="text" id="m-next" placeholder="例: 来週までに志望校を確認">' +
             '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addmeeting"' + (busy ? " disabled" : "") + '>記録する</button></div></div></details></div>';
 
+          }
           app.innerHTML = html;
         }
 
@@ -1356,7 +1384,8 @@
         }
         function lessonEntry(s, studentId) {
           if (s.status !== "booked" && s.lessonRecordStatus !== "active" && s.lessonRecordStatus !== "void") return "";
-          var label = s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < today()) ? "記録未入力" : "授業記録";
+          var page = route().page, day = (page === 'student' && cur ? cur.today : page === 'lessons' ? A.today : D && D.today) || today();
+          var label = s.date > day ? "授業準備" : s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "記録未入力" : "授業記録";
           return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>';
         }
         function lessonEditor(r) {
@@ -1377,6 +1406,7 @@
         }
         function lessonAdopt(e, c, mode) {
           e.context = c;
+          if (e.preparationBody === undefined || !e.prepDirty || mode === 'preparation' || mode === 'all') { e.preparationBody = c.preparation ? c.preparation.body : ''; e.prepRevision = c.preparation ? c.preparation.revision : 0; e.prepDirty = false; }
           if (c.slot && c.slot.id) e.slotId = c.slot.id;
           if (!e.form || !e.dirty || mode === "record" || mode === "all") { e.form = lessonForm(c.record); e.baseRevision = c.record ? c.record.revision : 0; e.dirty = false; }
           if (!e.draftDirty || mode === "report" || mode === "all") {
@@ -1407,7 +1437,7 @@
           if (e.recordId) payload.recordId = e.recordId;
           lessonApi("lessonContext", payload).then(function (res) {
             if (!res.context) throw new Error("授業記録は準備中です");
-            if ((e.dirty || e.draftDirty) && e.context) e.latest = res.context;
+            if ((e.dirty || e.draftDirty || e.prepDirty) && e.context) e.latest = res.context;
             else { lessonAdopt(e, res.context, "all"); e.conflict = false; e.latest = null; }
             e.unavailable = false;
           }).catch(function (er) {
@@ -1423,9 +1453,9 @@
           lessonApi(pending.op, pending.payload).then(function (res) {
             if (!res.ok || !res.context) throw new Error("保存結果を確認できませんでした。同じ内容で再試行してください。");
             e.pending = null; e.latest = null;
-            lessonAdopt(e, res.context, (res.operation || pending.op) === "lessonRecordSave" ? "record" : (res.operation || pending.op) === "lessonReportDraftSave" ? "report" : "");
+            lessonAdopt(e, res.context, (res.operation || pending.op) === "lessonPreparationSave" ? "preparation" : (res.operation || pending.op) === "lessonRecordSave" ? "record" : (res.operation || pending.op) === "lessonReportDraftSave" ? "report" : "");
             if (pending.op === "lessonRecordVoid") { e.dirty = false; e.form = lessonForm(res.context.record); }
-            e.message = pending.op === "lessonHomeworkApply" ? "宿題の反映結果を確認してください。" : pending.op === "lessonHomeworkWithdraw" ? "宿題を取り下げました。" : pending.op === "lessonRecordVoid" ? "記録を無効化しました。宿題の取り下げは別操作です。" : "保存しました。";
+            e.message = pending.op === "lessonPreparationSave" ? "授業準備を先生専用で保存しました。" : pending.op === "lessonHomeworkApply" ? "宿題の反映結果を確認してください。" : pending.op === "lessonHomeworkWithdraw" ? "宿題を取り下げました。" : pending.op === "lessonRecordVoid" ? "記録を無効化しました。宿題の取り下げは別操作です。" : "保存しました。";
             if ((res.held || []).length) e.message += " 完了済みなどのため保留された宿題があります。";
             cacheClear(); // 公開した宿題などの古いカルテキャッシュだけを破棄する
           }).catch(function (er) {
@@ -1464,7 +1494,8 @@
         function renderLesson() {
           renderNav();
           var e = lessonEditor(), c = e.context, r = c && c.record;
-          var h = '<div class="head"><div><h1>授業記録</h1><p class="sub">保存した授業記録を生徒・保護者と共有</p></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
+          var future = c && c.slot && c.slot.date > (c.today || today());
+          var h = '<div class="head"><div><h1>' + (future ? '授業準備' : '授業記録') + '</h1><p class="sub">' + (future ? '次の授業の計画を先生専用で保存' : '保存した授業記録を生徒・保護者と共有') + '</p></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
           if (e.error) h += '<div class="card lc-notice" role="alert">' + esc(e.error) + '</div>';
           if (e.message) h += '<p role="status">' + esc(e.message) + '</p>';
           if (e.pending) h += '<div class="card lc-notice">保存結果の確認が必要です。' + lessonAction("retry", e.busy ? "確認中…" : "同じ処理を再試行", e.busy, "btn-primary") + '</div>';
@@ -1473,13 +1504,13 @@
           if (!c.slot) { app.innerHTML = h + '<div class="card" style="margin-top:14px">記録できる確定授業はまだありません。授業を確定してから開いてください。</div>'; return; }
           var slot = r ? Object.assign({}, c.slot, { date: r.date || c.slot.date, start: r.start || c.slot.start, min: r.min || c.slot.min, subject: r.subject || c.slot.subject }) : c.slot;
           h += '<div class="card" style="margin-top:14px"><strong>' + esc((c.student || {}).name) + '</strong>　' + fmtDY(slot.date) + ' ' + esc(slot.start) + '　' + esc(slot.subject || "科目なし") + '　' + esc(slot.min || "") + '分 <span class="tag ' + (slot.done ? "gray" : "blue") + '">' + (slot.done ? "実施済み" : "未実施") + '</span>';
-          h += '<div class="note">' + (r && r.status !== 'void' ? (r.publishedRevision ? '生徒・保護者へ公開済み（第' + esc(r.publishedRevision) + '版）・' : '未公開（次の保存で公開）・') : '') + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : "授業記録は未入力です") + '</div></div>';
+          h += '<div class="note">' + (r && r.status !== 'void' ? (r.publishedRevision ? '生徒・保護者へ公開済み（第' + esc(r.publishedRevision) + '版）・' : '未公開（次の保存で公開）・') : '') + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : future ? "授業前・準備内容は非公開です" : "授業記録は未入力です") + '</div></div>';
           if (c.slotChanged) h += '<p class="lc-notice">元の予約が取消／変更されています。内容の保存はできません。宿題の取り下げは別に行えます。</p>';
           if (c.student && c.student.active === false) h += '<p class="lc-notice">停止中の生徒です。既存記録は訂正できますが、新しい宿題は反映できません。</p>';
           if (c.pending && !e.pending) h += '<div class="card lc-notice">前の処理が完了していません。' + lessonAction("resume", e.busy ? "再開中…" : "前の処理を再開", e.busy, "btn-primary") + '</div>';
           if ((c.lessonChoices || []).length) {
             h += '<details class="add"><summary>別の授業・過去の記録を開く</summary><div class="card lc-history">';
-            c.lessonChoices.forEach(function (x) { h += '<div class="line"><a href="' + esc(lessonHref(e.studentId, x.id, x.recordId)) + '">' + fmtDY(x.date) + ' ' + esc(x.start) + ' ' + esc(x.subject || "科目なし") + '</a><span class="tag gray">' + (x.recordStatus === "void" ? "無効化済み" : x.recordId ? "記録済み" : "未入力") + '</span>' + (x.slotChanged ? '<span class="small muted">予約変更あり</span>' : "") + '</div>'; });
+            c.lessonChoices.forEach(function (x) { h += '<div class="line"><a href="' + esc(lessonHref(e.studentId, x.id, x.recordId)) + '">' + fmtDY(x.date) + ' ' + esc(x.start) + ' ' + esc(x.subject || "科目なし") + '</a><span class="tag gray">' + (x.recordStatus === "void" ? "無効化済み" : x.recordId ? "記録済み" : x.date > (c.today || today()) ? "授業前" : "未入力") + '</span>' + (x.slotChanged ? '<span class="small muted">予約変更あり</span>' : "") + '</div>'; });
             h += '</div></details>';
           }
           h += '<h2>前回の確認と現在の未完了宿題</h2><div class="grid2"><div class="card">';
@@ -1491,12 +1522,14 @@
           var openTasks = (c.openTasks || []).filter(function (x) { return !x.done && !x.withdrawnAt && !x.withdrawn; });
           h += openTasks.length ? openTasks.map(function (x) { return '<div class="line"><span class="w">' + esc(x.title) + '</span><span class="small ' + (x.due && x.due < today() ? "lc-overdue" : "muted") + '">' + (taskDueText(x) + (x.due && x.due < today() ? "・期限超過" : "")) + '</span></div>'; }).join("") : '<div class="empty">未完了の宿題はありません。</div>';
           h += '</div></div>';
-          if (e.latest) {
+          if (e.latest && !future) {
             h += '<h2>最新の記録との比較</h2><div class="grid2"><div class="card"><strong>サーバーの最新</strong><div class="note">第' + esc(e.latest.record ? e.latest.record.revision : 0) + '版</div>';
             var latestForm = lessonForm(e.latest.record);
             ["content", "progress", "nextFocus", "teacherNote"].forEach(function (k) { h += '<div class="small muted">' + ({ content: "授業内容", progress: "取り組み", nextFocus: "次回の焦点", teacherNote: "先生だけのメモ" }[k]) + '</div>' + lessonText(latestForm[k]); });
             h += '<div class="small muted">宿題</div>' + lessonText(latestForm.homework.map(function (x) { return x.title + " " + x.due; }).join("\n")) + '<div class="small muted">報告下書き</div>' + lessonText(e.latest.draft && e.latest.draft.body) + '</div><div class="card"><strong>手元の入力は下の欄に保持しています</strong><p class="small">差分を確認してから選んでください。手元の入力を使う場合も、選択後に保存ボタンを押すまで更新しません。</p><div class="row">' + lessonAction("rebase", "手元の入力で編集を続ける", blocked, "btn-primary") + lessonAction("adopt", "最新の内容に入れ替える", blocked) + '</div></div></div>';
           }
+          h += renderPreparation(e, c, blocked);
+          if (future) { app.innerHTML = h + '<p class="note">授業記録の入力は授業当日から開けます。準備の内容は自動公開・転記しません。</p>'; return; }
           h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
           e.form.homework.forEach(function (x, i) {
             var dis = readonly ? " disabled" : "";
@@ -1517,6 +1550,15 @@
           app.innerHTML = h;
         }
 
+        function renderPreparation(e, c, blocked) {
+          var unavailable = blocked || !c.slot || c.slot.status !== 'booked' || (c.student || {}).active === false;
+          var h = '<h2>授業の準備 <span class="tag gray">先生専用・非公開</span></h2><div class="card">';
+          if (c.preparation && ['date','start','min','subject'].some(function(k){return String(c.preparation[k]) !== String(c.slot[k]);})) h += '<p class="lc-notice">準備を保存した後に授業の日時・科目が変わっています。内容を確認してください。</p>';
+          if (e.latest && e.prepDirty) h += '<p>サーバーの最新の準備</p>' + lessonText(e.latest.preparation && e.latest.preparation.body) + lessonAction('prep-rebase','最新の版を確認して手元の準備で編集を続ける',blocked) + ' ' + lessonAction('adopt','最新の内容に入れ替える',blocked);
+          h += '<label for="lc-preparation">授業計画・準備メモ（4,000文字まで）</label><textarea id="lc-preparation" maxlength="4000" rows="5" data-lc-preparation' + (unavailable ? ' disabled' : '') + '>' + esc(e.preparationBody || '') + '</textarea><p class="note">生徒・保護者には表示しません。公開する授業記録とは別に保存します。</p>';
+          h += lessonAction('prep-save','準備を先生専用で保存',unavailable || e.conflict,'btn-primary') + ' ' + lessonAction('refresh','最新を確認',blocked);
+          return h + '<span id="lc-preparation-status" class="small" role="status"> ' + (e.prepDirty ? '準備に未保存の変更があります' : c.preparation ? '準備保存済み・第' + esc(c.preparation.revision) + '版' : '準備はまだ保存されていません') + '</span></div>';
+        }
         function renderLessonHomework(e) {
           var labels = { new: "未反映", changed: "変更あり", applied: "反映済み", held: "完了済み・変更を保留", withdrawn: "取り下げ済み", removed: "記録から除去・やることに残存" };
           var c = e.context, blocked = e.busy || !!e.pending || !!c.pending;
@@ -1538,6 +1580,13 @@
           if (c.pending) return;
           var itemId = btn.getAttribute("data-item");
           switch (a) {
+            case "lc-prep-save":
+              if (e.conflict || !c || !c.slot || c.slot.status !== 'booked' || (c.student || {}).active === false) return;
+              if ((e.preparationBody || '').length > 4000) { e.error='準備は4,000文字以内にしてください。'; break; }
+              lessonWrite(e,'lessonPreparationSave',{slotId:e.slotId,expectedRevision:e.prepRevision || 0,body:e.preparationBody || '',expectedSlot:{date:c.slot.date,start:c.slot.start,min:c.slot.min,subject:c.slot.subject || ''}}); return;
+            case "lc-prep-rebase":
+              if (!e.latest) return;
+              e.context=e.latest; e.prepRevision=e.latest.preparation ? e.latest.preparation.revision : 0; e.latest=null; e.conflict=false; e.error=''; e.message='手元の準備を保持しました。保存する内容を確認してください。'; break;
             case "lc-add":
               if (e.form.homework.length >= 10) return;
               e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: "宿題" }); e.dirty = true; break;
@@ -1549,6 +1598,7 @@
               e.form.homework.push({ itemId: lessonId(), title: task.title, due: "", dueMode: task.dueMode || "nextLesson", type: task.type || "宿題" });
               e.dirty = true; e.message = "新しい宿題欄を追加しました。期限を確認して記録を保存後、生徒へ反映してください。"; break;
             case "lc-save":
+              if (c && c.slot && c.slot.date > (c.today || today())) return;
               var validation = lessonValidate(e.form);
               if (validation) { e.error = validation; break; }
               lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, record: JSON.parse(JSON.stringify(e.form)) }); return;
@@ -1597,6 +1647,7 @@
           if (route().page !== "lesson") return;
           var el = ev.target, e = lessonEditor(), field = el.getAttribute("data-lc-field"), itemId = el.getAttribute("data-lc-item");
           if (e.busy || e.pending || !e.form) return;
+          if (el.hasAttribute("data-lc-preparation")) { e.preparationBody = el.value; e.prepDirty = true; var prepStatus = document.getElementById('lc-preparation-status'); if (prepStatus) prepStatus.textContent = '準備に未保存の変更があります'; }
           if (field && Object.prototype.hasOwnProperty.call(e.form, field) && field !== "homework") { e.form[field] = el.value; e.dirty = true; e.preview = false; }
           if (itemId) {
             var prop = el.getAttribute("data-lc-prop");
@@ -1608,7 +1659,7 @@
           if (el.hasAttribute("data-lc-reason")) e.voidReason = el.value;
         });
         window.addEventListener("beforeunload", function (ev) {
-          if ((slotEdit && (slotEdit.pending || slotEdit.busy)) || Object.keys(lessonEditors).some(function (k) { var e = lessonEditors[k]; return e.dirty || e.draftDirty || e.pending || e.busy; }) || Object.keys(billingEditors).some(function (k) { return billingEditors[k].pending || billingEditors[k].busy; })) { ev.preventDefault(); ev.returnValue = ""; }
+          if ((slotEdit && (slotEdit.pending || slotEdit.busy)) || Object.keys(lessonEditors).some(function (k) { var e = lessonEditors[k]; return e.dirty || e.draftDirty || e.prepDirty || e.pending || e.busy; }) || Object.keys(billingEditors).some(function (k) { return billingEditors[k].pending || billingEditors[k].busy; })) { ev.preventDefault(); ev.returnValue = ""; }
         });
 
 
@@ -1688,7 +1739,7 @@
           admin(pending.op, pending.payload).then(function (res) {
             if (!res || !res.ok) throw new Error("保存結果を確認できませんでした。同じ処理を再試行してください。");
             e.pending = null; e.preview = null; e.error = ""; cacheClear();
-            if (token() === authAtStart && authM === "ok") { applyResult(res, { page: "student", id: sid }); toast(pending.message); }
+            if (token() === authAtStart && authM === "ok") { applyResult(res, { page: "student", id: sid, section: "billing" }); toast(pending.message); }
           }).catch(function (er) {
             e.error = er.message + " 入力は保持しています。";
             if (["conflict","validation","notFound","approvalRequired","invoiceExists","requestIdRequired"].indexOf(er.code) >= 0) { e.pending = null; e.preview = null; }
@@ -1730,7 +1781,7 @@
           var sid = s.id, inputKey = sid + ":" + m.ym, planAuth = token();
           busy = true; render();
           admin(op, payload).then(function (res) {
-            delete planInputs[inputKey]; cacheClear(); if (token() === planAuth && authM === "ok") { applyResult(res, {page:"student",id:sid}); toast(op === "planPropose" ? "保護者に提案しました" : "承諾を記録しました"); }
+            delete planInputs[inputKey]; cacheClear(); if (token() === planAuth && authM === "ok") { applyResult(res, {page:"student",id:sid,section:"billing"}); toast(op === "planPropose" ? "保護者に提案しました" : "承諾を記録しました"); }
           }).catch(function (er) { if (planInputs[inputKey]) planInputs[inputKey].error = er.message; toast(er.message + "。入力は保持しています"); }).then(function () { busy = false; render(); });
         }
         document.addEventListener("input", function (ev) {
@@ -1765,8 +1816,8 @@
           if (res.admin && res.admin.slots) { A = res.admin; cachePut("lessons", A); if (isLessons(now)) { ++loadSeq; busy = false; syncMsg = ""; return true; } return false; }
           if (res.dash) { D = res.dash; cachePut("home", D); if (now.page === "home" || now.page === "students") { ++loadSeq; busy = false; syncMsg = ""; return true; } return false; }
           if (res.data && res.data.lessons) {
-            cachePut("s:" + res.data.id, res.data);
-            if (now.page === "student" && String(now.id) === String(res.data.id)) { ++loadSeq; busy = false; syncMsg = ""; cur = res.data; return true; }
+            cachePut(keyOf({page:"student",id:res.data.id,section:res.data.section || r.section}), res.data);
+            if (now.page === "student" && String(now.id) === String(res.data.id) && (now.section || "overview") === (res.data.section || r.section || "overview")) { ++loadSeq; busy = false; syncMsg = ""; cur = res.data; return true; }
           }
           return false;
         }
@@ -1891,7 +1942,7 @@
               admin("addStudent", { name: nn, email: ne }).then(function (res) {
                 busy = false; syncMsg = ""; toast(nn + "さんを追加しました");
                 if (res.data && res.data.lessons) {
-                  cur = res.data; cachePut("s:" + res.data.id, res.data); skipLoad = true;
+                  cur = res.data; cachePut(keyOf({page:"student",id:res.data.id,section:"overview"}), res.data); skipLoad = true;
                   location.hash = "#s=" + encodeURIComponent(res.data.id);
                 } else load(true);
               }).catch(function (e) { busy = false; syncMsg = ""; toast(e.message); render(); });

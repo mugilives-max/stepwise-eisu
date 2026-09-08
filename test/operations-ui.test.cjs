@@ -60,11 +60,13 @@ test('select all limits the batch to 31 and a single confirmation uses the same 
 });
 
 test('changing a student default does not send slot fields and adopts a refreshed card with a visible notification warning', async () => {
-  const original = slot('slot-a', { status: 'booked', studentId: 'test-a' }); const ui = await adminReady(card({ lessons: [original] }));
+  const original = slot('slot-a', { status: 'booked', studentId: 'test-a' }); const ui = await adminReady(card({ lessons: [original] }), 'settings');
   ui.change('student-delivery', 'in_person'); ui.click('studentmode');
   const b = ui.requests.at(-1).body; assert.equal(b.op, 'setDeliveryMode'); assert.equal(b.deliveryMode, 'in_person'); assert.equal(b.slotId, undefined);
   ui.requests.at(-1).reply({ ok: true, data: card({ deliveryMode: 'in_person', lessons: [original] }), notificationWarning: '保存は完了しましたが通知を確認してください' }); await flush();
-  assert.equal(ui.el('student-delivery').value, 'in_person'); ui.click('slotmode', { 'data-id': 'slot-a' }); assert.equal(ui.el('se-mode').value, 'in_person'); assert.match(ui.html(), /role="alert".*通知を確認/);
+  assert.equal(ui.el('student-delivery').value, 'in_person'); assert.match(ui.html(), /role="alert".*通知を確認/);
+  ui.navigate('#s=test-a'); ui.requests.at(-1).reply({data:card({section:'overview',deliveryMode:'in_person',lessons:[original]})}); await flush();
+  ui.click('slotmode', { 'data-id': 'slot-a' }); assert.equal(ui.el('se-mode').value, 'in_person');
 });
 
 test('unfinished batch payload survives reload and lock-timeout responses without changing request ID', async () => {

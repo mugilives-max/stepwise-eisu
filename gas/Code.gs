@@ -58,8 +58,10 @@ function doPost(e) {
   var locked = false;
   try {
     lock.waitLock(10000); locked = true;
+    var afterLock=Date.now();
     memoClear_();
     ensureSchema_();
+    var afterSchema=Date.now();
     var req = JSON.parse(e.postData.contents);
     var res;
     if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
@@ -92,6 +94,7 @@ function doPost(e) {
       default:       res = { error: 'unknown action' };
     }
     if (res && typeof res === 'object') res.ms = Date.now() - t0; // 処理時間(ミリ秒)。フロントのconsoleに出る
+    if (res && typeof res === 'object') res.timings = {lockMs:afterLock-t0,schemaMs:afterSchema-afterLock,operationMs:Date.now()-afterSchema};
     return json_(res);
   } catch (err) {
     return json_({ error: String(err), errorCode: locked ? (err.billingCode || 'serverError') : 'pending' });
@@ -1334,7 +1337,7 @@ function kanriWrap_(req, res, studentId) {
   if (!res || res.error || req.from !== 'kanri') return res;
   if (req.view === 'lessons') return res; // 授業ページは admin 全データをそのまま使う
   if (req.view === 'home') return Object.assign({ ok: true, id: String(studentId || ''), dash: kanriDashboard_() },res.notificationWarning?{notificationWarning:res.notificationWarning}:{});
-  var d = kanriStudent_(String(studentId || req.studentId || ''));
+  var d = kanriStudent_(String(studentId || req.studentId || ''),req.section);
   if (d.error) return d;
   return Object.assign({ ok: true, id: String(studentId || req.studentId || ''), data: d },res.notificationWarning?{notificationWarning:res.notificationWarning}:{});
 }
@@ -1350,7 +1353,7 @@ function admin_(req) {
   if(['state','kanriStudent','kanriDashboard','studentEmailNotifications'].indexOf(req.op)>=0)slotCancellationRecoverNotices_(req.studentId);
   if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
   if (String(req.op || '').indexOf('studentEmail') === 0) return studentEmailAdmin_(req);
-  if (['lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
+  if (['lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
     case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
     case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));
@@ -1819,12 +1822,13 @@ function notify_(subject, body) {
    同じシートを何度も読まない。書き込みは sheet_()/ledgerSheet_() 経由なので、そこでキャッシュを捨てる。
    最終的な読み返し(adminState_/kanriDashboard_/kanriStudent_)の先頭でも全部捨てるので、書き込み後は必ず最新が返る */
 var MEMO_ = { ss: null, rows: {}, ledger: null, lrows: {} };
-function memoClear_() { MEMO_.rows = {}; MEMO_.lrows = {}; }
+function memoClear_() { MEMO_.rows = {}; MEMO_.lrows = {}; delete MEMO_.lessonMeta; }
 function ss_() { if (!MEMO_.ss) MEMO_.ss = SpreadsheetApp.getActive(); return MEMO_.ss; }
 
 // 書き込み用にシートを取る(そのシートのキャッシュは捨てる)
 function sheet_(name) {
   delete MEMO_.rows[name];
+  if (name === 'lessonRecords' || name === 'lessonReportDrafts') delete MEMO_.lessonMeta;
   return ss_().getSheetByName(name);
 }
 
@@ -1839,7 +1843,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk17')) return;
+  if (cache.get('schemaOk18')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1864,7 +1868,7 @@ function ensureSchema_() {
   if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
-  cache.put('schemaOk17', '1', 21600);
+  cache.put('schemaOk18', '1', 21600);
 }
 
 function readRows_(name) {
@@ -2073,7 +2077,7 @@ function kanriDashboard_() {
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
-  return { today: today, pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired,
+  return { today: today, pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
     slots: upcomingAll, blocked: blockedUp, teacherOff: teacherOff_(today, true), allEvents: eventsForAdmin_(0) };
@@ -2101,12 +2105,14 @@ function kanriSetActive_(req) {
 
 function kanriStudentOp_(req) {
   if (req.view === 'home') return { ok: true, dash: kanriDashboard_() };
-  var d = kanriStudent_(req.studentId);
+  var d = kanriStudent_(req.studentId,req.section);
   if (d.error) return d;
   return { ok: true, data: d };
 }
 
-function kanriStudent_(studentId) {
+function kanriStudent_(studentId,section) {
+  section=section || 'all';
+  if (['all','overview','settings','progress','billing'].indexOf(section)<0) return {error:'表示する項目が正しくありません'};
   memoClear_();
   var id = String(studentId || '');
   var sys = systemStudent_(id);
@@ -2116,42 +2122,60 @@ function kanriStudent_(studentId) {
   var profile = null;
   ledgerRows_('生徒台帳').forEach(function (p) { if (String(p['生徒ID']) === id) profile = p; });
   if (profile) delete profile._row;
+  var base={section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
+  if (section==='settings') return Object.assign(base,{email:String(sys.email || ''),emailStatus:studentEmailStatus_(id),rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),parentAuth:parentStatus_(id)});
+  if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
     .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
+  if (section==='overview') return Object.assign(base,{
+    lessons:lessons.filter(function(l){return l.date>=today;}).concat(lessons.filter(function(l){return l.date<today;}).slice(0,20)),
+    unrecordedLessons:lessons.filter(function(l){return l.status==='booked' && !l.done && /^\d{4}-\d{2}-\d{2}$/.test(l.date) && l.date<today;}),
+    pendingEdits:schedulingPendingEdits_(id),wishes:wishesForAdmin_().filter(function(x){return x.studentId===id;}),
+    blocked:blockedRows_().filter(function(x){return String(x.studentId)===id && x.date>=today;}),
+    teacherOff:teacherOff_(today,true),events:eventsForAdmin_(60).filter(function(x){return x.studentId===id;}),tasks:tasksFor_(id,60)
+  });
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });
-  var grades = ledgerRows_('成績推移').filter(function (g) { return String(g['生徒ID']) === id; })
-    .map(function (g) { return { row: g._row, date: g['日付'], test: g['テスト名'], subject: g['科目'], score: Number(g['点数']),
-      max: Number(g['満点'] || 0) || null, dev: g['偏差値'] === '' ? null : Number(g['偏差値']), rank: g['順位'], note: g['備考'] }; })
-    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
   var payments = ledgerRows_('入金管理').filter(function (p) { return String(p['生徒ID']) === id; })
     .map(function (p) { return { paymentRevision:Number(p['入金版'])||0, lessons:billingSavedLessons_(p), id:String(p['請求ID']||''), voidedAt:String(p['取消日時']||''), voidReason:String(p['取消理由']||''), row: p._row, ym: String(p['年月']), amount: Number(p['請求額'] || 0), billDate: p['請求日'] || '',
       paidDate: p['入金日'] || '', method: p['入金方法'] || '', status: p['状態'] || '', note: p['備考'] || '' }; })
     .sort(function (a, b) { return a.ym < b.ym ? 1 : -1; });
-  var meetings = ledgerRows_('面談記録').filter(function (m) { return String(m['生徒ID']) === id; })
-    .map(function (m) { return { row: m._row, date: m['日付'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; })
-    .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
   var fee = studentFee_(id, minutes, month), billingMonths = billingMonths_(id);
+  var plan=(function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
+      monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
+      months: billingMonths.map(function(b){return planMonthInfo_(id,b.ym,rows);}) }; })();
+  var thisMonth={count:doneMonth.length,minutes:minutes,fee:fee.amount,mode:fee.mode,billed:payments.some(function(p){return p.ym===month && p.status!=='取消';})};
+  if (section==='billing') return Object.assign(base,{rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),payments:payments,billing:billingPreview_(id,month),billingMonths:billingMonths,plan:plan,thisMonth:thisMonth});
+  var progressData=kanriStudentProgress_(id);
   return {
-    billing:billingPreview_(id,month), billingMonths:billingMonths,
+    section:section, billing:billingPreview_(id,month), billingMonths:billingMonths,
     id: id, name: sys.name, deliveryMode: String(sys.deliveryMode || ''), email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(id) : null,
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_(id) : [],
     parentAuth: parentStatus_(id),
-    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: grades, exams: examsFor_(id, true), payments: payments, meetings: meetings,
+    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: progressData.grades, exams: progressData.exams, payments: payments, meetings: progressData.meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
     blocked: blockedRows_().filter(function (b) { return String(b.studentId) === id && b.date >= today; }).map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; }),
     teacherOff: teacherOff_(today, true),
-    plan: (function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
-      monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
-      months: billingMonths.map(function(b){return planMonthInfo_(id,b.ym,rows);}) }; })(),
+    plan: plan,
     events: eventsForAdmin_(60).filter(function (x) { return x.studentId === id; }),
     tasks: tasksFor_(id, 60),
-    month: month, thisMonth: { count: doneMonth.length, minutes: minutes, fee: fee.amount, mode: fee.mode,
-      billed: payments.some(function (p) { return p.ym === month && p.status !== '取消'; }) }
+    month: month, thisMonth: thisMonth
   };
+}
+
+
+function kanriStudentProgress_(id) {
+  var grades = ledgerRows_('成績推移').filter(function (g) { return String(g['生徒ID']) === id; })
+    .map(function (g) { return { row: g._row, date: g['日付'], test: g['テスト名'], subject: g['科目'], score: Number(g['点数']),
+      max: Number(g['満点'] || 0) || null, dev: g['偏差値'] === '' ? null : Number(g['偏差値']), rank: g['順位'], note: g['備考'] }; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  var meetings = ledgerRows_('面談記録').filter(function (m) { return String(m['生徒ID']) === id; })
+    .map(function (m) { return { row: m._row, date: m['日付'], who: m['相手'], method: m['方法'], content: m['内容'], next: m['次のアクション'] }; })
+    .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  return {grades:grades,exams:examsFor_(id,true),meetings:meetings};
 }
 
 function kanriSaveProfile_(req) {
@@ -2180,7 +2204,7 @@ function kanriSaveProfile_(req) {
   } else {
     ledgerAppend_('生徒台帳', obj);
   }
-  return kanriStudentOp_({ studentId: id, view: req.view });
+  return kanriStudentOp_({ studentId: id, view: req.view, section: req.section });
 }
 
 function kanriAddGrade_(req) {
@@ -2192,7 +2216,7 @@ function kanriAddGrade_(req) {
   ledgerAppend_('成績推移', { '日付': req.date, '生徒ID': id, '氏名': sys.name, 'テスト名': String(req.test || '').slice(0, 50),
     '科目': String(req.subject || ''), '点数': Number(req.score), '満点': req.max ? Number(req.max) : '',
     '偏差値': req.dev ? Number(req.dev) : '', '順位': String(req.rank || ''), '備考': String(req.note || '').slice(0, 200) });
-  return kanriStudentOp_({ studentId: id, view: req.view });
+  return kanriStudentOp_({ studentId: id, view: req.view, section: req.section });
 }
 
 // 模試の結果を1回分登録。scores = { 国語:{score,dev}, ..., '3教科':{...}, '5教科':{...} }
@@ -2212,7 +2236,7 @@ function kanriAddExam_(req) {
   o['志望校判定'] = String(req.judge || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean).join(' / ').slice(0, 600);
   o['資料URL'] = String(req.url || '').slice(0, 300); o['備考'] = String(req.note || '').slice(0, 200);
   ledgerAppend_('模試', o);
-  return kanriStudentOp_({ studentId: id, view: req.view });
+  return kanriStudentOp_({ studentId: id, view: req.view, section: req.section });
 }
 
 function kanriAddPayment_(req) { return billingMutationResult_(req,billingAddInvoice_(req)); }
@@ -2226,7 +2250,7 @@ function kanriAddMeeting_(req) {
   if (!String(req.content || '').trim()) return { error: '内容を入れてください' };
   ledgerAppend_('面談記録', { '日付': String(req.date || todayStr_()), '生徒ID': id, '氏名': sys.name, '相手': String(req.who || ''),
     '方法': String(req.method || ''), '内容': String(req.content || '').slice(0, 2000), '次のアクション': String(req.next || '').slice(0, 500) });
-  return kanriStudentOp_({ studentId: id, view: req.view });
+  return kanriStudentOp_({ studentId: id, view: req.view, section: req.section });
 }
 
 function kanriDeleteRow_(req) {
@@ -2239,7 +2263,7 @@ function kanriDeleteRow_(req) {
   var idCol = cols.indexOf('生徒ID');
   if (String(vals[idCol]) !== String(req.studentId)) return { error: '行が一致しません。画面を更新してください' };
   sh.deleteRow(row);
-  return kanriStudentOp_({ studentId: String(req.studentId), view: req.view });
+  return kanriStudentOp_({ studentId: String(req.studentId), view: req.view, section: req.section });
 }
 
 // 【復旧用・エディタから実行】先生のログイン情報を初期化する(Webからは呼べない)。

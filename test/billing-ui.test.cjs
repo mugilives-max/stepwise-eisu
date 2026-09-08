@@ -22,7 +22,7 @@ function card(overrides = {}) {
 }
 function invoice(overrides = {}) { return { id: 'test-invoice', ym: '2026-09', amount: 3000, status: '未入金', paymentRevision: 0, ...overrides }; }
 async function ready(data = card()) {
-  const ui = createUI('#s=' + data.id);
+  const ui = createUI('#s=' + data.id + '&tab=billing');
   assert.equal(ui.requests[0].body.op, 'kanriStudent');
   ui.requests[0].reply({ ok: true, data }); await flush();
   return ui;
@@ -31,9 +31,6 @@ function setPayment(ui) {
   ui.input('bill-date-test-invoice', '2026-09-01');
   ui.input('bill-method-test-invoice', '現金');
   ui.click('billing-paid', { 'data-invoice': 'test-invoice' });
-}
-function setFee(ui, rate) {
-  ui.click('editfee'); ui.el('e-rate').value = String(rate); ui.el('e-monthly').value = '0'; ui.click('savefee');
 }
 function setPlan(ui, ym = '2026-09', count = 4) {
   ui.el('pl-scope').value = ym === 'default' ? 'default' : 'month';
@@ -84,7 +81,7 @@ test('an interrupted count save can be resent with the refreshed draft revision'
 
 test('a late background read cannot supply the revision for the next count save', async () => {
   const ui = await ready(planCard([month('2026-09', 1)]));
-  ui.navigate('#students'); ui.navigate('#s=test-a'); const background = ui.requests.at(-1);
+  ui.navigate('#students'); ui.navigate('#s=test-a&tab=billing'); const background = ui.requests.at(-1);
   setPlan(ui); ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 2)]) }); await flush();
   background.reply({ ok: true, data: planCard([month('2026-09', 1)]) }); await flush();
   setPlan(ui); assert.equal(ui.requests.at(-1).body.expectedRevision, 2);
@@ -92,7 +89,7 @@ test('a late background read cannot supply the revision for the next count save'
 
 test('late responses for another student cannot supply a count save student or revision', async () => {
   const ui = await ready(planCard([month('2026-09', 1)])); ui.click('reload'); const oldRead = ui.requests.at(-1);
-  ui.navigate('#s=test-b');
+  ui.navigate('#s=test-b&tab=billing');
   ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 8)], { id: 'test-b' }) }); await flush();
   oldRead.reply({ ok: true, data: planCard([month('2026-09', 99)]) }); await flush();
   setPlan(ui);
@@ -101,7 +98,7 @@ test('late responses for another student cannot supply a count save student or r
 });
 
 test('a failed student switch cannot save the previous student card still on screen', async () => {
-  const ui = await ready(); ui.navigate('#s=test-b');
+  const ui = await ready(); ui.navigate('#s=test-b&tab=billing');
   ui.requests.at(-1).fail(); await flush();
   const before = ui.requests.length; setPlan(ui);
   assert.equal(ui.requests.length, before);
@@ -111,7 +108,7 @@ test('a failed student switch cannot save the previous student card still on scr
 test('late cached-card read cannot roll a completed payment back to unpaid', async () => {
   const before = card({ payments: [invoice()] }), after = card({ payments: [invoice({ status: '入金済', paidDate: '2026-09-01' })] });
   const ui = await ready(before);
-  ui.navigate('#students'); ui.navigate('#s=test-a');
+  ui.navigate('#students'); ui.navigate('#s=test-a&tab=billing');
   const background = ui.requests.at(-1);
   assert.equal(background.body.op, 'kanriStudent');
   setPayment(ui);
@@ -120,13 +117,13 @@ test('late cached-card read cannot roll a completed payment back to unpaid', asy
   background.reply({ ok: true, data: before }); await flush();
   assert.match(ui.html(), /data-action="billing-correct"/);
   assert.equal(ui.html().includes('data-action="billing-paid"'), false);
-  assert.equal(JSON.parse(ui.local.get('sw_kanri_c'))['s:test-a'].data.payments[0].status, '入金済');
+  assert.equal(JSON.parse(ui.local.get('sw_kanri_sections_v1'))['s:test-a:billing'].data.payments[0].status, '入金済');
 });
 
 test('a payment response for another student does not cancel the current student read', async () => {
   const ui = await ready(card({ payments: [invoice()] })); setPayment(ui);
   const payment = ui.requests.at(-1);
-  ui.navigate('#s=test-b'); const otherRead = ui.requests.at(-1);
+  ui.navigate('#s=test-b&tab=billing'); const otherRead = ui.requests.at(-1);
   payment.reply({ ok: true, data: card({ payments: [invoice({ status: '入金済' })] }) }); await flush();
   otherRead.reply({ ok: true, data: card({ id: 'test-b', name: '【テスト】別生徒の画面' }) }); await flush();
   assert.match(ui.html(), /別生徒の画面/);
@@ -136,13 +133,13 @@ test('a payment response for another student does not cancel the current student
 test('unmodified proposal defaults refresh after a base-fee change at the same plan revision', async () => {
   const ui = await ready();
   assert.equal(ui.el('pl-rate-2026-09').value, '1500');
-  setFee(ui, 2000); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
+  ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
   assert.equal(ui.el('pl-rate-2026-09').value, '2000');
 });
 
 test('an explicitly edited proposal fee survives a base-fee refresh', async () => {
   const ui = await ready(); ui.input('pl-rate-2026-09', '1750');
-  setFee(ui, 2000); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
+  ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
   assert.equal(ui.el('pl-rate-2026-09').value, '1750');
 });
 
@@ -181,7 +178,7 @@ test('payment corrections need a reason and target the invoice ID rather than a 
 test('historical invoices retain their amount without inventing a zero-yen pricing formula', async () => {
   const bill = { ym: '2026-09', amount: 3000, mode: 'recorded', rate30: 0, monthly: 0, minutes: 0, count: 0, canBill: false, invoice: invoice({ lessons: [] }), lessons: [] };
   const ui = await ready(card({ billing: bill, payments: [invoice()] }));
-  setFee(ui, 9999);
+  ui.click('reload');
   ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 9999, billing: bill, payments: [invoice()] }) }); await flush();
   ui.click('billing-preview'); ui.requests.at(-1).reply({ ok: true, billing: bill }); await flush();
   assert.match(ui.html(), /3,000円/); assert.match(ui.html(), /当時の料金条件は未記録/);
@@ -190,7 +187,7 @@ test('historical invoices retain their amount without inventing a zero-yen prici
 
 test('an old billing rejection preserves a newer teacher token and another student screen', async () => {
   const ui = await ready(); ui.click('billing-preview'); const old = ui.requests.at(-1);
-  ui.local.set('sw_admt', 'replacement-teacher-token'); ui.navigate('#s=test-b');
+  ui.local.set('sw_admt', 'replacement-teacher-token'); ui.navigate('#s=test-b&tab=billing');
   ui.requests.at(-1).reply({ ok: true, data: card({ id: 'test-b', name: '【テスト】新しいログイン' }) }); await flush();
   old.reply({ error: '古いログイン', badAuth: true }); await flush();
   assert.equal(ui.local.get('sw_admt'), 'replacement-teacher-token');

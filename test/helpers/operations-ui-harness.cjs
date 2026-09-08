@@ -56,7 +56,7 @@ function slot(id, overrides = {}) { return { id, date: '2026-09-10', start: id =
 function state(slots = [slot('slot-a'), slot('slot-b', { deliveryMode: 'online' })], name = '【テスト】生徒A') { return { me: { name }, today: '2026-09-08', slots, history: [], tasks: [], blocked: [], teacherOff: [], wishes: [], events: [], plan: {} }; }
 function card(overrides = {}) { return { id: 'test-a', name: '【テスト】生徒A', active: true, code: 'test-link-a', month: '2026-09', today: '2026-09-08', rate30: 1000, monthly: 0, deliveryMode: 'online', lessons: [], grades: [], exams: [], payments: [], meetings: [], tasks: [], profile: {}, thisMonth: {}, plan: { months: [] }, parentAuth: {}, ...overrides }; }
 async function studentReady(s = state()) { const ui = createUI(); ui.requests[0].reply(s); await flush(); return ui; }
-async function adminReady(c = card()) { const ui = createUI('admin'); ui.requests[0].reply({ data: c }); await flush(); return ui; }
+async function adminReady(c = card(), section = 'overview') { const ui = createUI('admin', {hash:'#s='+c.id+'&tab='+section}); ui.requests[0].reply({ data: c }); await flush(); return ui; }
 
 
 module.exports = { createUI, slot, state, card, studentReady, adminReady, flush };

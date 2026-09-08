@@ -113,7 +113,7 @@ for (const dueMode of ['nextLesson', 'date', 'none']) test('teacher tasks submit
 
 async function lessonReady(record = null, extra = {}) {
   const ui = createUI('admin', { hash: '#lesson?student=test-a&slot=slot-a' });
-  const context = { student: { id: 'test-a', name: '【テスト】生徒A', active: true }, slot: offered({ subject: '化学', status: 'booked' }),
+  const context = { student: { id: 'test-a', name: '【テスト】生徒A', active: true }, today: '2026-09-10', slot: offered({ subject: '化学', status: 'booked' }),
     record, previous: null, otherPrevious: [], openTasks: [], homeworkState: [], draft: null, pending: null, slotChanged: false, lessonChoices: [], ...extra };
   ui.requests[0].reply({ ok: true, context }); await flush(); return ui;
 }
@@ -139,7 +139,7 @@ test('lesson homework deadline changes clear stale dates and retain the chosen p
 });
 
 test('teacher email status permits explicit retries only for safe queued messages and shows unknown results', async () => {
-  const ui = await adminReady(card({ emailStatus: { email: 'synthetic@example.invalid', verified: true } }));
+  const ui = await adminReady(card({ emailStatus: { email: 'synthetic@example.invalid', verified: true } }), 'settings');
   ui.click('sm-load'); assert.equal(ui.requests.at(-1).body.op, 'studentEmailNotifications');
   const emailStatus = { email: 'synthetic@example.invalid', verified: true }, notifications = [
     { id: 'uncertain-notice', kind: 'changed', status: 'uncertain', retryable: false }, { id: 'failed-notice', kind: 'offered', status: 'failed', retryable: true }
