@@ -72,12 +72,6 @@
 - **関連**: `stepwise-mcp/src/tools.ts`、`gas/Code.gs` のMCP入口。配置は [MCP_OPERATIONS.md](MCP_OPERATIONS.md#5-ツールを追加変更する手順)。
 - **追加日**: 2026-09-07
 
-### MCP: Codex をリモート版に一本化するか
-- **背景**: Codex はローカル stdio(`dist/stdio.js`)、ChatGPT は Cloudflare。コードを変えたとき `npm run build` と `wrangler deploy` の2系統の更新が要る。
-- **やること**: Codex がリモート MCP の OAuth に対応していれば `config.toml` を URL 指定に切り替え、ローカル版は予備にする。未定。
-- **関連**: `~/.codex/config.toml`、MCP_OPERATIONS.md 1章。
-- **追加日**: 2026-09-07
-
 ### MCP: Google ログイン化・独自ドメイン
 - **背景**: いまはパスフレーズ方式(GCP の OAuth クライアント設定を避けるため)。将来、保護者や別の先生が使うなら Google アカウントでの本人確認の方が管理しやすい。ドメインは workers.dev のまま。
 - **やること**: 必要になったら GCP に OAuth クライアントを作り、`src/worker.ts` の defaultHandler を Google 認可コードフローに差し替え。ドメインは `mcp.stepwise-education.jp` の候補。どちらも未定。
@@ -159,4 +153,5 @@
 
 ## 済み(記録用)
 
+- 2026-09-08 Codex の MCP をリモート版(Cloudflare `/mcp`、OAuth)に一本化。`~/.codex/config.toml` を `url` 指定に変更(旧 stdio はコメントアウトで予備)、Worker は `mcpLog` の client 列に OAuth の client_name を記録するよう変更して再配置(Version 91cbe92d)。初回の `codex mcp login stepwise` は先生が実施(MCP_OPERATIONS.md 1章)
 完了した変更の要点・日付・版は [SYSTEM.md 変更履歴](SYSTEM.md#9-変更履歴要点) に集約する。機能固有の検証・設計判断は該当文書に残し、ここに複製しない。

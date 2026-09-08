@@ -8,7 +8,8 @@
 
 ```
 ChatGPT(Chat/Work)  ─OAuth(パスフレーズ)─►  Cloudflare Workers "stepwise-mcp"  ─mcpKey─►  GAS(/exec)  ─►  スプレッドシート
-Codex(このPC)       ─stdio────────────►  PC内の同じコード(dist/stdio.js) ─mcpKey─►  GAS(/exec)
+Codex(このPC)       ─OAuth(パスフレーズ)─►  同じ Cloudflare Workers(/mcp)      ─mcpKey─►  GAS(/exec)   ※2026-09-08 にリモート版へ一本化
+(予備)Codex         ─stdio────────────►  PC内の同じコード(dist/stdio.js) ─mcpKey─►  GAS(/exec)   ※config.toml にコメントアウトで残置
 ```
 
 | もの | 場所 | 備考 |
@@ -16,11 +17,11 @@ Codex(このPC)       ─stdio────────────►  PC内の�
 | MCPサーバーのコード | `C:\Users\mugir\dev\stepwise-mcp`、GitHub private `mugilives-max/stepwise-mcp` | `src/tools.ts` ツール、`src/gas.ts` 中継・再試行、`src/stdio.ts` ローカル入口、`src/worker.ts` リモート入口、`wrangler.jsonc` 配置先 |
 | リモート接続先 | `https://stepwise-mcp.stepwise-edu.workers.dev/mcp` | Worker `stepwise-mcp`、workers.devサブドメイン `stepwise-edu`、Cloudflareアカウント mugilives@gmail.com、KV binding `OAUTH_KV` |
 | Cloudflare Secrets | Workerに設定 | `STEPWISE_GAS_URL`、`STEPWISE_MCP_KEY`、`MCP_LOGIN_PASSWORD`。値を文書・Git・チャット・コマンド引数に残さない |
-| PC側の設定 | `C:\Users\mugir\dev\stepwise-mcp\.env`(gitignore) | `STEPWISE_GAS_URL`、`STEPWISE_MCP_KEY`、`STEPWISE_CLIENT=codex`。stdioは実行ファイルからプロジェクト直下の.envを解決するため、別の作業ディレクトリから起動できる |
+| PC側の設定(予備のstdio用) | `C:\Users\mugir\dev\stepwise-mcp\.env`(gitignore) | `STEPWISE_GAS_URL`、`STEPWISE_MCP_KEY`、`STEPWISE_CLIENT=codex`。stdioは実行ファイルからプロジェクト直下の.envを解決するため、別の作業ディレクトリから起動できる。通常運用(リモート版)では使わない |
 | GAS側 | Apps Script「ステップワイズ予約システム」のScript Properties `MCP_KEY` | `Code.gs`の `mcpEntry_`、`MCP_READ_OPS` / `MCP_WRITE_OPS`。先生用adminTokenとは独立 |
 | 呼び出し記録 | 予約台帳の `mcpLog` | `time / requestId / client / op / target / params / result / ms`。requestIdは監査欄で、重複実行防止機能ではない |
 | ChatGPT側の登録 | 接続設定内の「Stepwise」 | 2026-09-07にOAuthで登録した記録。設定画面の分類名や提供条件は使用中の画面で確認 |
-| Codex側の登録 | `C:\Users\mugir\.codex\config.toml` の `[mcp_servers.stepwise]` | `node C:\Users\mugir\dev\stepwise-mcp\dist\stdio.js` を起動する登録 |
+| Codex側の登録 | `C:\Users\mugir\.codex\config.toml` の `[mcp_servers.stepwise]` | 2026-09-08 から `url = "https://stepwise-mcp.stepwise-edu.workers.dev/mcp"`(ChatGPTと同じ接続先)。認証は `codex mcp login stepwise`(OAuth、パスフレーズ)。旧stdio登録はコメントアウトで残置 |
 
 ### ChatGPTの接続・再接続
 
@@ -28,9 +29,21 @@ Codex(このPC)       ─stdio────────────►  PC内の�
 
 登録済みなら、まず既存Stepwiseの有効状態・認証エラーを確認します。削除して作り直すのは登録修復や再認証に必要な場合に限り、Worker障害やGASキー不一致を再登録で直そうとしません。組織の接続制限が表示される場合は、その制限に従って設定します。
 
-### Codexの接続・再起動
+### Codexの接続・再接続(リモート版、2026-09-08〜)
 
 既存登録を重複させず、必要な項目だけ合わせます。秘密値を含まない登録形:
+
+```toml
+[mcp_servers.stepwise]
+url = "https://stepwise-mcp.stepwise-edu.workers.dev/mcp"
+startup_timeout_sec = 60
+```
+
+初回、または認証が切れたときは PowerShell で `codex mcp login stepwise` を実行します(Codex CLI 0.153 で確認。`codex mcp add --url` と `codex mcp login` が使える)。ブラウザに Stepwise の認可画面が開くので、**MCP専用パスフレーズ**(ChatGPT と同じもの)を本人が入力します。Codex は動的クライアント登録(DCR)で接続するため、認可画面と `mcpLog` の `client` 列には Codex 側が名乗る client_name が出ます(Worker は 2026-09-08 から OAuth の client_name を `client` として GAS に渡す)。登録の確認は `codex mcp get stepwise`、認証の解除は `codex mcp logout stepwise`。
+
+利点: コード変更の反映が `npx wrangler deploy` の1系統だけになり、PC の `.env` と `dist` に依存しません。欠点: Worker か Cloudflare が止まると Codex からも読めません。その場合は `config.toml` にコメントアウトで残してある stdio 登録に戻し(`npm run build` 済みの `dist/stdio.js` と `.env` が必要)、Codex を再起動します。
+
+(参考・予備)stdio 登録形:
 
 ```toml
 [mcp_servers.stepwise]
@@ -38,7 +51,7 @@ command = "node"
 args = ["C:/Users/mugir/dev/stepwise-mcp/dist/stdio.js"]
 ```
 
-`.env`はプロセス開始時に読みます。`dist`や.env変更後は当該MCPサーバー、またはCodexを再起動して読み直します。stdioに別のOAuthログインはありませんが、PCアカウントと.envへのアクセスが信頼境界です。
+stdio は `.env` をプロセス開始時に読みます。`dist` や .env 変更後は Codex を再起動して読み直します。stdio に別の OAuth ログインはありませんが、PC アカウントと .env へのアクセスが信頼境界です。
 
 ## 2. いま使える機能(閲覧のみ)
 
@@ -85,7 +98,7 @@ GASのキー認証失敗は共通キャッシュで数え、20回以上で一時
 | Secret項目確認 | `npx wrangler secret list` | 名前だけで値の一致は確認できない |
 | 専用パスフレーズ変更 | `npx wrangler secret put MCP_LOGIN_PASSWORD` | 3章の既存認可への影響を確認 |
 | GASキー更新 | `npx wrangler secret put STEPWISE_MCP_KEY` | 3章の交換とセット。秘密値をコマンド引数に書かない |
-| Codex用コード生成 | `npm run build` | `dist`更新後はプロセス再起動 |
+| 予備stdio用コード生成 | `npm run build` | 通常運用(リモート版)では不要。stdioに戻すときだけ。`dist`更新後はプロセス再起動 |
 | Workers再配置 | `npx wrangler deploy` | 本番変更。5章の検証と対象確認後に実行 |
 | 本番ログ参照 | `npx wrangler tail` | 必要な期間だけ実行しCtrl+Cで終了。ログを公開文書や会話へそのまま貼らない |
 
@@ -105,7 +118,7 @@ GASのキー認証失敗は共通キャッシュで数え、20回以上で一時
 2. `src/tools.ts`など必要な箇所を編集する。GASに新opが必要なら `gas/Code.gs`の許可リストと `mcpDispatch_`も変更する。許可外op拒否・自由記述の扱い・秘密情報除外を検証する。
 3. `npm run build`と変更に対応する検証を行う。本番接続テストの影響は4章を確認。**データ変更の試験は名前が【テスト】で始まる生徒のみ**で、実生徒を変更しない。退避・復旧を変更範囲に合わせて準備する。
 4. GASを変えた場合は [SYSTEM.md](SYSTEM.md) の反映手順で保存・新バージョンをデプロイし、公開版とローカルの一致を確認する。MCPが新opを呼び始める前に対応GASを用意する。
-5. ローカルstdioを再起動して確認する。Workersへ反映が必要なら配置先を確認して `npx wrangler deploy`し、リモートも確認。単なる再配置で通常は登録を作り直さないが、ツール一覧・認証・URL変更では接続元の再読み込みや再認証の要否を確認する。
+5. 配置先を確認して `npx wrangler deploy` し、ChatGPT・Codex(どちらもリモート版)から確認する。予備のstdioを使う場合は `npm run build` 後に再起動して確認。単なる再配置で通常は登録を作り直さないが、ツール一覧・認証・URL変更では接続元の再読み込みや再認証の要否を確認する。
 6. 現行の機能・接続・運用はこの文書、全体構造はSYSTEM、残件はFUTURE_WORKへ反映する。設計判断や過去検証として残す理由がある場合だけMCP_DESIGNを更新し、同じ手順を複数文書へ複製しない。
 
 **更新系ツールは未実装です。** 追加する場合は [MCP_DESIGN.md](MCP_DESIGN.md) の非公開操作・不採用判断を守り、採用範囲を決めて実装します。最低条件は、対象・日時・通知・料金のプレビューと承認、入力に結び付いた1回限りの確認トークン、`request_id`の冪等化、テスト生徒だけを許可するサーバー側制限です。実装・検証前に許可リスト追加や `MCP_WRITE_SCOPE=all`という設定だけで開放しません。
@@ -122,7 +135,7 @@ GASのキー認証失敗は共通キャッシュで数え、20回以上で一時
 | MCP認証失敗による一時停止 | GASの共通失敗キャッシュか確認。誤った接続元を止め、記録期限を待って正しい設定で再試行 |
 | 「この操作はMCPから実行できません」 | 許可外のため拒否。全更新が意図的に不可。エラーを消すためだけに許可リストへ追加しない |
 | 遅い・通信失敗 | 中継は1試行25秒、例外時に1.5秒待って1回再試行。起動待ち・Spreadsheet・ScriptLock待ち等を切り分ける。正常なJSONの業務エラーは自動再試行しない。更新ツールへこの再送を流用しない |
-| Codexで起動しない | Node、生成済みdist/stdio.js、プロジェクト直下.envの存在・項目を確認。必要ならビルド後に再起動。.envの値を丸ごと出力しない |
+| Codexで接続できない | まず `codex mcp get stepwise` で `url` が上記 `/mcp` か確認し、`codex mcp login stepwise` で再認証。Workerの `/` と `/mcp`(未認証で401)の応答も確認。予備のstdioに戻す場合は Node、生成済みdist/stdio.js、プロジェクト直下.envの存在・項目を確認し、ビルド後に再起動。.envの値を丸ごと出力しない |
 | パスフレーズ変更後も接続可能 | refresh tokenで更新され得るため想定内。強制切断が目的なら3章の停止・認可失効を確認 |
 | deployでsubdomain設定を要求 | whoamiとwrangler.jsoncが既存アカウント・Workerを指すか確認。新規作成が意図された作業と確認してから画面に沿って設定 |
 
