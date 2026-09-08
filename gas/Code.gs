@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-teacher-workflow' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-08-cleanup' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -339,12 +339,7 @@ function cancel_(slotId, code) {
   }
   var name = student.name;
   deleteCalEvent_(r.slot);
-  r.slot.status = 'open';
-  r.slot.studentId = '';
-  r.slot.done = '';
-  r.slot.eventId = '';
-  r.slot.meetUrl = '';
-  writeSlotRow_(r);
+  sheet_('slots').deleteRow(r.rowIndex);
   addLog_(name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' を取消');
   if (!isTestStudent_(student)) notify_('【取消】' + name + 'さん',
     name + 'さんが予約を取り消しました。\n' +
@@ -462,7 +457,7 @@ function slotCancellation_(req,operation){
       var pending=typeof schedulingPendingSlotMutation_==='function'?schedulingPendingSlotMutation_(current.id):null;if(pending)return pending;
       var gate=operation==='cancelDeclined'?null:billingSlotMutable_(current);if(gate)return gate;
       if(operation==='cancelDeclined'&&!parseReq_(current.req))return {error:'取消依頼が見つかりません'};
-      var before=slotCancellationSnapshot_(current),after=operation==='deleteSlot'||operation==='resolveCancel'?null:Object.assign({},before,operation==='unbook'?{status:'open',studentId:'',done:'',eventId:'',meetUrl:'',req:''}:{req:''});
+      var before=slotCancellationSnapshot_(current),after=operation==='cancelDeclined'?Object.assign({},before,{req:''}):null;
       w={id:schedulingHash_(operation+'|'+JSON.stringify(before)),studentId:String(before.studentId),slotId:String(before.id),operation:operation,beforeJson:JSON.stringify(before),afterJson:JSON.stringify(after),status:'pending',createdAt:new Date().toISOString()};
       slotCancellationWrite_(w);
     }
@@ -2314,7 +2309,7 @@ function mcpStudents_(req) {
   return { ok: true, students: out };
 }
 
-// 期間内の授業(空き枠・案内中・確定)と、先生の休み・生徒の授業できない日・希望
+// 期間内の授業(案内中・確定)と、先生の休み・生徒の授業できない日・希望
 function mcpSchedule_(req) {
   var today = todayStr_();
   var from = mcpDate_(req.from, today), to = mcpDate_(req.to, addDays_(from, 14));

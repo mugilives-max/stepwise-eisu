@@ -35,15 +35,16 @@ test('cancellation journal failure before and after persistence leaves the booki
     const h=fixture();h.slot();failWriteOnce(h.spreadsheet.getSheetByName('slotChangeNotices'),()=>true,after);
     assert.equal(h.cancel().errorCode,'pending');assert.equal(h.rows('slots')[0].status,'booked');assert.equal(h.mailbox.length,0);
     if(after){assert.equal(h.context().slotCancellationPending_('cancel-slot').errorCode,'pending');assert.equal(h.admin('toggleDone',{studentId:'test-a',slotId:'cancel-slot',done:true}).errorCode,'pending');}
-    ok(h.cancel());assert.equal(h.rows('slots')[0].status,'open');assert.equal(h.mailbox.length,1);assert.equal(h.rows('slotChangeNotices').length,1);
+    ok(h.cancel());assert.equal(h.rows('slots').length,0);assert.equal(h.mailbox.length,1);assert.equal(h.rows('slotChangeNotices').length,1);
   }
 });
 
-test('interrupted booking-cell writes recover without repeating a notification or losing its original student',()=>{
+test('interrupted booking deletions recover without repeating a notification or losing its original student',()=>{
   for(const after of [false,true]){
-    const h=fixture();h.slot();failWriteOnce(h.spreadsheet.getSheetByName('slots'),v=>v[0][4]==='open',after);
+    const h=fixture();h.slot();const sh=h.spreadsheet.getSheetByName('slots'),del=sh.deleteRow;
+    sh.deleteRow=function(index){sh.deleteRow=del;if(after)del.call(this,index);throw new Error('synthetic interrupted deletion');};
     assert.equal(h.cancel().errorCode,'pending');assert.equal(h.mailbox.length,0);
-    ok(h.cancel());assert.equal(h.mailbox.length,1);assert.equal(h.rows('studentEmailOutbox').at(-1).studentId,'test-a');assert.equal(h.rows('slots')[0].studentId,'');
+    ok(h.cancel());assert.equal(h.mailbox.length,1);assert.equal(h.rows('studentEmailOutbox').at(-1).studentId,'test-a');assert.equal(h.rows('slots').length,0);
   }
 });
 
@@ -74,7 +75,8 @@ test('uncertain delivery and lost cancellation receipts never send twice',()=>{
 });
 
 test('pending cancellation cannot be redirected to another student, another decision or a changed slot',()=>{
-  const h=fixture();h.slot();failWriteOnce(h.spreadsheet.getSheetByName('slots'),v=>v[0][4]==='open');assert.equal(h.cancel().errorCode,'pending');
+  const h=fixture();h.slot();const sh=h.spreadsheet.getSheetByName('slots'),del=sh.deleteRow;
+  sh.deleteRow=function(){sh.deleteRow=del;throw new Error('synthetic interrupted deletion');};assert.equal(h.cancel().errorCode,'pending');
   assert.equal(h.cancel('unbook',{studentId:'test-b'}).errorCode,'conflict');assert.equal(h.cancel('resolveCancel',{approve:true}).errorCode,'pending');
   assert.equal(h.student('cancelReq',{slotId:'cancel-slot',withdraw:true}).errorCode,'pending');
   h.setRow('slots','id','cancel-slot',{studentId:'test-b'});assert.equal(h.cancel().errorCode,'conflict');assert.equal(h.mailbox.length,0);assert.equal(h.rows('slots')[0].studentId,'test-b');
@@ -92,5 +94,5 @@ test('Calendar deletion failure leaves the booking and stable cancellation journ
   const h=fixture();h.setRow('students','id','test-a',{name:'架空のカレンダー検証'});h.slot('booked',{eventId:'synthetic-legacy-event@google.com'});
   const c=h.context();let fail=true,count=0;c.Calendar={Events:{remove(calendar,id,options){count++;assert.equal(options.sendUpdates,'none');if(fail)throw new Error('503 synthetic failure');}}};
   assert.equal(c.slotCancellation_({slotId:'cancel-slot',studentId:'test-a'},'unbook').errorCode,'pending');assert.equal(h.rows('slots')[0].status,'booked');assert.equal(h.mailbox.length,0);
-  fail=false;ok(c.slotCancellation_({slotId:'cancel-slot',studentId:'test-a'},'unbook'));assert.equal(h.rows('slots')[0].status,'open');assert.equal(count,2);assert.equal(h.mailbox.length,1);
+  fail=false;ok(c.slotCancellation_({slotId:'cancel-slot',studentId:'test-a'},'unbook'));assert.equal(h.rows('slots').length,0);assert.equal(count,2);assert.equal(h.mailbox.length,1);
 });
