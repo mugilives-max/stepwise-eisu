@@ -15,12 +15,12 @@
   function area(key,label,value,max){return '<label style="display:block;margin:12px 0">'+esc(label)+'<textarea style="display:block;width:100%;min-height:90px" data-field="'+key+'" maxlength="'+(max||4000)+'">'+esc(value)+'</textarea></label>';}
   function btn(action,label){return '<button type="button" class="btn-quiet" data-svc="'+action+'">'+label+'</button>';}
   function paint(s){
-    if(current!==s||!s.host)return;var teacher=s.cfg.teacher,d=s.data||{},count=s.data?(d.messages||[]).filter(function(m){return m.status==='received'||m.status==='failed';}).length:s.cfg.pendingCount||0,h='<h2>'+(s.cfg.inbox?'連絡の受信箱（要対応 '+count+'件）':'成績票・振り返り／先生への連絡')+'</h2>';
+    if(current!==s||!s.host)return;var teacher=s.cfg.teacher,d=s.data||{},count=s.data?(d.messages||[]).filter(function(m){return m.status==='received'||m.status==='failed';}).length:s.cfg.pendingCount||0,h='<h2>'+(s.cfg.inbox?'連絡の受信箱（要対応 '+count+'件）':(s.cfg.panel==='exams'?'成績票・振り返り':s.cfg.panel==='cancel'?'授業の取消申請':s.cfg.panel==='messages'?'先生への連絡':'成績票・振り返り／先生への連絡'))+'</h2>';
     if(!s.open)h+=btn('open','開く');else{
       h+=btn('reload','最新の情報を確認')+' '+btn('close','閉じる');
       if(s.error)h+='<p role="alert">'+esc(s.error)+'</p>';if(s.notice)h+='<p role="status">'+esc(s.notice)+'</p>';
       if(s.busy)h+='<p role="status">処理中です…</p>';
-      if(!s.cfg.inbox){
+      if(!s.cfg.inbox && (!s.cfg.panel||s.cfg.panel==='all'||s.cfg.panel==='exams')){
         h+='<h3>成績票と振り返り</h3>'+(teacher?btn('new','試験結果を追加'):'');
         (d.exams||[]).forEach(function(e){h+='<article class="card"><h3>'+esc(e.date)+' '+esc(e.title)+'</h3><p>'+ (e.kind==='school'?'定期テスト':'模試')+'</p>';
           ['reflection','analysis','nextSteps'].forEach(function(k,i){h+='<h4>'+['振り返り','分析','次回の対策'][i]+'</h4><p style="white-space:pre-wrap">'+esc(e[k]||'未記入')+'</p>';});
@@ -29,13 +29,17 @@
           if(teacher)h+='<button type="button" data-svc="edit" data-id="'+esc(e.id)+'">編集する</button>';h+='</article>';});
         if(s.draft){var e=s.draft;h+='<form data-form="exam" class="card"><h3>試験結果を保存</h3><p>本文はこの生徒・保護者にも公開されます。先生用メモだけ非公開です。</p><label>試験日 <input type="date" data-field="date" value="'+esc(e.date)+'" required></label> <label>種類 <select data-field="kind"><option value="mock"'+(e.kind==='mock'?' selected':'')+'>模試</option><option value="school"'+(e.kind==='school'?' selected':'')+'>定期テスト</option></select></label><label style="display:block">試験名 <input data-field="title" maxlength="100" value="'+esc(e.title)+'" required></label><label>成績票PDF（5MBまで・任意） <input type="file" accept="application/pdf,.pdf" data-pdf></label><p>'+esc(e.pdf?e.pdf.name:e.fileName||'未添付')+'</p>'+area('reflection','振り返り',e.reflection)+area('analysis','分析',e.analysis)+area('nextSteps','次回の対策',e.nextSteps)+area('teacherNote','先生用メモ（非公開・この1欄にまとめる）',e.teacherNote)+'<button type="submit">保存して公開</button> '+btn('discard','編集をやめる')+'</form>';}
       }
+      if(!s.cfg.panel||s.cfg.panel==='all'||s.cfg.panel==='messages'){
       h+='<h3>連絡</h3>';
       if(!teacher){h+='<p>送信だけでは予定の登録・取消は完了しません。先生が確認し、結果をここに返信します。AIの自動処理はまだ開始していません。</p><form data-form="message" class="card"><label>用件 <select data-message="category">'+[['schedule','予定の希望・授業不可'],['question','質問'],['feedback','使いづらさ・改善要望'],['other','その他']].map(function(x){return '<option value="'+x[0]+'"'+(s.message.category===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></label>'+(s.message.replyTo?'<p>前の連絡への補足・訂正です。</p>':'')+'<label style="display:block">メッセージ<textarea style="width:100%;min-height:100px" data-message="body" maxlength="4000" required>'+esc(s.message.body)+'</textarea></label><button type="submit">先生へ送る</button></form>';}
       (d.messages||[]).forEach(function(m){h+='<article class="card"><p>'+esc(m.studentName||'')+' '+esc(stamp(m.receivedAt))+' '+esc(statuses[m.status]||m.status)+'</p><p style="white-space:pre-wrap">'+esc(m.body)+'</p>'+(m.reply?'<p style="white-space:pre-wrap"><strong>先生から：</strong>'+esc(m.reply)+'</p>':'');
         if(teacher){var rd=s.replyDrafts[m.id]||m;h+='<form data-form="reply" data-id="'+esc(m.id)+'"><label>処理状況 <select name="status">'+Object.keys(statuses).map(function(k){return '<option value="'+k+'"'+(rd.status===k?' selected':'')+'>'+statuses[k]+'</option>';}).join('')+'</select></label><label style="display:block">返信・具体的な登録結果<textarea style="width:100%" name="reply" maxlength="4000">'+esc(rd.reply)+'</textarea></label><p>「登録済み」は実際の登録を確認した場合だけ選んでください。</p><button type="submit">返信と状態を保存</button></form>';} 
         else h+='<button type="button" data-svc="replyTo" data-id="'+esc(m.id)+'">補足・訂正を送る</button>';h+='</article>';});
+      }
+      if(!s.cfg.panel||s.cfg.panel==='all'||s.cfg.panel==='cancel'){
       if(!teacher){h+='<h3>授業の取消申請</h3><p>24時間前までは通常申請、それ以降は原則取消不可のため病気・大幅な電車遅延などの例外申請です。いずれも理由と先生の承認が必要です。承認までは予定を保持します。</p><form data-form="cancel" class="card"><label>対象授業 <select data-cancel="slotId" required><option value="">選んでください</option>'+(d.slots||[]).filter(function(x){return !x.req;}).map(function(x){return '<option value="'+esc(x.id)+'"'+(s.cancel.slotId===x.id?' selected':'')+'>'+esc(x.date+' '+x.start+' '+(x.subject||''))+'</option>';}).join('')+'</select></label><label style="display:block">理由（必須）<textarea style="width:100%" data-cancel="reason" maxlength="1000" required>'+esc(s.cancel.reason)+'</textarea></label><button type="submit">取消を申請する</button></form>';}
       (d.cancellations||[]).forEach(function(c){h+='<p>'+esc(c.date+' '+c.start)+'：'+esc(c.requestType==='exception'?'期限後の例外申請':'通常申請')+'／'+esc({received:'取消未確定・先生の確認待ち',approved:'取消承認済み',rejected:'却下・予定どおり',withdrawn:'申請取り下げ'}[c.status]||c.status)+'<br>受付：'+esc(stamp(c.receivedAt))+'<br>'+esc(c.reason)+'</p>';});
+    }
     }
     s.host.innerHTML=h;s.host.querySelectorAll('button,input,textarea,select').forEach(function(el){el.disabled=!!s.busy;});
     s.host.onclick=function(ev){var b=ev.target.closest('[data-svc]');if(!b||s.busy)return;var a=b.dataset.svc,id=b.dataset.id;

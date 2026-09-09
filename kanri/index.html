@@ -164,6 +164,7 @@
       @media(max-width:900px) { .lesson-pair-grid { grid-template-columns:1fr; } .lesson-pair-pane .head { position:static; } }
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js"></script>
+<link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-ui"><script src="/assets/schedule-board.js?v=20260909-ui"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -173,7 +174,7 @@
     <div class="wrap" id="app"><div class="loading"><div class="spinner"></div>読み込んでいます…</div></div>
     <div id="toast" role="status"></div>
 
-    <script src="../assets/learning-services.js"></script>
+    <script src="../assets/learning-services.js?v=20260909-ui"></script>
     <script>
       (function () {
         "use strict";
@@ -424,7 +425,7 @@
           h += '<label for="f-subject">科目（必須）</label><select id="f-subject" required aria-required="true"><option value="">科目を選択</option>' + LESSON_SUBJECTS.map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
           h += '<label for="f-delivery">この回の形式</label><select id="f-delivery" required>' + deliveryOptions(d.deliveryMode || student.deliveryMode) + '</select>';
           h += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + (d.date || today) + '">';
-          h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" step="300">';
+          h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300">';
           h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
           h += '<label for="f-rep">くり返し</label><select id="f-rep">' + [1, 2, 4, 8, 12].map(function (n) { return '<option value="' + n + '"' + (n === (+d.repeat || 1) ? ' selected' : '') + '>' + (n === 1 ? 'この日だけ' : '毎週×' + n + '回') + '</option>'; }).join('') + '</select>';
           h += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>' + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
@@ -442,8 +443,13 @@
               h += '<div class="small" style="margin-top:8px;color:var(--primary)">今月の計画: ' + parts.join("、") + ' ' + stTxt + (stAll !== "approved" ? '<span class="muted">(承諾前の授業は請求できません。カルテの「保護者に提案」から)</span>' : '') + '</div>';
             }
           }
+          var warningData=A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]};
+          var liveWarnings=window.StepwiseBoard.warnings(warningData,Object.assign({start:'17:00',min:90},d,{deliveryMode:d.deliveryMode||student.deliveryMode}));
+          h+='<div id="board-warnings" role="status">'+liveWarnings.map(function(w){return '<p class="board-warning">'+esc(w)+'</p>';}).join('')+'</div>';
+          h+='<label class="small"><input type="checkbox" id="f-outside"'+(d.outside?' checked':'')+'> 7:00〜22:00の範囲外を指定する</label>';
           if (d.error) h += '<div role="alert" class="lc-notice">' + esc(d.error) + (d.conflicts || []).map(function (x) { return '<p>' + esc(x.date || '') + ' ' + esc(x.start || '') + '：' + esc(x.error || '') + '</p>'; }).join('') + '</div>';
           h += '<div class="note">全日程の定員と形式を確認してから案内します。案内は生徒ページに表示され、保護者の月間承認後に日程を確定できます。確定時にカレンダー登録・通知、オンラインの場合はMeet発行を行います。</div></div>';
+          if(busy)h=h.replace(/<(input|select)\b/g,'<$1 disabled');
           return h;
         }
 
@@ -783,7 +789,7 @@
           var p = s.profile || {}, section = route().section || "overview";
           var html = '<div class="head"><div><a href="#students" class="small">← 生徒一覧</a><h1>' + esc(s.name) + '</h1>' +
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
-            '<div class="row">' + (s.code ? '<a class="btn-quiet btn-sm" href="' + YOYAKU + '?preview=' + esc(s.code) + '" target="_blank" rel="noopener">生徒画面を見る ↗</a>' : "") + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+            '<div class="row">' + "" + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定・宿題'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
           if (section === 'overview') {
@@ -1124,6 +1130,21 @@
           return h + "</div>";
         }
 
+        var boardDate = '', boardStudent = '', boardFull = false, boardOpen = false, boardDetail = null;
+        function boardOpenOffer(date,start,min) {
+          if(busy)return;
+          if(date<A.today){toast('過去の授業は案内できません');return;}
+          offerDraft=Object.assign({},offerDraft||{},{date:date,start:start,min:Math.min(120,min,(boardFull?1440:1320)-window.StepwiseBoard.minutes(start)),studentId:boardStudent||(offerDraft||{}).studentId});
+          boardDate=date;boardOpen=true;boardDetail=null;render();
+          var el=document.getElementById('board-editor');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});
+        }
+        function boardHTML(){
+          var h=window.StepwiseBoard.render(A,{date:boardDate||A.today,full:boardFull,studentId:boardStudent});
+          if(boardOpen)h+='<dialog id="board-editor" class="board-editor" aria-label="授業の案内"><div class="row between"><h2>授業の案内</h2><button data-action="board-close" class="btn-quiet">閉じる</button></div>'+offerForm(A.today,A.students.filter(function(s){return s.active;}),null)+'</dialog>';
+          if(boardDetail){var items=boardDetail.kind==='slot'?A.slots:boardDetail.kind==='off'?A.teacherOff:A.blocked,item=(items||[]).filter(function(s){return String(s.id)===boardDetail.id;})[0];
+            if(item)h+='<section class="card" id="board-detail"><h2>'+esc(item.date)+' '+esc(item.start||'終日')+'</h2>'+(boardDetail.kind==='slot'?lessonRow(item,true):'<p>'+esc(item.studentName||'先生')+'・授業不可 '+esc(item.end||'')+'</p><p>'+esc(item.note||'メモなし')+'</p><button class="btn-quiet" data-action="'+(boardDetail.kind==='off'?'tdeloff':'tdelblock')+'" data-ids="'+esc(item.id)+'">解除する</button>')+' <button data-action="board-detailclose" class="btn-quiet">閉じる</button></section>';
+          }return h;
+        }
         function renderLessons() {
           renderNav();
           var today = A.today;
@@ -1143,7 +1164,7 @@
           }
           if (!offerDraft) offerDraft = { date: (selDate && selDate >= today) ? selDate : today };
           else if (!offerDraft.date) offerDraft.date = today;
-          html += '<h2>授業を案内する</h2>' + offerForm(today, active, null);
+          html += boardHTML();
 
           // 生徒からの希望日程
           var wl = A.wishes || [];
@@ -1157,7 +1178,7 @@
           html += expiredCard(past.filter(function (s) { return s.status === "offered"; }).slice().reverse(), true);
 
           // 予定表
-          html += '<h2>予定表</h2>';
+          html += '<details><summary>月間予定表・選択日の詳細</summary>';
           var info = {};
           upcoming.forEach(function (s) {
             var it = info[s.date] || (info[s.date] = { booked: 0, offered: 0, req: 0, ng: 0 });
@@ -1183,42 +1204,29 @@
           }
 
           // 今後の予定
+          html += '</details>';
           var next14 = upcoming.filter(function (s) { return s.status === "booked" && s.date < addDaysStr(today, 14); });
-          html += '<h2>今後2週間の授業 <span class="cnt">' + next14.length + '件</span></h2>';
+          html += '<details><summary>今後2週間の授業（' + next14.length + '件）</summary>';
           html += next14.length ? '<div class="card">' + next14.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">確定した授業はありません</div>';
 
+          html += '</details>';
           // 先生の休み
-          html += '<h2>先生の休み(先生が授業できない日)</h2><div class="card"><div class="row">';
+          html += '<details><summary>先生の授業不可時間を登録</summary><div class="card"><div class="row">';
           html += '<input type="date" id="o-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="o-date2" min="' + today + '">';
           html += '<input type="text" id="o-note" placeholder="メモ(任意。例: 学会、旅行)" maxlength="50" style="flex:1;min-width:140px"></div>';
           html += '<div class="row" style="margin-top:8px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="o-start" step="900"><span class="muted">〜</span><input type="time" id="o-end" step="900"><button class="btn-ghost btn-sm" data-action="taddoff"' + (busy ? " disabled" : "") + '>登録</button></div>';
-          var offAll = (A.teacherOff || []).filter(function (o) { return !o.start; }), offTimed = (A.teacherOff || []).filter(function (o) { return o.start; });
-          var offGroups = groupBlocked(offAll);
-          var offRows = offGroups.map(function (g) { return { key: g.start, html: '<div class="line"><span class="t">' + rangeLabel(g) + '</span><span class="w">終日 ' + (g.note ? esc(g.note) : '<span class="muted">メモなし</span>') + ' <span class="small muted">' + g.ids.length + '日</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(g.ids.join(",")) + '">削除</button></div>' }; })
-            .concat(offTimed.map(function (o) { return { key: o.date + o.start, html: '<div class="line"><span class="t">' + fmtD(o.date) + ' ' + o.start + '〜' + o.end + '</span><span class="w">' + (o.note ? esc(o.note) : '<span class="muted">メモなし</span>') + '</span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>' }; }))
-            .sort(function (a, b) { return a.key < b.key ? -1 : 1; });
-          if (offRows.length) html += '<div style="margin-top:12px">' + offRows.map(function (x) { return x.html; }).join("") + '</div>';
-          else html += '<div class="empty" style="margin-top:8px">登録はありません</div>';
           html += '<div class="note">1日だけなら左の日付のみでOK。時間帯を入れると、その時間に重なる案内だけ警告になります。カレンダーには「休」(終日)や「休13-17」(時間帯)と表示され、生徒のページにも出ます(メモは生徒には見えません)。</div></div>';
 
+          html += '</details>';
           // NG日
-          html += '<h2>授業できない日(生徒が登録した日)</h2><div class="card"><div class="row">';
+          html += '<details><summary>生徒の授業不可時間を代理登録</summary><div class="card"><div class="row">';
           html += '<select id="b-student"><option value="">生徒</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>'; }).join("") + '</select>';
           html += '<input type="date" id="b-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="b-date2" min="' + today + '">';
           html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px"></div>';
           html += '<div class="row" style="margin-top:8px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-start" step="900"><span class="muted">〜</span><input type="time" id="b-end" step="900"><button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
-          var ngGroups = [];
-          A.students.forEach(function (st) {
-            var own = (A.blocked || []).filter(function (b) { return sameId(b.studentId, st.id); });
-            groupBlocked(own.filter(function (b) { return !b.start; })).forEach(function (g) { g.name = st.name; g.label = rangeLabel(g); ngGroups.push(g); });
-            own.filter(function (b) { return b.start; }).forEach(function (b) { ngGroups.push({ start: b.date + b.start, name: st.name, label: fmtD(b.date) + ' ' + b.start + '〜' + b.end, note: String(b.note || ""), ids: [b.id] }); });
-          });
-          ngGroups.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
-          if (ngGroups.length) {
-            html += '<div style="margin-top:12px">' + ngGroups.map(function (g) { return '<div class="line"><span class="t">' + g.label + '</span><span class="w"><strong>' + esc(g.name) + '</strong> <span class="small muted">' + esc(g.note) + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-ids="' + esc(g.ids.join(",")) + '">削除</button></div>'; }).join("") + '</div>';
-          }
           html += '<div class="note">生徒も自分のページから登録できます。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
 
+          html += '</details>';
           // 実施の記録
           html += '<h2>実施の記録と請求</h2>';
           var pastBooked = past.filter(function (s) { return s.status === "booked"; });
@@ -1292,7 +1300,7 @@
               if (res.needForce) { if (confirm(res.error + "\n\nそれでも案内しますか?")) { sendOffer(true); return; } render(); return; }
               sendingDraft.error = res.error; sendingDraft.conflicts = res.conflicts || []; toast(res.error); render(); return;
             }
-            var d = offerDraft; offerDraft = null;
+            var d = offerDraft; offerDraft = null; boardOpen=false;
             if (!applyResult(res, route())) load(true);
             selDate = d.date; selManual = true;
             render(); toast("案内を送りました");
@@ -1316,6 +1324,7 @@
             app.innerHTML = slotEditHtml() + app.innerHTML;
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
+          var boardDialog=document.getElementById('board-editor');if(boardDialog&&boardDialog.showModal&&!boardDialog.open)boardDialog.showModal();
           if (window.StepwiseServices) {
             if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && ['overview','progress'].indexOf(r.section || 'overview') >= 0)) {
               var serviceSid=r.page==='student'?String(cur.id):'',serviceToken=token();
@@ -1381,7 +1390,7 @@
           if (action === "family-confirm") { familyDo(); return; }
           if (action === "family-cancel") { FT.confirm = null; render(); return; }
           if (action === "family-hidecode") { FT.invite = null; render(); return; }
-          if (action === "family-copy") { if (FT.invite) copyText("保護者の家族ページ\n" + new URL(YOYAKU + "#family", location.href).href + "\n招待コード：" + FT.invite.code + "\n有効期限：" + fmtAuthTime(FT.invite.expiresAt), "案内をコピーしました"); return; }
+          if (action === "family-copy") { if (FT.invite) copyText("保護者の家族ページ\n" + new URL("/hogosha/", location.href).href + "\n招待コード：" + FT.invite.code + "\n有効期限：" + fmtAuthTime(FT.invite.expiresAt), "案内をコピーしました"); return; }
           var d = FT.data; if (!d || FT.auth !== token()) return;
           var f = (d.families || []).filter(function (x) { return sameId(x.id, btn.getAttribute("data-id")); })[0];
           if (action === "family-new") FT.edit = { id: "", label: "", children: Object.create(null) };
@@ -2086,6 +2095,14 @@
                 D.lessonsToday = strip(D.lessonsToday); D.lessonsWeek = strip(D.lessonsWeek);
               });
               break;
+            case 'board-prev': boardDate=addDaysStr(boardDate||A.today,-7);render();break;
+            case 'board-next': boardDate=addDaysStr(boardDate||A.today,7);render();break;
+            case 'board-today': boardDate=A.today;render();break;
+            case 'board-hours': boardFull=!boardFull;render();break;
+            case 'board-new': boardOpenOffer(boardDate||A.today,'17:00',60);break;
+            case 'board-close': if(!busy){boardOpen=false;render();}break;
+            case 'board-detail': boardDetail={kind:btn.getAttribute('data-kind'),id:btn.getAttribute('data-id')};render();var detailEl=document.getElementById('board-detail');if(detailEl)detailEl.scrollIntoView({block:'center',behavior:'smooth'});break;
+            case 'board-detailclose': boardDetail=null;render();break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } render(); break;
             case "calday":
@@ -2097,6 +2114,8 @@
               if (!stid) { toast("生徒をえらんでください"); return; }
               if (!odate || !ostart) { toast("日付と時間を入れてください"); return; }
               offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject"), deliveryMode: val("f-delivery"), wishId: offerDraft && offerDraft.wishId };
+              offerDraft.outside=!!(document.getElementById('f-outside')||{}).checked;
+              if(!offerDraft.outside&&(window.StepwiseBoard.minutes(ostart)<420||window.StepwiseBoard.minutes(ostart)+offerDraft.min>1320)){toast('授業は7:00〜22:00の範囲で指定してください。例外は「範囲外を指定する」を選んでください');return;}
               sendOffer(false); break;
             case "usewish":
               var uwWant = btn.getAttribute("data-kind") === "want", uwLen = minutesBetween(btn.getAttribute("data-start"), btn.getAttribute("data-end"));
@@ -2107,7 +2126,7 @@
               if(btn.getAttribute('data-mode'))uw.deliveryMode=btn.getAttribute('data-mode');
               if(+btn.getAttribute('data-duration'))uw.min=+btn.getAttribute('data-duration');
               uw.subject = lsub;
-              offerDraft = uw; selDate = uw.date; selManual = true;
+              offerDraft = uw; selDate = uw.date; selManual = true; boardOpen = true; boardDate = uw.date;
               render();
               var fe = document.getElementById("f-date"); if (fe) fe.scrollIntoView({ behavior: "smooth", block: "center" });
               toast(uwWant ? "希望日時をフォームに入れました。内容を確認して案内してください" : "空き時間 " + uw.window + " のあいだで開始時刻と長さを決めて案内してください");
@@ -2267,10 +2286,18 @@
           var latest = "", latestDate = "";
           (A.slots || []).forEach(function (s) { if (sameId(s.studentId, ev.target.value) && s.subject && s.date >= latestDate) { latestDate = s.date; latest = s.subject; } });
           sel.value = latest || "";
-          offerDraft = { studentId: ev.target.value, subject: sel.value, date: val("f-date"), start: val("f-start"), min: val("f-min"), wishId: offerDraft && offerDraft.wishId, window: offerDraft && offerDraft.window };
+          offerDraft = Object.assign({},offerDraft||{},{studentId:ev.target.value,subject:sel.value,date:val('f-date'),start:val('f-start'),min:val('f-min'),repeat:val('f-rep'),deliveryMode:(A.students.filter(function(s){return sameId(s.id,ev.target.value);})[0]||{}).deliveryMode});
           render();
         });
 
+        if(window.StepwiseBoard)window.StepwiseBoard.bind(app,boardOpenOffer,document);
+        document.addEventListener('cancel',function(ev){if(ev.target.id==='board-editor'){if(busy)ev.preventDefault();else boardOpen=false;}},true);
+        document.addEventListener('change',function(ev){if(ev.target.id==='board-student'){boardStudent=ev.target.value;render();return;}if(ev.target.id==='board-date'){boardDate=ev.target.value||A.today;render();}});
+        document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|delivery|outside)$/.test(el.id))return;
+          offerDraft=Object.assign({},offerDraft||{},{studentId:val('f-student'),date:val('f-date'),start:val('f-start'),min:val('f-min'),repeat:val('f-rep'),subject:val('f-subject'),deliveryMode:val('f-delivery'),outside:!!(document.getElementById('f-outside')||{}).checked});
+          var startField=document.getElementById('f-start');if(startField){startField.min=offerDraft.outside?'00:00':'07:00';startField.max=offerDraft.outside?'23:59':'22:00';}
+          var target=document.getElementById('board-warnings');if(target)target.innerHTML=window.StepwiseBoard.warnings(A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]},offerDraft).map(function(w){return '<p class="board-warning">'+esc(w)+'</p>';}).join('');
+        });
         load();
       })();
     </script>

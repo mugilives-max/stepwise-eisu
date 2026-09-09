@@ -7,8 +7,15 @@ const harness = fs.readFileSync(path.join(__dirname, 'operations-ui.test.cjs'), 
 const { createUI, flush, state } = new Function('require', '__dirname', harness + '\nreturn {createUI, flush, state};')(require, __dirname);
 const home = children => ({ ok: true, family: { id: 'family-a', label: '【テスト】家族', email: 'parent@example.invalid' }, children: children || [{ studentId: 'child-a', name: '【テスト】子A' }, { studentId: 'child-b', name: '【テスト】子B' }] });
 const data = name => ({ name, month: '2026-09', thisMonth: {}, payments: [], upcoming: [{ id: 'slot-a', date: '2026-09-10', start: '17:00', min: 30, status: 'booked', subject: '英語', deliveryMode: 'online' }], planMonths: [{ ym: '2026-09', status: 'proposed', revision: 7, termsKnown: true, rate30: 1000, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4 }] });
-function loggedUI() { return createUI('student', { hash: '#family', session: new Map([['sw_ft_v1', 'test-family-token']]) }); }
+function loggedUI() { return createUI('student', { hash: '#family/billing', session: new Map([['sw_ft_v1', 'test-family-token']]) }); }
 async function readyFamily() { const ui = loggedUI(); ui.requests[0].reply(home()); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); return ui; }
+
+test('parent sections separate billing, reports and account settings without reloading the child',async()=>{
+  const ui=await readyFamily(),count=ui.requests.length;
+  assert.match(ui.html(),/この回数と料金を承認する/);assert.ok(!ui.html().includes('先生からの授業記録'));
+  ui.navigate('#family/records');assert.match(ui.html(),/先生からの授業記録/);assert.ok(!ui.html().includes('この回数と料金を承認する'));assert.ok(!ui.html().includes('メールアドレスを変更'));
+  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count);assert.equal(ui.el('fa-child').value,'child-a');
+});
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
 async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#families' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); await flush(); return ui; }
 
@@ -61,7 +68,7 @@ test('child switch discards the previous approval confirmation and membership re
   const ui = await readyFamily(); ui.click('fa-planok', { 'data-ym': '2026-09' }); ui.change('fa-child', 'child-b');
   assert.equal(ui.html().includes('data-action="fa-decide"'), false);
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush();
-  ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
+  ui.navigate('#family/settings'); ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
   ui.requests.at(-1).reply(home([])); await flush(); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
 });
 
@@ -79,7 +86,7 @@ test('a failed family logout hides data and remains a retry after refresh until 
 });
 
 test('email change clears the family session only after its successful request and waits for verification', async () => {
-  const ui = await readyFamily(); ui.click('fa-mode', { 'data-step': 'emailChange' }); ui.input('fa-email', 'new@example.invalid'); ui.input('fa-pass', 'test-family-password'); ui.submit('family-auth-form');
+  const ui = await readyFamily(); ui.navigate('#family/settings'); ui.click('fa-mode', { 'data-step': 'emailChange' }); ui.input('fa-email', 'new@example.invalid'); ui.input('fa-pass', 'test-family-password'); ui.submit('family-auth-form');
   assert.equal(ui.requests.at(-1).body.action, 'familyEmailChange'); assert.equal(ui.requests.at(-1).body.ftoken, 'test-family-token');
   ui.requests.at(-1).reply({ ok: true, verificationRequired: true, mailStatus: 'sent' }); await flush();
   assert.equal(ui.session.has('sw_ft_v1'), false); assert.match(ui.html(), /メール内のリンク/); assert.equal(ui.html().includes('今後の授業'), false);

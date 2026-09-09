@@ -56,7 +56,7 @@ test('saved public lesson records show escaped content and deadline only in stud
   const ui = await studentReady({ ...state(), lessonRecords:[published()] }); ui.navigate('#history');
   assert.match(ui.html(), /先生からの授業記録/); assert.match(ui.html(), /関係代名詞 &lt;復習&gt;/); assert.match(ui.html(), /次回の英語授業（予定未定）/);
   assert.equal(ui.html().includes('PRIVATE_'), false);
-  const family = createUI('student', { hash:'#family', session:new Map([['sw_ft_v1','test-family-token']]) });
+  const family = createUI('student', { hash:'#family/records', session:new Map([['sw_ft_v1','test-family-token']]) });
   family.requests[0].reply({ ok:true, family:{ label:'【テスト】家族', email:'parent@example.invalid' }, children:[{ studentId:'test-child', name:'【テスト】子' }] }); await flush();
   family.requests.at(-1).reply({ ok:true, data:{ name:'【テスト】子', month:'2026-09', thisMonth:{}, payments:[], planMonths:[], upcoming:[], lessonRecords:[published()] } }); await flush();
   assert.match(family.html(), /関係代名詞 &lt;復習&gt;/); assert.match(family.html(), /自分で説明できた/); assert.equal(family.html().includes('PRIVATE_'), false);
@@ -141,10 +141,10 @@ test('successful proof refreshes the current student status and late registratio
   assert.equal(ui.html().includes('later@example.invalid'), false); assert.equal(ui.el('se-email').value, '');
 });
 
-test('persisted uncertain mail remains visible after reload and teacher preview cannot request a message', async () => {
+test('persisted uncertain mail remains visible after reload and removed preview parameter cannot switch the student identity', async () => {
   const status = { pendingEmail:'pending@example.invalid', mailStatus:'uncertain' };
   const ui = await studentReady(emailState(status)); ui.navigate('#student-email'); assert.match(ui.html(), /まず受信箱を確認/); assert.equal(ui.requests.length, 1);
   const preview = createUI('student', { hash:'#student-email', search:'?preview=test-preview-key' });
-  preview.requests[0].reply(emailState(status)); await flush(); assert.match(preview.html(), /先生のプレビュー/);
-  assert.equal(preview.el('se-email').disabled, true); preview.click('se-resend'); preview.submit('student-email-form'); assert.equal(preview.requests.length, 1);
+  preview.requests[0].reply(emailState(status)); await flush(); assert.equal(preview.requests[0].body.k, 'test-link-a'); assert.equal(preview.local.get('sw_k'), 'test-link-a');
+  assert.equal(preview.html().includes('先生のプレビュー'), false);
 });

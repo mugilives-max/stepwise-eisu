@@ -44,6 +44,7 @@ function createUI(hash=href()) {
     return new Promise((resolve,reject)=>requests.push({body,reply:value=>resolve({json:()=>Promise.resolve(value)}),fail:()=>reject(new Error('network failed'))}));
   }};
   const source=fs.readFileSync(path.resolve(__dirname,'../kanri/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  context.window.StepwiseBoard=require('../assets/schedule-board.js');
   context.window.StepwiseReport=require('../assets/lesson-report.js');
   vm.runInNewContext(source,context,{filename:'kanri/index.html'});
   const ui={requests,local,session,storageWrites,el:id=>elements.get(id),html:()=>elements.get('app').innerHTML,

@@ -1,3 +1,4 @@
+for(const file of ['assets/schedule-board.js','assets/portal.js'])new (require('node:vm').Script)(require('node:fs').readFileSync(file,'utf8'),{filename:file});
 const fs = require('node:fs');
 const vm = require('node:vm');
 new vm.Script(fs.readFileSync('assets/learning-services.js','utf8'),{filename:'assets/learning-services.js'});

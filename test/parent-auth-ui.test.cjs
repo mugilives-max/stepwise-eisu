@@ -62,7 +62,7 @@ function createUI(kind = 'parent', shared = {}) {
     document: { getElementById: id => elements.get(id) || null,
       addEventListener: (name, handler) => events.set('document:' + name, handler) },
     window: { scrollTo() {}, addEventListener: (name, handler) => events.set('window:' + name, handler) },
-    location: { hash: kind === 'admin' ? '#s=test-id&tab=settings' : '#parent', search: '',
+    location: { hash: kind === 'admin' ? '#s=test-id&tab=settings' : '#parent/billing', search: '',
       pathname: kind === 'admin' ? '/kanri/' : '/yoyaku/', href: 'https://example.invalid/kanri/' },
     history: { replaceState() {} }, URL, URLSearchParams, navigator: {},
     localStorage: storage(local, false), sessionStorage: storage(session, true),
@@ -74,7 +74,8 @@ function createUI(kind = 'parent', shared = {}) {
     }
   };
   const file = kind === 'admin' ? 'kanri/index.html' : 'yoyaku/index.html';
-  const script = fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = kind === 'admin' ? fs.readFileSync(path.resolve(__dirname,'..',file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1] : fs.readFileSync(path.resolve(__dirname,'../assets/portal.js'),'utf8');
+  context.window.StepwiseBoard=require('../assets/schedule-board.js');
   context.window.StepwiseReport=require('../assets/lesson-report.js');
   vm.runInNewContext(script, context, { filename: file });
   const ui = { local, session, requests,

@@ -1,6 +1,6 @@
 # ステップワイズ個別指導 システム概要
 
-最終更新: 2026-09-08 / 管理者: 麦倉優輔 (mugilives@gmail.com)
+最終更新: 2026-09-09 / 管理者: 麦倉優輔 (mugilives@gmail.com)
 
 現行の構成・台帳・API・反映手順の正本。作業対象に関係する節を参照する。共通の制約と資料案内は [AGENTS.md](../AGENTS.md)、未完了事項は [FUTURE_WORK.md](FUTURE_WORK.md)。
 
@@ -38,7 +38,8 @@ GAS現行版はv56。授業記録と月間承認・請求、授業形式と同�
 - 実生徒の業務データは2台帳、成績票などの原資料はDriveに保存する。復旧にはコード・GAS設定・原資料も必要なので、台帳のコピーだけでシステム全体のバックアップが完了したとは扱わない。
 
 ```
-生徒・保護者のスマホ ──► https://www.stepwise-education.jp/yoyaku/ (マイページ)
+生徒のスマホ       ──► https://www.stepwise-education.jp/yoyaku/ (生徒ページ)
+保護者のスマホ     ──► https://www.stepwise-education.jp/hogosha/ (保護者ページ)
 先生のスマホ・PC   ──► https://www.stepwise-education.jp/kanri/  (管理画面, PWA)
         │  fetch(POST, JSON)
         ▼
@@ -54,8 +55,8 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 
 | 置き場所 | 何があるか | 備考 |
 |---|---|---|
-| GitHub `mugilives-max/stepwise-eisu`（public、main / root を Pages 配信） | `index.html` ホームページ、`yoyaku/index.html` 生徒マイページ、`kanri/index.html` 管理画面、`gas/*.gs` サーバーコードの写し、`docs/` 文書 | 作業先は [AGENTS.md](../AGENTS.md)。公開確認は `?nc=適当な値` でキャッシュを避け、配信内容を照合する |
-| Google Apps Script（予約システムに紐づくコンテナバインド） | 実行中のコード。WebアプリURL・デプロイIDは両HTMLの `API` 定数を参照 | [プロジェクト](https://script.google.com/home/projects/1vlfS4thMpRgV0WbHXZ8joFLzZBMmoROdopAJXK6JEIQWplokSgvgo619/edit)。Script IDはこのURLの `/projects/` と `/edit` の間。反映は6章 |
+| GitHub `mugilives-max/stepwise-eisu`（public、main / root を Pages 配信） | `index.html` ホームページ、`yoyaku/index.html` 生徒マイページ、`hogosha/index.html` 保護者ページ、`kanri/index.html` 管理画面、`gas/*.gs` サーバーコードの写し、`docs/` 文書 | 作業先は [AGENTS.md](../AGENTS.md)。公開確認は `?nc=適当な値` でキャッシュを避け、配信内容を照合する |
+| Google Apps Script（予約システムに紐づくコンテナバインド） | 実行中のコード。WebアプリURL・デプロイIDは管理HTMLと `assets/portal.js` の `API` 定数を参照 | [プロジェクト](https://script.google.com/home/projects/1vlfS4thMpRgV0WbHXZ8joFLzZBMmoROdopAJXK6JEIQWplokSgvgo619/edit)。Script IDはこのURLの `/projects/` と `/edit` の間。反映は6章 |
 | Drive: スプレッドシート「ステップワイズ予約システム」 | 生徒一覧と専用リンクコード、授業枠、授業できない日、希望日程、共有予定、月の授業回数(計画)と保護者承認、宿題・持ち物、先生ログイン情報(ハッシュ)、操作ログ | 場所: マイドライブ/ステップワイズ塾/ |
 | Drive: スプレッドシート「塾管理台帳」 | 生徒台帳、成績推移、模試、入金管理、面談記録 | 同上。ID は `Code.gs` の `LEDGER_ID` |
 | [Drive フォルダ「ステップワイズ塾」](https://drive.google.com/drive/folders/1DbCfH9j8BDtFsbe6iXpsUyCu4YURkBVG) | `01_生徒/<生徒>/`(成績票PDFなど)、`02_契約・規約`、`03_教材`、`04_経理`、`99_アーカイブ` | Drive for Desktopのマウント先・稼働状態は環境により異なる。必要なら接続中のDriveから参照 |
@@ -265,6 +266,16 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - ローカル検証: `test/mcp-inbox.test.cjs` 6件を追加し全体 416件が通過(`npm run check` 通過)。本番は health の release、`mcpPing` の readOps / writeOps、`mcpInboxList` の応答、存在しないメッセージへの claim / resolve / 紐づけ登録の拒否を確認。実在の連絡は処理していない。MCP サーバー側は `stepwise-mcp` 0.3.0。
 
 ## 7. 運用メモ
+
+<a id="calendar-parent-ui"></a>
+### 週間予定表と保護者専用の画面（2026-09-09）
+
+- 管理側の授業ページは週間予定表を先頭に表示。通常は7:00〜22:00を表示し、時間外の授業がある週は件数と表示切替を案内する。空き時間のクリック・タップ、マウスの縦ドラッグから日時・長さを入れた案内ダイアログを開く。ドラッグは30分単位・最大120分、フォームでは既存の30/45/60/90/120分と毎週の繰返しを利用する。操作の参考は [Google Calendarの予定作成](https://support.google.com/calendar/answer/72143?hl=ja)。
+- 7:00より前の開始または22:00を超える終了は、案内時に「範囲外を指定する」が必要。これは通常の画面操作の既定値であり、過去データの変更やGAS/MCPへの営業時間制限ではない。既存の時間外授業は保持する。
+- 先生の授業不可と授業を同じ時間軸に表示し、生徒の授業不可は対象生徒を選んで重ねる。帯を選ぶと詳細・解除操作を表示する。全期間の授業不可一覧は廃止し、代理登録と月間予定表は必要時に開く。フォームの重なり表示は補助で、送信時の既存GASによる定員・休み・料金条件の検査を維持する。
+- `/hogosha/` は家族認証用の独立した入口。「ホーム・予定・授業報告/宿題・成績・請求/料金承認・連絡・設定」に分け、認証済みの子ども切替を共通に置く。既読は報告を開いたときだけ、承認は料金ページの既存確認操作で保存する。旧 `/yoyaku/#family`、確認メールのリンク、生徒別の旧保護者認証は互換を維持する。
+- 生徒と保護者の見た目・処理の正本は `assets/portal.css` / `assets/portal.js`。各HTMLは入口で、ロジックを複製しない。API URLは管理HTMLと `assets/portal.js` を参照。管理画面の生徒プレビューボタンを削除し、旧 `?preview=` は生徒キーの切替に使わない。
+- 画面だけの変更でGASはv56のまま。全442件のテスト後、最終調整の対象テストも確認。隔離ブラウザで時間選択→案内の登録・予定表への反映、保護者のタブ分割・未読から既読への切替・連絡欄を確認した。実生徒への検証用の案内・請求・メール送信は行わない。
 
 <a id="local-lesson-workspace"></a>
 ### 授業情報の集約・実施分請求・家族明細
