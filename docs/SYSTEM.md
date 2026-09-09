@@ -277,7 +277,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 <a id="backup-release-automation"></a>
 ### バックアップ・GAS反映の自動化
 
-**2026-09-09: ローカル実装・対象テストは完了。Google初回認証、実GAS検証と定期運用の有効化は未実施。** 現行の公開版を自動化版へ切り替えたという意味ではない。
+**2026-09-09: claspでGAS v55へ反映済み。** v54の実ソースをGit基準 `b7e02df` と照合・退避し、全8ソースとmanifestの読み戻し、固定版の一致、既存URLの公開health `2026-09-09-backup-release` を確認した。GoogleログインとApps Script APIの有効化は完了。定期バックアップの初期設定は追加OAuth同意待ちで、初回バックアップ・復元確認とトリガー登録はまだ完了していない。反映記録はGit対象外の `.verification/releases/2026-09-09T05-11-15-242Z/`。
 
 #### GASの反映
 
