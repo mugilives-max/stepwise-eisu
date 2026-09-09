@@ -21,6 +21,17 @@
     }
     return out;
   }
+  // Give each connected overlap group stable, non-overlapping columns.
+  function layout(lessons){
+    const result=new Map();let group=[],ends=[],until=-Infinity;
+    function flush(){group.forEach(x=>result.set(x.s,{lane:x.lane,count:ends.length}));group=[];ends=[];}
+    lessons.slice().sort((a,b)=>minutes(a.start)-minutes(b.start)||String(a.id).localeCompare(String(b.id))).forEach(s=>{
+      const a=minutes(s.start),b=a+Number(s.min);
+      if(a>=until){flush();until=-Infinity;}
+      let lane=ends.findIndex(end=>end<=a);if(lane<0)lane=ends.length;
+      ends[lane]=b;group.push({s,lane});until=Math.max(until,b);
+    });flush();return result;
+  }
   function render(data,opts){
     const start=opts.date||data.today,first=day(start,-((new Date(start+'T12:00:00Z').getUTCDay()+6)%7)),from=opts.full?0:420,to=opts.full?1440:1320,dates=Array.from({length:7},(_,i)=>day(first,i));
     let h='<section class="schedule-board" aria-label="週間予定表"><div class="row"><button data-action="board-prev" class="btn-quiet">前の週</button><button data-action="board-today" class="btn-quiet">今日</button><button data-action="board-next" class="btn-quiet">次の週</button><strong>'+esc(first)+' 〜 '+esc(dates[6])+'</strong><label>表示日 <input type="date" id="board-date" value="'+esc(start)+'"></label><button data-action="board-hours" class="btn-quiet">'+(opts.full?'7:00〜22:00に戻す':'時間外も表示')+'</button><button data-action="board-new" class="btn-primary">授業を案内</button></div><label class="small">生徒の授業不可を重ねる <select id="board-student"><option value="">先生の予定のみ</option>'+ (data.students||[]).filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'"'+(String(x.id)===String(opts.studentId)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label><p class="small muted">空き時間をクリック・タップして案内を作成。マウスでは縦にドラッグして長さを指定できます。授業・授業不可の帯を選ぶと詳細を表示します。</p><div class="board-scroll"><div class="board-grid" style="--board-height:'+((to-from)*1.2)+'px"><div class="board-hours"><div class="board-heading">時刻</div>';
@@ -33,9 +44,10 @@
       (data.teacherOff||[]).filter(s=>s.date===date).forEach(s=>events.push({s,type:'off',label:'先生・授業不可'}));
       (data.blocked||[]).filter(s=>s.date===date&&(opts.studentId&&String(s.studentId)===String(opts.studentId))).forEach(s=>events.push({s,type:'blocked',label:(s.studentName||'生徒')+'・授業不可'}));
       const lessons=(data.slots||[]).filter(s=>s.date===date&&['booked','offered'].includes(s.status)).sort((a,b)=>minutes(a.start)-minutes(b.start));
+      const positions=layout(lessons);
       lessons.forEach(s=>events.push({s,type:'slot',label:(s.studentName||'授業')+' '+(s.subject||'')+(s.status==='offered'?'（案内中）':'')}));
-      events.forEach((e,i)=>{const a=e.s.start?minutes(e.s.start):from,b=e.s.start?minutes(e.s.end||time(a+Number(e.s.min))):to;if(b<=from||a>=to)return;const isSlot=e.type==='slot',lane=isSlot?lessons.filter(s=>minutes(s.start)<b&&minutes(s.start)+Number(s.min)>a).findIndex(s=>s===e.s):0;
-        h+='<button class="board-event '+e.type+'" data-action="board-detail" data-kind="'+e.type+'" data-id="'+esc(e.s.id)+'" style="top:'+((Math.max(from,a)-from)*1.2)+'px;height:'+Math.max(25,(Math.min(to,b)-Math.max(from,a))*1.2)+'px;'+(isSlot?'left:'+(8+Math.max(0,lane)*35)+'%;width:58%;':e.type==='blocked'?'left:70%;width:30%;':'left:0;width:100%;')+'" title="'+esc(e.label+' '+(e.s.start||'終日')+' '+(e.s.note||''))+'">'+esc((e.s.start||'終日')+' '+e.label)+'</button>';
+      events.forEach((e,i)=>{const a=e.s.start?minutes(e.s.start):from,b=e.s.start?minutes(e.s.end||time(a+Number(e.s.min))):to;if(b<=from||a>=to)return;const isSlot=e.type==='slot',position=isSlot?positions.get(e.s):null;
+        h+='<button class="board-event '+e.type+'" data-action="board-detail" data-kind="'+e.type+'" data-id="'+esc(e.s.id)+'" style="top:'+((Math.max(from,a)-from)*1.2)+'px;height:'+Math.max(25,(Math.min(to,b)-Math.max(from,a))*1.2)+'px;'+(isSlot?'left:calc('+(position.lane*100/position.count)+'% + 2px);width:calc('+(100/position.count)+'% - 4px);':e.type==='blocked'?'left:70%;width:30%;':'left:0;width:100%;')+'" title="'+esc(e.label+' '+(e.s.start||'終日')+' '+(e.s.note||''))+'">'+esc((e.s.start||'終日')+' '+e.label)+'</button>';
       });
       h+='</div></div>';
     });
@@ -50,5 +62,5 @@
     document.addEventListener('pointercancel',()=>{drag=null;});
     host.addEventListener('click',e=>{const b=e.target.closest('[data-board-time]');if(b&&!suppress)select(b.dataset.boardDate,b.dataset.boardTime,60);});
   }
-  const api={render,warnings,minutes,time,day,bind};if(typeof module!=='undefined')module.exports=api;else root.StepwiseBoard=api;
+  const api={layout,render,warnings,minutes,time,day,bind};if(typeof module!=='undefined')module.exports=api;else root.StepwiseBoard=api;
 })(typeof window!=='undefined'?window:globalThis);

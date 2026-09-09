@@ -26,3 +26,13 @@ test('calendar composer validates the default hours before sending and preserves
  ui.requests[1].fail();await flush();assert.equal(ui.el('f-start').value,'21:00');assert.match(ui.html(),/入力を保持/);
 });
 test('calendar navigation does not render the removed preview or global restriction lists',async()=>{const ui=await ready();assert.ok(!ui.html().includes('先生の休み(先生が授業できない日)'));assert.match(ui.html(),/先生の授業不可時間を登録/);ui.click('board-next');assert.equal(ui.el('board-date').value,'2026-09-17');});
+
+test('overlap columns remain distinct across chains, triples and adjacent lessons',()=>{
+ const board=require('../assets/schedule-board.js');
+ const slots=[{id:'a',start:'17:00',min:90},{id:'b',start:'17:30',min:60},{id:'c',start:'18:00',min:90},{id:'d',start:'19:30',min:60}];
+ const positions=board.layout(slots);
+ for(let i=0;i<slots.length;i++)for(let j=i+1;j<slots.length;j++){
+  const a=slots[i],b=slots[j];if(board.minutes(a.start)<board.minutes(b.start)+b.min&&board.minutes(b.start)<board.minutes(a.start)+a.min){assert.notEqual(positions.get(a).lane,positions.get(b).lane);assert.equal(positions.get(a).count,3);}
+ }
+ assert.deepEqual(positions.get(slots[3]),{lane:0,count:1});
+});
