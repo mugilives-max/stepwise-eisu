@@ -4,9 +4,15 @@
   "scripts": {
     "build:crypto": "node scripts/build-parent-crypto.mjs",
     "check": "node scripts/check-syntax.cjs",
-    "test": "node --test test/*.test.cjs"
+    "test": "node --test test/*.test.cjs",
+    "gas:login": "node scripts/gas-release.cjs login",
+    "gas:plan": "node scripts/gas-release.cjs plan",
+    "gas:apply": "node scripts/gas-release.cjs apply",
+    "gas:rollback": "node scripts/gas-release.cjs rollback",
+    "test:backup-release": "node --test test/backup-release.test.cjs"
   },
   "devDependencies": {
+    "@google/clasp": "3.4.1",
     "@noble/hashes": "1.8.0",
     "esbuild": "0.25.9"
   }

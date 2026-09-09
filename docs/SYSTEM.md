@@ -272,7 +272,38 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - パスワードを忘れたら管理画面の「パスワードを忘れた」→ 登録メール(mugilives@gmail.com)に届く6桁コードで再設定。
 - 通知メールはApps ScriptからGmailで送信し、確定授業はGoogleカレンダーにも作成する。案内・確定・取消承認・希望・取消依頼・パスワード再設定などは通知や予定変更を伴う。実行前に対象APIの副作用を確認する。MCPの閲覧も `mcpLog` に記録される。
 - LINEで受けた生徒のNG日を代理登録するときは、`blocked` のメモに「LINE連絡(日付)」を残す。
-- 台帳バックアップはDriveで2台帳をコピーする。個別移行の退避・照合記録は該当機能の文書に残す（認証は [PARENT_AUTH.md](PARENT_AUTH.md#今回の確認範囲)）。自動化・保管範囲は [FUTURE_WORK.md](FUTURE_WORK.md#バックアップの自動化)。
+- 台帳移行前は対象の最新コピーと照合が必要。週次バックアップは移行直前の退避の代わりにはしない。自動化の実装・復旧範囲は [下記](#backup-release-automation)、認証固有の退避は [PARENT_AUTH.md](PARENT_AUTH.md#今回の確認範囲)。
+
+<a id="backup-release-automation"></a>
+### バックアップ・GAS反映の自動化
+
+**2026-09-09: ローカル実装・対象テストは完了。Google初回認証、実GAS検証と定期運用の有効化は未実施。** 現行の公開版を自動化版へ切り替えたという意味ではない。
+
+#### GASの反映
+
+Google公式 [clasp](https://github.com/google/clasp) 3.4.1をdevDependencyに固定。初回は先生自身が `npm run gas:login` のGoogle認証を行い、[Apps Script設定](https://script.google.com/home/usersettings)でApps Script APIを有効にする。認証情報はユーザープロファイルの `.clasprc.json` に置き、Git・Drive共有資料に転記しない。新しい権限の同意は本人が行う。
+
+1. 関連変更をまとめて検証・コミットする。コード変更時は `Code.gs` のhealthの `release` も更新する。
+2. `npm run gas:plan -- <現在本番に対応するGitコミット>`。初回基準は `b7e02df`。省略時は `origin/main` だが、先に新コードをpushした場合は本番基準の代用にならない。
+3. 出力された変更ファイルを確認し、`npm run gas:apply -- <出力されたrelease-id>`。本番HEADと公開版が一致しない、Git基準と違う、ファイル削除が必要、計画後に編集された場合は停止する。新しい権限が必要な変更では、既存manifestを保持する本コマンドだけでは権限追加を行わず、別途同意と準備を済ませる。
+4. 反映後は全ソースと固定された版を取得して照合し、既存デプロイIDを指定して版を更新、公開healthのreleaseを確認する。画面変更があれば従来どおりGASの確認後にmainをpushし、対象画面を確認する。
+
+退避ソース・manifest・計画と進捗・healthはGit対象外の `.verification/releases/<release-id>/` に保存する。ブラウザ側の「コード.gs」とローカル `Code.gs` の名前を対応付け、公開manifestをそのまま保持する。想定外のファイルは削除せず停止する。失敗時は同じIDのapplyを再実行できるが、書き込みや版作成の結果が不明なら自動で上書きせず調査する。Google側に原子的な比較更新はないため、反映中の並行編集は避ける。
+
+旧公開版へ戻す場合は `npm run gas:rollback -- <release-id>`。この操作は公開版だけを切り替える。エディタHEAD、Sheets、Drive、通知、Calendarは巻き戻さない。台帳の列変更がある場合は旧版との互換性を先に確認する。既存のブラウザ手順は接続障害時の代替手段として残す。
+
+#### 週次バックアップ
+
+`gas/Backup.gs` を反映後、エディタで `setupStepwiseBackups` を一度実行して必要なGoogle権限に同意する。所有者だけがアクセスできる新規Driveフォルダへ、毎週日曜の日本時間3時台に退避する。初回は `startStepwiseBackup` を実行し、`continueStepwiseBackup` の5分間隔トリガーが台帳1冊またはPDF1件ずつ処理する。完了・失敗時は作業用トリガーを外し、他機能のトリガーは触らない。`stepwiseBackupStatus` で状況を取得できる。途中停止時の `startStepwiseBackup` は同じジョブを再開し、失敗済みなら新しい世代を作る。
+
+- 対象: 予約台帳、授業管理台帳、`EXAM_PDF_FOLDER_ID` 内の原資料、Script Properties。設定ファイルには秘密値を含むため所有者限定で保存し、内容をログや公開資料へ出さない。
+- 照合: 台帳のシート順・名前・使用範囲・値・数式、PDFの内容ハッシュ、設定内容。処理中に元データやPDFの集合・更新日時・設定が変われば失敗とし、最後に成功した世代を維持する。表示書式やDrive権限の復元を比較済みとは扱わない。
+- ソース: 台帳にバインドされたスクリプトは[コンテナのコピーに含まれる](https://developers.google.com/apps-script/guides/bound)。公開済みの版・manifestの明示的な退避は上記CLIで保持する。外部Calendar全体、送信済みメール、OAuthログイン、トリガーそのもの、Git履歴のバックアップは対象外。
+- 初回と復旧手順変更時に `verifyStepwiseBackupRestore` を実行する。最新の成功世代から独立したテスト用コピーを作って台帳内容を照合し、PDFと設定の保存内容も再確認する。実台帳には書き戻さず、作った検証フォルダだけをゴミ箱へ移す。失敗した場合は成功記録を更新しない。
+- 本復旧は自動実行しない。manifestで対象を確認し、現状の追加退避、差分確認、復元コピーへの切替を行う。コピー先の台帳IDやPDF参照ID、Script Properties、権限、トリガー、デプロイを点検する。**コピー内のスクリプトをそのまま実行しない**（コードの台帳IDは元環境を指す）。設定はJSONのキー・値ペア配列で保存する。秘密値を公開せず、バックアップ制御用の状態は復元対象から外す。
+- 保持期間未決定のため自動削除なし。失敗した途中コピーも調査用に保持。停止は `stopStepwiseBackups`、再有効化は `setupStepwiseBackups`。GASの実行履歴・トリガー失敗通知を確認する。長時間の処理中は書き込みと競合を避けるためロックを取り、通常操作に一時的な待ちが発生し得る。
+
+検証コマンド: `npm run check` / `npm run test:backup-release`。ローカルでは復元コピーの照合、元データ変更時の失敗、秘密設定の破損検出、共有先拒否、再実行、他トリガーの保持、反映元の不一致・暗黙削除の拒否を確認する。Google上での実行時間と実権限は初回接続後に確認する。
 
 ## 8. 別チャット・他のAIから参照するとき
 
