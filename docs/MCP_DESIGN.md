@@ -240,7 +240,10 @@ offer_lesson({ student: "【テスト】サンプル", date: "2026-09-09", start
 
 
 <a id="message-consumer-handoff"></a>
-## 連絡欄の定期処理への引き継ぎ（2026-09-09、Claude担当・未実装）
+## 連絡欄の定期処理への引き継ぎ（2026-09-09、Claude担当・2026-09-09 実装済み）
+
+**実装結果(2026-09-09 13:16 JST、GAS v54 `release: 2026-09-09-mcp-inbox`、stepwise-mcp 0.3.0)**: MCP op `mcpInboxList`(閲覧) / `mcpInboxClaim` / `mcpInboxResolve`、ツール `list_inbox` / `claim_message` / `resolve_message`、既存の登録4ツールに `message_id` / `process_id`。処理ジャーナルは新規シート `contactProcessing`(processId ごとに1行: 対象メッセージ・claim 時の revision・有効期限・登録結果 `itemsJson`・結果 summary)。下記の要件への対応: 送信者と生徒の関係はサーバーで固定(登録 op は連絡の studentId と一致しないと `studentMismatch`)、本文は資料として返すだけ、受付時刻 `receivedAtJst` を基準に相対日付を解釈、取消は登録せず取消申請フォームへ案内(ツール説明と instructions に明記)、メッセージ単位の実行権(15分の claim)と processId、項目別の登録結果を同じ processId に記録、`registered` は実際の書き込みがある場合だけ、先生の返信・訂正(revision の変化)で `conflict`、部分失敗は `released` か `failed` で再開。スケジューラ・実行頻度・失敗時の担当は引き続き未決定で、現在は ChatGPT / Codex への依頼で動く。検証は隔離ハーネス `test/mcp-inbox.test.cjs` 6件(一覧・スレッド・排他と失効・紐づけ登録・registered 判定・競合・解放・範囲)と本番の health / ping / 不在メッセージの拒否。使い方は [MCP_OPERATIONS.md 2-3節](MCP_OPERATIONS.md#2-3-連絡欄の処理3ツール2026-09-09-gas-v54worker-version-下記)。
+
 
 GAS v53・Pagesへ連絡の受付・返信・状態管理を公開した（2026-09-09）。[データと画面の正本](SYSTEM.md#local-learning-services)、列定義 `gas/LearningServices.gs` の `SERVICE_COLS_` を参照。`contactMessages` の `id`、`studentId`、`senderRole`、`senderId`、`body`、`category`、`replyTo`、`receivedAt` は受付時の記録。`status`、`reply`、`revision`、`updatedAt` は先生による処理状況。先生用APIのMCPアクセスはまだ許可していない。
 

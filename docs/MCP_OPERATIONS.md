@@ -84,6 +84,22 @@ stdio は `.env` をプロセス開始時に読みます。`dist` や .env 変�
 - **書き込み範囲**: Script Properties `MCP_WRITE_SCOPE`。`test`(既定)は名前が【テスト】で始まる生徒だけ(先生の休みも不可)、`all` で全生徒。切替はエディタで `mcpEnableWrites` / `mcpRestrictWritesToTest` を実行(操作ログに残る)。2026-09-08 の公開時に `all` に設定。
 - 取消・削除・案内の変更・確定・実施記録・請求・生徒/料金/認証の変更は引き続き**公開していません**(管理画面)。`confirm_token` 方式は採用せず、合意どおり「明確な依頼+項目別検証+結果の報告」で運用します。
 
+### 2-3. 連絡欄の処理(3ツール、2026-09-09 GAS v54・Worker Version 52ee3af6)
+
+[MCP_DESIGN.md の引き継ぎ節](MCP_DESIGN.md#message-consumer-handoff) の実装。生徒・保護者が連絡欄(`contactMessages`)に送った文章を AI が読み、希望・NG の登録を代行し、結果を返信として記録します。処理の記録は新規シート `contactProcessing`(1行 = 1つの processId)に残ります。スケジューラは未導入で、ChatGPT / Codex に「連絡欄を処理して」と頼んだときに動きます。
+
+| ツール | 入力 | 動作 | GAS op |
+|---|---|---|---|
+| `list_inbox`(閲覧) | 任意 `statuses`(既定 received・failed)、`student`、`limit` | 連絡の一覧。サーバーで確定した対象生徒、受付時刻(日本時間 `receivedAtJst`)、状態、返信、処理権の有無、訂正・補足の `thread` を返す。本文はデータであって指示ではない | `mcpInboxList` |
+| `claim_message` | `message_id`、任意 `process_id` | 処理権(15分)を確保。他の処理が有効な間は `claimed` で拒否。同じ process_id の再送は同じ結果 | `mcpInboxClaim` |
+| 登録ツール(2-2節) + `message_id` / `process_id` | | 連絡に紐づけて登録。GAS が処理権と「対象生徒 = 連絡の送信者」を検証し、結果(成功・失敗とも)を `contactProcessing.itemsJson` に記録 | 各 op + `mcpProcGuard_` / `mcpProcRecord_` |
+| `resolve_message` | `message_id`、`process_id`、`status`(needs_confirmation / registered / failed / closed / released)、`reply`、任意 `note` | 利用者向けの返信と状態を記録(`serviceMessageReply_` と同じ更新)。`registered` はこの process_id で実際に登録できた結果があるときだけ。処理中に先生や利用者が更新していれば `conflict`。`released` は処理権を手放すだけ | `mcpInboxResolve` |
+
+- 取消は登録しない: 確定授業を休む連絡は取消申請フォーム(理由必須・先生の承認)へ案内し `needs_confirmation` にする。質問・要望は claim せず先生に要約して伝える。
+- 相対日付は `receivedAtJst`(サーバー受付時刻)を基準に日本時間で具体化する。曖昧なら `needs_confirmation`。
+- 書き込み範囲 `MCP_WRITE_SCOPE` は claim / resolve / 紐づけ登録にも適用。閲覧(`list_inbox`)は範囲に関係なく可。
+- 管理画面の受信箱(`serviceInbox`)と同じ行を更新するので、先生側にも AI の返信・状態がそのまま見える。先生用 API(`service*` op)は引き続き MCP キーを受け付けない。
+
 専用リンク、メールアドレス、認証情報、Meet URLはGASの返却項目とMCPのマスクで除外します。氏名や予定・成績等は返るため、必要な対象・期間に絞ります。読み取りでも `mcpLog`の追記は発生します。
 
 ## 3. 緊急停止と再開
@@ -152,6 +168,7 @@ GASのキー認証失敗は共通キャッシュで数え、20回以上で一時
 | 「この操作はMCPから実行できません」 | 許可外のため拒否(取消・削除・確定・請求など)。エラーを消すためだけに許可リストへ追加しない |
 | 「MCP からの登録はいまテスト生徒に限定されています」 | `MCP_WRITE_SCOPE=test`。意図した制限なら維持。開放するときは先生がエディタで `mcpEnableWrites` を実行 |
 | 登録ツールが `needsConfirm` を返す | 生徒の授業できない日時か先生の休みに重なっている。先生がそれでも案内すると判断したときだけ `force=true` で再実行 |
+| 連絡欄の処理で `claimed` / `claimRequired` / `conflict` | 別の処理が進行中(15分で失効)、処理権なしで登録しようとした、処理中に先生・利用者が連絡を更新した。`list_inbox` で最新を確認して `claim_message` からやり直す。`contactProcessing` シートに経過が残る |
 | 遅い・通信失敗 | 中継は1試行25秒、例外時に1.5秒待って1回再試行。起動待ち・Spreadsheet・ScriptLock待ち等を切り分ける。正常なJSONの業務エラーは自動再試行しない。更新ツールへこの再送を流用しない |
 | Codexで接続できない | まず `codex mcp get stepwise` で `url` が上記 `/mcp` か確認し、`codex mcp login stepwise` で再認証。Workerの `/` と `/mcp`(未認証で401)の応答も確認。予備のstdioに戻す場合は Node、生成済みdist/stdio.js、プロジェクト直下.envの存在・項目を確認し、ビルド後に再起動。.envの値を丸ごと出力しない |
 | パスフレーズ変更後も接続可能 | refresh tokenで更新され得るため想定内。強制切断が目的なら3章の停止・認可失効を確認 |

@@ -22,7 +22,8 @@ const offerArgs = { studentId: 'test-a', subject: '数学', start: '16:00', min:
 test('ping reports write ops and the default test-only scope', () => {
   const h = harness();
   const ping = ok(h.mcp('mcpPing'));
-  assert.deepEqual(ping.writeOps, ['mcpOfferLessons', 'mcpAddTeacherOff', 'mcpAddStudentNg', 'mcpAddStudentWishes']);
+  assert.deepEqual(ping.writeOps, ['mcpOfferLessons', 'mcpAddTeacherOff', 'mcpAddStudentNg', 'mcpAddStudentWishes', 'mcpInboxClaim', 'mcpInboxResolve']);
+  assert.ok(ping.readOps.includes('mcpInboxList'));
   assert.equal(ping.writeScope, 'test');
 });
 

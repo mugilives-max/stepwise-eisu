@@ -121,7 +121,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 確定授業の取消は生徒からの「依頼」で先生が承認（締切は授業の24時間前 `CANCEL_DEADLINE_H`）。月間承認と請求の制御は次節。
 - 授業記録の先生専用op・返却範囲は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md)。通常のカルテ・予定・MCPには内部メモや下書き本文を含めない。
 - エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`、`mcpRotateKey`(MCP 用キーの発行・更新)、`mcpDisable`(MCP 停止)、`mcpEnableWrites` / `mcpRestrictWritesToTest`(MCP 登録の範囲切替)。
-- MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(v52〜: mcpOfferLessons / mcpAddTeacherOff / mcpAddStudentNg / mcpAddStudentWishes。項目ごとの検証と結果、既存と同じ日時は登録済み扱い)のホワイトリストのみ。書き込み範囲は Script Properties `MCP_WRITE_SCOPE`(test/all。エディタの `mcpEnableWrites` / `mcpRestrictWritesToTest`)。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。仕様は [MCP_OPERATIONS.md 2章](MCP_OPERATIONS.md#2-いま使える機能)。
+- MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(v52〜: mcpOfferLessons / mcpAddTeacherOff / mcpAddStudentNg / mcpAddStudentWishes。項目ごとの検証と結果、既存と同じ日時は登録済み扱い。v54〜: mcpInboxClaim / mcpInboxResolve と閲覧の mcpInboxList。連絡欄の処理はシート `contactProcessing` に記録)のホワイトリストのみ。書き込み範囲は Script Properties `MCP_WRITE_SCOPE`(test/all。エディタの `mcpEnableWrites` / `mcpRestrictWritesToTest`)。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。仕様は [MCP_OPERATIONS.md 2章](MCP_OPERATIONS.md#2-いま使える機能)。
 
 ### 5-1. 月間承認と請求
 
@@ -257,6 +257,11 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 公開直後、Googleの応答先へのアクセスでタイムアウトと一時的な404が発生したが、再確認で匿名HTTPとブラウザの両方から正常応答を得た。定常的な応答速度の改善を確認したものではない。
 - MCPとAIの定期実行は追加していない。実装範囲・保存期間等の残件は [FUTURE_WORK.md](FUTURE_WORK.md)。退避・照合・検証記録は非公開の `.verification/services-release-20260909/` に保存する。
 
+### 6-8. v54・連絡欄の MCP 処理
+
+- 2026-09-09 13:16 JST、既存URL・デプロイIDを維持して GAS v54 へ更新。`release: 2026-09-09-mcp-inbox`。変更は `Code.gs` のみ(MCP 連絡欄 op と処理ジャーナル、登録 op の紐づけ検証)。公開前にエディタ7ファイルのハッシュが Git HEAD(`3d67852`)と一致することを確認し、置換適用後・保存・再読み込み後にローカルと全文ハッシュ一致を確認した。新規シート `contactProcessing` は初回の claim 時に作成される(既存シートの変更なし)。
+- ローカル検証: `test/mcp-inbox.test.cjs` 6件を追加し全体 416件が通過(`npm run check` 通過)。本番は health の release、`mcpPing` の readOps / writeOps、`mcpInboxList` の応答、存在しないメッセージへの claim / resolve / 紐づけ登録の拒否を確認。実在の連絡は処理していない。MCP サーバー側は `stepwise-mcp` 0.3.0。
+
 ## 7. 運用メモ
 
 - 検証は隔離台帳を優先する。本番で専用テスト生徒を使った場合は、復元用の退避と実データの差分照合を行い、検証用の関連データ・家族・操作ログも通常環境から片付ける。停止だけで家族の選択肢や「最近の動き」に残さない。実生徒の記録・監査履歴はこの整理対象にしない。
@@ -283,6 +288,8 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - MCPサーバー本体は別のprivateリポジトリ `mugilives-max/stepwise-mcp`。接続先・環境・配置手順は [MCP_OPERATIONS.md](MCP_OPERATIONS.md) に集約する。
 
 ## 9. 変更履歴(要点)
+
+- 2026-09-09 連絡欄の MCP 処理(取得・処理権・登録の紐づけ・返信と状態の記録)を GAS v54 と stepwise-mcp 0.3.0 へ公開。記録は [6-8節](#6-8-v54連絡欄の-mcp-処理)、仕様は [MCP_OPERATIONS.md 2-3節](MCP_OPERATIONS.md#2-いま使える機能)。
 
 - 2026-09-09 取消申請・成績票PDFと振り返り・連絡欄をGAS v53へ公開。反映結果は [6-7節](#services-release-v53)、仕様は [取消・成績票・連絡欄](#local-learning-services)。
 
@@ -327,7 +334,7 @@ PDFは `EXAM_PDF_FOLDER_ID` の先生専用Driveフォルダへ保存する。�
 
 先生は最新の返信1件と状態を更新できる。状態は `received`（受付済み）、`needs_confirmation`（確認待ち）、`registered`（登録済み）、`failed`（失敗）、`closed`（対応済み）。確認待ち/登録済み/失敗は説明必須。登録済みは先生が実際の予定登録結果を確認して付ける状態で、この操作自体は予定を書き換えない。返信は版番号で競合を検出する。未送信入力はページ内で通信失敗時に保持し、端末への永続保存はしない。ブラウザを閉じる際には未保存警告を出す。
 
-MCP・AIの定期処理は未接続。新しい先生用APIはMCPキーを受け付けない。拡張の条件は [MCP_DESIGN.md](MCP_DESIGN.md#message-consumer-handoff) を参照する。
+AI による処理は MCP ツール(`list_inbox` → `claim_message` → 登録 → `resolve_message`)で行い、経過は `contactProcessing` シートに残る(v54、2026-09-09)。定期実行は未導入。新しい先生用API(`service*`)はMCPキーを受け付けない。仕様は [MCP_OPERATIONS.md 2-3節](MCP_OPERATIONS.md#2-いま使える機能)、設計は [MCP_DESIGN.md](MCP_DESIGN.md#message-consumer-handoff)。
 
 ### 台帳・配置・確認
 
