@@ -174,7 +174,7 @@
       .tabs a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 7px 12px; border-radius: 8px; white-space: nowrap; }
       .tabs a.on { background: var(--soft); color: var(--primary); font-weight: 700; }
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js"></script><script src="/assets/lesson-read.js"></script>
 </head>
   <body>
     <header class="site-header">
@@ -269,7 +269,7 @@
         function renderPublishedRecords(records,editable) {
           var list = records || [], h = '<h2>先生からの授業記録</h2>';
           if (!list.length) return h + '<p class="empty">公開された授業記録はまだありません。</p>';
-          return h + list.map(function (r) { return '<details class="card"><summary>' + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(r.subject) + '</summary>' + window.StepwiseReport.context(r.workspace) + window.StepwiseReport.view(r.report) + '<h3>授業報告</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="'+esc(x.title)+'の完了" data-action="taskdone" data-id="'+esc(x.taskId)+'"'+(x.done?' checked':'')+'>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }).join('');
+          return h + list.map(function (r) { return '<details class="card"' + (!editable ? ' data-parent-record="'+esc(r.recordId)+'" data-record-revision="'+esc(r.revision)+'"' : '') + '><summary>' + (!editable ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(r.subject) + '</summary>' + window.StepwiseReport.context(r.workspace) + window.StepwiseReport.view(r.report) + '<h3>授業報告</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="'+esc(x.title)+'の完了" data-action="taskdone" data-id="'+esc(x.taskId)+'"'+(x.done?' checked':'')+'>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }).join('');
         }
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
@@ -1228,6 +1228,10 @@
             if(page==='family'&&F.home&&F.step==='home'&&F.data&&F.studentId)auth={ftoken:familyToken(),studentId:F.studentId};
             else if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
             else if(['home','schedule','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
+          }
+          if(window.StepwiseLessonRead){
+            if(auth&&(auth.ftoken||auth.ptoken))window.StepwiseLessonRead.mount(app,function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));},JSON.stringify(auth));
+            else window.StepwiseLessonRead.clear();
           }
           if(!auth){window.StepwiseServices.clear();return;}
           window.StepwiseServices.mount(app,{key:JSON.stringify(auth),teacher:false,call:function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));}});

@@ -2,6 +2,7 @@
  * MCP/scheduled consumers are deliberately not exposed. All dispatch runs under doPost's ScriptLock.
  */
 var SERVICE_COLS_={
+  lessonReadReceipts:['id','studentId','readerId','recordId','revision','readAt'],
   examReports:['id','studentId','date','kind','title','reflection','analysis','nextSteps','teacherNote','fileId','fileName','fileHash','revision','requestId','payloadHash','updatedAt'],
   contactMessages:['id','studentId','senderRole','senderId','body','category','replyTo','receivedAt','status','reply','revision','updatedAt'],
   cancellationRequests:['id','studentId','slotId','receivedAt','deadlineAt','requestType','reason','senderRole','senderId','slotJson','status','decidedAt']
@@ -30,12 +31,32 @@ function servicePublic_(req){
   if(req.studentId&&String(req.studentId)!==String(auth.student.id))return {error:'対象の生徒が一致しません'};
   var sid=String(auth.student.id);
   switch(req.op){
+    case 'recordReadStatus':return serviceRecordRead_(req,auth,false);
+    case 'recordRead':return serviceRecordRead_(req,auth,true);
     case 'list':return serviceList_(sid,false);
     case 'pdf':return servicePdfGet_(req,sid);
     case 'messageSend':return serviceMessageSend_(req,auth);
     case 'cancelRequest':return serviceCancelRequest_(req,auth);
     default:return {error:'この操作は利用できません'};
   }
+}
+// Read status is per authenticated parent account, never student activity or consent.
+function serviceRecordRead_(req,auth,write){
+  if(auth.role!=='parent')return {error:'保護者としてログインしてください'};
+  var sid=String(auth.student.id),reader=String(auth.senderId);
+  var published=lessonPublishedForStudent_(sid),rows=serviceRows_('lessonReadReceipts').filter(function(r){return String(r.studentId)===sid&&String(r.readerId)===reader;});
+  if(write){
+    var record=published.filter(function(r){return r.recordId===req.recordId;})[0];
+    if(!record)return {error:'公開された授業記録が見つかりません'};
+    if(typeof req.revision!=='number'||req.revision!==record.revision)return {error:'記録が更新されています。再読み込みして確認してください',errorCode:'updated'};
+    var previous=rows.filter(function(r){return String(r.recordId)===record.recordId;});
+    if(previous.length>1)return {error:'既読記録の重複を確認してください'};
+    if(!previous.length||Number(previous[0].revision)<record.revision){
+      serviceWrite_('lessonReadReceipts',{id:JSON.stringify([reader,sid,record.recordId]),studentId:sid,readerId:reader,recordId:record.recordId,revision:record.revision,readAt:new Date().toISOString()});
+      rows=serviceRows_('lessonReadReceipts').filter(function(r){return String(r.studentId)===sid&&String(r.readerId)===reader;});
+    }
+  }
+  return {ok:true,reads:published.map(function(r){var match=rows.filter(function(x){return String(x.recordId)===r.recordId;});return {recordId:r.recordId,readRevision:match.length===1?Number(match[0].revision)||0:0};})};
 }
 function serviceAdmin_(req){
   // Second guard: never permit editor helpers or future MCP dispatch to bypass teacher auth.
