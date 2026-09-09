@@ -182,12 +182,13 @@ test('empty family still authenticates but grants no child data', () => {
   rejected(h.family('familyData', { ftoken: login.ftoken, studentId: 'test-a' }));
 });
 
-test('family password lock and one-session policy; logout cannot terminate newer session', () => {
+test('shared parent logins coexist and device logout cannot terminate another session', () => {
   const h = createFamilyHarness(); const v = verified(h);
   for (let i = 0; i < 5; i++) rejected(h.family('familyLogin', { email: EMAIL, pass: PASS + 'bad' }));
   rejected(h.family('familyLogin', { email: EMAIL, pass: PASS }));h.advance(15 * 60000 + 1);
   const newer = ok(h.family('familyLogin', { email: EMAIL, pass: PASS }));
-  ok(h.family('familyLogout', { ftoken: v.ftoken }));ok(h.family('familyHome', { ftoken: newer.ftoken }));
+  ok(h.family('familyHome',{ftoken:v.ftoken}));
+  ok(h.family('familyLogout', { ftoken: v.ftoken }));rejected(h.family('familyHome',{ftoken:v.ftoken}));ok(h.family('familyHome', { ftoken: newer.ftoken }));
   ok(h.family('familyLogout', { ftoken: newer.ftoken }));rejected(h.family('familyHome', { ftoken: newer.ftoken }));
 });
 
@@ -375,4 +376,35 @@ test('notification failure preserves plan and invoice success while surfacing wa
 
 test('pending parent can recover forgotten password by proving email ownership, and old verification is invalidated',()=>{
  const h=createFamilyHarness(),r=register(h);const old=h.latestChallenge();h.advance(61000);ok(h.family('familyResetRequest',{email:EMAIL}));const reset=h.latestChallenge('reset');ok(h.family('familyResetConfirm',{challenge:reset,pass:'Replacement password!'}));ok(h.family('familyLogin',{email:EMAIL,pass:'Replacement password!'}));rejected(h.family('familyVerify',{challenge:old}));rejected(h.family('familyResetConfirm',{challenge:reset,pass:'Another password!'}));
+});
+
+test('new student gets one automatic group and invitation reuses the existing group',()=>{
+ const h=createFamilyHarness();const added=ok(h.admin('addStudent',{name:'【テスト】自動グループ'}));
+ const list=ok(h.admin('familyList'));const group=list.families.find(f=>f.children.some(c=>c.studentId===added.id));assert.ok(group);
+ const first=ok(h.admin('familyEnsureGroup',{studentId:added.id})),second=ok(h.admin('familyEnsureGroup',{studentId:added.id}));assert.equal(first.family.id,group.id);assert.equal(second.family.id,group.id);assert.equal(h.rows('familyAccounts').length,1);
+});
+test('moving siblings preserves target account, removes source access and retires empty source; retry is safe',()=>{
+ const h=createFamilyHarness();const a=verified(h,create(h,['test-a'])),b=verified(h,create(h,['test-b']),'other@example.invalid');
+ ok(h.admin('familyMoveStudent',{studentId:'test-a',familyId:b.family.id,sourceFamilyId:a.family.id}));
+ rejected(h.family('familyHome',{ftoken:a.ftoken}));rejected(h.family('familyHome',{ftoken:b.ftoken}));
+ const login=ok(h.family('familyLogin',{email:'other@example.invalid',pass:PASS}));assert.equal(login.children.length,2);assert.equal(h.rows('familyAccounts').find(x=>x.id===a.family.id).status,'disabled');
+ ok(h.admin('familyMoveStudent',{studentId:'test-a',familyId:b.family.id,sourceFamilyId:a.family.id}));assert.equal(h.rows('familyLinks').filter(l=>l.studentId==='test-a'&&String(l.active)==='true').length,1);
+ rejected(h.admin('familySetChildren',{familyId:a.family.id,studentIds:['test-a']}));
+});
+test('sessions expire independently and password reset revokes all devices',()=>{
+ const h=createFamilyHarness(),a=verified(h);h.advance(60000);const b=ok(h.family('familyLogin',{email:EMAIL,pass:PASS}));h.advance(12*60*60000-60000);
+ rejected(h.family('familyHome',{ftoken:a.ftoken}));ok(h.family('familyHome',{ftoken:b.ftoken}));
+ ok(h.family('familyResetRequest',{email:EMAIL}));ok(h.family('familyResetConfirm',{challenge:h.latestChallenge('reset'),pass:'New synthetic password!'}));rejected(h.family('familyHome',{ftoken:b.ftoken}));
+});
+
+test('group move recovers after source detach without exposing the child to old sessions',()=>{
+ const h=createFamilyHarness(),a=verified(h,create(h,['test-a'])),b=verified(h,create(h,['test-b']),'second@example.invalid');
+ const sh=h.spreadsheet.getSheetByName('familyLinks'),get=sh.getRange;let failed=false;
+ sh.getRange=function(...args){const range=get.apply(this,args),set=range.setValues;range.setValues=function(values){const result=set.call(this,values);if(!failed&&values[0]&&values[0][1]===a.family.id&&String(values[0][3])==='false'){failed=true;throw Error('Synthetic detached-write interruption');}return result;};return range;};
+ const req={studentId:'test-a',familyId:b.family.id,sourceFamilyId:a.family.id};rejected(h.admin('familyMoveStudent',req));assert.equal(h.rows('familyLinks').filter(x=>x.studentId==='test-a'&&String(x.active)==='true').length,0);rejected(h.family('familyData',{ftoken:a.ftoken,studentId:'test-a'}));
+ ok(h.admin('familyMoveStudent',req));assert.equal(h.rows('familyAccounts').find(x=>x.id===a.family.id).status,'disabled');assert.equal(h.rows('familyLinks').filter(x=>x.studentId==='test-a'&&String(x.active)==='true').length,1);
+});
+test('single-hash legacy session survives adding another device and is revoked individually',()=>{
+ const h=createFamilyHarness(),v=verified(h),c=h.context(),a=c.familyAccount_(v.family.id);const sessions=JSON.parse(a.tokenHash);a.tokenHash=sessions[0].hash;c.familySave_(a);
+ ok(h.family('familyHome',{ftoken:v.ftoken}));const b=ok(h.family('familyLogin',{email:EMAIL,pass:PASS}));ok(h.family('familyHome',{ftoken:v.ftoken}));ok(h.family('familyLogout',{ftoken:v.ftoken}));ok(h.family('familyHome',{ftoken:b.ftoken}));
 });

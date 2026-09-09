@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-parent-onboarding' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-student-groups-local' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1432,6 +1432,7 @@ function adminAddStudent_(req) {
   if (mode !== 'in_person' && mode !== 'online') return {error:'対面・オンラインを選んでください'};
   var id = uid_();
   sheet_('students').appendRow([id, name, true, normEmail_(req.email), newCode_(), 1500, '', '', '', mode]);
+  memoClear_();var group;try{group=familyEnsureGroup_(id);}catch(e){group={error:true};}if(group.error)return {ok:true,id:id,warning:'生徒を登録しました。グループは保護者画面から登録案内を作成してください。'};
   return { ok: true, id: id, admin: adminState_() };
 }
 

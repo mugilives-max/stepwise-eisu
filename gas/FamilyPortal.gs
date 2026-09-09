@@ -77,8 +77,13 @@ function familyView_(a) {
   return {billing:familyBilling_(a,true),id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,
     children:familyChildren_(a,true),inviteExpiresAt:a.inviteHash&&Number(a.inviteExpiresAt)>Date.now()?Number(a.inviteExpiresAt):0,createdAt:String(a.createdAt||''),lastLogin:String(a.lastLogin||'')};
 }
+function familySessions_(a) {
+  if(!a||!a.tokenHash)return [];
+  var values=[];try{values=JSON.parse(String(a.tokenHash));}catch(e){values=[{hash:String(a.tokenHash),expiresAt:Number(a.tokenExpiresAt)}];}
+  return Array.isArray(values)?values.filter(function(x){return x&&typeof x.hash==='string'&&/^[a-f0-9]{64}$/.test(x.hash)&&Number(x.expiresAt)>Date.now();}):[];
+}
 function familySessionMatches_(a,token) {
-  return !!(a&&a.status==='active'&&a.verifiedAt&&a.passHash&&a.tokenHash&&Number(a.tokenExpiresAt)>Date.now()&&/^fa1\.[a-f0-9]{32}\.[a-f0-9]{64}$/.test(String(token||''))&&parentEqual_(a.tokenHash,parentDigest_('family-session',a.id,token)));
+  return !!(a&&a.status==='active'&&a.verifiedAt&&a.passHash&&a.tokenHash&&Number(a.tokenExpiresAt)>Date.now()&&/^fa1\.[a-f0-9]{32}\.[a-f0-9]{64}$/.test(String(token||''))&&familySessions_(a).some(function(x){return parentEqual_(x.hash,parentDigest_('family-session',a.id,token));}));
 }
 function familyRequire_(req) {
   var token=String(req.ftoken||''),parts=token.split('.'),a=parts.length===3?familyAccount_(parts[1]):null;
@@ -90,7 +95,8 @@ function familyChildRequire_(req) {
   auth.student=findStudent_(id);return auth;
 }
 function familyIssueSession_(a) {
-  var token='fa1.'+a.id+'.'+parentSecret_();a.tokenHash=parentDigest_('family-session',a.id,token);a.tokenExpiresAt=Date.now()+PARENT_SESSION_MS_;a.lastLogin=familyStamp_();a.failCount=0;a.lockUntil='';familySave_(a);
+  var sessions=familySessions_(a);if(sessions.length>=20)return familyError_('同時ログインの上限です。利用していない端末でログアウトするか、有効期限後に再試行してください');
+  var token='fa1.'+a.id+'.'+parentSecret_();a.tokenExpiresAt=Date.now()+PARENT_SESSION_MS_;sessions.push({hash:parentDigest_('family-session',a.id,token),expiresAt:a.tokenExpiresAt});a.tokenHash=JSON.stringify(sessions);a.lastLogin=familyStamp_();a.failCount=0;a.lockUntil='';familySave_(a);
   return {ok:true,ftoken:token,family:familyPublic_(a),children:familyChildren_(a,false),billing:familyBilling_(a,false)};
 }
 function familyPassword_(a,pass) {
@@ -110,7 +116,7 @@ function familyLogin_(req) {
 }
 function familyLogout_(req) {
   var token=String(req.ftoken||''),parts=token.split('.'),a=parts.length===3?familyAccount_(parts[1]):null;
-  if(familySessionMatches_(a,token)){a.tokenHash='';a.tokenExpiresAt='';familySave_(a);}return {ok:true};
+  if(familySessionMatches_(a,token)){var sessions=familySessions_(a).filter(function(x){return !parentEqual_(x.hash,parentDigest_('family-session',a.id,token));});a.tokenHash=sessions.length?JSON.stringify(sessions):'';a.tokenExpiresAt=sessions.reduce(function(n,x){return Math.max(n,Number(x.expiresAt));},0)||'';familySave_(a);}return {ok:true};
 }
 function familyInvite_(a) {
   if(a.passHash)return familyError_('登録済みの保護者はメールからパスワードを再設定してください');
@@ -264,6 +270,7 @@ function familyList_() {
 }
 function familySetChildren_(a,ids) {
   if(!Array.isArray(ids)||ids.length>20||ids.some(function(id){return typeof id!=='string';})||new Set(ids).size!==ids.length)return familyError_('紐付ける在籍生徒を確認してください');
+  if(ids.some(function(id){return familyStudentGroups_(id).some(function(l){return String(l.familyId)!==String(a.id);});}))return familyError_('別のグループに所属しています。グループの移動を使ってください');
   var links=familyRows_('familyLinks').filter(function(l){return String(l.familyId)===String(a.id);}),seen={};
   links.forEach(function(l){if(seen[l.studentId])throw new Error('家族と生徒の紐付けが重複しています');seen[l.studentId]=true;});
   // 停止中の子は既存リンクの保持だけ許可。新たに紐付けたり、解除後に戻したりはしない。
@@ -274,12 +281,49 @@ function familySetChildren_(a,ids) {
   ids.forEach(function(id){if(!seen[id])familyWrite_('familyLinks',FAMILY_LINK_COLS_,{id:familyId_(),familyId:a.id,studentId:id,active:true,linkedAt:familyStamp_(),updatedAt:familyStamp_()});});
   return {ok:true,family:familyView_(a)};
 }
+// A student belongs to one group. Existing ambiguous links are never guessed.
+function familyStudentGroups_(id) {return familyRows_('familyLinks').filter(function(l){return String(l.studentId)===String(id)&&String(l.active)==='true';});}
+function familyEnsureGroup_(id) {
+  var student=findStudent_(id);if(!student)return familyError_('利用中の生徒を選んでください');
+  var links=familyStudentGroups_(id);if(links.length>1)return familyError_('複数のグループに所属しています。既存の紐付けを確認してください');
+  if(links.length){var current=familyAccount_(links[0].familyId);return current?{ok:true,family:familyView_(current)}:familyError_('グループ情報を確認してください');}
+  // Recover an interrupted draft by a student-derived identifier, never by a name.
+  var label=student.name+'さんのグループ',draftId=parentDigest_('singleton-group',String(id),'').slice(0,32),a=familyAccount_(draftId);
+  if(a&&(a.passHash||familyRows_('familyLinks').some(function(l){return l.familyId===a.id;})))a=null;
+  if(!a){a={id:familyAccount_(draftId)?familyId_():draftId,label:label,status:'pending',createdAt:familyStamp_(),securityVersion:0,testOnly:isTestStudent_(student)};familySave_(a);}
+  return familySetChildren_(a,[String(id)]);
+}
+function familyRetireEmptySource_(sourceId,studentId) {
+  var source=familyAccount_(String(sourceId||'')),links=familyRows_('familyLinks');
+  if(source&&links.some(function(l){return l.familyId===source.id&&String(l.studentId)===studentId;})&&!links.some(function(l){return l.familyId===source.id&&String(l.active)==='true';})){
+    familyInvalidate_(source);source.status='disabled';source.inviteHash='';source.inviteExpiresAt='';familySave_(source);
+  }
+}
+function familyMoveStudent_(req) {
+  var id=String(req.studentId||''),target=familyAccount_(String(req.familyId||'')),links=familyStudentGroups_(id);
+  if(!findStudent_(id)||!target||target.status==='disabled')return familyError_('移動先と生徒を確認してください');
+  if(links.length>1)return familyError_('既存の重複グループを確認してください');
+  if(links.length&&String(links[0].familyId)===String(target.id)){if(String(req.sourceFamilyId)!==String(target.id))familyRetireEmptySource_(req.sourceFamilyId,id);return {ok:true,family:familyView_(target),replayed:true};}
+  if(links.length&&String(links[0].familyId)!==String(req.sourceFamilyId||''))return familyError_('所属が変わりました。一覧を更新して確認してください');
+  var ids=familyRows_('familyLinks').filter(function(l){return l.familyId===target.id&&String(l.active)==='true';}).map(function(l){return String(l.studentId);});
+  if(ids.length>=20)return familyError_('グループは20人以内にしてください');
+  var source=links.length?familyAccount_(links[0].familyId):null;
+  // Revoke both groups first; detach before attaching so failure never broadens access.
+  familyInvalidate_(target);familySave_(target);
+  if(source){familyInvalidate_(source);familySave_(source);var link=links[0];link.active=false;link.updatedAt=familyStamp_();familyWrite_('familyLinks',FAMILY_LINK_COLS_,link);}
+  var result=familySetChildren_(target,ids.concat([id]));if(result.error)return result;
+  familyRetireEmptySource_(source?source.id:req.sourceFamilyId,id);
+  return result;
+}
 function familyAdmin_(req) {
   if(authMode_()!=='account'||!tokenOk_(req.token))return {error:'先生アカウントでログインし直してください',badAuth:true};
   if(req.op==='familyList')return familyList_();
+  if(req.op==='familyEnsureGroup'){var ensured=familyEnsureGroup_(String(req.studentId||''));if(ensured.error)return ensured;return familyInvite_(familyAccount_(ensured.family.id));}
+  if(req.op==='familyMoveStudent')return familyMoveStudent_(req);
   if(req.op==='familyCreate'){
     var label=String(req.label||'').trim();if(!label||label.length>80)return familyError_('家族の表示名は1〜80文字で入力してください');
     if(!Array.isArray(req.studentIds)||!req.studentIds.length||req.studentIds.length>20||req.studentIds.some(function(id){return typeof id!=='string'||!findStudent_(id);})||new Set(req.studentIds).size!==req.studentIds.length)return familyError_('紐付ける在籍生徒を確認してください');
+    if(req.studentIds.some(function(id){return familyStudentGroups_(id).length;}))return familyError_('所属済みです。グループの移動を使ってください');
     var created={id:familyId_(),label:label,status:'pending',createdAt:familyStamp_(),securityVersion:0,testOnly:req.studentIds.every(function(id){return isTestStudent_(findStudent_(id));})};familySave_(created);
     var linked=familySetChildren_(created,req.studentIds);if(linked.error)return linked;return familyInvite_(created);
   }
