@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-completion-independent' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-parent-unified' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -735,55 +735,15 @@ function parentTokenMatches_(p, token) {
     parentEqual_(p.tokenHash, parentDigest_('session', p.studentId, token)));
 }
 function parentRequire_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true, parentAuthRequired: true };
-  var p = parentRecord_(student.id);
-  if (!parentTokenMatches_(p, req.ptoken)) return { error: '保護者用パスワードでログインしてください', parentAuthRequired: true };
-  return { student: student, record: p };
+  return {error:'保護者ページからメールアドレスでログインしてください', errorCode:'parentAccountRequired', parentAuthRequired:true, parentUrl:'/hogosha/'};
 }
 
-// admin_の認証後のみ到達。コードはこの応答で1回表示し、ログ・台帳には平文を保存しない。
 function adminParentIssueSetupCode_(req) {
-  if (authMode_() !== 'account' || !tokenOk_(req.token)) {
-    return { error: '先生アカウントでログインし直してください', badAuth: true };
-  }
-  var student = findStudent_(String(req.studentId || ''));
-  if (!student) return { error: '利用中の生徒が見つかりません' };
-  var p = parentRecord_(student.id) || { studentId: String(student.id) };
-  var code = parentSetupCode_();
-  p.setupHash = parentDigest_('setup', student.id, code);
-  p.setupExpiresAt = Date.now() + PARENT_SETUP_MS_;
-  p.setupFailCount = 0;
-  // 再設定が完了するまで旧パスワードは使える。既存セッションは直ちに失効。
-  parentClearSession_(p); parentWrite_(p);
-  addLog_(student.name + 'さんの保護者用設定コードを発行');
-  return { ok: true, setupCode: code, expiresAt: Number(p.setupExpiresAt), parentAuth: parentStatus_(student.id) };
+  return {error:'保護者ページからメールアドレスでログインしてください', errorCode:'parentAccountRequired', parentAuthRequired:true, parentUrl:'/hogosha/'};
 }
 
 function parentSetup_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var p = parentRecord_(student.id);
-  if (!p || !p.setupHash || !(Number(p.setupExpiresAt) > Date.now())) {
-    return { error: '設定コードが無効か期限切れです。先生に再発行をお願いしてください' };
-  }
-  var code = halfDigits_(req.setupCode || '');
-  if (!/^\d{6}$/.test(code) || !parentEqual_(p.setupHash, parentDigest_('setup', student.id, code))) {
-    p.setupFailCount = Number(p.setupFailCount || 0) + 1;
-    var exhausted = p.setupFailCount >= PARENT_MAX_FAILURES_;
-    if (exhausted) parentClearSetup_(p);
-    parentWrite_(p);
-    return { error: exhausted ? '設定コードの入力間違いが続いたため無効になりました。先生に再発行をお願いしてください' : '設定コードがちがいます' };
-  }
-  var pass = String(req.pass || '');
-  if (pass.length < 12 || pass.length > 128) return { error: 'パスワードは12〜128文字で設定してください' };
-  var salt = parentSecret_();
-  p.passHash = parentPasswordHash_(pass, salt); p.passSalt = salt;
-  p.setAt = new Date().toISOString(); p.failCount = 0; p.lockUntil = '';
-  parentClearSetup_(p);
-  var result = parentIssueSession_(p);
-  addLog_(student.name + 'さんの保護者用パスワードを設定');
-  return result;
+  return {error:'保護者ページからメールアドレスでログインしてください', errorCode:'parentAccountRequired', parentAuthRequired:true, parentUrl:'/hogosha/'};
 }
 
 function parentLogout_(req) {
@@ -830,21 +790,7 @@ function examsFor_(id, withUrl) {
 }
 
 function parentLogin_(req) {
-  var student = findStudentByCode_(req.k);
-  if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var p = parentRecord_(student.id);
-  if (!p || !p.passHash) return { error: '初回設定が必要です。先生から設定コードを受け取ってください', needSetup: true };
-  if (Number(p.lockUntil || 0) > Date.now()) return { error: '入力間違いが続いています。15分後にもう一度お試しください' };
-  if (Number(p.lockUntil || 0)) { p.failCount = 0; p.lockUntil = ''; }
-  var pass = String(req.pass || '');
-  if (pass.length < 12 || pass.length > 128 || !parentEqual_(p.passHash, parentPasswordHash_(pass, p.passSalt))) {
-    p.failCount = Number(p.failCount || 0) + 1;
-    if (p.failCount >= PARENT_MAX_FAILURES_) p.lockUntil = Date.now() + PARENT_LOCK_MS_;
-    parentWrite_(p);
-    return { error: p.lockUntil ? '入力間違いが続いたため15分間ログインを停止しました' : '保護者用パスワードがちがいます' };
-  }
-  p.failCount = 0; p.lockUntil = '';
-  return parentIssueSession_(p);
+  return {error:'保護者ページからメールアドレスでログインしてください', errorCode:'parentAccountRequired', parentAuthRequired:true, parentUrl:'/hogosha/'};
 }
 
 function parentData_(req) {

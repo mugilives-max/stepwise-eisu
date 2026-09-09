@@ -26,7 +26,7 @@
         var tabs = document.getElementById("tabs");
         function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['home','schedule','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';}
         function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['schedule','予定'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
-        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h.indexOf('#parent/')===0)return 'parent'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#schedule": "schedule", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#schedule": "schedule", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         function renderTabs() {
           if (route() === "family" || route() === 'parent') { tabs.innerHTML=parentNavigation(route()==='family');return; }
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
@@ -998,7 +998,7 @@
           });
         }
         function renderFamily() {
-          var dis = F.busy ? " disabled" : "", h = '<h1>家族の保護者ページ</h1><p class="sub">メールアドレスでログインし、家族の子どもを切り替えて確認できます。</p>';
+          var dis = F.busy ? " disabled" : "", h = '<h1>保護者ページ</h1><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
           if (F.error) h += '<p class="parent-error" role="alert">' + esc(F.error) + '</p>';
           if (F.message) h += '<p class="card" role="status">' + esc(F.message) + '</p>';
           if (F.step === "logout" || ssGet("sw_ft_v1:logout")) { app.innerHTML = h + '<div class="card"><p>ログアウトを完了するにはサーバーの確認が必要です。</p><button class="btn-primary" data-action="fa-logout"' + dis + '>ログアウトを再試行</button></div>'; return; }
@@ -1014,7 +1014,7 @@
           if (familyToken() && F.step === "login") { app.innerHTML = h + '<div class="card"><button class="btn-primary" data-action="fa-home"' + dis + '>家族ページを開く</button> <button class="btn-quiet" data-action="fa-logout"' + dis + '>ログアウト</button></div>'; return; }
           var step = F.step, newPass = step === "register" || step === "reset";
           var titles = { login: 'ログイン', register: '初めての登録', requestReset: 'パスワードを忘れた方', resend: '確認メールを再送', reset: '新しいパスワード', emailChange: 'メールアドレスを変更' };
-          h += (location.pathname.indexOf('/hogosha')===0 && myKey()?'<p><a href="/yoyaku/#parent">従来の生徒別保護者パスワードでログイン</a></p>':'')+'<div class="card parent-auth"><h2>' + esc(titles[step] || titles.login) + '</h2><form id="family-auth-form">';
+          h += '<div class="card parent-auth"><h2>' + esc(titles[step] || titles.login) + '</h2><form id="family-auth-form">';
           if (step === "register") h += '<label for="fa-invite">先生から受け取った招待コード</label><input id="fa-invite" autocomplete="off" required' + dis + '>';
           if (step !== "reset") h += '<label for="fa-email">' + (step === "emailChange" ? '新しいメールアドレス' : 'メールアドレス') + '</label><input type="email" id="fa-email" autocomplete="email" value="' + esc(F.email) + '" required' + dis + '>';
           if (step !== "requestReset") h += '<label for="fa-pass">' + (newPass ? '新しい保護者用パスワード（12〜128文字）' : '保護者用パスワード') + '</label><input type="password" id="fa-pass" autocomplete="' + (newPass ? 'new-password' : 'current-password') + '" maxlength="128"' + (newPass ? ' minlength="12"' : '') + ' required' + dis + '>';

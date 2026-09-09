@@ -1,0 +1,2 @@
+// Synthetic verified parent fixture; public authentication is covered by family-portal tests.
+module.exports=h=>{h.admin('state');const c=h.context();c.ensureFamilySchema_();const a={id:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',label:'【テスト】保護者',status:'active',email:'parent@example.invalid',verifiedAt:'2026-09-01',passHash:'fixture'};c.familySave_(a);c.familySetChildren_(a,['test-a']);return c.familyIssueSession_(a).ftoken;};

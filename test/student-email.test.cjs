@@ -82,7 +82,7 @@ test('direct legacy column changes fail closed even if caller forgot explicit in
   assert.equal(h.context().studentEmailVerifiedAddress_('test-a'),'');assert.equal(notify(h,'mismatched').status,'skipped');
 });
 test('student email does not change legacy parents or family account and links',()=>{
-  const h=createStudentEmailHarness();ok(h.admin('state'));ok(h.admin('parentIssueSetupCode',{studentId:'test-a'}));ok(h.admin('familyCreate',{label:'【テスト】既存家族',studentIds:['test-a','test-b']}));
+  const h=createStudentEmailHarness();ok(h.admin('state'));ok(h.admin('familyCreate',{label:'【テスト】既存家族',studentIds:['test-a','test-b']}));
   const names=['parents','familyAccounts','familyLinks','familyChallenges','familyOutbox'],before=JSON.stringify(names.map(n=>h.rows(n)));
   verify(h);ok(h.student('studentEmailRemove'));assert.equal(JSON.stringify(names.map(n=>h.rows(n))),before);
 });

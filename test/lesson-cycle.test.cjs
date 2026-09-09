@@ -223,9 +223,8 @@ test('HTTP teacher dispatch preserves isolation and public/MCP outputs exclude p
   const r=ok(h.admin('lessonRecordSave',req)); assert.deepEqual(snapshot(h),before);
   ok(h.admin('lessonHomeworkApply',{studentId:'test-a',recordId:r.recordId,expectedRevision:1,requestId:'http-apply'}));
   const task=h.rows('tasks')[0];
-  const issue=ok(h.admin('parentIssueSetupCode',{studentId:'test-a'}));
-  const parent=ok(h.parent('parentSetup',{setupCode:issue.setupCode,pass:'TestParentPassword!'}));
-  const output=[h.get({action:'state',k:'synthetic-link-a'}),ok(h.parent('parentData',{ptoken:parent.ptoken})),ok(h.admin('kanriStudent',{studentId:'test-a'}))];
+  const parent={ptoken:require('./helpers/parent-session.cjs')(h)};
+  const output=[h.get({action:'state',k:'synthetic-link-a'}),ok(h.request({action:'familyData',studentId:'test-a',ftoken:parent.ptoken})),ok(h.admin('kanriStudent',{studentId:'test-a'}))];
   const mcpOutput=[];
   for (const op of ['mcpStudents','mcpStudent','mcpPending','mcpBilling','mcpSchedule']) mcpOutput.push(ok(h.request({action:'admin',op,studentId:'test-a',mcpKey:MCP_KEY})));
   const json=JSON.stringify(output.concat(mcpOutput)); assert.equal(json.includes('PRIVATE_SENTINEL'),false); assert.equal(json.includes('sourceRecordId'),false);

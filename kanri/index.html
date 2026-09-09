@@ -874,19 +874,7 @@
             (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
           html += '<div class="note">「リンクをコピー」は今のリンクをコピーするだけです(何度押しても同じ)。リンクが他人に知られたときだけ「再発行」してください。前のリンクは使えなくなります。</div></div>';
 
-          // 保護者認証: パスワードは取得せず、設定状況だけを表示する。
-          var pa = s.parentAuth;
-          html += '<h2>保護者用パスワード</h2><div class="card"><dl class="kv">';
-          html += '<dt>設定状況</dt><dd><span class="tag ' + (pa && pa.configured ? "green" : "gray") + '">' + (!pa ? "未確認" : pa.configured ? "設定済み" : "未設定") + '</span></dd>';
-          html += '<dt>設定日時</dt><dd>' + esc(fmtAuthTime(pa && pa.setAt)) + '</dd><dt>最終ログイン</dt><dd>' + esc(fmtAuthTime(pa && pa.lastLogin)) + '</dd></dl>';
-          if (pa && pa.setupExpiresAt > Date.now()) html += '<p class="small muted">発行済みコードの有効期限: ' + esc(fmtAuthTime(pa.setupExpiresAt)) + '（日本時間）。コードを再発行すると、前のコードは無効になります。</p>';
-          html += '<div class="row" style="margin-top:12px"><button class="btn-primary btn-sm" data-action="parentissue"' + (busy || s.active === false || !s.code ? " disabled" : "") + '>' + (pa && (pa.configured || pa.setupExpiresAt > Date.now()) ? "設定コードを再発行" : "設定コードを発行") + '</button></div>';
-          html += '<p class="note">初回設定・パスワードを忘れた場合に使う6桁のコードです（24時間有効・1回限り）。発行後、先生から保護者へLINEなどで直接伝えてください。保護者はマイページの「保護者」でパスワードを設定します。パスワードは先生には表示されません。</p>';
-          if (pa && pa.configured) html += '<p class="note">コードを発行すると、保護者のログイン中のセッションは終了します。以前のパスワードは、新しいパスワードの設定が完了するまで使えます。</p>';
-          if (s.active === false || !s.code) html += '<p class="note">設定コードを発行するには、有効な生徒の専用リンクが必要です。</p>';
-          html += '<div id="parent-setup-issued" aria-live="polite"></div></div>';
-
-          html += '<h2>家族設定</h2><div class="card"><p>兄弟を同じ家族へ紐付け、保護者の招待・通知先を管理します。</p><a class="btn-quiet btn-sm" href="#families">家族・通知を開く</a></div>';
+          html += '<h2>家族設定</h2><div class="card"><p>保護者アカウントに生徒を紐付け、招待・通知先を管理します。お子さまが1人の場合も同じ方法です。</p><a class="btn-quiet btn-sm" href="#families">家族・通知を開く</a></div>';
           }
           if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する

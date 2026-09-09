@@ -16,11 +16,10 @@ test('student credentials, another child and unpublished records cannot mark par
  assert.ok(h.request({action:'learningService',op:'recordRead',k:'synthetic-link-a',recordId:r.recordId,revision:1}).error);
  assert.ok(h.read('recordRead',{recordId:'missing',revision:1}).error);assert.equal(h.rows('lessonReadReceipts').length,0);
 });
-test('legacy parent account read state is separate from family account read state',()=>{
- const h=fixture(),r=h.save(),setup=ok(h.admin('parentIssueSetupCode',{studentId:'test-a'})),p=ok(h.request({action:'parentSetup',k:'synthetic-link-a',setupCode:setup.setupCode,pass:'Synthetic parent password!'}));
- const req={action:'learningService',op:'recordRead',k:'synthetic-link-a',ptoken:p.ptoken,recordId:r.recordId,revision:1};ok(h.request(req));assert.equal(ok(h.read('recordReadStatus')).reads[0].readRevision,0);
- assert.equal(ok(h.request({...req,op:'recordReadStatus'})).reads[0].readRevision,1);
+test('retired parent credentials cannot record reads',()=>{
+ const h=fixture(),r=h.save();assert.ok(h.request({action:'learningService',op:'recordRead',k:'synthetic-link-a',ptoken:'retired',recordId:r.recordId,revision:1}).error);assert.equal(h.rows('lessonReadReceipts').length,0);
 });
+
 const flush=()=>new Promise(r=>setImmediate(r));
 function ui(){const label={textContent:''},el={dataset:{parentRecord:'r',recordRevision:'2'},open:false,matches:()=>true,querySelector:()=>label},calls=[];let listener;const host={addEventListener:(n,fn)=>listener=fn,removeEventListener:()=>listener=null,querySelectorAll:()=>[el]},c={window:{},console};vm.runInNewContext(fs.readFileSync('assets/lesson-read.js','utf8'),c);c.window.StepwiseLessonRead.mount(host,(op,payload)=>new Promise((resolve,reject)=>calls.push({op,payload,resolve,reject})),'parent');return {calls,label,el,api:c.window.StepwiseLessonRead,toggle:()=>listener({target:el})};}
 test('UI listing and closing do not mark read; opening persists and stale load cannot undo result',async()=>{

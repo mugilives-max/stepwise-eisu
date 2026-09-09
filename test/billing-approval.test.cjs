@@ -15,10 +15,7 @@ function rejected(result) {
   return result;
 }
 
-function parentSession(h) {
-  const setup = ok(h.admin('parentIssueSetupCode', { studentId: 'test-a' }));
-  return ok(h.parent('parentSetup', { setupCode: setup.setupCode, pass: 'Synthetic billing parent password!' })).ptoken;
-}
+const parentSession=require('./helpers/parent-session.cjs');
 
 function preview(h, studentId = 'test-a', ym = '2026-09') {
   return ok(h.admin('billingPreview', { studentId, ym })).billing;
@@ -298,10 +295,10 @@ test('parent approval requires the displayed revision and only approves the curr
   const current = propose(h, { counts: { 数学: 3 } });
   assert.notEqual(current.revision, old.revision);
   for (const revision of [undefined, old.revision]) {
-    rejected(h.parent('parentPlanDecide', { ptoken, ym: '2026-09', approve: true, expectedRevision: revision }));
+    rejected(h.request({ action:'familyPlanDecide', studentId:'test-a', ftoken:ptoken, ym: '2026-09', approve: true, expectedRevision: revision }));
   }
   assert.equal(preview(h).planStatus, 'proposed');
-  ok(h.parent('parentPlanDecide', { ptoken, ym: '2026-09', approve: true, expectedRevision: current.revision }));
+  ok(h.request({ action:'familyPlanDecide', studentId:'test-a', ftoken:ptoken, ym: '2026-09', approve: true, expectedRevision: current.revision }));
   assert.equal(preview(h).planStatus, 'approved');
   assert.equal(preview(h, 'test-b').planStatus, 'proposed');
   assert.deepEqual(h.effects, []);
@@ -600,7 +597,7 @@ test('invoice amounts agree across parent, teacher and MCP views after standard 
   issueInvoice(h);
   ok(h.admin('setFee', { studentId: 'test-a', rate30: 2900, monthly: 0 }));
   const teacher = ok(h.admin('kanriStudent', { studentId: 'test-a' })).data;
-  const parent = ok(h.parent('parentData', { ptoken })).data;
+  const parent = ok(h.request({action:'familyData',studentId:'test-a',ftoken:ptoken})).data;
   const dashboard = ok(h.admin('kanriDashboard')).data;
   const mcp = ok(h.mcp('mcpBilling', { month: '2026-09' }));
   assert.equal(teacher.thisMonth.fee, 4500);
