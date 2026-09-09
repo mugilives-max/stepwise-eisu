@@ -144,3 +144,12 @@ test('an expired verification link provides a working resend route without reloa
   assert.equal(ui.requests.at(-1).body.action, 'familyResendVerification');
   assert.equal(ui.requests.at(-1).body.challenge, undefined);
 });
+
+test('student entry preselects one child and existing-parent linking preserves siblings',async()=>{
+ const ui=createUI('admin',{hash:'#families?student=child-b'});ui.requests[0].reply(familyList({families:[{id:'family-a',label:'保護者A',status:'active',configured:true,verifiedAt:'2026-09-01',children:[{studentId:'child-a',name:'子A'}]}]}));await flush();
+ ui.click('family-new');ui.input('family-label','保護者B');ui.click('family-save');ui.click('family-confirm');assert.deepEqual(ui.requests.at(-1).body.studentIds,['child-b']);
+ const linked=createUI('admin',{hash:'#families?student=child-b'});linked.requests[0].reply(familyList({families:[{id:'family-a',label:'保護者A',status:'active',configured:true,children:[{studentId:'child-a',name:'子A'}]}]}));await flush();linked.click('family-link',{'data-id':'family-a'});linked.click('family-confirm');assert.deepEqual(linked.requests.at(-1).body.studentIds,['child-a','child-b']);assert.equal(linked.requests.at(-1).body.op,'familySetChildren');
+});
+test('invite link opens registration, scrubs URL and survives validation errors without logging in another account',()=>{
+ const ui=createUI('student',{hash:'#family?invite=fi1.synthetic.secret',session:new Map([['sw_ft_v1','other-session']])});assert.equal(ui.location.hash,'#family');assert.equal(ui.requests.length,0);assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');ui.input('fa-email','test@example.invalid');ui.input('fa-pass','short');ui.submit('family-auth-form');assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');assert.equal(JSON.stringify(ui.writes).includes('synthetic.secret'),false);
+});

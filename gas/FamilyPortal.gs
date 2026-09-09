@@ -175,15 +175,15 @@ function familyResendVerification_(req) {
 }
 function familyResetRequest_(req) {
   var a=familyByEmail_(familyEmail_(req.email));
-  if(a&&a.status==='active'&&a.verifiedAt)familyIssueChallengeSafe_(a,'reset',String(a.email));return familyGenericMail_();
+  if(a&&a.passHash&&(a.status==='active'||a.status==='pending'))familyIssueChallengeSafe_(a,'reset',String(a.email));return familyGenericMail_();
 }
 function familyResetConfirm_(req) {
   var v=familyChallenge_(req.challenge,['reset']);if(!v)return familyError_('再設定リンクが無効か期限切れです。もう一度申し込んでください');
   var a=v.account,c=v.challenge,pass=String(req.pass||'');
-  if(a.status!=='active'||!a.verifiedAt||String(a.email)!==String(c.email))return familyError_('再設定リンクが無効です');
+  if((a.status!=='active'&&a.status!=='pending')||String(a.email)!==String(c.email))return familyError_('再設定リンクが無効です');
   if(pass.length<12||pass.length>128)return familyError_('パスワードは12〜128文字で設定してください');
   var salt=parentSecret_(),hash=parentPasswordHash_(pass,salt);c.usedAt=familyStamp_();familyChallengeWrite_(c);
-  a.passSalt=salt;a.passHash=hash;a.failCount=0;a.lockUntil='';familyInvalidate_(a);familySave_(a);return {ok:true,reset:true};
+  a.passSalt=salt;a.passHash=hash;a.failCount=0;a.lockUntil='';a.verifiedAt=a.verifiedAt||familyStamp_();a.status='active';familyInvalidate_(a);familySave_(a);return {ok:true,reset:true};
 }
 function familyEmailChange_(req) {
   var auth=familyRequire_(req);if(auth.error)return auth;var a=auth.account,email=familyEmail_(req.email);

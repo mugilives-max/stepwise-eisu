@@ -936,7 +936,7 @@
         }
 
         /* ---------- 家族の保護者認証: 専用リンク方式とは別のセッション ---------- */
-        var F = { step: "login", email: "", home: null, data: null, studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", confirm: null, memos: Object.create(null) };
+        var F = { step: "login", invite: "", email: "", home: null, data: null, studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", confirm: null, memos: Object.create(null) };
         function familyToken() { return ssGet("sw_ft_v1") || ""; }
         function familyClear() { ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.data = null; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
@@ -969,7 +969,9 @@
         }
         function familyReadChallenge() {
           if (location.hash.indexOf("#family?") !== 0) return;
-          var q = new URLSearchParams(location.hash.slice(8)), verify = q.get("verify"), reset = q.get("reset");
+          var q = new URLSearchParams(location.hash.slice(8)), invite=q.get("invite"), mode=q.get("mode"), verify = q.get("verify"), reset = q.get("reset");
+          if(invite){F.invite=invite;F.step='register';F.home=null;F.data=null;F.message='メールアドレスとパスワードを登録し、届いた確認メールを開くと利用開始です。';}
+          else if(['requestReset','resend'].indexOf(mode)>=0){F.step=mode;F.home=null;F.data=null;}
           F.challenge = verify || reset || ""; F.challengeKind = verify ? "verify" : reset ? "reset" : "";
           if (F.challenge) { ++F.seq; F.busy = false; F.home = null; F.data = null; F.step = F.challengeKind; F.message = ""; F.error = ""; }
           history.replaceState(null, "", location.pathname + "#family");
@@ -985,7 +987,7 @@
           if (step === "register" && !invite) { F.error = "先生から受け取った招待コードを入力してください。"; familyRender(); return; }
           F.email = email || F.email;
           if (passEl) passEl.value = ""; if (pass2) pass2.value = ""; if (inviteEl) inviteEl.value = "";
-          if (step === "register") familyRequest("familyRegister", { inviteCode: invite, email: email, pass: pass }, function (res) { F.step = "login"; F.message = familyMailMessage(res); });
+          if (step === "register") familyRequest("familyRegister", { inviteCode: invite, email: email, pass: pass }, function (res) { F.invite=""; F.step = "login"; F.message = familyMailMessage(res); });
           else if (step === "reset") { if (!F.challenge) { F.error = "メール内の再設定リンクを開いてください。"; familyRender(); return; } familyRequest("familyResetConfirm", { challenge: F.challenge, pass: pass }, function () { familyClear(); F.challenge = ""; F.challengeKind = ""; F.message = "パスワードを変更しました。メールアドレスでログインしてください。"; }); }
           else if (step === "requestReset") familyRequest("familyResetRequest", { email: email }, function (res) { F.message = res.message || "登録されている場合は、再設定のメールを送ります。"; });
           else if (step === "resend") familyRequest("familyResendVerification", { email: email, pass: pass }, function (res) { F.message = familyMailMessage(res); });
@@ -1015,10 +1017,11 @@
           var step = F.step, newPass = step === "register" || step === "reset";
           var titles = { login: 'ログイン', register: '初めての登録', requestReset: 'パスワードを忘れた方', resend: '確認メールを再送', reset: '新しいパスワード', emailChange: 'メールアドレスを変更' };
           h += '<div class="card parent-auth"><h2>' + esc(titles[step] || titles.login) + '</h2><form id="family-auth-form">';
-          if (step === "register") h += '<label for="fa-invite">先生から受け取った招待コード</label><input id="fa-invite" autocomplete="off" required' + dis + '>';
+          if (step === "register") h += (F.invite ? '<p>先生からの登録案内を受け取りました。</p><input type="hidden" id="fa-invite" value="' + esc(F.invite) + '">' : '<label for="fa-invite">先生から受け取った招待コード</label><input id="fa-invite" autocomplete="off" required' + dis + '>');
           if (step !== "reset") h += '<label for="fa-email">' + (step === "emailChange" ? '新しいメールアドレス' : 'メールアドレス') + '</label><input type="email" id="fa-email" autocomplete="email" value="' + esc(F.email) + '" required' + dis + '>';
           if (step !== "requestReset") h += '<label for="fa-pass">' + (newPass ? '新しい保護者用パスワード（12〜128文字）' : '保護者用パスワード') + '</label><input type="password" id="fa-pass" autocomplete="' + (newPass ? 'new-password' : 'current-password') + '" maxlength="128"' + (newPass ? ' minlength="12"' : '') + ' required' + dis + '>';
           if (newPass) h += '<label for="fa-pass2">新しいパスワード（確認）</label><input type="password" id="fa-pass2" autocomplete="new-password" minlength="12" maxlength="128" required' + dis + '>';
+          if (step === 'resend') h += '<p class="note">パスワードを忘れた場合は、ログインに戻り「パスワードを忘れた方」から再設定できます。メール確認前でも利用できます。</p>';
           if (step === 'register') h += '<p class="note">確認メール内のリンクでメールアドレスを確認するとログインできます。</p>';
           if (step === 'emailChange') h += '<p class="note">変更手続きでログアウトします。新しいメールの確認が完了するまで、登録先は現在のメールのままです。</p>';
           h += '<div class="row"><button type="submit" class="btn-primary"' + dis + '>' + (F.busy ? '確認中…' : step === 'login' ? 'ログイン' : step === 'reset' ? 'パスワードを変更する' : step === 'emailChange' ? '確認メールを送りログアウトする' : '送信する') + '</button></div></form><div class="row" style="margin-top:16px">' + (step === 'login' ? [['register', '初めての登録'], ['requestReset', 'パスワードを忘れた方'], ['resend', '確認メールを再送']] : [[F.home ? 'home' : 'login', F.home ? '家族ページに戻る' : 'ログインに戻る']]).map(function (x) { return '<button class="btn-quiet btn-sm" data-action="fa-mode" data-step="' + x[0] + '"' + dis + '>' + x[1] + '</button>'; }).join('') + '</div></div><p class="note">共用端末では、利用後にログアウトしてください。</p>';
@@ -1290,7 +1293,7 @@
           else if (qp) { history.replaceState(null, "", location.pathname + location.hash); }
           else if (qs.toString()) history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
-        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
+        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
         window.addEventListener("storage", function (ev) {
           if (route()==='family')return;
           if (previewK || (ev.key !== "sw_k" && ev.key !== null) || (ev.key !== null && ev.oldValue === ev.newValue)) return;
@@ -1301,7 +1304,7 @@
           app.innerHTML = '<div class="loading"><div class="spinner"></div>専用リンクを確認しています…</div>';
           loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。再読み込みしてください。</div>'; });
         });
-        if (route() === 'family') { render(); if (!F.challenge && familyToken()) familyLoadHome(); }
+        if (route() === 'family') { render(); if (!F.challenge && F.step==='login' && familyToken()) familyLoadHome(); }
         else if (route() === 'student-email' && SE.challenge) render();
         else loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>'; });
       })();

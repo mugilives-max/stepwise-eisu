@@ -181,3 +181,5 @@
 - 2026-09-08 MCP 登録ツール4本(offer_lessons / add_teacher_off / add_student_unavailable / add_student_wishes)を実装・公開(GAS v52 `2026-09-08-mcp-writes`、Worker Version ec4f2bf5、stepwise-mcp 0.2.0)。日付展開(毎週/隔週/毎月/曜日/期間/除外)、項目別検証と結果、再送安全、`MCP_WRITE_SCOPE`(mcpEnableWrites / mcpRestrictWritesToTest)。ローカル検証 11件+日付展開 5件通過。詳細は MCP_DESIGN.md 合意節と MCP_OPERATIONS.md 2-2節
 - 2026-09-08 Codex の MCP をリモート版(Cloudflare `/mcp`、OAuth)に一本化。`~/.codex/config.toml` を `url` 指定に変更(旧 stdio はコメントアウトで予備)、Worker は `mcpLog` の client 列に OAuth の client_name を記録するよう変更して再配置(Version 91cbe92d)。初回の `codex mcp login stepwise` は先生が実施(MCP_OPERATIONS.md 1章)
 完了した変更の要点・日付・版は [SYSTEM.md 変更履歴](SYSTEM.md#9-変更履歴要点) に集約する。機能固有の検証・設計判断は該当文書に残し、ここに複製しない。
+
+- 2026-09-09 保護者登録導線を整理：生徒から新規追加／既存保護者へ紐付け、状態別案内、登録リンク、未確認メールのパスワード復旧を実装。手順の正本はPARENT_AUTH.md。運用時は実際の案内文とメール到達を確認する。

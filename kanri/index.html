@@ -460,7 +460,7 @@
           if (h.indexOf("#lesson?") === 0) { var q = new URLSearchParams(h.slice(8)); return { page: "lesson", id: q.get("student") || "", slotId: q.get("slot") || "", recordId: q.get("record") || "" }; }
           if (h.indexOf("#s=") === 0) { var sq = new URLSearchParams(h.slice(1)), section = sq.get("tab") || "overview"; return { page: "student", id: sq.get("s") || "", section: ["overview","settings","progress","billing"].indexOf(section) >= 0 ? section : "overview" }; }
           if (h === "#students") return { page: "students" };
-          if (h === "#families") return { page: "families" };
+          if (h === "#families" || h.indexOf("#families?")===0) return { page: "families", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
           if (h === "#lessons") return { page: "lessons" };
           if (h === "#settings") return { page: "settings" };
           return { page: "home" };
@@ -478,7 +478,7 @@
             '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
             '<a href="#lessons" class="' + (r.page === "lessons" ? "on" : "") + '">授業</a>' +
             '<a href="#students" class="' + (r.page === "students" || r.page === "student" ? "on" : "") + '">生徒</a>' +
-            '<a href="#families" class="' + (r.page === "families" ? "on" : "") + '">家族・通知</a>' +
+            '<a href="#families" class="' + (r.page === "families" ? "on" : "") + '">保護者・通知</a>' +
             '<a href="#settings" class="' + (r.page === "settings" ? "on" : "") + '">設定</a>' +
             '<a href="#" data-action="logout">ログアウト</a>' +
             (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
@@ -792,6 +792,7 @@
             '<div class="row">' + "" + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定・宿題'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
+          html += '<p><a class="btn-quiet btn-sm" href="#families?student=' + encodeURIComponent(s.id) + '">保護者を追加・確認</a></p>';
           if (section === 'overview') {
           html += unrecordedCard(s.unrecordedLessons || (s.lessons || []).filter(function(l){return l.status==='booked' && !l.done && l.date<(s.today || today());}),false,s);
           // この生徒の予定表
@@ -874,7 +875,7 @@
             (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
           html += '<div class="note">「リンクをコピー」は今のリンクをコピーするだけです(何度押しても同じ)。リンクが他人に知られたときだけ「再発行」してください。前のリンクは使えなくなります。</div></div>';
 
-          html += '<h2>家族設定</h2><div class="card"><p>保護者アカウントに生徒を紐付け、招待・通知先を管理します。お子さまが1人の場合も同じ方法です。</p><a class="btn-quiet btn-sm" href="#families">家族・通知を開く</a></div>';
+          html += '<h2>保護者</h2><div class="card"><p>保護者アカウントに生徒を紐付け、招待・通知先を管理します。お子さまが1人の場合も同じ方法です。</p><a class="btn-quiet btn-sm" href="#families?student=' + encodeURIComponent(s.id) + '">保護者を追加・確認</a></div>';
           }
           if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する
@@ -1348,20 +1349,26 @@
         }
         function renderFamilies() {
           renderNav(); var d = FT.auth === token() ? FT.data : null, dis = FT.busy ? ' disabled' : '';
-          var h = '<h1>家族・保護者への通知</h1><p class="sub">家族ごとの確認済みメールで、きょうだいを切り替えて閲覧できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
+          var h = '<h1>保護者アカウント</h1><p class="sub">保護者を登録し、閲覧できる生徒を紐付けます。生徒1人でも兄弟でも同じ操作です。父母が別々にログインする場合は、それぞれ追加してください。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
-          if (FT.invite && FT.auth === token()) h += '<div class="card"><strong>' + esc(FT.invite.label) + 'の招待コード</strong><p class="note">保護者へ個別にお渡しください。このタブを閉じるとコードは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">案内とコードをコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
+          if (FT.invite && FT.auth === token()) h += '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクを開くと、メール・パスワードの設定画面が開きます。保護者が確認メールのリンクを開くと利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
           if (!d) { app.innerHTML = h + (FT.busy ? '<p>読み込んでいます…</p>' : ''); return; }
-          var students = d.students || [], families = d.families || [];
+          var students = d.students || [], families = d.families || [], targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
+          if(targetStudent) h += '<div class="card"><h2>'+esc(targetStudent.name)+'さんの保護者</h2><p>新しい保護者は「保護者を追加」。兄弟などですでに登録済みなら、下のアカウントから「この生徒を紐付ける」を選んでください。</p></div>';
           if (FT.confirm) h += '<div class="card" role="region" aria-label="家族の変更確認"><strong>' + esc(FT.confirm.label) + '</strong><p>' + esc(FT.confirm.description) + '</p><button class="btn-primary" data-action="family-confirm"' + dis + '>この内容で実行</button> <button class="btn-quiet" data-action="family-cancel"' + dis + '>やめる</button></div>';
           if (FT.edit) {
             var e = FT.edit;
-            h += '<div class="card"><h2>' + (e.id ? '家族の子どもを変更' : '家族を作成') + '</h2>';
-            if (!e.id) h += '<label for="family-label">家族の表示名</label><input id="family-label" data-family-label maxlength="80" value="' + esc(e.label) + '" placeholder="保護者に分かる表示名">';
-            h += '<fieldset><legend>この家族から閲覧できる子ども</legend>' + students.map(function (s) { return '<label style="display:block"><input type="checkbox" data-family-child="' + esc(s.id) + '"' + (e.children[s.id] ? ' checked' : '') + (FT.busy || s.active === false && !e.children[s.id] ? ' disabled' : '') + '> ' + esc(s.name) + (s.active === false ? '（停止中）' : '') + '</label>'; }).join('') + '</fieldset><p class="note">子どもを外すと、この家族から閲覧できなくなり、現在の家族ログインも失効します。実際の保護者関係を確認してください。</p><button class="btn-primary" data-action="family-save"' + dis + '>変更内容を確認</button> <button class="btn-quiet" data-action="family-editcancel"' + dis + '>閉じる</button></div>';
-          } else h += '<p><button class="btn-primary" data-action="family-new"' + dis + '>家族を作成する</button></p>';
+            h += '<div class="card"><h2>' + (e.id ? '閲覧できる生徒を変更' : '保護者を追加') + '</h2>';
+            if (!e.id) h += '<label for="family-label">保護者の名前</label><input id="family-label" data-family-label maxlength="80" value="' + esc(e.label) + '" placeholder="例：山田 花子（母）">';
+            h += '<fieldset><legend>この保護者が閲覧できる生徒</legend>' + students.map(function (s) { return '<label style="display:block"><input type="checkbox" data-family-child="' + esc(s.id) + '"' + (e.children[s.id] ? ' checked' : '') + (FT.busy || s.active === false && !e.children[s.id] ? ' disabled' : '') + '> ' + esc(s.name) + (s.active === false ? '（停止中）' : '') + '</label>'; }).join('') + '</fieldset><p class="note">子どもを外すと、この家族から閲覧できなくなり、現在の家族ログインも失効します。実際の保護者関係を確認してください。</p><button class="btn-primary" data-action="family-save"' + dis + '>変更内容を確認</button> <button class="btn-quiet" data-action="family-editcancel"' + dis + '>閉じる</button></div>';
+          } else h += '<p><button class="btn-primary" data-action="family-new"' + dis + '>保護者を追加</button></p>';
           families.forEach(function (f) {
-            h += '<div class="card"><h2>' + esc(f.label) + '</h2><p>' + (f.children || []).map(function (s) { return esc(s.name); }).join('・') + '</p><p>' + esc(f.email || 'メール未登録') + ' <span class="tag ' + (f.verifiedAt ? 'green' : 'amber') + '">' + (f.verifiedAt ? 'メール確認済み' : 'メール未確認') + '</span> ' + (f.configured ? 'パスワード設定済み' : '未登録') + '・' + esc({ active: '利用中', pending: '初回登録・メール確認待ち', disabled: '利用停止' }[f.status] || '確認待ち') + '</p><p class="small muted">最終ログイン：' + esc(fmtAuthTime(f.lastLogin)) + '</p><div class="row"><button class="btn-quiet btn-sm" data-action="family-edit" data-id="' + esc(f.id) + '"' + dis + '>子どもを変更</button>' + (!f.configured ? '<button class="btn-ghost btn-sm" data-action="family-invite" data-id="' + esc(f.id) + '"' + dis + '>招待コードを再発行</button>' : '') + '<button class="btn-quiet btn-sm" data-action="family-active" data-id="' + esc(f.id) + '"' + dis + '>' + (f.status === 'disabled' ? '利用を再開' : '利用を停止') + '</button></div></div>';
+            var linked=(f.children || []).some(function(x){return targetStudent && sameId(x.studentId,targetStudent.id);});
+            var state=f.status==='disabled'?'利用停止':f.verifiedAt?'利用中':f.configured?'メール確認待ち':f.inviteExpiresAt>Date.now()?'登録待ち':'登録案内が必要';
+            h += '<div class="note"><strong>'+esc(state)+'</strong> — '+(f.status==='disabled'?'利用を再開すると案内できます。':f.verifiedAt?'ログインできます。パスワードを忘れた場合は再設定案内を渡してください。':f.configured?'登録済みです。保護者に確認メールを開いてもらってください。届かない場合は確認メールの再送案内を渡してください。':'登録案内を発行し、保護者へ渡してください。先生がパスワードを発行する必要はありません。')+'</div>';
+            if(targetStudent) h += '<p>'+ (linked?'この生徒に紐付け済み': '<button class="btn-primary btn-sm" data-action="family-link" data-id="'+esc(f.id)+'"'+dis+'>この生徒を紐付ける</button>')+'</p>';
+            if(f.configured && f.status!=='disabled') h += '<p><button class="btn-quiet btn-sm" data-action="family-help" data-id="'+esc(f.id)+'"'+dis+'>'+(f.verifiedAt?'ログイン・再設定案内をコピー':'確認メールの再送案内をコピー')+'</button></p>';
+            h += '<div class="card"><h2>' + esc(f.label) + '</h2><p>' + (f.children || []).map(function (s) { return esc(s.name); }).join('・') + '</p><p>' + esc(f.email || 'メール未登録') + ' <span class="tag ' + (f.verifiedAt ? 'green' : 'amber') + '">' + (f.verifiedAt ? 'メール確認済み' : 'メール未確認') + '</span> ' + (f.configured ? 'パスワード設定済み' : '未登録') + '・' + esc({ active: '利用中', pending: '初回登録・メール確認待ち', disabled: '利用停止' }[f.status] || '確認待ち') + '</p><p class="small muted">最終ログイン：' + esc(fmtAuthTime(f.lastLogin)) + '</p><div class="row"><button class="btn-quiet btn-sm" data-action="family-edit" data-id="' + esc(f.id) + '"' + dis + '>紐付ける生徒を変更</button>' + (!f.configured ? '<button class="btn-ghost btn-sm" data-action="family-invite" data-id="' + esc(f.id) + '"' + dis + '>登録案内を発行し直す</button>' : '') + '<button class="btn-quiet btn-sm" data-action="family-active" data-id="' + esc(f.id) + '"' + dis + '>' + (f.status === 'disabled' ? '利用を再開' : '利用を停止') + '</button></div></div>';
           });
           families.forEach(function(f){h += window.StepwiseReport.invoices(f.billing,f.label);});
           h += '<h2>通知の状況</h2><p class="note">送信結果が不明な通知は自動で送り直しません。重複を避けるため、届いているか確認してください。</p>';
@@ -1378,17 +1385,19 @@
           if (action === "family-confirm") { familyDo(); return; }
           if (action === "family-cancel") { FT.confirm = null; render(); return; }
           if (action === "family-hidecode") { FT.invite = null; render(); return; }
-          if (action === "family-copy") { if (FT.invite) copyText("保護者の家族ページ\n" + new URL("/hogosha/", location.href).href + "\n招待コード：" + FT.invite.code + "\n有効期限：" + fmtAuthTime(FT.invite.expiresAt), "案内をコピーしました"); return; }
+          if (action === "family-copy") { if (FT.invite) copyText("ステップワイズ 保護者登録のご案内\n" + new URL("/hogosha/#family?invite=" + encodeURIComponent(FT.invite.code), location.href).href + "\n1. このリンクを開く\n2. メールアドレスとご自身で決めたパスワードを登録\n3. 届いた確認メールのリンクを開く\n4. 保護者ページでログイン\n登録リンクの有効期限：" + fmtAuthTime(FT.invite.expiresAt) + "\nご本人以外には転送しないでください。", "案内をコピーしました"); return; }
           var d = FT.data; if (!d || FT.auth !== token()) return;
           var f = (d.families || []).filter(function (x) { return sameId(x.id, btn.getAttribute("data-id")); })[0];
-          if (action === "family-new") FT.edit = { id: "", label: "", children: Object.create(null) };
+          if (action === "family-new") { FT.edit = { id: "", label: "", children: Object.create(null) }; if(route().studentId) FT.edit.children[route().studentId]=true; }
+          else if(action === 'family-help' && f){copyText('ステップワイズ 保護者ページ\n'+new URL('/hogosha/#family?mode='+(f.verifiedAt?'requestReset':'resend'),location.href).href+'\n'+(f.verifiedAt?'パスワードを忘れた場合は登録済みメールアドレスを入力し、届いたメールから再設定してください。通常のログインは「ログインに戻る」から行えます。':'登録したメールアドレスとパスワードを入力し、確認メールを再送してください。届いたメールのリンクを開くと登録完了です。'),'案内をコピーしました');return;}
+          else if(action === 'family-link' && f && route().studentId){var ids=(f.children || []).map(function(x){return String(x.studentId);});if(ids.indexOf(route().studentId)<0)ids.push(route().studentId);FT.confirm={op:'familySetChildren',payload:{familyId:f.id,studentIds:ids},label:f.label,description:'現在の紐付けを残して、この生徒を追加します。この保護者に閲覧を許可することを確認してください。'};}
           else if (action === "family-editcancel") FT.edit = null;
           else if (action === "family-edit" && f) { FT.edit = { id: f.id, label: f.label, children: Object.create(null) }; (f.children || []).forEach(function (s) { FT.edit.children[s.studentId] = true; }); }
           else if (action === "family-save" && FT.edit) {
             var e = FT.edit, ids = Object.keys(e.children).filter(function (id) { return e.children[id]; });
             if (!e.id) e.label = val("family-label");
-            if (!e.label) { toast("家族の表示名を入力してください"); return; }
-            if ((!e.id && !ids.length) || ids.length > 20) { toast("家族を作るときは1〜20人の子どもを選んでください"); return; }
+            if (!e.label) { toast("保護者の名前を入力してください"); return; }
+            if ((!e.id && !ids.length) || ids.length > 20) { toast("保護者が閲覧できる生徒を1〜20人選んでください"); return; }
             FT.confirm = { op: e.id ? "familySetChildren" : "familyCreate", payload: e.id ? { familyId: e.id, studentIds: ids } : { label: e.label, studentIds: ids }, label: e.label, description: "閲覧できる子ども：" + ((d.students || []).filter(function (s) { return ids.indexOf(String(s.id)) >= 0; }).map(function (s) { return s.name; }).join('・') || 'なし') + '。この保護者関係で登録します。' };
           } else if (action === "family-invite" && f) FT.confirm = { op: "familyInvite", payload: { familyId: f.id }, label: f.label, description: "以前の招待コードを無効にし、新しいコードを発行します。メールは送りません。" };
           else if (action === "family-active" && f) FT.confirm = { op: "familySetActive", payload: { familyId: f.id, active: f.status === 'disabled' }, label: f.label, description: f.status === 'disabled' ? "家族の利用を再開します。" : "家族の利用を停止し、ログインを失効させます。" };

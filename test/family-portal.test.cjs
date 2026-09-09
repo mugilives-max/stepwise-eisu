@@ -372,3 +372,7 @@ test('notification failure preserves plan and invoice success while surfacing wa
   const notices = h.rows('familyOutbox').filter(o => ['planProposed','invoiceCreated','invoiceVoided'].includes(o.kind));
   assert.equal(notices.length, 3);assert.ok(notices.every(o => o.status === 'failed'));
 });
+
+test('pending parent can recover forgotten password by proving email ownership, and old verification is invalidated',()=>{
+ const h=createFamilyHarness(),r=register(h);const old=h.latestChallenge();h.advance(61000);ok(h.family('familyResetRequest',{email:EMAIL}));const reset=h.latestChallenge('reset');ok(h.family('familyResetConfirm',{challenge:reset,pass:'Replacement password!'}));ok(h.family('familyLogin',{email:EMAIL,pass:'Replacement password!'}));rejected(h.family('familyVerify',{challenge:old}));rejected(h.family('familyResetConfirm',{challenge:reset,pass:'Another password!'}));
+});

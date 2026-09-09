@@ -11,7 +11,7 @@ test('overview separates settings and loads each section only on navigation',asy
  assert.equal(ui.html().includes('data-action="editfee"'),false); assert.equal(ui.html().includes('data-action="billing-preview"'),false);
  ui.navigate('#s=test-a&tab=settings');assert.equal(ui.requests.at(-1).body.section,'settings');
  ui.requests.at(-1).reply({data:card({section:'settings'})});await flush();
- assert.match(ui.html(),/data-action="editfee"/);assert.match(ui.html(),/家族設定/);assert.equal(ui.html().includes('data-action="offerslot"'),false);
+ assert.match(ui.html(),/data-action="editfee"/);assert.match(ui.html(),/保護者を追加・確認/);assert.equal(ui.html().includes('data-action="offerslot"'),false);
  ui.click('editfee');ui.input('e-rate','2000');assert.equal(ui.html().includes('id="e-monthly"'),false);ui.click('savefee');
  assert.equal(ui.requests.at(-1).body.section,'settings');const count=ui.requests.length;
  ui.requests.at(-1).reply({ok:true,data:card({section:'settings',rate30:2000})});await flush();assert.equal(ui.requests.length,count);
