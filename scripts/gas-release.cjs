@@ -84,7 +84,7 @@ async function main(args){
     if(p.oldRelease===expected&&!same(stage,remote))throw Error('Change the release marker before deploying code changes.');
     save(dir,p);console.log(JSON.stringify({id,oldVersion:p.oldVersion,expected,changed:Object.keys(stage).filter(n=>hash(stage[n])!==hash(remote[n]||'')),next:`npm run gas:apply -- ${id}`},null,2));return;
   }
-  if(command==='apply'){
+  if(command==='apply'||command==='stage'){
     const {dir,p}=load(id);clean();if(git('rev-parse','HEAD')!==p.head)throw Error('Git HEAD changed; make a new plan.');
     const stage=files(path.join(dir,'stage'));if(JSON.stringify(digest(stage))!==JSON.stringify(p.stage))throw Error('Staged files changed');
     let deployment=target(path.join(dir,'stage'));
@@ -96,6 +96,7 @@ async function main(args){
       p.status='pushing';save(dir,p);clasp(path.join(dir,'stage'),'push','--force');
     }else if(!same(remote,stage))throw Error('Partial/unknown push; inspect before restarting, do not overwrite automatically.');
     const readback=pull(path.join(dir,'readback-'+Date.now()));if(!same(readback,stage))throw Error('Readback mismatch; existing deployment preserved');
+    if(command==='stage'){if(p.newVersion)throw Error('Version already created; use apply');p.status='staged';save(dir,p);console.log('Editor verified; public deployment unchanged. Complete schema preparation, then apply the same ID.');return;}
     if(!p.newVersion){
       if(p.status==='creating-version')throw Error('Version creation outcome unknown. Inspect versions before making a new plan.');
       p.status='creating-version';save(dir,p);p.newVersion=clasp(path.join(dir,'stage'),'create-version',`${p.expected} ${p.head.slice(0,8)}`).versionNumber;
