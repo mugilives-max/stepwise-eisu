@@ -174,7 +174,8 @@
       .tabs a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 7px 12px; border-radius: 8px; white-space: nowrap; }
       .tabs a.on { background: var(--soft); color: var(--primary); font-weight: 700; }
     </style>
-  </head>
+  <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js"></script>
+</head>
   <body>
     <header class="site-header">
       <span class="brand">ステップワイズ個別指導<small>英数教室・個別指導部</small></span>
@@ -265,10 +266,10 @@
           if (d.dueMode === 'nextLesson') h += '<p class="note">選んだ科目の次の確定授業が期限です。まだ決まっていないときは「予定未定」と表示し、授業が決まると期限が入ります。</p>';
           return h + '<div class="note">先生から出た宿題・持ち物は自動でここに入ります。自分用のメモにも使えます。</div></details>';
         }
-        function renderPublishedRecords(records) {
+        function renderPublishedRecords(records,editable) {
           var list = records || [], h = '<h2>先生からの授業記録</h2>';
           if (!list.length) return h + '<p class="empty">公開された授業記録はまだありません。</p>';
-          return h + list.map(function (r) { return '<details class="card"><summary>' + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(r.subject) + '</summary><h3>授業内容</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }).join('');
+          return h + list.map(function (r) { return '<details class="card"><summary>' + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(r.subject) + '</summary>' + window.StepwiseReport.context(r.workspace) + window.StepwiseReport.view(r.report) + '<h3>授業報告</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="'+esc(x.title)+'の完了" data-action="taskdone" data-id="'+esc(x.taskId)+'"'+(x.done?' checked':'')+'>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }).join('');
         }
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
@@ -958,7 +959,7 @@
 
         function renderHistoryPage() {
           var h = '<h1>' + esc(S.me.name) + 'さんの授業の記録</h1><p class="sub">実施済みの授業(直近120日)</p>';
-          h += renderPublishedRecords(S.lessonRecords);
+          h += renderPublishedRecords(S.lessonRecords,true);
           var done = (S.history || []).filter(function (x) { return x.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
           var bySub = {}, order = [];
           done.forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = 0; order.push(k); } bySub[k]++; });
@@ -1092,7 +1093,7 @@
             pms.forEach(function (m) {
               html += '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row between"><strong>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月の授業回数</strong>' + (m.status === "approved" ? '<span class="tag green">承認済み ' + esc(m.approvedAt) + '</span>' : m.status === "declined" ? '<span class="tag red">見送り</span>' : '<span class="tag amber">ご確認ください</span>') + '</div>';
               html += '<div style="margin:4px 0">' + m.rows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") + '<span class="small muted">(合計 ' + m.total + '回)</span></div>';
-              html += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? "月謝 " + yen(m.monthly) + "（月額固定）" : "30分あたり " + yen(m.rate30) + "（実施時間で計算）") : "料金条件が未確認です。先生からの再提案をお待ちください。") + (m.revision != null ? "・第" + esc(m.revision) + "版" : "") + '</p>';
+              html += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? "月謝 " + yen(m.monthly) + "（旧条件・先生に再提案を依頼してください）" : "30分あたり " + yen(m.rate30) + "（実施時間で計算）") : "料金条件が未確認です。先生からの再提案をお待ちください。") + (m.revision != null ? "・第" + esc(m.revision) + "版" : "") + '</p>';
               if (m.status === "proposed" && m.termsKnown && m.revision != null) html += '<div class="row" style="margin-top:6px"><button class="btn-primary btn-sm" data-action="' + (family ? 'fa-planok' : 'planok') + '" data-ym="' + esc(m.ym) + '"' + (activeBusy ? " disabled" : "") + '>この回数と料金を承認する</button><input type="text" id="pl-memo-' + esc(m.ym) + '" value="' + esc(memos[memoKey + ":" + m.ym] || "") + '" data-parent-plan-memo="' + esc(m.ym) + '" aria-label="' + esc(m.ym) + 'の相談" placeholder="見送る場合の理由や相談(任意)" maxlength="100" style="flex:1;min-width:160px"><button class="btn-quiet btn-sm" data-action="' + (family ? 'fa-planng' : 'planng') + '" data-ym="' + esc(m.ym) + '"' + (activeBusy ? " disabled" : "") + '>見送る・相談する</button></div>';
               else if (m.status === "declined" && m.memo) html += '<div class="small muted">' + esc(m.memo) + '</div>';
               html += '</div>';
@@ -1181,6 +1182,7 @@
           if (F.step === "verify") { app.innerHTML = h + '<div class="card"><p>メールアドレスを確認します。確認後は、ご自身で設定したパスワードでログインしてください。</p><button class="btn-primary" data-action="fa-verify"' + dis + '>メールアドレスを確認する</button><div class="row" style="margin-top:12px"><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button><button class="btn-quiet" data-action="fa-mode" data-step="login"' + dis + '>ログインへ</button></div></div>'; return; }
           if (F.home && F.step === "home") {
             h += '<div class="card"><strong>' + esc((F.home.family || {}).label) + '</strong><p>' + esc((F.home.family || {}).email) + '・メール確認済み</p><label for="fa-child">表示する子ども</label><select id="fa-child"' + dis + '>' + (F.home.children || []).map(function (c) { return '<option value="' + esc(c.studentId) + '"' + (sameId(c.studentId, F.studentId) ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select><div class="row" style="margin-top:12px"><button class="btn-quiet btn-sm" data-action="fa-home"' + dis + '>家族情報を更新</button><button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"' + dis + '>メールアドレスを変更</button><button class="btn-quiet btn-sm" data-action="fa-logout"' + dis + '>ログアウト</button></div></div>';
+            h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
             if (F.confirm) h += '<div class="card" role="region" aria-label="月間計画の回答確認"><strong>' + esc((F.data || {}).name) + 'さん・' + esc(F.confirm.ym) + '</strong><p>第' + F.confirm.expectedRevision + '版の回数と料金を' + (F.confirm.approve ? '承認します。' : '見送り・相談として先生に伝えます。') + '</p><button class="btn-primary" data-action="fa-decide"' + dis + '>この内容で回答する</button> <button class="btn-quiet" data-action="fa-cancel"' + dis + '>やめる</button></div>';
             h += F.data ? renderParent(F.data, true) : F.busy ? '<p>読み込んでいます…</p>' : F.studentId ? '<button class="btn-quiet" data-action="fa-refresh">子どもの情報を再読み込み</button>' : '';

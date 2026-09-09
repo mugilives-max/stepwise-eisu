@@ -40,6 +40,7 @@ function createUI(kind = 'student', options = {}) {
     localStorage: storage(local), sessionStorage: storage(session), setTimeout: () => 0, clearTimeout() {}, confirm: () => { ++confirmCount; return true; }, console: { log: (...v) => logs.push(v) },
     fetch(url, config) { const body = config ? JSON.parse(config.body) : Object.fromEntries(new URL(url).searchParams); return new Promise((resolve, reject) => requests.push({ body, reply: value => resolve({ json: () => Promise.resolve(value) }), fail: () => reject(new Error('network failed')) })); } };
   const source = fs.readFileSync(path.join(__dirname, '..', '..', kind === 'admin' ? 'kanri/index.html' : 'yoyaku/index.html'), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  context.window.StepwiseReport=require('../../assets/lesson-report.js');
   vm.runInNewContext(source, context);
   const ui = { requests, local, session, writes, logs, replaced, location, el: id => elements.get(id), html: () => elements.get('app').innerHTML, confirms: () => confirmCount,
     input(id, value) { const el = elements.get(id); assert.ok(el, 'visible input: ' + id); el.value = value; emit('document:input', { target: el }); emit('app:input', { target: el }); },

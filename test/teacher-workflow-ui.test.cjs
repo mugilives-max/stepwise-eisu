@@ -12,13 +12,13 @@ test('overview separates settings and loads each section only on navigation',asy
  ui.navigate('#s=test-a&tab=settings');assert.equal(ui.requests.at(-1).body.section,'settings');
  ui.requests.at(-1).reply({data:card({section:'settings'})});await flush();
  assert.match(ui.html(),/data-action="editfee"/);assert.match(ui.html(),/家族設定/);assert.equal(ui.html().includes('data-action="offerslot"'),false);
- ui.click('editfee');ui.input('e-rate','2000');ui.input('e-monthly','0');ui.click('savefee');
+ ui.click('editfee');ui.input('e-rate','2000');assert.equal(ui.html().includes('id="e-monthly"'),false);ui.click('savefee');
  assert.equal(ui.requests.at(-1).body.section,'settings');const count=ui.requests.length;
  ui.requests.at(-1).reply({ok:true,data:card({section:'settings',rate30:2000})});await flush();assert.equal(ui.requests.length,count);
  assert.equal(ui.html().includes('data-action="offerslot"'),false);
 });
 test('a delayed settings write cannot replace the overview or invalidate its in-flight read',async()=>{
- const ui=await adminReady(card({section:'settings'}),'settings');ui.click('editfee');ui.input('e-rate','2000');ui.input('e-monthly','0');ui.click('savefee');const save=ui.requests.at(-1);
+ const ui=await adminReady(card({section:'settings'}),'settings');ui.click('editfee');ui.input('e-rate','2000');assert.equal(ui.html().includes('id="e-monthly"'),false);ui.click('savefee');const save=ui.requests.at(-1);
  ui.navigate('#s=test-a');const read=ui.requests.at(-1);
  save.reply({ok:true,data:card({section:'settings',rate30:2000})});await flush();
  // The act helper may refresh the destination after an unrelated write; answer the newest read.

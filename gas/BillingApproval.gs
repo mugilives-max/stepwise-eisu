@@ -165,12 +165,13 @@ function billingPlanPropose_(req) {
   if(!st)return billingError_('在籍生徒を選んでください','notFound');
   if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
   var a=billingAgreement_(id,ym),check=billingMonthUnlocked_(id,ym)||billingRevisionCheck_(req,a,false);if(check)return check;
-  var rate=req.rate30,monthly=req.monthly;
-  if(rate==null || monthly==null){
-    if(ym<todayStr_().slice(0,7))return billingError_('過去月は、その月に合意する単価と月謝を明示してください','termsRequired');
-    if(rate==null)rate=Number(st.rate30)||0;if(monthly==null)monthly=Number(st.monthly)||0;
+  if(req.monthly!=null && Number(req.monthly)!==0)return billingError_('固定月謝は使いません。実施分の30分単価を指定してください');
+  var rate=req.rate30,monthly=0;
+  if(rate==null){
+    if(ym<todayStr_().slice(0,7))return billingError_('過去月は、その月に合意する単価を明示してください','termsRequired');
+    rate=Number(st.rate30)||0;
   }
-  if(!billingMoney_(rate)||!billingMoney_(monthly))return billingError_('単価・月謝は0〜10,000,000円の整数です');
+  if(!billingMoney_(rate))return billingError_('単価は0〜10,000,000円の整数です');
   var p=billingPlanList_(id,ym);
   if(!p.length){
     p=billingPlanList_(id,'default');if(!p.length)return billingError_('先に科目と回数を登録してください');
@@ -187,6 +188,7 @@ function billingApprove_(req,id,parent) {
   var ym=String(req.ym||'');if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
   var a=billingAgreement_(id,ym),check=billingRevisionCheck_(req,a,true);if(check)return check;
   if(!a || a.rate30==='' || a.monthly==='')return billingError_('月の回数と料金の提案がありません','approvalRequired');
+  if(Number(a.monthly)>0)return billingError_('旧固定月謝の提案です。実施分の単価で再提案してください','legacyTerms');
   if(JSON.stringify(billingPlanJson_(a))!==JSON.stringify(billingPlanList_(id,ym)))return billingError_('計画が変わっています。先生に再提案を依頼してください','conflict');
   var approve=parent?(req.approve===true || String(req.approve)==='true'):true;
   if((approve && a.status==='approved') || (!approve && a.status==='declined'))return {ok:true,replayed:true};
@@ -248,7 +250,7 @@ function billingFee_(studentId,minutes,ym) {
   var a=billingAgreement_(studentId,ym),st=systemStudent_(studentId)||{};
   var known=!!a&&a.rate30!==''&&a.monthly!=='';
   var monthly=Number(known?a.monthly:st.monthly)||0,rate=Number(known?a.rate30:st.rate30)||0;
-  return {amount:monthly>0?monthly:Math.round(Number(minutes||0)/30*rate),mode:monthly>0?'monthly':'time',rate30:rate,monthly:monthly,locked:false,provisional:!known};
+  return {amount:Math.round(Number(minutes||0)/30*rate),mode:'time',rate30:rate,monthly:0,locked:false,provisional:!known,legacyTerms:known&&monthly>0};
 }
 function billingPreview_(studentId,ym) {
   var id=String(studentId||'');
@@ -260,6 +262,7 @@ function billingPreview_(studentId,ym) {
   var minutes=done.reduce(function(n,s){return n+(Number(s.min)||0);},0),fee=billingFee_(id,minutes,ym),reason='';
   if(invoices.length)reason=invoices.length>1?'この月の請求が重複しています。台帳を確認してください':'この月は請求を記録済みです';
   else if(!billingAgreementCurrent_(a))reason='この月の回数と料金の承認が必要です';
+  else if(fee.legacyTerms)reason='旧固定月謝の承認が残っています。実施分の単価で再提案・承認してください';
   else {
     var plan=billingPlanJson_(a),counts=Object.create(null);slots.forEach(function(s){counts[String(s.subject||'')]=(counts[String(s.subject||'')]||0)+1;});
     Object.keys(counts).forEach(function(sub){var p=plan.filter(function(x){return x.subject===sub;})[0];if(!p||counts[sub]>p.count)reason='承認されていない科目・回数の授業があります';});
@@ -268,9 +271,10 @@ function billingPreview_(studentId,ym) {
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';
     if(!reason && !(fee.amount>0))reason='請求対象の授業料がありません';
   }
+  var cumulativeMinutes=0,allocated=0;
   return {ym:ym,amount:fee.amount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:done.length,planStatus:info.status,revision:info.revision,canBill:!reason,reason:reason,provisional:!!fee.provisional,
     invoice:invoices.length?billingInvoiceView_(invoices[0]):null,
-    lessons:done.map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||'')};})};
+    lessons:done.map(function(s){cumulativeMinutes+=Number(s.min)||0;var total=Math.round(cumulativeMinutes/30*fee.rate30),amount=total-allocated;allocated=total;return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),amount:amount};})};
 }
 function billingMonths_(id) {
   var seen={},current=todayStr_().slice(0,7);seen[current]=true;seen[nextYm_(current)]=true;

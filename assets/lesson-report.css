@@ -1,0 +1,4 @@
+.sw-report-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:14px; }
+.sw-report-grid > label { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.sw-report-grid input, .sw-report-grid textarea { width:100%; min-width:0; box-sizing:border-box; }
+.sw-report-grid dd { overflow-wrap:anywhere; }

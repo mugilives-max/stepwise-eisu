@@ -44,6 +44,7 @@ function createUI(hash=href()) {
     return new Promise((resolve,reject)=>requests.push({body,reply:value=>resolve({json:()=>Promise.resolve(value)}),fail:()=>reject(new Error('network failed'))}));
   }};
   const source=fs.readFileSync(path.resolve(__dirname,'../kanri/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  context.window.StepwiseReport=require('../assets/lesson-report.js');
   vm.runInNewContext(source,context,{filename:'kanri/index.html'});
   const ui={requests,local,session,storageWrites,el:id=>elements.get(id),html:()=>elements.get('app').innerHTML,
     async ready(c=lessonContext()){assert.equal(requests[0].body.op,'lessonContext');requests[0].reply({ok:true,context:c});await flush();return ui;},
@@ -54,6 +55,12 @@ function createUI(hash=href()) {
     noPrivateStorage(){assert.equal(JSON.stringify(storageWrites).includes(privateSentinel),false);assert.equal(JSON.stringify([...local,...session]).includes(privateSentinel),false);}
   };return ui;
 }
+
+test('public report fields retain typed values in the record save and retry',async()=>{
+  const ui=await createUI().ready();ui.input('lc-content','短い報告');ui.input('lc-report-actualUnit','消化');ui.input('lc-report-homeworkAccuracy','0');ui.input('lc-report-parentMessage','次回も復習します');
+  ui.click('lc-save');const first=ui.requests.at(-1),body=clone(first.body);assert.equal(body.record.report.actualUnit,'消化');assert.equal(body.record.report.homeworkAccuracy,'0');
+  first.fail();await flush();assert.equal(ui.el('lc-report-parentMessage').value,'次回も復習します');ui.click('lc-retry');assert.deepEqual(clone(ui.requests.at(-1).body),body);
+});
 
 test('lesson save keeps input after network failure and retries the identical mutation once',async()=>{
   const ui=await createUI().ready(); ui.input('lc-content','手元の授業内容'); ui.input('lc-teacherNote',privateSentinel);

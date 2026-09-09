@@ -12,6 +12,28 @@ var LESSON_HEADERS_ = {
   tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime']
 };
 var LESSON_SCHEMA_BOOK_ = null; // Per-execution only; never CacheService.
+LESSON_HEADERS_.lessonRecords.push('reportJson');
+LESSON_HEADERS_.lessonPublicSnapshots.push('reportJson');
+
+// Optional public report details share the existing record revision/journal.
+function lessonReportFields_(input) {
+  var fields=['teacher','plannedUnit','actualUnit','understanding','pace','homeworkReview','homeworkAccuracy','testDate','parentMessage'];
+  lessonOnly_(input,fields);var out={};
+  fields.forEach(function(k){out[k]=lessonText_(input[k],k==='parentMessage'?1000:200,false);});
+  if(out.homeworkAccuracy && (!/^\d{1,3}(\.\d)?$/.test(out.homeworkAccuracy)||Number(out.homeworkAccuracy)>100))lessonFail_('validation','宿題の正答率は0〜100%で入力してください');
+  out.testDate=lessonDate_(out.testDate);
+  return out;
+}
+function lessonReportRead_(r) { return r && r.reportJson ? lessonReportFields_(JSON.parse(String(r.reportJson))) : {}; }
+function lessonWorkspace_(studentId,reference) {
+  var date=String(reference.lessonDate||reference.date),start=String(reference.lessonStart||reference.start),subject=String(reference.subject||''),key=date+'T'+start;
+  var slots=readRows_('slots').filter(function(s){return String(s.studentId)===String(studentId)&&s.status==='booked'&&subject&&String(s.subject||'')===subject;}).sort(slotSort_);
+  var month=slots.filter(function(s){return s.date.slice(0,7)===date.slice(0,7);}),next=slots.filter(function(s){return s.date+'T'+s.start>key;})[0];
+  var index=month.findIndex(function(s){return s.date===date&&s.start===start&&String(s.id)===String(reference.slotId||reference.id);});
+  var planned=planRows_().filter(function(p){return String(p.studentId)===String(studentId)&&String(p.ym)===date.slice(0,7)&&String(p.subject)===subject;});
+  var report=lessonReportRead_(reference),beforeTest=report.testDate?slots.filter(function(s){return s.date+'T'+s.start>key&&s.date<=report.testDate;}).length:null;
+  return {plannedCount:planned.length===1?Number(planned[0].count):null,scheduledCount:month.length,ordinal:index<0?null:index+1,next:next?{date:next.date,start:next.start,subject:String(next.subject),days:Math.round((new Date(next.date+'T00:00:00Z')-new Date(date+'T00:00:00Z'))/86400000)}:null,beforeTest:beforeTest};
+}
 
 // Preflight every header before changing any sheet. Existing task rows and their
 // first eight columns stay in place. A partially appended header is resumable.
@@ -162,8 +184,9 @@ function lessonPayload_(req) {
     p.expectedSlot={date:lessonDate_(req.expectedSlot.date),start:lessonText_(req.expectedSlot.start,5,true),min:lessonInteger_(req.expectedSlot.min,1),subject:lessonText_(req.expectedSlot.subject,80,false)};
   } else if (req.op === 'lessonRecordSave') {
     p.slotId = lessonId_(req.slotId); p.expectedRevision = lessonInteger_(req.expectedRevision,0);
-    lessonOnly_(req.record,['content','progress','nextFocus','teacherNote','homework']);
+    lessonOnly_(req.record,['content','progress','nextFocus','teacherNote','homework','report']);
     p.record = { content:lessonText_(req.record.content,2000,true), progress:lessonText_(req.record.progress,1000,false), nextFocus:lessonText_(req.record.nextFocus,1000,false), teacherNote:lessonText_(req.record.teacherNote,2000,false), homework:lessonHomework_(req.record.homework === undefined ? [] : req.record.homework) };
+    if(req.record.report !== undefined) p.record.report=lessonReportFields_(req.record.report);
   } else {
     p.recordId = lessonId_(req.recordId);
     if (req.op === 'lessonReportDraftSave') {
@@ -270,12 +293,14 @@ function lessonPlan_(p,requestId,hash) {
   } else if (p.operation === 'lessonRecordSave') {
     var saved = r ? lessonCopy_(r) : { id:plan.recordId, studentId:p.studentId, slotId:p.slotId, lessonDate:slot.date, lessonStart:slot.start, lessonMin:Number(slot.min), subject:String(slot.subject || ''), createdBy:plan.actor, createdAt:now, status:'active', voidReason:'' };
     saved.content=p.record.content; saved.progress=p.record.progress; saved.nextFocus=p.record.nextFocus; saved.homeworkJson=JSON.stringify(p.record.homework);
+    if(p.record.report !== undefined) saved.reportJson=JSON.stringify(p.record.report);
     saved.revision=p.expectedRevision+1; saved.updatedBy=plan.actor; saved.updatedAt=now; saved.lastRequestId=requestId; saved.lastRequestHash=hash;
     p.record.homework.forEach(function (item) { lessonDueFields_(item,p.studentId,String(saved.subject || ''),String(saved.lessonDate)+'T'+String(saved.lessonStart)); });
     plan.record=saved; plan.note={recordId:plan.recordId,teacherNote:p.record.teacherNote};
     // Only newly accepted saves opt into publication. Old pending journals do
     // not gain this field on resume; old report drafts never become public.
     plan.publicSnapshot={id:plan.recordId+':'+saved.revision,recordId:plan.recordId,studentId:p.studentId,slotId:p.slotId,revision:saved.revision,lessonDate:saved.lessonDate,lessonStart:saved.lessonStart,lessonMin:saved.lessonMin,subject:saved.subject,content:saved.content,progress:saved.progress,nextFocus:saved.nextFocus,homeworkJson:saved.homeworkJson,publishedAt:now,sourceRequestId:requestId};
+    plan.publicSnapshot.reportJson=saved.reportJson || '';
   } else if (p.operation === 'lessonHomeworkApply') {
     plan.items = lessonHomeworkItems_(r).map(function (item) {
       var t = lessonTask_(String(r.id),item.itemId,p.studentId);
@@ -310,7 +335,7 @@ function lessonExecute_(plan) {
     lessonPut_('lessonRecords','id',plan.recordId,plan.record); result.revision=plan.record.revision;
     if (plan.publicSnapshot) {
       var prior=lessonFind_('lessonPublicSnapshots','id',plan.publicSnapshot.id);
-      if (prior && LESSON_HEADERS_.lessonPublicSnapshots.some(function (key) { return String(prior[key]) !== String(plan.publicSnapshot[key]); })) lessonFail_('conflict','公開版の内容が一致しません');
+      if (prior && LESSON_HEADERS_.lessonPublicSnapshots.some(function (key) { return String(prior[key] == null ? '' : prior[key]) !== String(plan.publicSnapshot[key] == null ? '' : plan.publicSnapshot[key]); })) lessonFail_('conflict','公開版の内容が一致しません');
       if (!prior) lessonPut_('lessonPublicSnapshots','id',plan.publicSnapshot.id,plan.publicSnapshot);
       result.publishedRevision=plan.record.revision; result.publishedAt=plan.now;
     }
@@ -411,9 +436,9 @@ function lessonHomeworkDueView_(item,r,task) {
 function lessonPublishedForStudent_(studentId) {
   if (getConfig_('lessonCycleEnabled') === 'off' || !lessonActive_(systemStudent_(String(studentId)))) return [];
   return lessonCommittedPublic_(String(studentId)).map(function (r) {
-    return {recordId:String(r.recordId),revision:Number(r.revision),date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),content:String(r.content || ''),progress:String(r.progress || ''),nextFocus:String(r.nextFocus || ''),publishedAt:String(r.publishedAt),homework:lessonHomeworkItems_(r).map(function (item) {
-      var due=lessonHomeworkDueView_(item,r,lessonTask_(String(r.recordId),item.itemId,String(studentId)));
-      return {itemId:item.itemId,title:item.title,type:item.type,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending};
+    return {report:lessonReportRead_(r),workspace:lessonWorkspace_(studentId,r),recordId:String(r.recordId),revision:Number(r.revision),date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),content:String(r.content || ''),progress:String(r.progress || ''),nextFocus:String(r.nextFocus || ''),publishedAt:String(r.publishedAt),homework:lessonHomeworkItems_(r).map(function (item) {
+      var task=lessonTask_(String(r.recordId),item.itemId,String(studentId)),due=lessonHomeworkDueView_(item,r,task);
+      return {taskId:task?String(task.id):'',done:!!(task&&task.doneAt),withdrawn:!!(task&&task.withdrawnAt),itemId:item.itemId,title:item.title,type:item.type,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending};
     })};
   }).sort(function (a,b) { return a.date+'T'+a.start < b.date+'T'+b.start ? 1 : -1; });
 }
@@ -423,6 +448,7 @@ function lessonRecordView_(r,includePrivate) {
   var published=lessonCommittedPublic_(String(r.studentId)).filter(function (p) { return String(p.recordId) === String(r.id); })[0];
   out.publishedRevision=published ? Number(published.revision) : 0; out.publishedAt=published ? String(published.publishedAt) : '';
   if (includePrivate) { var note=lessonFind_('lessonPrivateNotes','recordId',r.id); out.teacherNote=note ? String(note.teacherNote || '') : ''; }
+  out.report=lessonReportRead_(r);
   return out;
 }
 function lessonTaskView_(t) {
@@ -497,7 +523,7 @@ function lessonContextData_(studentId,slotId,recordId) {
     if (!choices.some(function (c) { return c.recordId === String(x.id); })) choices.push({id:String(x.slotId),recordId:String(x.id),date:String(x.lessonDate),start:String(x.lessonStart),min:Number(x.lessonMin),subject:String(x.subject || ''),status:'history',done:false,slotChanged:lessonSlotChanged_(x),recordStatus:String(x.status)});
   });
   choices.sort(function (a,b) { return (a.date+'T'+a.start) < (b.date+'T'+b.start) ? 1 : -1; });
-  return {today:todayStr_(),preparation:lessonPreparationView_(studentId,slotId),student:{id:studentId,name:String(student.name || ''),active:lessonActive_(student)},slot:slot ? {id:String(slot.id),date:slot.date,start:slot.start,min:Number(slot.min),subject:String(slot.subject || ''),status:slot.status,done:slot.done === true || String(slot.done) === 'true'} : {id:slotId,date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),status:'missing',done:false},record:current,previous:lessonRecordView_(same,false),otherPrevious:previous.filter(function (x) { return String(x.subject || '') !== String(reference.subject || ''); }).map(function (x) { return {id:String(x.id),slotId:String(x.slotId),date:String(x.lessonDate),subject:String(x.subject || '')}; }),openTasks:tasks.filter(function (t) { return t.id && t.title && !t.doneAt && !t.withdrawnAt; }).map(lessonTaskView_),homeworkState:state,draft:draft ? {body:String(draft.body || ''),revision:Number(draft.revision),sourceRevision:Number(draft.sourceRevision),updatedAt:String(draft.updatedAt || ''),stale:Number(draft.sourceRevision)!==Number(r.revision)} : null,draftTemplate:lessonDraftTemplate_(current ? lessonRecordView_(r,false) : null),pending:pending.length ? {requestId:String(pending[0].requestId),operation:String(pending[0].operation)} : null,slotChanged:r ? lessonSlotChanged_(r) : !slot || slot.status !== 'booked',lessonChoices:choices};
+  return {workspace:lessonWorkspace_(studentId,r||slot),previousTasks:same?tasks.filter(function(t){return String(t.sourceRecordId)===String(same.id)&&!t.withdrawnAt;}).map(lessonTaskView_):[],today:todayStr_(),preparation:lessonPreparationView_(studentId,slotId),student:{id:studentId,name:String(student.name || ''),active:lessonActive_(student)},slot:slot ? {id:String(slot.id),date:slot.date,start:slot.start,min:Number(slot.min),subject:String(slot.subject || ''),status:slot.status,done:slot.done === true || String(slot.done) === 'true'} : {id:slotId,date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),status:'missing',done:false},record:current,previous:lessonRecordView_(same,false),otherPrevious:previous.filter(function (x) { return String(x.subject || '') !== String(reference.subject || ''); }).map(function (x) { return {id:String(x.id),slotId:String(x.slotId),date:String(x.lessonDate),subject:String(x.subject || '')}; }),openTasks:tasks.filter(function (t) { return t.id && t.title && !t.doneAt && !t.withdrawnAt; }).map(lessonTaskView_),homeworkState:state,draft:draft ? {body:String(draft.body || ''),revision:Number(draft.revision),sourceRevision:Number(draft.sourceRevision),updatedAt:String(draft.updatedAt || ''),stale:Number(draft.sourceRevision)!==Number(r.revision)} : null,draftTemplate:lessonDraftTemplate_(current ? lessonRecordView_(r,false) : null),pending:pending.length ? {requestId:String(pending[0].requestId),operation:String(pending[0].operation)} : null,slotChanged:r ? lessonSlotChanged_(r) : !slot || slot.status !== 'booked',lessonChoices:choices};
 }
 
 // Caller must hold ScriptLock (doPost also serializes legacy task completion).

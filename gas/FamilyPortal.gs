@@ -59,8 +59,22 @@ function familyChildren_(a,includeInactive) {
   });return out;
 }
 function familyPublic_(a) { return {id:String(a.id),label:String(a.label),email:String(a.email)}; }
+// Read-only statement of existing child invoices; does not issue or pay again.
+function familyBilling_(a,includeInactive) {
+  var children=familyChildren_(a,includeInactive),months={};
+  children.forEach(function(child){billingInvoiceRows_(child.studentId).forEach(function(p){
+    if(p['取消日時']||String(p['状態'])==='取消')return;
+    var invoice=billingInvoiceView_(p),ym=invoice.ym;
+    if(!billingMonthValid_(ym))return;
+    var m=months[ym]||(months[ym]={ym:ym,children:[],amount:0,unpaid:0,conflict:false});
+    if(m.children.some(function(c){return c.studentId===child.studentId;}))m.conflict=true;
+    m.children.push({studentId:child.studentId,name:child.name,invoice:invoice});m.amount+=invoice.amount;
+    if(!invoice.paidDate)m.unpaid+=invoice.amount;
+  });});
+  return Object.keys(months).sort().reverse().map(function(ym){var m=months[ym];if(m.conflict){m.amount=null;m.unpaid=null;}return m;});
+}
 function familyView_(a) {
-  return {id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,
+  return {billing:familyBilling_(a,true),id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,
     children:familyChildren_(a,true),inviteExpiresAt:a.inviteHash&&Number(a.inviteExpiresAt)>Date.now()?Number(a.inviteExpiresAt):0,createdAt:String(a.createdAt||''),lastLogin:String(a.lastLogin||'')};
 }
 function familySessionMatches_(a,token) {
@@ -77,7 +91,7 @@ function familyChildRequire_(req) {
 }
 function familyIssueSession_(a) {
   var token='fa1.'+a.id+'.'+parentSecret_();a.tokenHash=parentDigest_('family-session',a.id,token);a.tokenExpiresAt=Date.now()+PARENT_SESSION_MS_;a.lastLogin=familyStamp_();a.failCount=0;a.lockUntil='';familySave_(a);
-  return {ok:true,ftoken:token,family:familyPublic_(a),children:familyChildren_(a,false)};
+  return {ok:true,ftoken:token,family:familyPublic_(a),children:familyChildren_(a,false),billing:familyBilling_(a,false)};
 }
 function familyPassword_(a,pass) {
   pass=String(pass||'');
@@ -190,7 +204,7 @@ function familyDispatch_(req) {
     case 'familyResetRequest':return familyResetRequest_(req);
     case 'familyResetConfirm':return familyResetConfirm_(req);
     case 'familyEmailChange':return familyEmailChange_(req);
-    case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false)};}
+    case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false)};}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
     case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:billingParentDecideForStudent_(b.student,req);}
     default:return familyError_('操作が見つかりません');

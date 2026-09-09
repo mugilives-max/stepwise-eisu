@@ -75,6 +75,7 @@ function createUI(kind = 'parent', shared = {}) {
   };
   const file = kind === 'admin' ? 'kanri/index.html' : 'yoyaku/index.html';
   const script = fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  context.window.StepwiseReport=require('../assets/lesson-report.js');
   vm.runInNewContext(script, context, { filename: file });
   const ui = { local, session, requests,
     el: id => elements.get(id), html: () => elements.get('app').innerHTML,

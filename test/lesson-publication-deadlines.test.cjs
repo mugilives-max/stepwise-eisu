@@ -31,7 +31,7 @@ test('new saves publish whitelisted snapshots to only the original student and o
   const h=fixture(),saved=ok(h.save());
   assert.equal(saved.publishedRevision,1); assert.equal(saved.context.record.publishedRevision,1);
   assert.equal(h.public()[0].content,'公開する本文'); assert.equal(h.public('test-b').length,0);
-  assert.deepEqual(Object.keys(h.public()[0]).sort(),['recordId','revision','date','start','min','subject','content','progress','nextFocus','publishedAt','homework'].sort());
+  assert.deepEqual(Object.keys(h.public()[0]).sort(),['recordId','revision','date','start','min','subject','content','progress','nextFocus','publishedAt','homework','report','workspace'].sort());
   ok(h.lesson('lessonReportDraftSave',{recordId:saved.recordId,expectedDraftRevision:0,sourceRevision:1,requestId:'draft-1',body:'PRIVATE_DRAFT_812'}));
   const serialized=JSON.stringify(h.public()); assert.equal(serialized.includes('PRIVATE_'),false); assert.equal(JSON.stringify(h.rows('lessonPublicSnapshots')).includes('PRIVATE_'),false);
   assert.equal(h.public()[0].revision,1); assert.equal(h.rows('tasks').length,0,'public lesson text does not implicitly create tasks');

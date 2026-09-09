@@ -70,7 +70,7 @@ for (const count of [0, 3]) {
       const h = createBillingHarness();
       const ym = stage === 'snapshot' ? '2026-08' : '2026-09';
       const before = approve(h, { ym, counts: { 数学: 2, 英語: 1 }, rate30: 1700, monthly: 0 });
-      ok(h.admin('setFee', { studentId: 'test-a', rate30: 9999, monthly: 50000 }));
+      ok(h.admin('setFee', { studentId: 'test-a', rate30: 9999, monthly: 0 }));
       const expectedPlan = count ? [{subject:'数学',count},{subject:'英語',count:1}] : [{subject:'英語',count:1}];
       const expectedJson = JSON.stringify(expectedPlan);
       if (stage === 'status') {
@@ -340,7 +340,7 @@ test('past-month plans require explicit historical fees and cannot inherit curre
   const h = createBillingHarness();
   ok(h.admin('planSet', { studentId: 'test-a', ym: '2026-08', subject: '数学', count: 2 }));
   rejected(h.admin('planPropose', { studentId: 'test-a', ym: '2026-08' }));
-  rejected(h.admin('planPropose', { studentId: 'test-a', ym: '2026-08', rate30: 1000 }));
+  ok(h.admin('planPropose', { studentId: 'test-a', ym: '2026-08', rate30: 1000 }));
   const approved = approve(h, { ym: '2026-08', rate30: 1000, monthly: 0 });
   assert.equal(approved.rate30, 1000);
   h.seedSlot({ date: '2026-08-10', status: 'booked', done: true });
@@ -366,18 +366,18 @@ test('billing uses only completed lessons and rejects a month with unfinished bo
   assert.equal(ready.amount, 4500);
 });
 
-test('a monthly fee can be billed with no completed lessons after approval', () => {
+test('fixed fees are rejected and no completed lessons produce no invoice', () => {
   const h = createBillingHarness();
-  ok(h.admin('setFee', { studentId: 'test-a', rate30: 1500, monthly: 12000 }));
+  rejected(h.admin('setFee', { studentId: 'test-a', rate30: 1500, monthly: 12000 }));
   approve(h);
   const bill = preview(h);
-  assert.equal(bill.mode, 'monthly');
+  assert.equal(bill.mode, 'time');
   assert.equal(bill.minutes, 0);
   assert.equal(bill.count, 0);
-  assert.equal(bill.amount, 12000);
-  assert.equal(bill.canBill, true);
-  ok(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-monthly-invoice' }));
-  assert.equal(h.payments()[0]['請求額'], 12000);
+  assert.equal(bill.amount, 0);
+  assert.equal(bill.canBill, false);
+  rejected(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-monthly-invoice' }));
+  assert.equal(h.payments().length, 0);
 });
 
 function billableFixture() {

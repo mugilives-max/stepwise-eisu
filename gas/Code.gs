@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-backup-release' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-lesson-workspace' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1489,12 +1489,13 @@ function adminAddStudent_(req) {
 }
 
 function adminSetFee_(req) {
+  if(req.monthly!=null && Number(req.monthly)!==0)return {error:'固定月謝は使いません。実施分の30分単価を指定してください'};
+  if(!billingMoney_(req.rate30))return {error:'単価は0〜10,000,000円の整数です'};
   var rate30 = Math.max(0, Number(req.rate30) || 0);
-  var monthly = Math.max(0, Number(req.monthly) || 0);
   var rows = readRows_('students');
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i].id) === String(req.studentId)) {
-      sheet_('students').getRange(i + 2, 6, 1, 2).setValues([[rate30, monthly || '']]);
+      sheet_('students').getRange(i + 2, 6).setValue(rate30);
       return { ok: true, admin: adminState_() };
     }
   }

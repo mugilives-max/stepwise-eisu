@@ -6,6 +6,13 @@ const { MCP_KEY } = require('./gas-harness.cjs');
 
 const PASS = 'Synthetic family password!';
 const EMAIL = 'parent@example.invalid';
+test('family billing projection respects the authenticated child links and rejects missing sessions',()=>{
+  const h=createFamilyHarness(),v=verified(h,create(h,['test-a']));
+  h.context().ensureBillingSchema_();const sh=h.ledger.getSheetByName('入金管理');
+  for(const [id,amount] of [['test-a',3000],['test-b',99999]]){const row={'年月':'2026-09','生徒ID':id,'請求ID':'invoice-'+id,'請求額':amount,'状態':'未入金'};sh.appendRow(sh.values[0].map(k=>row[k]??''));}
+  const home=ok(h.family('familyHome',{ftoken:v.ftoken}));assert.equal(home.billing[0].amount,3000);assert.equal(home.billing[0].children.length,1);assert.equal(JSON.stringify(home.billing).includes('99999'),false);
+  rejected(h.family('familyHome',{}));
+});
 function ok(r) { assert.equal(r.ok, true, JSON.stringify(r)); return r; }
 function rejected(r) { assert.ok(r.error, JSON.stringify(r)); return r; }
 function create(h, studentIds = ['test-a', 'test-b'], label = '【テスト】兄弟保護者') {
@@ -352,12 +359,13 @@ test('existing inactive child link may be retained but never newly linked or res
 test('notification failure preserves plan and invoice success while surfacing warning through teacher wrappers', () => {
   const h = createFamilyHarness();const v = verified(h);h.setQuota(0);
   ok(h.admin('planSet', { studentId:'test-a', ym:'2026-09', subject:'数学', count:2 }));
-  const proposed = ok(h.admin('planPropose', { studentId:'test-a', ym:'2026-09', rate30:1500, monthly:12000, from:'kanri' }));
+  const proposed = ok(h.admin('planPropose', { studentId:'test-a', ym:'2026-09', rate30:1500, monthly:0, from:'kanri' }));
   assert.match(proposed.notificationWarning, /保存は完了/);
   const revision = proposed.data.plan.months.find(m => m.ym === '2026-09').revision;
   ok(h.family('familyPlanDecide', { ftoken:v.ftoken, studentId:'test-a', ym:'2026-09', approve:true, expectedRevision:revision }));
+  const sh=h.spreadsheet.getSheetByName('slots'),slot={id:'synthetic-warning-slot',studentId:'test-a',date:'2026-09-01',start:'10:00',min:60,status:'booked',done:true,subject:'数学'};sh.appendRow(sh.values[0].map(k=>slot[k]??''));
   const bill = ok(h.admin('kanriAddPayment', { studentId:'test-a', ym:'2026-09', requestId:'synthetic-family-warning', from:'kanri' }));
-  assert.match(bill.notificationWarning, /メール通知/);assert.equal(bill.invoice.amount, 12000);
+  assert.match(bill.notificationWarning, /メール通知/);assert.equal(bill.invoice.amount, 3000);
   const cancelled = ok(h.admin('kanriVoidInvoice', { studentId:'test-a', invoiceId:bill.invoice.id, reason:'架空の通知検証後の取消', from:'kanri' }));
   assert.match(cancelled.notificationWarning, /メール通知/);
   assert.equal(h.rows('入金管理', h.ledger)[0]['状態'], '取消');

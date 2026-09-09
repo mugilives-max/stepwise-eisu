@@ -163,7 +163,8 @@
       .lesson-pair-pane .head { position:sticky; top:64px; background:var(--bg,#f6f8fb); z-index:2; padding:8px; }
       @media(max-width:900px) { .lesson-pair-grid { grid-template-columns:1fr; } .lesson-pair-pane .head { position:static; } }
     </style>
-  </head>
+  <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js"></script>
+</head>
   <body>
     <div class="top"><div class="in">
       <span class="brand">ステップワイズ 管理<small>英数教室・個別指導部</small></span>
@@ -859,9 +860,9 @@
             html += '<div class="line"><span class="t">通知メール</span><span class="w">' + (s.email ? esc(s.email) : '<span class="muted">未登録（生徒への通知メールなし）</span>') + '</span><button class="btn-quiet btn-sm" data-action="editemail">変更</button></div>';
           }
           if (editFee) {
-            html += '<div class="line"><span class="t">料金</span><span class="w row"><label class="small muted">30分あたり</label><input type="number" id="e-rate" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円 <label class="small muted">月謝(任意)</label><input type="number" id="e-monthly" value="' + (s.monthly || "") + '" min="0" step="500" placeholder="0" style="width:100px">円</span><button class="btn-primary btn-sm" data-action="savefee"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editfee">やめる</button></div>';
+            html += '<div class="line"><span class="t">料金</span><span class="w row"><label class="small muted">30分あたり</label><input type="number" id="e-rate" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円（実施時間で計算）</span><button class="btn-primary btn-sm" data-action="savefee"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editfee">やめる</button></div>';
           } else {
-            html += '<div class="line"><span class="t">料金</span><span class="w">' + (s.monthly > 0 ? '月謝 ' + yen(s.monthly) + ' <span class="muted small">(固定)</span>' : '30分 ' + yen(s.rate30) + ' <span class="muted small">(90分 ' + yen(s.rate30 * 3) + ')</span>') + '</span><button class="btn-quiet btn-sm" data-action="editfee">変更</button></div>';
+            html += '<div class="line"><span class="t">料金</span><span class="w">' + ('30分 ' + yen(s.rate30) + ' <span class="muted small">（実施分のみ）</span>' + (s.monthly > 0 ? '<span class="tag amber">旧固定月謝の保存値あり・新規請求には使いません</span>' : '')) + '</span><button class="btn-quiet btn-sm" data-action="editfee">変更</button></div>';
           }
           html += '<div class="line"><span class="t">予約ページ</span><span class="w">' + (s.active === false ? '<span class="tag red">停止中</span> <span class="small muted">案内の相手に出ず、専用リンクも使えません</span>' : '<span class="tag green">表示中</span>') + '</span>' +
             (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
@@ -1365,6 +1366,7 @@
           families.forEach(function (f) {
             h += '<div class="card"><h2>' + esc(f.label) + '</h2><p>' + (f.children || []).map(function (s) { return esc(s.name); }).join('・') + '</p><p>' + esc(f.email || 'メール未登録') + ' <span class="tag ' + (f.verifiedAt ? 'green' : 'amber') + '">' + (f.verifiedAt ? 'メール確認済み' : 'メール未確認') + '</span> ' + (f.configured ? 'パスワード設定済み' : '未登録') + '・' + esc({ active: '利用中', pending: '初回登録・メール確認待ち', disabled: '利用停止' }[f.status] || '確認待ち') + '</p><p class="small muted">最終ログイン：' + esc(fmtAuthTime(f.lastLogin)) + '</p><div class="row"><button class="btn-quiet btn-sm" data-action="family-edit" data-id="' + esc(f.id) + '"' + dis + '>子どもを変更</button>' + (!f.configured ? '<button class="btn-ghost btn-sm" data-action="family-invite" data-id="' + esc(f.id) + '"' + dis + '>招待コードを再発行</button>' : '') + '<button class="btn-quiet btn-sm" data-action="family-active" data-id="' + esc(f.id) + '"' + dis + '>' + (f.status === 'disabled' ? '利用を再開' : '利用を停止') + '</button></div></div>';
           });
+          families.forEach(function(f){h += window.StepwiseReport.invoices(f.billing,f.label);});
           h += '<h2>通知の状況</h2><p class="note">送信結果が不明な通知は自動で送り直しません。重複を避けるため、届いているか確認してください。</p>';
           (d.notifications || []).forEach(function (n) {
             var labels = { sent: '送信済み', pending: '送信待ち', failed: '送信失敗', uncertain: '結果不明', suppressed: 'テストのため送信省略', cancelled: '送信取消' };
@@ -1462,7 +1464,7 @@
         function lessonId() { return "lc-" + (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)); }
         function lessonForm(record) {
           record = record || {};
-          return { content: record.content || "", progress: record.progress || "", nextFocus: record.nextFocus || "", teacherNote: record.teacherNote || "", homework: (record.homework || []).map(function (x) { return { itemId: x.itemId, title: x.title || "", due: x.dueMode === "nextLesson" ? "" : x.due || "", dueMode: x.dueMode || (x.due ? "date" : "none"), type: x.type || "宿題" }; }) };
+          return { report: Object.assign({},record.report || {}), content: record.content || "", progress: record.progress || "", nextFocus: record.nextFocus || "", teacherNote: record.teacherNote || "", homework: (record.homework || []).map(function (x) { return { itemId: x.itemId, title: x.title || "", due: x.dueMode === "nextLesson" ? "" : x.due || "", dueMode: x.dueMode || (x.due ? "date" : "none"), type: x.type || "宿題" }; }) };
         }
         function lessonAdopt(e, c, mode) {
           e.context = c;
@@ -1545,8 +1547,8 @@
           return '<button type="button" class="' + (style || "btn-quiet") + ' btn-sm" data-action="lc-' + name + '"' + (disabled ? " disabled" : "") + (attrs || "") + '>' + label + '</button>';
         }
         function lessonFields(form, disabled) {
-          var h = "", labels = { content: "授業内容（必須・2,000文字まで）", progress: "取り組みの様子・理解できたこと（任意・1,000文字まで）", nextFocus: "次回の焦点（任意・1,000文字まで）", teacherNote: "先生だけのメモ（任意・2,000文字まで）" };
-          Object.keys(labels).forEach(function (k) { h += '<label class="lc-label" for="lc-' + k + '">' + labels[k] + '</label><textarea id="lc-' + k + '" data-lc-field="' + k + '" rows="' + (k === "content" ? 4 : 2) + '" maxlength="' + (k === "content" || k === "teacherNote" ? 2000 : 1000) + '"' + (disabled ? " disabled" : "") + '>' + esc(form[k]) + '</textarea>'; });
+          var h = window.StepwiseReport.fields(form.report || {},disabled), labels = { content: "授業報告（必須・2,000文字まで）", progress: "取り組みの様子・理解できたこと（任意・1,000文字まで）", nextFocus: "次回の焦点（任意・1,000文字まで）", teacherNote: "先生だけのメモ（任意・2,000文字まで）" };
+          Object.keys(labels).forEach(function (k) { h += '<label class="lc-label" for="lc-' + k + '">' + labels[k] + '</label><textarea id="lc-' + k + '" data-lc-field="' + k + '" rows="' + (k === "content" ? 3 : 2) + '" maxlength="' + (k === "content" || k === "teacherNote" ? 2000 : 1000) + '"' + (disabled ? " disabled" : "") + '>' + esc(form[k]) + '</textarea>'; });
           return h;
         }
         function lessonPublicDraft(record) {
@@ -1574,10 +1576,12 @@
             c.lessonChoices.forEach(function (x) { h += '<div class="line"><a href="' + esc(lessonHref(e.studentId, x.id, x.recordId)) + '">' + fmtDY(x.date) + ' ' + esc(x.start) + ' ' + esc(x.subject || "科目なし") + '</a><span class="tag gray">' + (x.recordStatus === "void" ? "無効化済み" : x.recordId ? "記録済み" : x.date > (c.today || today()) ? "授業前" : "未入力") + '</span>' + (x.slotChanged ? '<span class="small muted">予約変更あり</span>' : "") + '</div>'; });
             h += '</div></details>';
           }
+          h += window.StepwiseReport.context(c.workspace);
           h += '<h2>前回の確認と現在の未完了宿題</h2><div class="grid2"><div class="card">';
           if (c.previous) {
             h += '<strong>' + fmtDY(c.previous.date) + ' ' + esc(c.previous.subject) + '</strong>' + lessonText(c.previous.content) + (c.previous.progress ? '<div class="small muted" style="margin-top:8px">取り組みの様子</div>' + lessonText(c.previous.progress) : '') + '<div class="small muted" style="margin-top:8px">今回につなぐ焦点</div>' + lessonText(c.previous.nextFocus);
           } else h += '<div class="empty">同じ科目の記録はまだありません。</div>';
+          if ((c.previousTasks || []).length) h += '<h3>前回の宿題</h3>' + c.previousTasks.map(function(t){return '<p>'+esc(t.title)+'：'+(t.done?'完了':'未完了')+'</p>';}).join('');
           if ((c.otherPrevious || []).length) h += '<details class="add"><summary>他科目の記録を確認</summary>' + c.otherPrevious.map(function (x) { return '<p><a href="' + esc(lessonHref(e.studentId, x.slotId, x.id)) + '">' + fmtDY(x.date) + ' ' + esc(x.subject) + '</a></p>'; }).join("") + '</details>';
           h += '</div><div class="card">';
           var openTasks = (c.openTasks || []).filter(function (x) { return !x.done && !x.withdrawnAt && !x.withdrawn; });
@@ -1586,6 +1590,7 @@
           if (e.latest && !future) {
             h += '<h2>最新の記録との比較</h2><div class="grid2"><div class="card"><strong>サーバーの最新</strong><div class="note">第' + esc(e.latest.record ? e.latest.record.revision : 0) + '版</div>';
             var latestForm = lessonForm(e.latest.record);
+            h += window.StepwiseReport.view(latestForm.report);
             ["content", "progress", "nextFocus", "teacherNote"].forEach(function (k) { h += '<div class="small muted">' + ({ content: "授業内容", progress: "取り組み", nextFocus: "次回の焦点", teacherNote: "先生だけのメモ" }[k]) + '</div>' + lessonText(latestForm[k]); });
             h += '<div class="small muted">宿題</div>' + lessonText(latestForm.homework.map(function (x) { return x.title + " " + x.due; }).join("\n")) + '<div class="small muted">報告下書き</div>' + lessonText(e.latest.draft && e.latest.draft.body) + '</div><div class="card"><strong>手元の入力は下の欄に保持しています</strong><p class="small">差分を確認してから選んでください。手元の入力を使う場合も、選択後に保存ボタンを押すまで更新しません。</p><div class="row">' + lessonAction("rebase", "手元の入力で編集を続ける", blocked, "btn-primary") + lessonAction("adopt", "最新の内容に入れ替える", blocked) + '</div></div></div>';
           }
@@ -1709,7 +1714,8 @@
           var el = ev.target, e = lessonEditors[el.getAttribute('data-lc-editor')] || lessonEditor(), field = el.getAttribute("data-lc-field"), itemId = el.getAttribute("data-lc-item");
           if (e.busy || e.pending || !e.form) return;
           if (el.hasAttribute("data-lc-preparation")) { e.preparationBody = el.value; e.prepDirty = true; var prepStatus = document.getElementById((e.panePrefix || '')+'lc-preparation-status'); if (prepStatus) prepStatus.textContent = '準備に未保存の変更があります'; }
-          if (field && Object.prototype.hasOwnProperty.call(e.form, field) && field !== "homework") { e.form[field] = el.value; e.dirty = true; e.preview = false; }
+          var reportField=el.getAttribute("data-lc-report"); if(reportField && Object.prototype.hasOwnProperty.call(window.StepwiseReport.labels,reportField)){e.form.report[reportField]=el.value;e.dirty=true;e.preview=false;}
+          if (field && Object.prototype.hasOwnProperty.call(e.form, field) && field !== "homework" && field !== "report") { e.form[field] = el.value; e.dirty = true; e.preview = false; }
           if (itemId) {
             var prop = el.getAttribute("data-lc-prop");
             e.form.homework.forEach(function (x) { if (x.itemId === itemId && ["title", "due", "dueMode", "type"].indexOf(prop) >= 0) x[prop] = el.value; });
@@ -1735,7 +1741,7 @@
         }
         function planInput(s, m) {
           var key = s.id + ":" + m.ym, saved = planInputs[key];
-          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: m.termsKnown ? m.monthly : s.monthly, via: "LINE", consentDate: today(), memo: "", dirty: false };
+          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: 0, via: "LINE", consentDate: today(), memo: "", dirty: false };
           return saved;
         }
         function renderPlanCard(s) {
@@ -1747,12 +1753,12 @@
             var f = planInput(s, m), dis = busy || s.active === false, attrs = ' data-ym="' + esc(m.ym) + '"';
             h += '<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row between"><strong>' + esc(m.ym) + ' <span class="tag ' + (m.status === "approved" ? "green" : "amber") + '">' + ({ approved: "承認済み", proposed: "承認待ち", declined: "見送り", draft: "未提案", none: "計画なし" }[m.status] || "未提案") + '</span></strong><span class="small muted">' + (m.revision != null ? '第' + esc(m.revision) + '版' : "料金条件の確認が必要") + '</span></div>';
             h += '<div>' + (m.rows || []).map(function (x) { return esc(x.subject) + ' ' + esc(x.count) + '回'; }).join("、") + ' <span class="small muted">合計 ' + esc(m.total || 0) + '回' + (m.fromDefault ? "・既定からの案" : "") + '</span></div>';
-            h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（月額固定）' : '30分あたり ' + yen(m.rate30) + '（実施時間で計算）') : 'この月の料金はまだ提案されていません。') + '</p>';
+            h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : '30分あたり ' + yen(m.rate30) + '（実施時間で計算）') : 'この月の料金はまだ提案されていません。') + '</p>';
             if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。<button class="btn-quiet btn-sm" data-action="reload">最新の計画を確認</button></p>';
             if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '</p>';
             if ((m.rows || []).length && !dis) {
               if (m.status === "approved") h += '<details class="add"><summary>料金を変更して再承認を依頼</summary><p class="note">再提案すると現在の承認が失効します。請求済みなら、先に未入金請求を取り消してください。</p>';
-              h += '<div class="row"><label for="pl-rate-' + esc(m.ym) + '">30分単価</label><input type="number" id="pl-rate-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="rate30" min="0" step="1" value="' + esc(f.rate30 || 0) + '" style="width:110px">円<label for="pl-monthly-' + esc(m.ym) + '">月謝</label><input type="number" id="pl-monthly-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="monthly" min="0" step="1" value="' + esc(f.monthly || 0) + '" style="width:110px">円</div><p class="note">月謝が0円なら時間制です。この月に保護者へ提示する料金を確認してください。</p>';
+              h += '<div class="row"><label for="pl-rate-' + esc(m.ym) + '">30分単価</label><input type="number" id="pl-rate-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="rate30" min="0" step="1" value="' + esc(f.rate30 || 0) + '" style="width:110px">円</div><p class="note">実施した授業の時間分だけを請求します。月間回数は予定であり、固定額の購入ではありません。</p>';
               h += '<div class="row"><button class="btn-primary btn-sm" data-action="planpropose"' + attrs + '>' + (m.status === "approved" ? "現在の承認を取り消して再提案" : m.status === "proposed" ? "この料金で再提案" : "この料金で保護者に提案") + '</button><button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button></div>';
               if (m.status === "proposed" && m.termsKnown) {
                 h += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pl-via-' + esc(m.ym) + '">確認方法</label><select id="pl-via-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="via">' + ["LINE","電話","対面","メール"].map(function (v) { return '<option' + (v === f.via ? " selected" : "") + '>' + v + '</option>'; }).join("") + '</select><label for="pl-consent-' + esc(m.ym) + '">実際の承諾日</label><input type="date" id="pl-consent-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="consentDate" max="' + today() + '" value="' + esc(f.consentDate) + '"><label for="pl-note-' + esc(m.ym) + '">確認内容・理由</label><textarea id="pl-note-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="memo" maxlength="500" placeholder="過去の承諾を記録する場合、または授業後の承認の場合は理由が必要です">' + esc(f.memo) + '</textarea></div><p>' + '<button class="btn-ghost btn-sm" data-action="planapprove"' + attrs + '>この提案への承諾を記録</button></p></details>';
@@ -2200,7 +2206,7 @@
               if (a === "planpropose") {
                 var proposedRate = Number(planFields.rate30), proposedMonthly = Number(planFields.monthly);
                 if (!Number.isInteger(proposedRate) || proposedRate < 0 || !Number.isInteger(proposedMonthly) || proposedMonthly < 0 || proposedRate > 10000000 || proposedMonthly > 10000000) { toast("月の料金を正しく入力してください"); return; }
-                if (!confirm(planYm + " の回数と料金（" + (proposedMonthly > 0 ? "月謝 " + yen(proposedMonthly) : "30分 " + yen(proposedRate)) + "）を保護者に提案しますか？")) return;
+                if (!confirm(planYm + " の回数と料金（" + (proposedMonthly > 0 ? "旧料金 " + yen(proposedMonthly) : "30分 " + yen(proposedRate)) + "）を保護者に提案しますか？")) return;
                 planWrite("planPropose", cur, monthInfo, { studentId: sid, ym: planYm, expectedRevision: rev, rate30: proposedRate, monthly: proposedMonthly });
               } else {
                 if (Number(planFields.rate30) !== Number(monthInfo.rate30) || Number(planFields.monthly) !== Number(monthInfo.monthly)) { toast("料金の入力が提案と異なります。先に再提案してください"); return; }
