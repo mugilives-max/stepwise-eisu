@@ -500,16 +500,15 @@ test('paid invoices require a recorded correction before voiding and use IDs ins
   rejected(h.admin('kanriSetPaid', { studentId: 'test-a', invoiceId: invoice.id, expectedPaymentRevision: 2, date: '2026-09-07', method: '振込' }));
 });
 
-test('completion shortcuts cannot bypass monthly approval or an approved subject quota', () => {
+test('teacher completion is independent of parent monthly approval and quota', () => {
   const h = createBillingHarness();
   const offered = h.seedSlot({ date: '2026-09-01' });
   const booked = h.seedSlot({ date: '2026-09-02', status: 'booked' });
-  rejected(h.admin('finishOffered', { studentId: 'test-a', slotId: offered.id }));
-  rejected(h.admin('toggleDone', { studentId: 'test-a', slotId: booked.id }));
+  ok(h.admin('finishOffered', { studentId: 'test-a', slotId: offered.id }));
+  ok(h.admin('toggleDone', { studentId: 'test-a', slotId: booked.id, done: true }));
   approve(h, { counts: { 数学: 1 } });
-  rejected(h.admin('finishOffered', { studentId: 'test-a', slotId: offered.id }));
-  ok(h.admin('toggleDone', { studentId: 'test-a', slotId: booked.id }));
-  assert.equal(h.rows('slots').find(row => row.id === offered.id).status, 'offered');
+  ok(h.admin('toggleDone', { studentId: 'test-a', slotId: booked.id, done: true }));
+  assert.equal(h.rows('slots').find(row => row.id === offered.id).status, 'booked');
   assert.equal(h.rows('slots').find(row => row.id === booked.id).done, true);
 });
 

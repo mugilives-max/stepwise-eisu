@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-lesson-workspace' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-09-completion-independent' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1450,7 +1450,7 @@ function adminToggleDone_(req) {
   var gate = billingSlotMutable_(r.slot); if (gate) return gate;
   var done = req.done == null ? !(String(r.slot.done) === 'true' || r.slot.done === true) : (req.done === true || String(req.done) === 'true');
   if (done) {
-    gate = billingSlotAllowed_(r.slot); if (gate) return gate;
+    if (!billingSlotValid_(r.slot) || !findStudent_(r.slot.studentId)) return {error:'授業情報を確認してください'};
     gate = typeof schedulingCapacityError_ === 'function' ? schedulingCapacityError_(r.slot, undefined, r.slot.id) : null; if (gate) return gate;
     if (hoursUntil_(r.slot.date,r.slot.start) > 0) return {error:'開始前の授業は実施済みにできません'};
   }
@@ -1465,7 +1465,8 @@ function adminFinishOffered_(req) {
   var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   if (r.slot.status !== 'offered') return { error: 'この枠は承認待ちではありません。画面を更新してください', refresh: true };
   if (hoursUntil_(r.slot.date, r.slot.start) > 0) return { error: 'まだ開始前の案内です。過ぎてから記録してください' };
-  var gate = billingSlotAllowed_(r.slot); if (gate) return gate;
+  var gate = billingSlotMutable_(r.slot); if (gate) return gate;
+  if (!billingSlotValid_(r.slot) || !findStudent_(r.slot.studentId)) return {error:'授業情報を確認してください'};
   gate = typeof schedulingCapacityError_ === 'function' ? schedulingCapacityError_(r.slot, undefined, r.slot.id) : null; if (gate) return gate;
   r.slot.status = 'booked';
   r.slot.done = true;
