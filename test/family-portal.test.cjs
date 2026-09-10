@@ -23,9 +23,10 @@ function register(h, c = create(h), email = EMAIL) {
 }
 function verified(h, c, email = EMAIL) {
   const r = register(h, c, email);
-  ok(h.family('familyVerify', { challenge: h.latestChallenge() }));
+  complete(h, h.latestChallenge());
   return { ...r, ...ok(h.family('familyLogin', { email, pass: PASS })) };
 }
+function complete(h, challenge) { ok(h.family('familyVerify',{challenge})); return ok(h.family('familyCompleteRegistration',{challenge,pass:PASS})); }
 function row(h, id) { return h.rows('familyAccounts').find(r => r.id === id); }
 function secretLeaks(value) { return /passSalt|passHash|tokenHash|secretHash|securityVersion|inviteHash|fc1\.|fa1\./.test(JSON.stringify(value)); }
 
@@ -77,7 +78,7 @@ test('unverified accounts cannot login or access data; verified siblings share o
   rejected(h.family('familyLogin', { email: EMAIL, pass: PASS }));
   rejected(h.family('familyData', { studentId: 'test-a' }));
   const challenge = h.latestChallenge();
-  ok(h.family('familyVerify', { challenge }));
+  complete(h, challenge);
   rejected(h.family('familyVerify', { challenge }));
   const login = ok(h.family('familyLogin', { email: ' Parent@Example.Invalid ', pass: PASS }));
   assert.deepEqual(login.children.map(s => s.studentId), ['test-a', 'test-b']);
@@ -107,11 +108,11 @@ test('mail challenge stores hash only, no URL, password, token or raw mail excep
   assert.equal(persisted.includes(r.inviteCode), false);
   assert.equal(persisted.includes(PASS), false);
   assert.equal(persisted.includes('fc1.'), false);
-  assert.match(row(h, r.family.id).passHash, /^pbkdf2-sha256\$10\$/);
+  assert.equal(row(h, r.family.id).passHash, '');
   assert.equal(secretLeaks(ok(h.admin('familyList'))), false);
 });
 
-test('unverified mail can be reissued with password; cooldown and old challenge invalidation', () => {
+test('unverified mail can be reissued without password; cooldown and old challenge invalidation', () => {
   const h = createFamilyHarness(); register(h); const first = h.latestChallenge();
   ok(h.family('familyResendVerification', { email: EMAIL, pass: PASS })); assert.equal(h.mailbox.length, 1);
   h.advance(61000);
@@ -119,7 +120,7 @@ test('unverified mail can be reissued with password; cooldown and old challenge 
   const known = h.family('familyResendVerification', { email: EMAIL, pass: PASS });
   assert.deepEqual(known, unknown);assert.equal(h.mailbox.length, 2);
   rejected(h.family('familyVerify', { challenge: first }));
-  ok(h.family('familyVerify', { challenge: h.latestChallenge() }));
+  complete(h, h.latestChallenge());
 });
 
 test('password reset is generic, expires, one-use and revokes old sessions and password', () => {
@@ -273,12 +274,13 @@ test('interrupted verification consumes proof safely and can recover by a newly 
   const h = createFamilyHarness();const r = register(h);const first = h.latestChallenge();
   const accounts = h.spreadsheet.getSheetByName('familyAccounts'), statusIndex = accounts.values[0].indexOf('status');
   interruptWriteOnce(accounts, values => values[0][statusIndex] === 'active');
-  rejected(h.family('familyVerify', { challenge: first }));
+  ok(h.family('familyVerify', { challenge: first }));
+  rejected(h.family('familyCompleteRegistration', { challenge: first, pass: PASS }));
   assert.equal(row(h, r.family.id).status, 'pending');
   rejected(h.family('familyVerify', { challenge: first }));
   rejected(h.family('familyLogin', { email: EMAIL, pass: PASS }));
   h.advance(61000);ok(h.family('familyResendVerification', { email: EMAIL, pass: PASS }));
-  ok(h.family('familyVerify', { challenge: h.latestChallenge() }));ok(h.family('familyLogin', { email: EMAIL, pass: PASS }));
+  complete(h, h.latestChallenge());ok(h.family('familyLogin', { email: EMAIL, pass: PASS }));
 });
 
 test('interrupted child relinking revokes session before adding any new child', () => {
@@ -307,7 +309,7 @@ test('auth mail quota failures allow a new challenge without exposing status on 
   const h = createFamilyHarness();h.setQuota(0);const r = register(h);
   assert.equal(r.registration.mailStatus, 'failed');assert.equal(h.mailbox.length, 0);
   h.advance(61000);h.setQuota(100);ok(h.family('familyResendVerification', { email: EMAIL, pass: PASS }));
-  ok(h.family('familyVerify', { challenge: h.latestChallenge() }));
+  complete(h, h.latestChallenge());
   const c = h.context();c.familyMailQuota_ = () => { throw new Error('Synthetic quota failure'); };
   const known = c.familyResetRequest_({ email: EMAIL }), unknown = c.familyResetRequest_({ email:'none@example.invalid' });
   assert.equal(JSON.stringify(known), JSON.stringify(unknown));
@@ -375,7 +377,7 @@ test('notification failure preserves plan and invoice success while surfacing wa
 });
 
 test('pending parent can recover forgotten password by proving email ownership, and old verification is invalidated',()=>{
- const h=createFamilyHarness(),r=register(h);const old=h.latestChallenge();h.advance(61000);ok(h.family('familyResetRequest',{email:EMAIL}));const reset=h.latestChallenge('reset');ok(h.family('familyResetConfirm',{challenge:reset,pass:'Replacement password!'}));ok(h.family('familyLogin',{email:EMAIL,pass:'Replacement password!'}));rejected(h.family('familyVerify',{challenge:old}));rejected(h.family('familyResetConfirm',{challenge:reset,pass:'Another password!'}));
+ const h=createFamilyHarness(),r=register(h);const a=h.context().familyAccount_(r.family.id);a.passSalt=h.context().parentSecret_();a.passHash=h.context().parentPasswordHash_(PASS,a.passSalt);h.context().familySave_(a);const old=h.latestChallenge();h.advance(61000);ok(h.family('familyResetRequest',{email:EMAIL}));const reset=h.latestChallenge('reset');ok(h.family('familyResetConfirm',{challenge:reset,pass:'Replacement password!'}));ok(h.family('familyLogin',{email:EMAIL,pass:'Replacement password!'}));rejected(h.family('familyVerify',{challenge:old}));rejected(h.family('familyResetConfirm',{challenge:reset,pass:'Another password!'}));
 });
 
 test('new student gets one automatic group and invitation reuses the existing group',()=>{

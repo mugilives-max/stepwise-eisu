@@ -122,20 +122,21 @@ function familyInvite_(a) {
   if(a.passHash)return familyError_('登録済みの保護者はメールからパスワードを再設定してください');
   if(a.status==='disabled'||!familyChildren_(a,false).length)return familyError_('利用中の生徒を紐付けてください');
   var secret=parentSecret_(),code='fi1.'+a.id+'.'+secret;
-  familyInvalidate_(a);a.inviteHash=parentDigest_('family-invite',a.id,secret);a.inviteExpiresAt=Date.now()+PARENT_SETUP_MS_;a.inviteFailCount=0;familySave_(a);
+  a.verifiedAt='';familyInvalidate_(a);a.inviteHash=parentDigest_('family-invite',a.id,secret);a.inviteExpiresAt=Date.now()+PARENT_SETUP_MS_;a.inviteFailCount=0;familySave_(a);
   return {ok:true,family:familyView_(a),inviteCode:code,expiresAt:Number(a.inviteExpiresAt)};
 }
 function familyRegister_(req) {
   var parts=String(req.inviteCode||'').trim().split('.'),a=parts.length===3&&parts[0]==='fi1'?familyAccount_(parts[1]):null;
-  if(!a||a.status==='disabled'||a.passHash||!a.inviteHash||Number(a.inviteExpiresAt)<=Date.now()||!familyChildren_(a,false).length)return familyError_('招待コードが無効か期限切れです。先生に再発行をお願いしてください');
+  if(!a||a.status!=='pending'||a.passHash||a.verifiedAt||!a.inviteHash||Number(a.inviteExpiresAt)<=Date.now()||!familyChildren_(a,false).length)return familyError_('招待コードが無効か期限切れです。先生に再発行をお願いしてください');
   if(!/^[a-f0-9]{64}$/.test(parts[2])||!parentEqual_(a.inviteHash,parentDigest_('family-invite',a.id,parts[2]))){
     a.inviteFailCount=Number(a.inviteFailCount||0)+1;if(a.inviteFailCount>=PARENT_MAX_FAILURES_)a.inviteHash='';familySave_(a);return familyError_('招待コードを確認してください');
   }
-  var email=familyEmail_(req.email),pass=String(req.pass||'');
+  var email=familyEmail_(req.email);
   if(!email)return familyError_('メールアドレスを確認してください');
-  if(pass.length<12||pass.length>128)return familyError_('パスワードは12〜128文字で設定してください');
   if(!familyEmailAvailable_(email,a.id))return familyError_('このメールでは登録できません。既存のログインをお試しになるか先生へご相談ください');
-  a.email=email;a.passSalt=parentSecret_();a.passHash=parentPasswordHash_(pass,a.passSalt);a.status='pending';a.verifiedAt='';a.inviteHash='';a.inviteExpiresAt='';a.inviteFailCount=0;familyInvalidate_(a);familySave_(a);
+  // 制限中は有効な確認リンクを保持。招待は完了まで保持して未確認メールの訂正に使う。
+  if(!familyChallengeAvailable_(a,'verify'))return familyError_('送信間隔の制限中です。メールアドレスは変更していません。1分以上待ってお試しください（1時間に5回まで）');
+  a.email=email;a.status='pending';a.verifiedAt='';a.inviteFailCount=0;familyInvalidate_(a);familySave_(a);
   var delivery=familyIssueChallengeSafe_(a,'verify',email);
   return {ok:true,verificationRequired:true,mailStatus:delivery.status};
 }
@@ -154,7 +155,7 @@ function familyIssueChallenge_(a,kind,email) {
   c.secretHash=parentDigest_('family-challenge',c.id,secret);familyChallengeWrite_(c);
   var token='fc1.'+c.id+'.'+secret,query=kind==='reset'?'reset':'verify',url=FAMILY_PORTAL_URL_+'?'+query+'='+encodeURIComponent(token);
   var subject=kind==='reset'?'【ステップワイズ】パスワード再設定':'【ステップワイズ】保護者メールの確認';
-  var body=(kind==='reset'?'パスワード再設定':'保護者メールの確認')+'のお申し込みを受け付けました。30分以内に次のページでお手続きください。\n\n'+url+'\n\nお心当たりがない場合は、このメールを破棄してください。';
+  var body=(kind==='reset'?'パスワード再設定':'保護者メールの確認')+'のお申し込みを受け付けました。30分以内に次のページでお手続きください。\n\n'+url+(kind==='verify'?'\n\nメールアドレスを確認した後、保護者用パスワードを設定すると登録完了です。':'')+'\n\nお心当たりがない場合は、このメールを破棄してください。';
   var out=familyOutboxAdd_('auth:'+c.id,a,'',kind==='reset'?'passwordReset':'emailVerification',{email:email});
   return familyDeliverOutbox_(out,a,subject,body,true);
 }
@@ -170,14 +171,32 @@ function familyVerify_(req) {
   var c=v.challenge,a=v.account;
   if(!familyEmailAvailable_(String(c.email),a.id))return familyError_('このメールでは登録できません。先生へご相談ください');
   if(c.kind==='verify'&&(a.status!=='pending'||String(a.email)!==String(c.email)))return familyError_('確認リンクが無効です');
+  if(c.kind==='verify') {
+    // パスワード設定時に証明を消費する。期限内なら設定途中から再開できる。
+    a.verifiedAt=a.verifiedAt||familyStamp_();familySave_(a);
+    return {ok:true,verified:true,passwordRequired:true,email:String(a.email)};
+  }
   // 先に一回限りの証明を消費。後続書き込みが失敗したら再発行し、古い証明を再利用しない。
   c.usedAt=familyStamp_();familyChallengeWrite_(c);a.email=String(c.email);a.verifiedAt=familyStamp_();a.status='active';a.failCount=0;a.lockUntil='';familyInvalidate_(a);familySave_(a);
   return {ok:true,verified:true};
 }
+function familyCompleteRegistration_(req) {
+  var v=familyChallenge_(req.challenge,['verify']);
+  if(!v)return familyError_('確認リンクが無効か期限切れです。確認メールを再送してください');
+  var a=v.account,c=v.challenge,pass=String(req.pass||'');
+  if(a.status!=='pending'||!a.verifiedAt||String(a.email)!==String(c.email))return familyError_('先にメールアドレスを確認してください');
+  if(!familyEmailAvailable_(String(c.email),a.id))return familyError_('このメールでは登録できません。先生へご相談ください');
+  if(pass.length<12||pass.length>128)return familyError_('パスワードは12〜128文字で設定してください');
+  var salt=parentSecret_(),hash=parentPasswordHash_(pass,salt);
+  c.usedAt=familyStamp_();familyChallengeWrite_(c);
+  a.passSalt=salt;a.passHash=hash;a.status='active';a.failCount=0;a.lockUntil='';a.inviteHash='';a.inviteExpiresAt='';a.inviteFailCount=0;
+  familyInvalidate_(a);familySave_(a);
+  return {ok:true,registered:true,email:String(a.email)};
+}
 function familyGenericMail_() { return {ok:true,message:'登録内容が一致する場合、確認メールを送信します。届かない場合は少し待ってから再試行するか先生へご相談ください。'}; }
 function familyResendVerification_(req) {
   var a=familyByEmail_(familyEmail_(req.email));
-  if(familyPassword_(a,req.pass)&&a&&a.status==='pending'&&!a.verifiedAt)familyIssueChallengeSafe_(a,'verify',String(a.email));return familyGenericMail_();
+  if(a&&a.status==='pending')familyIssueChallengeSafe_(a,'verify',String(a.email));return familyGenericMail_();
 }
 function familyResetRequest_(req) {
   var a=familyByEmail_(familyEmail_(req.email));
@@ -204,6 +223,7 @@ function familyDispatch_(req) {
   try { switch(req.action){
     case 'familyRegister':return familyRegister_(req);
     case 'familyVerify':return familyVerify_(req);
+    case 'familyCompleteRegistration':return familyCompleteRegistration_(req);
     case 'familyResendVerification':return familyResendVerification_(req);
     case 'familyLogin':return familyLogin_(req);
     case 'familyLogout':return familyLogout_(req);
@@ -341,7 +361,7 @@ function familyAdmin_(req) {
   if(req.op==='familyInvite')return familyInvite_(a);
   if(req.op==='familySetActive'){
     if(typeof req.active!=='boolean')return familyError_('利用状態を確認してください');
-    familyInvalidate_(a);a.status=req.active?(a.verifiedAt?'active':'pending'):'disabled';a.inviteHash='';a.inviteExpiresAt='';familySave_(a);return {ok:true,family:familyView_(a)};
+    familyInvalidate_(a);a.status=req.active?(a.verifiedAt&&a.passHash?'active':'pending'):'disabled';a.inviteHash='';a.inviteExpiresAt='';familySave_(a);return {ok:true,family:familyView_(a)};
   }
   return familyError_('操作が見つかりません');
 }

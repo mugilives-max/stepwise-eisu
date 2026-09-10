@@ -47,7 +47,7 @@ test('unauthenticated or unrelated family sessions cannot read or write services
 test('verified family can read its child and submit messages and cancellations, but unlink revokes access',()=>{
  const {createFamilyHarness}=require('./helpers/family-harness.cjs');const h=createFamilyHarness();
  const c=ok(h.admin('familyCreate',{label:'【テスト】家族',studentIds:['test-a']}));
- ok(h.family('familyRegister',{inviteCode:c.inviteCode,email:'family@example.invalid',pass:'Synthetic family password!'}));ok(h.family('familyVerify',{challenge:h.latestChallenge()}));
+ ok(h.family('familyRegister',{inviteCode:c.inviteCode,email:'family@example.invalid',pass:'Synthetic family password!'}));ok(h.family('familyVerify',{challenge:h.latestChallenge()}));ok(h.family('familyCompleteRegistration',{challenge:h.latestChallenge(),pass:'Synthetic family password!'}));
  const login=ok(h.family('familyLogin',{email:'family@example.invalid',pass:'Synthetic family password!'}));
  const req=(op,args={})=>h.request({action:'learningService',op,ftoken:login.ftoken,studentId:'test-a',...args});
  ok(h.admin('serviceExamSave',exam));assert.equal(ok(req('list')).exams[0].analysis,'公開分析');assert.equal(JSON.stringify(req('list')).includes('SECRET'),false);

@@ -54,7 +54,10 @@ function stepwiseNativeFamilyCheck() {
     check(!!pub('familyLogin',{email:email,pass:'too short'}).error,'unverified_login_rejected');
     check(!!pub('familyData',{studentId:'native-family-a'}).familyAuthRequired,'unauthenticated_child_rejected');
     var firstChallenge=challenge('verify');
-    check(pub('familyVerify',{challenge:firstChallenge}).ok,'email_verified');
+    check(!familyAccount_(familyId).passHash,'password_absent_before_verification');
+    check(pub('familyVerify',{challenge:firstChallenge}).passwordRequired,'email_verified');
+    check(!!pub('familyLogin',{email:email,pass:pass}).error,'verified_but_unfinished_login_rejected');
+    check(pub('familyCompleteRegistration',{challenge:firstChallenge,pass:pass}).registered,'password_set_after_verification');
     check(!!pub('familyVerify',{challenge:firstChallenge}).error,'verification_one_use');
     var login=pub('familyLogin',{email:email.toUpperCase(),pass:pass});
     check(login.ok&&login.children.length===2,'email_login_siblings');ftoken=login.ftoken;

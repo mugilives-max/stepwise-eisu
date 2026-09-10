@@ -19,16 +19,14 @@ test('parent sections separate billing, reports and account settings without rel
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
 async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#families' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); await flush(); return ui; }
 
-test('standalone family registration preserves password spaces, clears credentials, and waits for email verification', async () => {
-  const ui = createUI('student', { hash: '#family', local: new Map() }); assert.equal(ui.requests.length, 0);
-  ui.click('fa-mode', { 'data-step': 'register' }); ui.input('fa-email', ' Parent@Example.Invalid '); ui.input('fa-invite', 'fi1.synthetic.invite-secret');
-  ui.input('fa-pass', ' long password '); ui.input('fa-pass2', 'mismatch'); ui.submit('family-auth-form'); assert.equal(ui.requests.length, 0);
-  ui.input('fa-email', ' Parent@Example.Invalid '); ui.input('fa-invite', 'fi1.synthetic.invite-secret'); ui.input('fa-pass', ' long password '); ui.input('fa-pass2', ' long password '); const oldPass = ui.el('fa-pass'); ui.submit('family-auth-form');
-  assert.equal(oldPass.value, ''); assert.equal(ui.requests[0].body.pass, ' long password '); assert.equal(ui.requests[0].body.email, 'parent@example.invalid');
-  assert.equal(ui.requests[0].body.inviteCode, 'fi1.synthetic.invite-secret');
-  ui.requests[0].reply({ ok: true, verificationRequired: true, mailStatus: 'sent' }); await flush();
-  assert.match(ui.html(), /メール内のリンク/); assert.equal(ui.session.has('sw_ft_v1'), false);
-  assert.equal(JSON.stringify(ui.writes).includes('invite-secret'), false); assert.equal(JSON.stringify(ui.writes).includes('long password'), false); assert.equal(JSON.stringify(ui.logs).includes('invite-secret'), false);
+test('registration collects only email and keeps a correction route while waiting', async () => {
+  const ui=createUI('student',{hash:'#family?invite=fi1.synthetic.invite-secret'});
+  assert.ok(!ui.html().includes('id="fa-pass"'));
+  ui.input('fa-email',' Parent@Example.Invalid ');ui.submit('family-auth-form');
+  assert.equal(ui.requests[0].body.pass,undefined);assert.equal(ui.requests[0].body.email,'parent@example.invalid');
+  ui.requests[0].reply({ok:true,verificationRequired:true,mailStatus:'sent'});await flush();
+  assert.match(ui.html(),/メール確認待ち/);assert.match(ui.html(),/parent@example.invalid/);assert.match(ui.html(),/メールアドレスを修正/);
+  assert.equal(ui.session.has('sw_ft_v1'),false);assert.equal(JSON.stringify(ui.writes).includes('invite-secret'),false);
 });
 
 test('verification and reset challenges are stripped from the URL and never copied to DOM logs or storage', async () => {
@@ -132,7 +130,7 @@ test('teacher mail retries display a confirmation and send only the selected ret
 
 test('a failed verification mail is reported as unsent while registration remains saved', async () => {
   const ui = createUI('student', { hash: '#family' }); ui.click('fa-mode', { 'data-step': 'register' });
-  ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-invite', 'fi1.synthetic.test'); ui.input('fa-pass', 'test-family-password'); ui.input('fa-pass2', 'test-family-password'); ui.submit('family-auth-form');
+  ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-invite', 'fi1.synthetic.test'); ui.submit('family-auth-form');
   ui.requests.at(-1).reply({ ok: true, verificationRequired: true, mailStatus: 'failed' }); await flush();
   assert.match(ui.html(), /登録は保存しましたが確認メールを送れませんでした/); assert.equal(ui.session.has('sw_ft_v1'), false);
 });
@@ -140,7 +138,7 @@ test('a failed verification mail is reported as unsent while registration remain
 test('an expired verification link provides a working resend route without reloading', async () => {
   const ui = createUI('student', { hash: '#family?verify=expired-challenge' }); ui.click('fa-verify');
   ui.requests.at(-1).reply({ error: '確認リンクが期限切れです' }); await flush();
-  ui.click('fa-mode', { 'data-step': 'resend' }); ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-pass', 'test-family-password'); ui.submit('family-auth-form');
+  ui.click('fa-mode', { 'data-step': 'resend' }); ui.input('fa-email', 'parent@example.invalid'); ui.submit('family-auth-form');
   assert.equal(ui.requests.at(-1).body.action, 'familyResendVerification');
   assert.equal(ui.requests.at(-1).body.challenge, undefined);
 });
@@ -151,5 +149,29 @@ test('student entry preselects one child and existing-parent linking preserves s
  const linked=createUI('admin',{hash:'#families?student=child-b'});linked.requests[0].reply(familyList({families:[{id:'family-a',label:'保護者A',status:'active',configured:true,children:[{studentId:'child-a',name:'子A'}]}]}));await flush();linked.click('family-link',{'data-id':'family-a'});linked.click('family-confirm');assert.equal(linked.requests.at(-1).body.studentId,'child-b');assert.equal(linked.requests.at(-1).body.familyId,'family-a');assert.equal(linked.requests.at(-1).body.sourceFamilyId,'');assert.equal(linked.requests.at(-1).body.op,'familyMoveStudent');
 });
 test('invite link opens registration, scrubs URL and survives validation errors without logging in another account',()=>{
- const ui=createUI('student',{hash:'#family?invite=fi1.synthetic.secret',session:new Map([['sw_ft_v1','other-session']])});assert.equal(ui.location.hash,'#family');assert.equal(ui.requests.length,0);assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');ui.input('fa-email','test@example.invalid');ui.input('fa-pass','short');ui.submit('family-auth-form');assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');assert.equal(JSON.stringify(ui.writes).includes('synthetic.secret'),false);
+ const ui=createUI('student',{hash:'#family?invite=fi1.synthetic.secret',session:new Map([['sw_ft_v1','other-session']])});assert.equal(ui.location.hash,'#family');assert.equal(ui.requests.length,0);assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');ui.input('fa-email','');ui.submit('family-auth-form');assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');assert.equal(JSON.stringify(ui.writes).includes('synthetic.secret'),false);
+});
+
+
+test('verified email opens password-only form, then completes signup and logs in',async()=>{
+ const ui=createUI('student',{hash:'#family?verify=signup-proof'});ui.click('fa-verify');
+ ui.requests[0].reply({ok:true,passwordRequired:true,email:'parent@example.invalid'});await flush();
+ assert.match(ui.html(),/メール確認済み/);assert.ok(!ui.html().includes('id="fa-email"'));
+ ui.input('fa-pass',' short ');ui.input('fa-pass2',' short ');ui.submit('family-auth-form');assert.equal(ui.requests.length,1);
+ ui.input('fa-pass',' long password ');ui.input('fa-pass2',' long password ');ui.submit('family-auth-form');
+ assert.equal(ui.requests[1].body.action,'familyCompleteRegistration');assert.equal(ui.requests[1].body.pass,' long password ');
+ assert.equal(ui.requests[1].body.challenge,'signup-proof');
+ ui.requests[1].reply({ok:true,registered:true,email:'parent@example.invalid'});await flush();
+ assert.equal(ui.requests[2].body.action,'familyLogin');
+ ui.requests[2].reply({...home([]),ftoken:'new-family-token'});await flush();assert.equal(ui.session.get('sw_ft_v1'),'new-family-token');
+ assert.equal(JSON.stringify(ui.writes).includes('signup-proof'),false);assert.equal(JSON.stringify(ui.writes).includes('long password'),false);
+});
+test('password setup failure offers resend; successful save with login network error offers login',async()=>{
+ const ui=createUI('student',{hash:'#family?verify=signup-proof'});ui.click('fa-verify');
+ ui.requests[0].reply({ok:true,passwordRequired:true,email:'parent@example.invalid'});await flush();
+ ui.input('fa-pass',' long password ');ui.input('fa-pass2',' long password ');ui.submit('family-auth-form');
+ ui.requests[1].reply({error:'リンクが期限切れです'});await flush();assert.match(ui.html(),/確認メールを再送/);
+ ui.input('fa-pass',' long password ');ui.input('fa-pass2',' long password ');ui.submit('family-auth-form');
+ ui.requests[2].reply({ok:true,registered:true,email:'parent@example.invalid'});await flush();ui.requests[3].fail();await flush();
+ assert.match(ui.html(),/登録が完了しました/);assert.ok(ui.html().includes('id="fa-email"'));
 });

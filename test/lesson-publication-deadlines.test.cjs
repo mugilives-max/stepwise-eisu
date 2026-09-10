@@ -181,7 +181,7 @@ test('family data publishes each linked child independently and rejects unlinked
   const h=createFamilyHarness(),pass='Synthetic family lesson password!';
   const family=ok(h.admin('familyCreate',{label:'【テスト】授業共有',studentIds:['test-a','test-b']}));
   ok(h.family('familyRegister',{inviteCode:family.inviteCode,email:'lesson-parent@example.invalid',pass}));
-  ok(h.family('familyVerify',{challenge:h.latestChallenge()}));const login=ok(h.family('familyLogin',{email:'lesson-parent@example.invalid',pass}));
+  ok(h.family('familyVerify',{challenge:h.latestChallenge()}));ok(h.family('familyCompleteRegistration',{challenge:h.latestChallenge(),pass:pass}));const login=ok(h.family('familyLogin',{email:'lesson-parent@example.invalid',pass}));
   for(const studentId of ['test-a','test-b']){
     h.spreadsheet.getSheetByName('slots').appendRow(['slot-'+studentId,'2026-09-07','13:00',60,'booked',studentId,false,'','','英語','']);
     ok(h.admin('lessonRecordSave',{studentId,slotId:'slot-'+studentId,requestId:'save-'+studentId,expectedRevision:0,record:{content:'本人だけの本文-'+studentId,teacherNote:'PRIVATE_FAMILY_325',homework:[]}}));
