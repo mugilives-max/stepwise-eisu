@@ -1349,9 +1349,8 @@
         }
         function renderFamilies(embedded) {
           renderNav(); var d = FT.auth === token() ? FT.data : null, dis = FT.busy ? ' disabled' : '';
-          var h = '<h2 id="parent-notifications">グループの管理</h2><p class="sub">生徒グループごとに保護者ログインを1つ使います。父母などが同じログインを複数端末で共有できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
+          var h = '<h2 id="parent-notifications">グループの管理</h2><p class="sub">同じグループに設定されている生徒を表示します。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
-          h += familyInviteHtml();
           if (!d) { h += FT.busy ? '<p>読み込んでいます…</p>' : ''; if (embedded) return h; app.innerHTML = h; return; }
           var students = d.students || [], families = (d.families || []).filter(function(f){return new Set((f.children||[]).map(function(c){return String(c.studentId);})).size >= 2;}), targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
           if(targetStudent) h += '<div class="card"><h2>'+esc(targetStudent.name)+'さんの保護者</h2><p>1人でも同じグループとして扱います。兄弟は下の移動先を選んでまとめてください。移動先の保護者ログインを引き続き使います。</p></div>';
@@ -1365,13 +1364,9 @@
           if(!families.length) h += '<p>生徒が2人以上のグループはありません。</p>';
           families.forEach(function (f) {
             var linked=(f.children || []).some(function(x){return targetStudent && sameId(x.studentId,targetStudent.id);});
-            var state=f.status==='disabled'?'利用停止':f.status==='active'?'利用中':f.verifiedAt?'パスワード設定待ち':f.email?'メール確認待ち':f.inviteExpiresAt>Date.now()?'登録待ち':'登録案内が必要';
-            h += '<div class="note"><strong>'+esc(state)+'</strong> — '+(f.status==='disabled'?'利用を再開すると案内できます。':f.status==='active'?'ログインできます。パスワードを忘れた場合は再設定案内を渡してください。':f.email?'登録はまだ完了していません。確認メールから認証・パスワード設定を進めてください。途中で止まった場合は再送案内を渡してください。':'登録案内を発行し、保護者へ渡してください。先生がパスワードを発行する必要はありません。')+'</div>';
             if(targetStudent && f.status!=='disabled') h += '<p>'+ (linked?'この生徒に紐付け済み': '<button class="btn-primary btn-sm" data-action="family-link" data-id="'+esc(f.id)+'"'+dis+'>このグループにまとめる</button>')+'</p>';
-            if(f.email && f.status!=='disabled') h += '<p><button class="btn-quiet btn-sm" data-action="family-help" data-id="'+esc(f.id)+'"'+dis+'>'+(f.status==='active'?'ログイン・再設定案内をコピー':'確認メールの再送案内をコピー')+'</button></p>';
-            h += '<div class="card"><h2>' + esc(f.label) + '</h2><p>' + (f.children || []).map(function (s) { return esc(s.name); }).join('・') + '</p><p>' + esc(f.email || 'メール未登録') + ' <span class="tag ' + (f.verifiedAt ? 'green' : 'amber') + '">' + (f.verifiedAt ? 'メール確認済み' : 'メール未確認') + '</span> ' + (f.configured ? 'パスワード設定済み' : '未登録') + '・' + esc({ active: '利用中', pending: f.verifiedAt ? 'パスワード設定待ち' : 'メール確認待ち', disabled: '利用停止' }[f.status] || '確認待ち') + '</p><p class="small muted">最終ログイン：' + esc(fmtAuthTime(f.lastLogin)) + '</p><div class="row"><button class="btn-quiet btn-sm" data-action="family-edit" data-id="' + esc(f.id) + '"' + dis + '>紐付ける生徒を変更</button>' + (!f.configured ? '<button class="btn-ghost btn-sm" data-action="family-invite" data-id="' + esc(f.id) + '"' + dis + '>登録案内を発行し直す</button>' : '') + '<button class="btn-quiet btn-sm" data-action="family-active" data-id="' + esc(f.id) + '"' + dis + '>' + (f.status === 'disabled' ? '利用を再開' : '利用を停止') + '</button></div></div>';
+            h += '<div class="card"><p>' + (f.children || []).map(function (s) { return '<a href="#s='+encodeURIComponent(s.studentId)+'&tab=settings">'+esc(s.name)+'</a>'; }).join('・') + '</p><button class="btn-quiet btn-sm" data-action="family-edit" data-id="' + esc(f.id) + '"' + dis + '>紐付ける生徒を変更</button></div>';
           });
-          families.forEach(function(f){h += window.StepwiseReport.invoices(f.billing,f.label);});
           if (embedded) return h;
           app.innerHTML = h;
         }
