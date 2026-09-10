@@ -792,7 +792,6 @@
             '<div class="row">' + "" + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定・宿題'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
-          html += '<p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></p>';
           if (section === 'overview') {
           html += unrecordedCard(s.unrecordedLessons || (s.lessons || []).filter(function(l){return l.status==='booked' && !l.done && l.date<(s.today || today());}),false,s);
           // この生徒の予定表
@@ -1391,7 +1390,7 @@
         }
         function studentParentInviteHtml(s) {
           var own = studentInvite.id === String(s.id) && studentInvite.auth === token();
-          return '<h2>保護者</h2><div class="card"><p>この生徒が所属するグループの保護者登録案内を作成します。兄弟が同じグループにいる場合は、共通の案内になります。</p><p class="note">作成すると以前の登録案内は使えなくなります。登録済みの保護者は、ログイン画面のパスワード再設定をご利用ください。</p><button class="btn-primary" data-action="family-student-invite"' + (studentInvite.busy ? ' disabled' : '') + '>' + (own && studentInvite.busy ? '案内を作成しています…' : '保護者の登録案内を作成') + '</button><p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></p>' + (own && studentInvite.error ? '<p role="alert">' + esc(studentInvite.error) + '</p>' : '') + '</div>' + (own && FT.invite && FT.invite.studentId === String(s.id) ? familyInviteHtml() : '');
+          return '<h2>保護者</h2><div class="card"><p>この生徒が所属するグループの保護者登録案内を作成します。兄弟が同じグループにいる場合は、共通の案内になります。</p><p class="note">作成すると以前の登録案内は使えなくなります。登録済みの保護者は、ログイン画面のパスワード再設定をご利用ください。</p><button class="btn-primary" data-action="family-student-invite"' + (studentInvite.busy ? ' disabled' : '') + '>' + (own && studentInvite.busy ? '案内を作成しています…' : '保護者の登録案内を作成') + '</button>' + (own && studentInvite.error ? '<p role="alert">' + esc(studentInvite.error) + '</p>' : '') + '</div>' + (own && FT.invite && FT.invite.studentId === String(s.id) ? familyInviteHtml() : '');
         }
         function issueStudentParentInvite() {
           var r=route(); if (r.page !== 'student' || r.section !== 'settings' || !cur || studentInvite.busy) return;
