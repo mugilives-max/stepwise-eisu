@@ -880,7 +880,7 @@
 
         function renderParent(data, family) {
           var d = data || P, activeBusy = family ? F.busy : busy, memoKey = family ? F.studentId : myKey(), memos = family ? F.memos : parentPlanMemos;
-          var html = '<div class="parentbar"><span style="flex:1"><strong>保護者ページ</strong> ' + esc(d.name) + 'さん</span><button class="btn-sm" data-action="' + (family ? 'fa-logout' : 'parentclose') + '"' + (activeBusy ? " disabled" : "") + '>ログアウト</button></div>';
+          var html = family ? '' : '<div style="display:flex;justify-content:flex-end"><button class="btn-quiet btn-sm" data-action="parentclose"' + (activeBusy ? ' disabled' : '') + '>ログアウト</button></div>';
           var tm = d.thisMonth || {}, bill = d.billing, section=parentSection();
           if (!family && parentPlanNotice) html += '<p class="parent-error" role="alert">' + esc(parentPlanNotice) + '</p>';
           html += '<p><button class="btn-sm" data-action="' + (family ? 'fa-refresh' : 'parentrefresh') + '"' + (activeBusy ? " disabled" : "") + '>最新の情報を確認</button></p>';
@@ -1008,7 +1008,7 @@
             F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; if (children.length) familyLoadChild(children[0].studentId);
         }
         function renderFamily() {
-          var dis = F.busy ? " disabled" : "", h = '<h1>保護者ページ</h1><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
+          var dis = F.busy ? " disabled" : "", h = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h1>保護者ページ</h1>' + (F.home && familyToken() ? '<button class="btn-quiet btn-sm" data-action="fa-logout"' + dis + '>ログアウト</button>' : '') + '</div><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
           if (F.error) h += '<p class="parent-error" role="alert">' + esc(F.error) + '</p>';
           if (F.message) h += '<p class="card" role="status">' + esc(F.message) + '</p>';
           if (F.step === "logout" || ssGet("sw_ft_v1:logout")) { app.innerHTML = h + '<div class="card"><p>ログアウトを完了するにはサーバーの確認が必要です。</p><button class="btn-primary" data-action="fa-logout"' + dis + '>ログアウトを再試行</button></div>'; return; }
@@ -1022,7 +1022,7 @@
           }
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
-            h += '<div class="card"><strong>' + esc((F.home.family || {}).label) + '</strong>' + (parentSection()==='settings'?'<p>'+esc((F.home.family || {}).email)+'・メール確認済み</p>':'') + '<label for="fa-child">表示する子ども</label><select id="fa-child"' + dis + '>' + (F.home.children || []).map(function (c) { return '<option value="' + esc(c.studentId) + '"' + (sameId(c.studentId, F.studentId) ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>' + (parentSection()==='settings'?'<div class="row" style="margin-top:12px"><button class="btn-quiet btn-sm" data-action="fa-home"' + dis + '>家族情報を更新</button><button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"' + dis + '>メールアドレスを変更</button><button class="btn-quiet btn-sm" data-action="fa-logout"' + dis + '>ログアウト</button></div>':'')+'</div>';
+            h += '<div class="card"><strong>' + esc((F.home.family || {}).label) + '</strong>' + (parentSection()==='settings'?'<p>'+esc((F.home.family || {}).email)+'・メール確認済み</p>':'') + '<label for="fa-child">表示する子ども</label><select id="fa-child"' + dis + '>' + (F.home.children || []).map(function (c) { return '<option value="' + esc(c.studentId) + '"' + (sameId(c.studentId, F.studentId) ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>' + (parentSection()==='settings'?'<div class="row" style="margin-top:12px"><button class="btn-quiet btn-sm" data-action="fa-home"' + dis + '>家族情報を更新</button><button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"' + dis + '>メールアドレスを変更</button></div>':'')+'</div>';
             if(parentSection()==='billing')h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
             if (F.confirm && parentSection() === "billing") h += '<div class="card" role="region" aria-label="月間計画の回答確認"><strong>' + esc((F.data || {}).name) + 'さん・' + esc(F.confirm.ym) + '</strong><p>第' + F.confirm.expectedRevision + '版の回数と料金を' + (F.confirm.approve ? '承認します。' : '見送り・相談として先生に伝えます。') + '</p><button class="btn-primary" data-action="fa-decide"' + dis + '>この内容で回答する</button> <button class="btn-quiet" data-action="fa-cancel"' + dis + '>やめる</button></div>';

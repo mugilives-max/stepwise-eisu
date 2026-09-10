@@ -6,7 +6,7 @@ const path = require('node:path');
 const harness = fs.readFileSync(path.join(__dirname, 'operations-ui.test.cjs'), 'utf8').split('\ntest(')[0];
 const { createUI, flush, state } = new Function('require', '__dirname', harness + '\nreturn {createUI, flush, state};')(require, __dirname);
 const home = children => ({ ok: true, family: { id: 'family-a', label: '【テスト】家族', email: 'parent@example.invalid' }, children: children || [{ studentId: 'child-a', name: '【テスト】子A' }, { studentId: 'child-b', name: '【テスト】子B' }] });
-const data = name => ({ name, month: '2026-09', thisMonth: {}, payments: [], upcoming: [{ id: 'slot-a', date: '2026-09-10', start: '17:00', min: 30, status: 'booked', subject: '英語', deliveryMode: 'online' }], planMonths: [{ ym: '2026-09', status: 'proposed', revision: 7, termsKnown: true, rate30: 1000, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4 }] });
+const data = name => ({ name, month: '2026-09', thisMonth: {}, payments: [], upcoming: [{ id: 'slot-a', date: '2026-09-10', start: '17:00', min: 30, status: 'booked', subject: '英語 '+name, deliveryMode: 'online' }], planMonths: [{ ym: '2026-09', status: 'proposed', revision: 7, termsKnown: true, rate30: 1000, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4 }] });
 function loggedUI() { return createUI('student', { hash: '#family/billing', session: new Map([['sw_ft_v1', 'test-family-token']]) }); }
 async function readyFamily() { const ui = loggedUI(); ui.requests[0].reply(home()); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); return ui; }
 
