@@ -986,6 +986,7 @@
           var invite = inviteEl ? inviteEl.value.trim() : F.invite || "";
           if (step === "register" && !invite) { F.error = "先生から受け取った招待コードを入力してください。"; familyRender(); return; }
           F.email = email || F.email;
+          if (step === "register") F.invite = invite;
           if (passEl) passEl.value = ""; if (pass2) pass2.value = ""; if (inviteEl) inviteEl.value = "";
           if (step === "register") familyRequest("familyRegister", { inviteCode: invite, email: email }, function (res) { F.invite=invite; F.step = "waiting"; F.message = familyMailMessage(res); });
           else if (step === "setPassword") familyRequest("familyCompleteRegistration", { challenge: F.challenge, pass: pass }, function (res) { F.challenge=""; F.invite=""; F.step="login"; F.email=res.email; F.message="登録が完了しました。ログインしています…"; familyRequest("familyLogin", { email:res.email, pass:pass }, familyAcceptLogin); });
