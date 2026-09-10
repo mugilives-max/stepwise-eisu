@@ -878,8 +878,8 @@
           return svg;
         }
 
-        function renderParent(data, family) {
-          var d = data || P, activeBusy = family ? F.busy : busy, memoKey = family ? F.studentId : myKey(), memos = family ? F.memos : parentPlanMemos;
+        function renderParent(data, family, childId) {
+          var d = data || P, activeBusy = family ? F.busy : busy, memoKey = family ? childId : myKey(), memos = family ? F.memos : parentPlanMemos;
           var html = family ? '' : '<div style="display:flex;justify-content:flex-end"><button class="btn-quiet btn-sm" data-action="parentclose"' + (activeBusy ? ' disabled' : '') + '>ログアウト</button></div>';
           var tm = d.thisMonth || {}, bill = d.billing, section=parentSection();
           if (!family && parentPlanNotice) html += '<p class="parent-error" role="alert">' + esc(parentPlanNotice) + '</p>';
@@ -932,13 +932,14 @@
           if(section==='contacts')html+='<p>予定の希望・質問・改善点を送れます。取消は理由を記入して申請してください。</p>';
           if(section==='grades')html+='<h2>成績の推移</h2>'+gradeChart(d.grades||[],'score');
           if(section==='settings')html+='<h2>保護者の設定</h2><p>共用端末では利用後にログアウトしてください。</p>';
+          if (family) html = html.replace(/data-action="(fa-[^"]+)"/g, 'data-action="$1" data-child="' + esc(childId) + '"').replace(/id="pl-memo-/g, 'id="pl-memo-' + esc(childId) + '-').replace(/data-parent-plan-memo=/g, 'data-child="' + esc(childId) + '" data-parent-plan-memo=');
           return html;
         }
 
         /* ---------- 家族の保護者認証: 専用リンク方式とは別のセッション ---------- */
-        var F = { step: "login", invite: "", email: "", home: null, data: null, studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
+        var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
         function familyToken() { return ssGet("sw_ft_v1") || ""; }
-        function familyClear() { ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.data = null; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -950,30 +951,44 @@
             success(res); familyRender();
           }).catch(function () { if (seq !== F.seq || auth && auth !== familyToken()) return; F.busy = false; F.error = "通信に失敗しました。通信状態を確認して再試行してください。"; familyRender(); });
         }
+        function familyVisibleChildren() {
+          return (F.home && F.home.children || []).filter(function(c){return !F.studentId || sameId(c.studentId,F.studentId);});
+        }
         function familyLoadChild(id) {
-          if (F.busy || !F.home || !(F.home.children || []).some(function (c) { return sameId(c.studentId, id); })) return;
-          F.studentId = id; F.data = null; F.confirm = null;
-          familyRequest("familyData", { ftoken: familyToken(), studentId: id }, function (res) { if (sameId(F.studentId, id)) F.data = res.data; });
+          if (F.busy || !F.home) return;
+          var list = F.home.children || [];
+          if (id) list = (F.home.children || []).filter(function(c){return sameId(c.studentId,id);});
+          F.confirm = null;
+          list.forEach(function(c){delete F.childrenData[c.studentId];});
+          function next(index) {
+            if (index >= list.length || !F.home) return;
+            var child = list[index];
+            familyRequest("familyData", {ftoken:familyToken(),studentId:child.studentId}, function(res){
+              F.childrenData[child.studentId]=res.data;
+              next(index+1);
+            });
+          }
+          next(0);
         }
         function familyLoadHome() {
           if (F.busy || !familyToken()) return;
           if (ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
-          F.data = null; F.confirm = null;
-          familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (list.length) familyLoadChild(list.some(function (c) { return sameId(c.studentId, F.studentId); }) ? F.studentId : list[0].studentId); else F.studentId = ""; });
+          F.childrenData = Object.create(null); F.confirm = null;
+          familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; familyLoadChild(); });
         }
         function familyLogout() {
           if (F.busy) return;
           if (!familyToken()) { familyClear(); familyRender(); return; }
-          F.home = null; F.data = null; F.confirm = null; F.step = "logout"; ssSet("sw_ft_v1:logout", "1");
+          F.home = null; F.childrenData = Object.create(null); F.confirm = null; F.step = "logout"; ssSet("sw_ft_v1:logout", "1");
           familyRequest("familyLogout", { ftoken: familyToken() }, function () { familyClear(); F.message = "ログアウトしました。"; });
         }
         function familyReadChallenge() {
           if (location.hash.indexOf("#family?") !== 0) return;
           var q = new URLSearchParams(location.hash.slice(8)), invite=q.get("invite"), mode=q.get("mode"), verify = q.get("verify"), reset = q.get("reset");
-          if(invite){F.invite=invite;F.step='register';F.home=null;F.data=null;F.message='';}
-          else if(['requestReset','resend'].indexOf(mode)>=0){F.step=mode;F.home=null;F.data=null;}
+          if(invite){F.invite=invite;F.step='register';F.home=null;F.message='';}
+          else if(['requestReset','resend'].indexOf(mode)>=0){F.step=mode;F.home=null;}
           F.challenge = verify || reset || ""; F.challengeKind = verify ? "verify" : reset ? "reset" : "";
-          if (F.challenge) { ++F.seq; F.busy = false; F.home = null; F.data = null; F.step = F.challengeKind; F.verificationInfo = null; F.verificationInvalid = false; F.message = ""; F.error = ""; }
+          if (F.challenge) { ++F.seq; F.busy = false; F.home = null; F.childrenData = Object.create(null); F.step = F.challengeKind; F.verificationInfo = null; F.verificationInvalid = false; F.message = ""; F.error = ""; }
           history.replaceState(null, "", location.pathname + "#family");
           if (verify) { var pendingProof=F.challenge; Promise.resolve().then(function () { if (F.challenge===pendingProof && F.step==='verify' && route()==='family') familyLoadVerification(); }); }
         }
@@ -1005,7 +1020,7 @@
             if (!res.ftoken) { F.error = "ログインを確認できませんでした。"; return; }
             ssSet("sw_ft_v1", res.ftoken); ssDel("sw_ft_v1:logout");
             if (familyToken() !== res.ftoken) { apiPost({ action: "familyLogout", ftoken: res.ftoken }).catch(function () {}); F.error = "このブラウザではログインを保持できません。セッション保存を許可してお試しください。"; return; }
-            F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; if (children.length) familyLoadChild(children[0].studentId);
+            F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; F.studentId=""; F.childrenData=Object.create(null); if (children.length) familyLoadChild();
         }
         function renderFamily() {
           var dis = F.busy ? " disabled" : "", h = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h1>保護者ページ</h1>' + (F.home && familyToken() ? '<button class="btn-quiet btn-sm" data-action="fa-logout"' + dis + '>ログアウト</button>' : '') + '</div><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
@@ -1022,11 +1037,16 @@
           }
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
-            h += '<div class="card"><strong>' + esc((F.home.family || {}).label) + '</strong>' + (parentSection()==='settings'?'<p>'+esc((F.home.family || {}).email)+'・メール確認済み</p>':'') + '<label for="fa-child">表示する子ども</label><select id="fa-child"' + dis + '>' + (F.home.children || []).map(function (c) { return '<option value="' + esc(c.studentId) + '"' + (sameId(c.studentId, F.studentId) ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>' + (parentSection()==='settings'?'<div class="row" style="margin-top:12px"><button class="btn-quiet btn-sm" data-action="fa-home"' + dis + '>家族情報を更新</button><button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"' + dis + '>メールアドレスを変更</button></div>':'')+'</div>';
+            if(parentSection()==='settings') h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
+            else if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             if(parentSection()==='billing')h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
-            if (F.confirm && parentSection() === "billing") h += '<div class="card" role="region" aria-label="月間計画の回答確認"><strong>' + esc((F.data || {}).name) + 'さん・' + esc(F.confirm.ym) + '</strong><p>第' + F.confirm.expectedRevision + '版の回数と料金を' + (F.confirm.approve ? '承認します。' : '見送り・相談として先生に伝えます。') + '</p><button class="btn-primary" data-action="fa-decide"' + dis + '>この内容で回答する</button> <button class="btn-quiet" data-action="fa-cancel"' + dis + '>やめる</button></div>';
-            h += F.data ? renderParent(F.data, true) : F.busy ? '<p>読み込んでいます…</p>' : F.studentId ? '<button class="btn-quiet" data-action="fa-refresh">子どもの情報を再読み込み</button>' : '';
+            if (F.confirm && parentSection() === "billing") h += '<div class="card" role="region" aria-label="月間計画の回答確認"><strong>' + esc((F.childrenData[F.confirm.studentId] || {}).name) + 'さん・' + esc(F.confirm.ym) + '</strong><p>第' + F.confirm.expectedRevision + '版の回数と料金を' + (F.confirm.approve ? '承認します。' : '見送り・相談として先生に伝えます。') + '</p><button class="btn-primary" data-action="fa-decide"' + dis + '>この内容で回答する</button> <button class="btn-quiet" data-action="fa-cancel"' + dis + '>やめる</button></div>';
+            if(parentSection()!=='settings') familyVisibleChildren().forEach(function(c,index){
+              h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
+              h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId) : F.busy ? '<p>読み込んでいます…</p>' : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">子どもの情報を再読み込み</button>';
+              h += '</section>';
+            });
             app.innerHTML = h; return;
           }
           if (familyToken() && F.step === "login") { app.innerHTML = h + '<div class="card"><button class="btn-primary" data-action="fa-home"' + dis + '>家族ページを開く</button> <button class="btn-quiet" data-action="fa-logout"' + dis + '>ログアウト</button></div>'; return; }
@@ -1047,30 +1067,47 @@
         function familyClick(action, btn) {
           if (F.busy || route() !== "family") return;
           if (action === "fa-home") familyLoadHome();
-          else if (action === "fa-refresh") familyLoadChild(F.studentId);
+          else if (action === "fa-refresh") familyLoadChild(btn.getAttribute("data-child") || F.studentId);
           else if (action === "fa-logout") familyLogout();
           else if (action === "fa-mode") { F.step = btn.getAttribute("data-step"); F.error = ""; F.message = ""; F.confirm = null; if (F.step === 'emailChange') F.email = ''; familyRender(); }
           else if (action === "fa-verification-retry" && F.challenge) familyLoadVerification();
           else if (action === "fa-verify" && F.challenge && F.verificationInfo) familyRequest("familyVerify", { challenge: F.challenge }, function (res) { if (res.passwordRequired) { F.step="setPassword"; F.email=res.email; F.message="メールアドレスを確認しました。パスワードを設定すると登録完了です。"; } else { familyClear(); F.challenge = ""; F.challengeKind = ""; F.message = "メールアドレスを確認しました。ログインしてください。"; } });
           else if (action === "fa-planok" || action === "fa-planng") {
-            var ym = btn.getAttribute("data-ym"), m = (F.data && F.data.planMonths || []).filter(function (x) { return x.ym === ym; })[0];
+            var childId=btn.getAttribute("data-child"), childData=F.childrenData[childId], ym = btn.getAttribute("data-ym"), m = (childData && childData.planMonths || []).filter(function (x) { return x.ym === ym; })[0];
             if (!m || m.status !== 'proposed' || !m.termsKnown || !Number.isSafeInteger(m.revision)) { F.error = '最新の提案を確認してください。'; familyRender(); return; }
-            var memo = val('pl-memo-' + ym); F.memos[F.studentId + ':' + ym] = memo;
-            F.confirm = { studentId: F.studentId, ym: ym, approve: action === "fa-planok", expectedRevision: m.revision, memo: memo }; familyRender();
+            var memo = val('pl-memo-' + childId + '-' + ym); F.memos[childId + ':' + ym] = memo;
+            F.confirm = { studentId: childId, ym: ym, approve: action === "fa-planok", expectedRevision: m.revision, memo: memo }; familyRender();
           } else if (action === "fa-cancel") { F.confirm = null; familyRender(); }
-          else if (action === "fa-decide" && F.confirm && sameId(F.confirm.studentId, F.studentId)) {
+          else if (action === "fa-decide" && F.confirm && (F.home.children||[]).some(function(c){return sameId(c.studentId,F.confirm.studentId);})) {
             var confirmation = F.confirm;
-            familyRequest("familyPlanDecide", Object.assign({ ftoken: familyToken() }, confirmation), function (res) { F.confirm = null; F.data = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); });
+            familyRequest("familyPlanDecide", Object.assign({ ftoken: familyToken() }, confirmation), function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); });
           }
         }
 
+        var familyPanels=Object.create(null);
+        function renderFamilyPanels() {
+          var active=Object.create(null), section=parentSection();
+          (F.home.children||[]).forEach(function(c){active[JSON.stringify([familyToken(),c.studentId])]=true;});
+          Object.keys(familyPanels).forEach(function(key){familyPanels[key].reads.clear();});
+          familyVisibleChildren().forEach(function(c,index){
+            var host=document.getElementById('family-child-'+index);
+            if(!host || !F.childrenData[c.studentId])return;
+            var key=JSON.stringify([familyToken(),c.studentId]);active[key]=true;
+            var panel=familyPanels[key] || (familyPanels[key]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
+            var token=familyToken(); var call=function(op,payload){return apiPost(Object.assign({},payload,{ftoken:token,studentId:c.studentId,action:'learningService',op:op}));};
+            if(section==='records')panel.reads.mount(host,call,key);else panel.reads.clear();
+            if(['contacts','grades','schedule'].indexOf(section)>=0)panel.services.mount(host,{key:key,teacher:false,panel:section==='grades'?'exams':section==='schedule'?'cancel':'messages',call:call});
+          });
+          Object.keys(familyPanels).forEach(function(key){if(!active[key]){familyPanels[key].services.clear();familyPanels[key].reads.clear();}});
+        }
         function render() {
           renderStudent(); if(wishReview && wishReview.key===myKey()) app.innerHTML=wishReviewHTML();
           if(!window.StepwiseServices)return;
+          if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }
+          Object.keys(familyPanels).forEach(function(key){familyPanels[key].services.clear();familyPanels[key].reads.clear();});
           var page=route(),auth=null;
           if(!wishReview&&!previewK){
-            if(page==='family'&&F.home&&F.step==='home'&&F.data&&F.studentId)auth={ftoken:familyToken(),studentId:F.studentId};
-            else if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
+            if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
             else if(['home','schedule','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
           }
           if(window.StepwiseLessonRead){
@@ -1290,14 +1327,14 @@
 
         app.addEventListener("change", function (ev) {
           var el = ev.target;
-          if (el && el.id === "fa-child") { familyLoadChild(el.value); return; }
+          if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
           if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
           if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; } return; }
           if (!el || el.getAttribute("data-action") !== "taskdone") return;
           studentAction({ action: "taskDone", k: myKey(), taskId: el.getAttribute("data-id"), done: el.checked }, el.checked ? "できた! ✓" : "未完了に戻しました");
         });
 
-        app.addEventListener("input", function (ev) { if (taskDraftInput(ev.target)) return; var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) { if (route() === 'family') { F.memos[F.studentId + ':' + ym] = ev.target.value; F.confirm = null; } else parentPlanMemos[myKey() + ":" + ym] = ev.target.value; } if (ev.target && ev.target.id === 'fa-email') F.email = ev.target.value; if (ev.target && ev.target.id === 'se-email') SE.email = ev.target.value; });
+        app.addEventListener("input", function (ev) { if (taskDraftInput(ev.target)) return; var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) { if (route() === 'family') { F.memos[ev.target.getAttribute('data-child') + ':' + ym] = ev.target.value; F.confirm = null; } else parentPlanMemos[myKey() + ":" + ym] = ev.target.value; } if (ev.target && ev.target.id === 'fa-email') F.email = ev.target.value; if (ev.target && ev.target.id === 'se-email') SE.email = ev.target.value; });
 
         /* ---------- 起動 ---------- */
         window.addEventListener("beforeunload", function (ev) { if (Object.keys(acceptBatches).some(function (k) { return !!acceptBatches[k].pending; })) { ev.preventDefault(); ev.returnValue = ""; } });

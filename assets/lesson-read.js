@@ -1,5 +1,6 @@
 (function(root){
  'use strict';
+ function create(){
  var current=null;
  function clear(){if(current){current.host.removeEventListener('toggle',current.listener,true);current=null;}}
  function mount(host,call,scope){
@@ -15,5 +16,7 @@
   host.addEventListener('toggle',state.listener,true);
   call('recordReadStatus',{}).then(function(res){if(current===state)adopt(res);}).catch(function(){if(current===state)host.querySelectorAll('[data-parent-record]').forEach(function(el){label(el,'状態を取得できませんでした');});});
  }
- root.StepwiseLessonRead={mount:mount,clear:clear};
+ return {mount:mount,clear:clear};
+ }
+ root.StepwiseLessonRead=create();root.StepwiseLessonRead.create=create;
 })(window);

@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 function ui(){
  const handlers={},host=()=>({innerHTML:'',style:{},querySelectorAll:()=>[]}),app={appendChild(x){this.host=x;}},requests=[];
  const sandbox={window:{addEventListener:(name,fn)=>handlers[name]=fn},document:{createElement:host,addEventListener:(name,fn)=>handlers[name]=fn},crypto:{randomUUID:()=> 'synthetic-id-0001'},confirm:()=>true,Date,console,setTimeout,clearTimeout};vm.createContext(sandbox);
- const source=fs.readFileSync('assets/learning-services.js','utf8').replace('window.StepwiseServices={','window._test={state:function(){return current;},paint:paint,run:run};window.StepwiseServices={');vm.runInContext(source,sandbox);
+ const source=fs.readFileSync('assets/learning-services.js','utf8').replace('return {mount:mount,clear:', 'window._test={state:function(){return current;},paint:paint,run:run};return {mount:mount,clear:');vm.runInContext(source,sandbox);
  const mount=(key='student-a',teacher=false)=>sandbox.window.StepwiseServices.mount(app,{key,teacher,call:(op,payload)=>new Promise((resolve,reject)=>requests.push({op,payload,resolve,reject}))});
  return {mount,app,requests,api:sandbox.window.StepwiseServices,t:sandbox.window._test,handlers};
 }

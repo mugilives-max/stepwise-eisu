@@ -1,5 +1,6 @@
 (function () {
   'use strict';
+  function create(){
   var current=null;
   var esc=function(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
   var stamp=function(v){return v?new Date(v).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'';};
@@ -62,5 +63,7 @@
   function run(s,op,payload,done,reload){s.busy=true;s.error='';paint(s);call(s,op,payload).then(function(r){if(current!==s)return;s.busy=false;done(r);if(reload!==false)load(s);else paint(s);}).catch(function(e){if(current!==s)return;s.busy=false;s.error=e.message;paint(s);});}
   window.addEventListener('beforeunload',function(e){if(current&&(current.busy||current.draft||current.message.body||current.cancel.reason||Object.keys(current.replyDrafts).length)){e.preventDefault();e.returnValue='';}});
   document.addEventListener('click',function(e){var a=e.target.closest('a[href]');if(a&&current&&(current.draft||current.message.body||current.cancel.reason||Object.keys(current.replyDrafts).length)){if(!confirm('入力中の内容があります。移動すると失われる場合があります。移動しますか？')){e.preventDefault();e.stopImmediatePropagation();}}},true);
-  window.StepwiseServices={mount:mount,clear:function(){current=null;}};
+  return {mount:mount,clear:function(){current=null;}};
+  }
+  window.StepwiseServices=create();window.StepwiseServices.create=create;
 })();
