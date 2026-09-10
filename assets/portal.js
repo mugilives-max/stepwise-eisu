@@ -905,7 +905,8 @@
           }
 
           var pms = d.planMonths || [];
-          html += '<h2>授業回数と料金の承認</h2>';
+          var approvalHelpId='approval-help-'+encodeURIComponent(childId||'parent');
+          html += '<h2>授業回数と料金の承認<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業回数と料金の承認について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その月に実施できる授業回数の上限を確認するものです。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、事前にキャンセルが成立した授業の料金は発生しません。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
           if (!pms.length) html += '<div class="empty">承認をお願いする予定はいまありません</div>';
           else {
             html += '<div class="card">';
@@ -1252,6 +1253,7 @@
           var btn = ev.target.closest("[data-action]");
           if (!btn || btn.disabled) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
+          if(act==='approval-help'){var help=document.getElementById(btn.getAttribute('aria-controls'));if(help){help.hidden=!help.hidden;btn.setAttribute('aria-expanded',String(!help.hidden));}return;}
           if (act.indexOf("fa-") === 0) { ev.preventDefault(); familyClick(act, btn); return; }
           if (act.indexOf('se-') === 0) { ev.preventDefault(); if (act === 'se-askremove') { SE.removeConfirm = true; render(); } else if (act === 'se-cancel') { SE.removeConfirm = false; render(); } else if (act === 'se-back') { ++SE.seq; SE.challenge = ''; SE.error = ''; SE.message = ''; render(); if (myKey() && !S) loadState().catch(function () { toast('元の生徒専用ページを開き直してください'); }); } else studentEmailSend({'se-verify':'studentEmailVerify','se-resend':'studentEmailResend','se-remove':'studentEmailRemove'}[act]); return; }
           switch (act) {

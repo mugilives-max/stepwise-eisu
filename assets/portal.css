@@ -165,4 +165,6 @@
       .tabs:empty { display: none; }
       .tabs a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 7px 12px; border-radius: 8px; white-space: nowrap; }
       .tabs a.on { background: var(--soft); color: var(--primary); font-weight: 700; }
-    
+
+      .approval-help-button { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: #e5e7eb; color: #59616b; font-size: 16px; font-weight: 700; cursor: pointer; }
+      .approval-help-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
