@@ -100,9 +100,9 @@ test('late family data cannot replace the student page after route departure', a
 });
 
 test('teacher family creation confirms exact children, reveals invitation once, and never caches it', async () => {
-  const ui = await teacherReady(); ui.click('family-single',{'data-id':'child-a'});
-  assert.equal(ui.requests.length, 2); assert.match(ui.html(), /1人の生徒グループ/); assert.equal(ui.confirms(), 0);
-  ui.click('family-confirm'); assert.equal(ui.requests.at(-1).body.studentId, 'child-a'); assert.equal(ui.requests.at(-1).body.op, 'familyEnsureGroup');
+  const ui = await teacherReady(familyList({families:[{id:'group-a',label:'【テスト】きょうだい',children:[{studentId:'child-a'},{studentId:'child-b'}]}]})); ui.click('family-invite',{'data-id':'group-a'});
+  assert.equal(ui.requests.length, 2); assert.match(ui.html(), /新しいコードを発行/); assert.equal(ui.confirms(), 0);
+  ui.click('family-confirm'); assert.equal(ui.requests.at(-1).body.familyId, 'group-a'); assert.equal(ui.requests.at(-1).body.op, 'familyInvite');
   ui.requests.at(-1).reply({ ok: true, family: { label: '【テスト】きょうだい' }, inviteCode: 'fi1.synthetic.private-invite', expiresAt: 1790000000000 }); await flush();
   ui.requests.at(-1).reply(familyList()); await flush(); assert.match(ui.html(), /private-invite/);
   assert.equal(JSON.stringify(ui.writes).includes('private-invite'), false); assert.equal((ui.local.get('sw_kanri_c') || '').includes('private-invite'), false); assert.equal(JSON.stringify(ui.logs).includes('private-invite'), false);
@@ -110,7 +110,7 @@ test('teacher family creation confirms exact children, reveals invitation once, 
 });
 
 test('teacher notification retries exclude uncertain and nonretryable authentication emails, and pending families can stop', async () => {
-  const ui = await teacherReady(familyList({ families: [{ id: 'family-a', label: '【テスト】家族', status: 'pending', children: [], configured: false }], notifications: [
+  const ui = await teacherReady(familyList({ families: [{ id: 'family-a', label: '【テスト】家族', status: 'pending', children: [{studentId:'child-a'},{studentId:'child-b'}], configured: false }], notifications: [
     { id: 'uncertain', kind: 'invoiceCreated', status: 'uncertain', retryable: false }, { id: 'auth-failed', kind: 'emailVerification', status: 'failed', retryable: false }, { id: 'invoice-failed', kind: 'invoiceCreated', status: 'failed', retryable: true }
   ] }));
   assert.equal((ui.html().match(/data-action="family-notify"/g) || []).length, 1); assert.match(ui.html(), /保護者ページから/);
@@ -145,10 +145,8 @@ test('an expired verification link provides a working resend route without reloa
   assert.equal(ui.requests.at(-1).body.challenge, undefined);
 });
 
-test('student entry preselects one child and existing-parent linking preserves siblings',async()=>{
- const ui=createUI('admin',{hash:'#families?student=child-b'});ui.requests[0].reply(familyList({families:[{id:'family-a',label:'保護者A',status:'active',configured:true,verifiedAt:'2026-09-01',children:[{studentId:'child-a',name:'子A'}]}]}));await flush();
- ui.click('family-single',{'data-id':'child-b'});ui.click('family-confirm');assert.equal(ui.requests.at(-1).body.studentId,'child-b');
- const linked=createUI('admin',{hash:'#families?student=child-b'});linked.requests[0].reply(familyList({families:[{id:'family-a',label:'保護者A',status:'active',configured:true,children:[{studentId:'child-a',name:'子A'}]}]}));await flush();linked.click('family-link',{'data-id':'family-a'});linked.click('family-confirm');assert.equal(linked.requests.at(-1).body.studentId,'child-b');assert.equal(linked.requests.at(-1).body.familyId,'family-a');assert.equal(linked.requests.at(-1).body.sourceFamilyId,'');assert.equal(linked.requests.at(-1).body.op,'familyMoveStudent');
+test('student entry links a student to an existing multi-student group',async()=>{
+ const linked=createUI('admin',{hash:'#families?student=child-b'});linked.requests[0].reply(familyList({families:[{id:'family-a',label:'保護者A',status:'active',configured:true,children:[{studentId:'child-a',name:'子A'},{studentId:'child-c',name:'子C'}]}]}));await flush();linked.click('family-link',{'data-id':'family-a'});linked.click('family-confirm');assert.equal(linked.requests.at(-1).body.studentId,'child-b');assert.equal(linked.requests.at(-1).body.familyId,'family-a');assert.equal(linked.requests.at(-1).body.sourceFamilyId,'');assert.equal(linked.requests.at(-1).body.op,'familyMoveStudent');
 });
 test('invite link opens registration, scrubs URL and survives validation errors without logging in another account',()=>{
  const ui=createUI('student',{hash:'#family?invite=fi1.synthetic.secret',session:new Map([['sw_ft_v1','other-session']])});assert.equal(ui.location.hash,'#family');assert.equal(ui.requests.length,0);assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');ui.input('fa-email','');ui.submit('family-auth-form');assert.equal(ui.el('fa-invite').value,'fi1.synthetic.secret');assert.equal(JSON.stringify(ui.writes).includes('synthetic.secret'),false);
@@ -189,7 +187,7 @@ test('verification lookup network failure offers reload, never resends mail or v
 
  test('student list includes parent management below students and keeps legacy links usable', async()=>{
   const ui=await teacherReady();
-  assert.ok(ui.html().indexOf('生徒を追加') < ui.html().indexOf('保護者・通知'));
+  assert.ok(ui.html().indexOf('生徒を追加') < ui.html().indexOf('グループの管理'));
   assert.match(ui.html(),/通知の状況/);
   assert.doesNotMatch(ui.el('nav').innerHTML, /保護者・通知/);
   assert.match(ui.el('nav').innerHTML, /href="#students" class="on"/);
@@ -219,4 +217,9 @@ test('student family settings shows only other members of the current group',asy
  ui.requests[1].reply(familyList({families:[{id:'g1',label:'【テスト】家族A',children:[{studentId:'test-a',name:'本人'},{studentId:'sibling',name:'【テスト】弟'}]},{id:'g2',label:'別家族',children:[{studentId:'unrelated',name:'関係ない生徒'}]}]}));await flush();
  const section=ui.html().split('<h2>家族設定</h2>')[1];assert.match(section,/【テスト】弟/);assert.doesNotMatch(section,/本人|関係ない生徒|別家族/);assert.match(section,/#s=sibling&tab=settings/);
  ui.navigate('#s=sibling&tab=settings');ui.requests.findLast(r=>r.body.op==='kanriStudent').reply({ok:true,data:settingsCard({id:'sibling'})});ui.requests.findLast(r=>r.body.op==='familyList').reply(familyList({families:[{id:'single',label:'単独',children:[{studentId:'sibling',name:'本人'}]}]}));await flush();assert.match(ui.html(),/同じグループの他の生徒はいません/);
+});
+
+test('group management excludes single and empty groups',async()=>{
+ const ui=await teacherReady(familyList({families:[{id:'one',label:'単独グループ',children:[{studentId:'child-a'}]},{id:'empty',label:'空グループ',children:[]},{id:'two',label:'兄弟グループ',children:[{studentId:'child-a'},{studentId:'child-b'}]}]}));
+ assert.match(ui.html(),/兄弟グループ/);assert.doesNotMatch(ui.html(),/単独グループ|空グループ|family-single/);
 });

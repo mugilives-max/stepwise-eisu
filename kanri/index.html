@@ -1349,11 +1349,11 @@
         }
         function renderFamilies(embedded) {
           renderNav(); var d = FT.auth === token() ? FT.data : null, dis = FT.busy ? ' disabled' : '';
-          var h = '<h2 id="parent-notifications">保護者・通知</h2><p class="sub">生徒グループごとに保護者ログインを1つ使います。父母などが同じログインを複数端末で共有できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
+          var h = '<h2 id="parent-notifications">グループの管理</h2><p class="sub">生徒グループごとに保護者ログインを1つ使います。父母などが同じログインを複数端末で共有できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
           h += familyInviteHtml();
           if (!d) { h += FT.busy ? '<p>読み込んでいます…</p>' : ''; if (embedded) return h; app.innerHTML = h; return; }
-          var students = d.students || [], families = d.families || [], targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
+          var students = d.students || [], families = (d.families || []).filter(function(f){return new Set((f.children||[]).map(function(c){return String(c.studentId);})).size >= 2;}), targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
           if(targetStudent) h += '<div class="card"><h2>'+esc(targetStudent.name)+'さんの保護者</h2><p>1人でも同じグループとして扱います。兄弟は下の移動先を選んでまとめてください。移動先の保護者ログインを引き続き使います。</p></div>';
           if (FT.confirm) h += '<div class="card" role="region" aria-label="家族の変更確認"><strong>' + esc(FT.confirm.label) + '</strong><p>' + esc(FT.confirm.description) + '</p><button class="btn-primary" data-action="family-confirm"' + dis + '>この内容で実行</button> <button class="btn-quiet" data-action="family-cancel"' + dis + '>やめる</button></div>';
           if (FT.edit) {
@@ -1362,8 +1362,7 @@
             if (!e.id) h += '<label for="family-label">グループ名</label><input id="family-label" data-family-label maxlength="80" value="' + esc(e.label) + '" placeholder="例：山田 花子（母）">';
             h += '<fieldset><legend>このグループの生徒</legend>' + students.map(function (s) { return '<label style="display:block"><input type="checkbox" data-family-child="' + esc(s.id) + '"' + (e.children[s.id] ? ' checked' : '') + (FT.busy || s.active === false && !e.children[s.id] ? ' disabled' : '') + '> ' + esc(s.name) + (s.active === false ? '（停止中）' : '') + '</label>'; }).join('') + '</fieldset><p class="note">子どもを外すと、この家族から閲覧できなくなり、現在の家族ログインも失効します。実際の保護者関係を確認してください。</p><button class="btn-primary" data-action="family-save"' + dis + '>変更内容を確認</button> <button class="btn-quiet" data-action="family-editcancel"' + dis + '>閉じる</button></div>';
           }
-          var grouped={};families.forEach(function(f){(f.children||[]).forEach(function(c){grouped[c.studentId]=true;});});
-          students.filter(function(x){return x.active&&!grouped[x.id];}).forEach(function(x){h += '<div class="card"><strong>'+esc(x.name)+'</strong><p>1人のグループで保護者の登録案内を作成できます。</p><button class="btn-primary" data-action="family-single" data-id="'+esc(x.id)+'"'+dis+'>保護者の登録案内を作成</button></div>';});
+          if(!families.length) h += '<p>生徒が2人以上のグループはありません。</p>';
           families.forEach(function (f) {
             var linked=(f.children || []).some(function(x){return targetStudent && sameId(x.studentId,targetStudent.id);});
             var state=f.status==='disabled'?'利用停止':f.status==='active'?'利用中':f.verifiedAt?'パスワード設定待ち':f.email?'メール確認待ち':f.inviteExpiresAt>Date.now()?'登録待ち':'登録案内が必要';
