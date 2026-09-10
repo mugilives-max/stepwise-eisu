@@ -684,6 +684,8 @@
           app.innerHTML = html;
         }
 
+        var newStudentDraft = null;
+        document.addEventListener("input", function(ev) { if(newStudentDraft && (ev.target.id==='n-name'||ev.target.id==='n-email')) newStudentDraft[ev.target.id==='n-name'?'name':'email']=ev.target.value; });
         function renderStudents() {
           renderNav();
           var html = '<h1>生徒一覧</h1><p class="sub">タップするとカルテを開きます</p><div class="grid" style="margin-top:14px">';
@@ -692,9 +694,8 @@
             html += '<div class="muted small">' + esc([s.grade, s.school].filter(Boolean).join("・") || "学年・学校 未登録") + '</div>';
             html += '<div class="small" style="margin-top:8px">今月 ' + s.doneThisMonth + '回・' + yen(s.feeThisMonth) + (s.unpaid ? ' <span class="tag red">未入金</span>' : "") + '</div></a>';
           });
-          html += '</div>';
-          html += '<h2>生徒を追加</h2><div class="card"><div class="row"><input type="text" id="n-name" placeholder="生徒の名前" style="flex:1;min-width:140px"><input type="email" id="n-email" placeholder="メール(任意)" style="flex:1;min-width:160px"><button class="btn-primary" data-action="addstudent"' + (busy ? " disabled" : "") + '>追加</button></div>' +
-            '<div class="note">追加すると専用リンク(予約ページのURL)が発行されます。カルテの「予約ページの設定」からコピーしてLINEで送ってください。名前が【テスト】で始まる生徒はカレンダー・Meet・メールが動かないテスト用になります。</div></div>';
+          html += '<button type="button" class="card scard" data-action="newstudent-open" style="text-align:center;min-height:120px;color:#1013b6;cursor:pointer" aria-label="生徒を追加"><span aria-hidden="true" style="font-size:32px">＋</span><div class="nm">生徒を追加</div></button></div>';
+          if(newStudentDraft) html += '<div class="card" role="region" aria-label="生徒を追加"><h2>生徒を追加</h2><label for="n-name">生徒の名前</label><input type="text" id="n-name" value="'+esc(newStudentDraft.name)+'"'+(busy?' disabled':'')+'><label for="n-email">メールアドレス（任意）</label><input type="email" id="n-email" value="'+esc(newStudentDraft.email)+'"'+(busy?' disabled':'')+'><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addstudent"'+(busy?' disabled':'')+'>追加</button><button class="btn-quiet" data-action="newstudent-close"'+(busy?' disabled':'')+'>閉じる</button></div></div>';
           var ina = D.inactive || [];
           if (ina.length) {
             html += '<h2>予約ページから外した生徒 <span class="cnt">' + ina.length + '人</span></h2><div class="card">';
@@ -1348,7 +1349,7 @@
         }
         function renderFamilies(embedded) {
           renderNav(); var d = FT.auth === token() ? FT.data : null, dis = FT.busy ? ' disabled' : '';
-          var h = '<h2 id="parent-notifications">グループの管理</h2><p class="sub">同じグループに設定されている生徒を表示します。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
+          var h = '<h2 id="parent-notifications">グループの管理</h2><p class="sub">同じグループに設定されている生徒を表示します。</p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
           if (!d) { h += FT.busy ? '<p>読み込んでいます…</p>' : ''; if (embedded) return h; app.innerHTML = h; return; }
           var students = d.students || [], families = (d.families || []).filter(function(f){return new Set((f.children||[]).map(function(c){return String(c.studentId);})).size >= 2;}), targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
@@ -2035,12 +2036,15 @@
                 cur.meetings.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
               });
               break;
+            case "newstudent-open": if(!newStudentDraft)newStudentDraft={name:'',email:''};render();document.getElementById('n-name').focus();break;
+            case "newstudent-close": if(!busy){newStudentDraft=null;render();}break;
             case "addstudent":
+              if(busy || !newStudentDraft) return;
               var nn = val("n-name"), ne = val("n-email");
               if (!nn) { toast("名前を入れてください"); return; }
               busy = true; syncMsg = "追加中…"; render();
               admin("addStudent", { name: nn, email: ne }).then(function (res) {
-                busy = false; syncMsg = ""; toast(nn + "さんを追加しました");
+                busy = false; syncMsg = ""; newStudentDraft=null; toast(nn + "さんを追加しました");
                 if (res.data && res.data.lessons) {
                   cur = res.data; cachePut(keyOf({page:"student",id:res.data.id,section:"overview"}), res.data); skipLoad = true;
                   location.hash = "#s=" + encodeURIComponent(res.data.id);

@@ -204,3 +204,9 @@ test('group list displays members without account or billing details',async()=>{
  const ui=await teacherReady(familyList({families:[{id:'two',label:'アカウント名',email:'private@example.invalid',configured:true,verifiedAt:'2026-09-10',children:[{studentId:'a',name:'生徒A'},{studentId:'b',name:'生徒B'}]}]}));
  assert.match(ui.html(),/生徒A/);assert.match(ui.html(),/生徒B/);assert.doesNotMatch(ui.html(),/private@example|アカウント名|メール確認済み|最終ログイン|family-invite|family-active|family-help/);
 });
+test('student add card opens on demand and retains draft after a failed save',async()=>{
+ const ui=await teacherReady();assert.doesNotMatch(ui.html(),/id="n-name"|一覧を更新/);
+ ui.click('newstudent-open');ui.input('n-name','【テスト】追加');ui.input('n-email','test@example.invalid');ui.click('addstudent');
+ const request=ui.requests.at(-1);assert.equal(request.body.op,'addStudent');assert.equal(request.body.name,'【テスト】追加');assert.equal(request.body.email,'test@example.invalid');
+ request.fail();await flush();assert.equal(ui.el('n-name').value,'【テスト】追加');assert.equal(ui.el('n-email').value,'test@example.invalid');ui.click('newstudent-close');assert.doesNotMatch(ui.html(),/id="n-name"/);
+});
