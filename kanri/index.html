@@ -1332,7 +1332,7 @@
         function familyAdminRender() { var r=route(); if (r.page === "families" || r.page === "students" || r.page === "student" && r.section === "settings" && cur && sameId(cur.id,r.id)) render(); }
         function loadFamilies() {
           var seq = ++FT.seq, auth = token(); FT.busy = true; FT.error = ""; familyAdminRender();
-          admin("familyList", {}).then(function (res) {
+          admin("familyList", {view:"groups",studentId:route().page==="student"?route().id:""}).then(function (res) {
             if (seq !== FT.seq || auth !== token()) return;
             FT.data = res; FT.auth = auth; FT.busy = false; authM = "ok"; familyAdminRender();
           }).catch(function (er) { if (seq !== FT.seq || auth !== token()) return; FT.busy = false; FT.error = er.message; familyAdminRender(); });

@@ -291,6 +291,16 @@ function familyNotifySafe_(kind,studentId,eventKey,detail) {
     return {ok:true,statuses:states};
   }catch(e){return {ok:false,warning:'保護者通知の記録を確認してください'};}
 }
+// Group membership only: filter links before building student/group details.
+function familyGroups_(studentId) {
+  var links=familyRows_('familyLinks'), members=Object.create(null);
+  links.forEach(function(l){if(String(l.active)!=='true')return;var key=String(l.familyId),id=String(l.studentId);var ids=members[key]||(members[key]=[]);if(ids.indexOf(id)>=0)throw new Error('家族と生徒の紐付けが重複しています');ids.push(id);});
+  var eligible=Object.keys(members).filter(function(id){return studentId?members[id].indexOf(String(studentId))>=0:members[id].length>=2;});
+  var students=readRows_('students').map(function(s){return {id:String(s.id),name:String(s.name),active:String(s.active)!=='false'};}),byId=Object.create(null);
+  students.forEach(function(s){byId[s.id]=s;});
+  var groups=familyRows_('familyAccounts').filter(function(a){return eligible.indexOf(String(a.id))>=0;}).map(function(a){return {id:String(a.id),label:String(a.label),status:String(a.status),children:members[String(a.id)].filter(function(id){return !!byId[id];}).map(function(id){var s=byId[id];return {studentId:s.id,name:s.name,active:s.active};})};});
+  return {ok:true,families:groups,students:students};
+}
 function familyList_() {
   var families=familyRows_('familyAccounts').map(familyView_),names={};families.forEach(function(a){names[a.id]=a.label;});
   return {ok:true,families:families,students:readRows_('students').map(function(s){return {id:String(s.id),name:String(s.name),active:String(s.active)!=='false'};}),notifications:familyRows_('familyOutbox').slice(-100).reverse().map(function(r){
@@ -346,7 +356,7 @@ function familyMoveStudent_(req) {
 }
 function familyAdmin_(req) {
   if(authMode_()!=='account'||!tokenOk_(req.token))return {error:'先生アカウントでログインし直してください',badAuth:true};
-  if(req.op==='familyList')return familyList_();
+  if(req.op==='familyList')return req.view==='groups'?familyGroups_(String(req.studentId||'')):familyList_();
   if(req.op==='familyEnsureGroup'){var ensured=familyEnsureGroup_(String(req.studentId||''));if(ensured.error)return ensured;return familyInvite_(familyAccount_(ensured.family.id));}
   if(req.op==='familyMoveStudent')return familyMoveStudent_(req);
   if(req.op==='familyCreate'){
