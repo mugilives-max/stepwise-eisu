@@ -131,8 +131,8 @@ test('teacher mail retries display a confirmation and send only the selected ret
 });
 
 test('a failed verification mail is reported as unsent while registration remains saved', async () => {
-  const ui = createUI('student', { hash: '#family' }); ui.click('fa-mode', { 'data-step': 'register' });
-  ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-invite', 'fi1.synthetic.test'); ui.submit('family-auth-form');
+  const ui = createUI('student', { hash: '#family?invite=fi1.synthetic.test' });
+  ui.input('fa-email', 'parent@example.invalid'); ui.submit('family-auth-form');
   ui.requests.at(-1).reply({ ok: true, verificationRequired: true, mailStatus: 'failed' }); await flush();
   assert.match(ui.html(), /登録は保存しましたが確認メールを送れませんでした/); assert.equal(ui.session.has('sw_ft_v1'), false);
 });
