@@ -1050,7 +1050,7 @@
             F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; F.studentId=""; F.childrenData=Object.create(null); if (children.length) familyLoadChild();
         }
         function renderFamily() {
-          var dis = F.busy ? " disabled" : "", h = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h1>保護者ページ</h1>' + (F.home && familyToken() ? '<button class="btn-quiet btn-sm" data-action="fa-logout"' + dis + '>ログアウト</button>' : '') + '</div><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
+          var dis = F.busy ? " disabled" : "", h = '<h1>保護者ページ</h1><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
           if (F.error) h += '<p class="parent-error" role="alert">' + esc(F.error) + '</p>';
           if (F.message) h += '<p class="card" role="status">' + esc(F.message) + '</p>';
           if (F.step === "logout" || ssGet("sw_ft_v1:logout")) { app.innerHTML = h + '<div class="card"><p>ログアウトを完了するにはサーバーの確認が必要です。</p><button class="btn-primary" data-action="fa-logout"' + dis + '>ログアウトを再試行</button></div>'; return; }
@@ -1131,7 +1131,10 @@
           });
           Object.keys(familyPanels).forEach(function(key){if(!active[key]){familyPanels[key].services.clear();familyPanels[key].reads.clear();}});
         }
+        var parentHeaderActions=document.getElementById('parent-header-actions');
+        if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action="fa-logout"]');if(btn)familyClick('fa-logout',btn);});
         function render() {
+          if(parentHeaderActions)parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" style="white-space:nowrap" data-action="fa-logout"'+(F.busy?' disabled':'')+'>ログアウト</button>':'';
           renderStudent(); if(wishReview && wishReview.key===myKey()) app.innerHTML=wishReviewHTML();
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }

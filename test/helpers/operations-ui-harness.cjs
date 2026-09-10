@@ -29,7 +29,7 @@ function createUI(kind = 'student', options = {}) {
       }
     } }); return e;
   }
-  ['app', 'nav', 'tabs', 'toast'].forEach(id => elements.set(id, element(id)));
+  ['app', 'nav', 'tabs', 'toast', 'parent-header-actions'].forEach(id => elements.set(id, element(id)));
   const storage = map => ({ getItem: k => map.get(k) ?? null, setItem(k, v) { writes.push([k, String(v)]); map.set(k, String(v)); }, removeItem: k => map.delete(k) });
   let requestId = 0, confirmCount = 0;
   const location = { hash: options.hash || (kind === 'admin' ? '#s=test-a' : '#home'), search: options.search || '', pathname: kind === 'admin' ? '/kanri/' : '/yoyaku/', href: 'https://example.invalid/' + (kind === 'admin' ? 'kanri/' : 'yoyaku/') };
@@ -47,7 +47,7 @@ function createUI(kind = 'student', options = {}) {
     input(id, value) { const el = elements.get(id); assert.ok(el, 'visible input: ' + id); el.value = value; emit('document:input', { target: el }); emit('app:input', { target: el }); },
     change(id, value) { const el = elements.get(id); assert.ok(el, 'visible input: ' + id); el.value = value; emit('document:change', { target: el }); emit('app:change', { target: el }); },
     check(attribute, id, checked) { const tag = [...ui.html().matchAll(/<input\b[^>]*>/g)].find(m => attrs(m[0])[attribute] === id); assert.ok(tag, 'visible checkbox: ' + id); const el = element('', attrs(tag[0])); el.checked = checked; if (el.disabled) return; emit('document:change', { target: el }); emit('app:change', { target: el }); },
-    click(action, wanted = {}) { const tags = [...(ui.html() + [...elements.values()].map(e => e.innerHTML).join('')).matchAll(/<[^>]+\bdata-action="([^"]+)"[^>]*>/g)]; const tag = tags.find(m => m[1] === action && Object.keys(wanted).every(k => attrs(m[0])[k] === wanted[k])); assert.ok(tag, 'visible action: ' + action); const btn = element('', attrs(tag[0])); if (!btn.disabled) emit((kind === 'admin' ? 'document' : 'app') + ':click', { target: { closest: () => btn }, preventDefault() {} }); },
+    click(action, wanted = {}) { const tags = [...(ui.html() + [...elements.values()].map(e => e.innerHTML).join('')).matchAll(/<[^>]+\bdata-action="([^"]+)"[^>]*>/g)]; const tag = tags.find(m => m[1] === action && Object.keys(wanted).every(k => attrs(m[0])[k] === wanted[k])); assert.ok(tag, 'visible action: ' + action); const btn = element('', attrs(tag[0])); if (!btn.disabled) emit((kind === 'admin' ? 'document' : action==='fa-logout' && elements.get('parent-header-actions').innerHTML.includes('fa-logout') ? 'parent-header-actions' : 'app') + ':click', { target: { closest: () => btn }, preventDefault() {} }); },
     submit(id) { assert.ok(elements.has(id), 'visible form: ' + id); emit('app:submit', { target: elements.get(id), preventDefault() {} }); },
     navigate(hash) { location.hash = hash; emit('window:hashchange', {}); },
     switchStudent(k) { const oldValue = local.get('sw_k'); local.set('sw_k', k); emit('window:storage', { key: 'sw_k', oldValue, newValue: k }); },
