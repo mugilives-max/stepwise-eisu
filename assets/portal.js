@@ -1053,7 +1053,7 @@
             F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; F.studentId=""; F.childrenData=Object.create(null); if (children.length) familyLoadChild(); else loadFamilyNotices();
         }
         function renderFamily() {
-          var dis = F.busy ? " disabled" : "", h = '<h1>保護者ページ</h1><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
+          var dis = F.busy ? " disabled" : "", h = '';
           if (F.error) h += '<p class="parent-error" role="alert">' + esc(F.error) + '</p>';
           if (F.message) h += '<p class="card" role="status">' + esc(F.message) + '</p>';
           if (F.step === "logout" || ssGet("sw_ft_v1:logout")) { app.innerHTML = h + '<div class="card"><p>ログアウトを完了するにはサーバーの確認が必要です。</p><button class="btn-primary" data-action="fa-logout"' + dis + '>ログアウトを再試行</button></div>'; return; }
