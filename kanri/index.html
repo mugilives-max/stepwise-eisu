@@ -536,7 +536,7 @@
           var unset = authMode === "unset";
           var html = '<h1 style="margin-top:28px">管理画面</h1>';
           if (unset || resetStep) {
-            html += '<p class="sub">' + (unset ? 'パスワードが未設定です。先生のメール(mugilives@gmail.com)に届くコードで設定します。' : 'パスワードの再設定。先生のメールに届く6桁のコードで新しいパスワードを設定します。') + '</p>';
+            html += '<p class="sub">' + (unset ? 'パスワードが未設定です。先生のメールに届くコードで設定します。' : 'パスワードの再設定。先生のメールに届く6桁のコードで新しいパスワードを設定します。') + '</p>';
             html += '<div class="card" style="margin-top:14px;max-width:460px">';
             if (resetStep !== "confirm") {
               html += '<div class="row"><button class="btn-primary" data-action="resetreq"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "コードをメールで送る") + '</button>' + (unset ? "" : '<button class="btn-quiet btn-sm" data-action="resetback">ログインに戻る</button>') + '</div>';
@@ -555,7 +555,7 @@
               '<label for="a-email">メール</label><input type="email" id="a-email" autocomplete="username">' +
               '<label for="a-pass">パスワード</label><input type="password" id="a-pass" autocomplete="current-password">' +
               '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="login"' + (busy ? " disabled" : "") + ">" + (busy ? "ログイン中…" : "ログイン") + '</button><button class="btn-quiet btn-sm" data-action="resetstart">パスワードを忘れた</button></div>' +
-              '<div class="note">「メールアドレスまたはパスワードがちがいます」と出るときは、メール欄が登録したアドレス(mugilives@gmail.com)と完全に一致しているか、自動入力で別のアドレスが入っていないかを確認してください。5回失敗すると10分間ロックされます。</div></div>';
+              '</div>';
           }
           app.innerHTML = html;
           var el = document.getElementById(resetStep === "confirm" ? "r-code" : "a-email"); if (el) el.focus();
