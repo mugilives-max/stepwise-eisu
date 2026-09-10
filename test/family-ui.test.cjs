@@ -109,11 +109,11 @@ test('teacher family creation confirms exact children, reveals invitation once, 
   ui.click('family-hidecode'); assert.equal(ui.html().includes('private-invite'), false);
 });
 
-test('teacher notification retries exclude uncertain and nonretryable authentication emails, and pending families can stop', async () => {
+test('group management hides notification history and pending families can stop', async () => {
   const ui = await teacherReady(familyList({ families: [{ id: 'family-a', label: '【テスト】家族', status: 'pending', children: [{studentId:'child-a'},{studentId:'child-b'}], configured: false }], notifications: [
     { id: 'uncertain', kind: 'invoiceCreated', status: 'uncertain', retryable: false }, { id: 'auth-failed', kind: 'emailVerification', status: 'failed', retryable: false }, { id: 'invoice-failed', kind: 'invoiceCreated', status: 'failed', retryable: true }
   ] }));
-  assert.equal((ui.html().match(/data-action="family-notify"/g) || []).length, 1); assert.match(ui.html(), /保護者ページから/);
+  assert.doesNotMatch(ui.html(), /通知の状況|data-action="family-notify"/);
   ui.click('family-active', { 'data-id': 'family-a' }); ui.click('family-confirm'); assert.equal(ui.requests.at(-1).body.active, false);
 });
 
@@ -122,12 +122,6 @@ test('teacher unlink sends only the final child list after explicit confirmation
   ui.click('family-edit', { 'data-id': 'family-a' }); ui.check('data-family-child', 'child-b', false); ui.click('family-save');
   assert.equal(ui.requests.length, 2); ui.click('family-confirm');
   assert.equal(ui.requests.at(-1).body.op, 'familySetChildren'); assert.equal(ui.requests.at(-1).body.familyId, 'family-a'); assert.deepEqual(ui.requests.at(-1).body.studentIds, ['child-a']);
-});
-
-test('teacher mail retries display a confirmation and send only the selected retryable notification', async () => {
-  const ui = await teacherReady(familyList({ notifications: [{ id: 'invoice-failed', familyId: 'family-a', label: '【テスト】通知対象', kind: 'invoiceCreated', status: 'failed', retryable: true }] }));
-  ui.click('family-notify', { 'data-id': 'invoice-failed' }); assert.equal(ui.requests.length, 2); assert.match(ui.html(), /確認済みメールへ/);
-  ui.click('family-confirm'); assert.equal(ui.requests.at(-1).body.op, 'familyRetryNotifications'); assert.deepEqual(ui.requests.at(-1).body.ids, ['invoice-failed']);
 });
 
 test('a failed verification mail is reported as unsent while registration remains saved', async () => {
@@ -188,7 +182,7 @@ test('verification lookup network failure offers reload, never resends mail or v
  test('student list includes parent management below students and keeps legacy links usable', async()=>{
   const ui=await teacherReady();
   assert.ok(ui.html().indexOf('生徒を追加') < ui.html().indexOf('グループの管理'));
-  assert.match(ui.html(),/通知の状況/);
+  assert.doesNotMatch(ui.html(),/通知の状況/);
   assert.doesNotMatch(ui.el('nav').innerHTML, /保護者・通知/);
   assert.match(ui.el('nav').innerHTML, /href="#students" class="on"/);
   ui.navigate('#families?student=child-a');

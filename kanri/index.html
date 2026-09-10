@@ -1372,12 +1372,6 @@
             h += '<div class="card"><h2>' + esc(f.label) + '</h2><p>' + (f.children || []).map(function (s) { return esc(s.name); }).join('・') + '</p><p>' + esc(f.email || 'メール未登録') + ' <span class="tag ' + (f.verifiedAt ? 'green' : 'amber') + '">' + (f.verifiedAt ? 'メール確認済み' : 'メール未確認') + '</span> ' + (f.configured ? 'パスワード設定済み' : '未登録') + '・' + esc({ active: '利用中', pending: f.verifiedAt ? 'パスワード設定待ち' : 'メール確認待ち', disabled: '利用停止' }[f.status] || '確認待ち') + '</p><p class="small muted">最終ログイン：' + esc(fmtAuthTime(f.lastLogin)) + '</p><div class="row"><button class="btn-quiet btn-sm" data-action="family-edit" data-id="' + esc(f.id) + '"' + dis + '>紐付ける生徒を変更</button>' + (!f.configured ? '<button class="btn-ghost btn-sm" data-action="family-invite" data-id="' + esc(f.id) + '"' + dis + '>登録案内を発行し直す</button>' : '') + '<button class="btn-quiet btn-sm" data-action="family-active" data-id="' + esc(f.id) + '"' + dis + '>' + (f.status === 'disabled' ? '利用を再開' : '利用を停止') + '</button></div></div>';
           });
           families.forEach(function(f){h += window.StepwiseReport.invoices(f.billing,f.label);});
-          h += '<h2>通知の状況</h2><p class="note">送信結果が不明な通知は自動で送り直しません。重複を避けるため、届いているか確認してください。</p>';
-          (d.notifications || []).forEach(function (n) {
-            var labels = { sent: '送信済み', pending: '送信待ち', failed: '送信失敗', uncertain: '結果不明', suppressed: 'テストのため送信省略', cancelled: '送信取消' };
-            var kind = { planProposed: '回数・料金の確認依頼', invoiceCreated: '請求', invoiceVoided: '請求取消', emailVerification: 'メール確認', passwordReset: 'パスワード再設定' }[n.kind] || '保護者への連絡';
-            h += '<div class="card"><strong>' + esc(n.label || '家族') + '</strong> ' + esc(n.ym || '') + '・' + kind + '<p>' + esc(labels[n.status] || n.status) + (n.error ? '：' + esc(n.error) : '') + '</p>' + (n.retryable ? '<button class="btn-quiet btn-sm" data-action="family-notify" data-id="' + esc(n.id) + '"' + dis + '>送信先を確認して再試行</button>' : (n.status === 'failed' || n.status === 'pending') && /emailVerification|passwordReset/.test(n.kind) ? '<p class="note">保護者ページから確認・再設定メールを再発行してください。</p>' : '') + '</div>';
-          });
           if (embedded) return h;
           app.innerHTML = h;
         }
