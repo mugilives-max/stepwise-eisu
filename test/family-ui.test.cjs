@@ -48,7 +48,7 @@ test('login uses a separate session token and clears each child before loading t
   ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-pass', 'test-family-password'); ui.submit('family-auth-form');
   ui.requests[0].reply({ ...home(), ftoken: 'test-family-token' }); await flush();
   assert.equal(ui.session.get('sw_ft_v1'), 'test-family-token'); assert.equal(ui.session.get('sw_pt_v2:test-link-a'), 'legacy-parent-token'); assert.equal(ui.requests.at(-1).body.studentId, 'child-a');
-  ui.requests.at(-1).reply({ ok: true, data: data('Aだけの表示') }); await flush(); assert.match(ui.html(), /Aだけの表示/); assert.match(ui.html(), /今後の授業/); assert.match(ui.html(), /オンライン/);
+  ui.requests.at(-1).reply({ ok: true, data: data('Aだけの表示') }); await flush(); assert.match(ui.html(), /Aだけの表示/); assert.match(ui.html(), /予定カレンダー/); assert.match(ui.html(), /オンライン/);
   assert.equal(ui.requests.at(-1).body.studentId, 'child-b');
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush(); assert.match(ui.html(), /Bだけの表示/); assert.match(ui.html(), /Aだけの表示/); const count=ui.requests.length; ui.change('fa-child','child-b'); assert.equal(ui.html().includes('Aだけの表示'),false); assert.equal(ui.requests.length,count); ui.change('fa-child',''); assert.match(ui.html(),/Aだけの表示/);
   assert.equal(JSON.stringify(ui.writes).includes('parent@example.invalid'), false);
@@ -216,4 +216,12 @@ test('all-child approval targets child B and keeps child A visible after saving'
 test('one child has no selector and failed second-child loading retains the first with retry',async()=>{
  const one=loggedUI();one.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();one.requests.at(-1).reply({ok:true,data:data('一人')});await flush();assert.equal(one.el('fa-child'),undefined);
  const ui=loggedUI();ui.requests[0].reply(home());await flush();ui.requests.at(-1).reply({ok:true,data:data('子Aを保持')});await flush();ui.requests.at(-1).fail();await flush();ui.navigate('#family/schedule');assert.match(ui.html(),/子Aを保持/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
+});
+
+
+test('parent home calendar precedes summaries, combines children, filters dates and omits teacher schedules',async()=>{
+ const ui=await readyFamily();ui.navigate('#family/home');assert.ok(ui.html().indexOf('予定カレンダー')<ui.html().indexOf('今月の授業'));
+ assert.match(ui.html(),/2026-09-10 2件/);ui.click('fa-calday',{'data-date':'2026-09-10'});assert.match(ui.html(),/9\/10.*の授業/);
+ ui.change('fa-child','child-b');assert.match(ui.html(),/2026-09-10 1件/);assert.ok(!ui.html().includes('英語 【テスト】子A'));
+ assert.ok(!ui.html().includes('先生休み'));const count=ui.requests.length;ui.click('fa-calnext');assert.match(ui.html(),/2026年10月/);assert.equal(ui.requests.length,count);ui.click('fa-calprev');assert.match(ui.html(),/2026年9月/);
 });
