@@ -1779,7 +1779,7 @@
         }
         function planInput(s, m) {
           var key = s.id + ":" + m.ym, saved = planInputs[key];
-          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: 0, via: "LINE", consentDate: today(), memo: "", dirty: false };
+          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, lessonMin: m.lessonMin || 90, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: 0, via: "LINE", consentDate: today(), memo: "", dirty: false };
           return saved;
         }
         function renderPlanCard(s) {
@@ -1791,11 +1791,12 @@
             var f = planInput(s, m), dis = busy || s.active === false, attrs = ' data-ym="' + esc(m.ym) + '"';
             h += '<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row between"><strong>' + esc(m.ym) + ' <span class="tag ' + (m.status === "approved" ? "green" : "amber") + '">' + ({ approved: "承認済み", proposed: "承認待ち", declined: "見送り", draft: "未提案", none: "計画なし" }[m.status] || "未提案") + '</span></strong><span class="small muted">' + (m.revision != null ? '第' + esc(m.revision) + '版' : "料金条件の確認が必要") + '</span></div>';
             h += '<div>' + (m.rows || []).map(function (x) { return esc(x.subject) + ' ' + esc(x.count) + '回'; }).join("、") + ' <span class="small muted">合計 ' + esc(m.total || 0) + '回' + (m.fromDefault ? "・既定からの案" : "") + '</span></div>';
-            h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : '30分あたり ' + yen(m.rate30) + '（実施時間で計算）') : 'この月の料金はまだ提案されていません。') + '</p>';
+            h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin? m.lessonMin+'分・1回 '+yen(m.rate30*m.lessonMin/30):'授業時間を設定してください')) : 'この月の料金はまだ提案されていません。') + '</p>';
             if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。<button class="btn-quiet btn-sm" data-action="reload">最新の計画を確認</button></p>';
             if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '</p>';
             if ((m.rows || []).length && !dis) {
               if (m.status === "approved") h += '<details class="add"><summary>料金を変更して再承認を依頼</summary><p class="note">再提案すると現在の承認が失効します。請求済みなら、先に未入金請求を取り消してください。</p>';
+              h += '<div class="row"><label>1回の授業時間 <input type="number" data-plan-ym="'+esc(m.ym)+'" data-plan-field="lessonMin" min="30" max="240" step="30" value="'+esc(f.lessonMin)+'" style="width:90px"> 分</label></div>';
               h += '<div class="row"><label for="pl-rate-' + esc(m.ym) + '">30分単価</label><input type="number" id="pl-rate-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="rate30" min="0" step="1" value="' + esc(f.rate30 || 0) + '" style="width:110px">円</div><p class="note">実施した授業の時間分だけを請求します。月間回数は予定であり、固定額の購入ではありません。</p>';
               h += '<div class="row"><button class="btn-primary btn-sm" data-action="planpropose"' + attrs + '>' + (m.status === "approved" ? "現在の承認を取り消して再提案" : m.status === "proposed" ? "この料金で再提案" : "この料金で保護者に提案") + '</button><button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button></div>';
               if (m.status === "proposed" && m.termsKnown) {
@@ -2263,9 +2264,9 @@
                 var proposedRate = Number(planFields.rate30), proposedMonthly = Number(planFields.monthly);
                 if (!Number.isInteger(proposedRate) || proposedRate < 0 || !Number.isInteger(proposedMonthly) || proposedMonthly < 0 || proposedRate > 10000000 || proposedMonthly > 10000000) { toast("月の料金を正しく入力してください"); return; }
                 if (!confirm(planYm + " の回数と料金（" + (proposedMonthly > 0 ? "旧料金 " + yen(proposedMonthly) : "30分 " + yen(proposedRate)) + "）を保護者に提案しますか？")) return;
-                planWrite("planPropose", cur, monthInfo, { studentId: sid, ym: planYm, expectedRevision: rev, rate30: proposedRate, monthly: proposedMonthly });
+                planWrite("planPropose", cur, monthInfo, { studentId: sid, ym: planYm, expectedRevision: rev, rate30: proposedRate, monthly: proposedMonthly, lessonMin:Number(planFields.lessonMin) });
               } else {
-                if (Number(planFields.rate30) !== Number(monthInfo.rate30) || Number(planFields.monthly) !== Number(monthInfo.monthly)) { toast("料金の入力が提案と異なります。先に再提案してください"); return; }
+                if (Number(planFields.lessonMin) !== Number(monthInfo.lessonMin) || Number(planFields.rate30) !== Number(monthInfo.rate30) || Number(planFields.monthly) !== Number(monthInfo.monthly)) { toast("料金の入力が提案と異なります。先に再提案してください"); return; }
                 if (!planFields.consentDate || planFields.consentDate > today()) { toast("実際の承諾日を入力してください"); return; }
                 if ((planYm < thisYm() || (cur.lessons || []).some(function (l) { return l.date.slice(0, 7) === planYm && l.date < planFields.consentDate && (l.status === "booked" || l.status === "offered"); })) && !String(planFields.memo || "").trim()) { toast("過去の承諾を記録する理由・確認内容を入力してください"); return; }
                 if (!confirm(planYm + " の提案第" + rev + "版について、" + planFields.consentDate + " に" + planFields.via + "で保護者の承諾を得たことを記録しますか？")) return;
@@ -2275,7 +2276,7 @@
             case "plancopy":
               var pym = btn.getAttribute("data-ym"), pm2 = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === pym; })[0];
               if (!pm2 || !pm2.rows.length) { toast("計画がありません"); return; }
-              var ptext = "【" + (+pym.slice(5)) + "月の授業回数のご確認】" + cur.name + "さん\n" + pm2.rows.map(function (x) { return "・" + x.subject + " " + x.count + "回"; }).join("\n") + "\n合計 " + pm2.total + "回の予定です。\n" + (pm2.termsKnown ? (pm2.monthly > 0 ? "月謝 " + yen(pm2.monthly) : "30分あたり " + yen(pm2.rate30)) : "料金条件は提案待ちです") + "\n\nよろしければ、保護者ページの「請求・料金承認」から承認をお願いします(LINEでのお返事でも結構です)。\n" + location.origin + "/hogosha/";
+              var ptext = "【" + (+pym.slice(5)) + "月の授業回数のご確認】" + cur.name + "さん\n" + pm2.rows.map(function (x) { return "・" + x.subject + " " + x.count + "回"; }).join("\n") + "\n合計 " + pm2.total + "回の予定です。\n" + (pm2.termsKnown ? (pm2.monthly > 0 ? "月謝 " + yen(pm2.monthly) : (pm2.lessonMin ? pm2.lessonMin+"分・1回 "+yen(pm2.rate30*pm2.lessonMin/30) : "授業時間は設定待ちです")) : "料金条件は提案待ちです") + "\n\nよろしければ、保護者ページの「請求・料金承認」から承認をお願いします(LINEでのお返事でも結構です)。\n" + location.origin + "/hogosha/";
               copyText(ptext, "保護者への連絡文をコピーしました。LINEに貼り付けできます");
               break;
             case "taskadd":

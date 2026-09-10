@@ -101,7 +101,7 @@ for (const count of [0, 3]) {
       const receipts = h.rows('approvalEvents').filter(e => e.id === `${repaired.id}:${repaired.revision}:changed`);
       assert.equal(receipts.length, 1);
       assert.equal(receipts[0].event, 'planChanged');
-      assert.deepEqual(JSON.parse(receipts[0].snapshotJson), {plan:expectedPlan,rate30:1700,monthly:0});
+      assert.deepEqual(JSON.parse(receipts[0].snapshotJson), {plan:expectedPlan,rate30:1700,monthly:0,lessonMin:90});
       const complete = planPersistence(h);
       h.advance(1000);
       ok(h.admin('planSet', current));
@@ -819,4 +819,24 @@ test('payment recovery preserves its version and audit evidence after the final 
   assert.equal(Number(h.payments()[0]['入金版']), 1);
   assert.equal(ok(h.admin('kanriSetPaid', request)).replayed, true);
   assert.equal(h.rows('approvalEvents').filter(event => event.event === 'paid').length, 1);
+});
+
+
+test('duration is saved with the proposal and reduced parent counts govern actual booking limits',()=>{
+ const h=createBillingHarness(),p=propose(h,{counts:{数学:4},lessonMin:90,rate30:1500});const token=parentSession(h);
+ const req={action:'familyPlanDecide',ftoken:token,studentId:'test-a',ym:'2026-09',expectedRevision:p.revision,approve:true,approvedCounts:[{subject:'数学',count:2}],memo:'2回まで'};
+ const r=ok(h.request(req));assert.equal(r.data.planMonths[0].lessonMin,90);assert.equal(r.data.planMonths[0].total,2);assert.equal(Number(h.rows('monthAgreements')[0].lessonMin),90);
+ ok(h.request(req));rejected(h.request({...req,approvedCounts:[{subject:'数学',count:3}]}));
+ const c=h.context();const sh=h.spreadsheet.getSheetByName('slots');for(let i=0;i<2;i++){const slot={id:'limit-'+i,studentId:'test-a',date:'2026-09-20',start:'10:00',min:90,subject:'数学',status:'booked'};sh.appendRow(sh.values[0].map(k=>slot[k]??''));}c.memoClear_();assert.equal(c.billingSlotAllowed_({id:'new-slot',studentId:'test-a',date:'2026-09-21',start:'10:00',min:90,subject:'数学'}).errorCode,'planLimit');
+});
+test('partial approval rejects invalid counts and zero counts remain declined',()=>{
+ const h=createBillingHarness(),p=propose(h,{counts:{数学:4}}),token=parentSession(h);const req={action:'familyPlanDecide',ftoken:token,studentId:'test-a',ym:'2026-09',expectedRevision:p.revision,approve:false};
+ for(const count of [-1,5,1.5])rejected(h.request({...req,approvedCounts:[{subject:'数学',count}]}));
+ ok(h.request({...req,approvedCounts:[{subject:'数学',count:0}]}));assert.equal(h.rows('monthAgreements')[0].status,'declined');
+});
+
+test('duration migration backs up before changing only proposed plans without a duration',()=>{
+ const h=createBillingHarness();propose(h,{lessonMin:90});let sh=h.spreadsheet.getSheetByName('monthAgreements');let col=sh.values[0].indexOf('lessonMin');sh.getRange(2,col+1).setValue('');const c=h.context();let backed=false;const saved=JSON.parse(JSON.stringify(sh.getDataRange().getValues()));
+ h.spreadsheet.getId=()=> 'synthetic-source';c.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};c.DriveApp={getFileById:()=>({makeCopy:()=>{backed=true;return {getId:()=> 'synthetic-backup'};}})};c.SpreadsheetApp.openById=()=>({getSheetByName:()=>({getDataRange:()=>({getValues:()=>saved})})});c.console={log(){}};
+ c.migratePendingPlanDuration90();assert.equal(backed,true);assert.equal(Number(h.rows('monthAgreements')[0].lessonMin),90);assert.equal(h.rows('monthAgreements')[0].status,'proposed');const after=JSON.stringify(h.rows('monthAgreements'));c.memoClear_();c.migratePendingPlanDuration90();assert.equal(JSON.stringify(h.rows('monthAgreements')),after);
 });

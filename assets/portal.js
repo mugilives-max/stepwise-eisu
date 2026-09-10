@@ -906,19 +906,18 @@
 
           var pms = d.planMonths || [];
           var approvalHelpId='approval-help-'+encodeURIComponent(childId||'parent');
-          html += '<h2>授業回数と料金の承認<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業回数と料金の承認について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その月に実施できる授業回数の上限を確認するものです。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、事前にキャンセルが成立した授業の料金は発生しません。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
+          html += '<h2>授業計画の案内<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業計画の案内について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その月に実施できる授業回数の上限を確認するものです。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、事前にキャンセルが成立した授業の料金は発生しません。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
           if (!pms.length) html += '<div class="empty">承認をお願いする予定はいまありません</div>';
           else {
             html += '<div class="card">';
             pms.forEach(function (m) {
-              html += '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row between"><strong>' + (+m.ym.slice(0, 4)) + '年' + (+m.ym.slice(5)) + '月の授業回数</strong>' + (m.status === "approved" ? '<span class="tag green">承認済み ' + esc(m.approvedAt) + '</span>' : m.status === "declined" ? '<span class="tag red">見送り</span>' : '<span class="tag amber">ご確認ください</span>') + '</div>';
-              html += '<div style="margin:4px 0">' + m.rows.map(function (x) { return esc(x.subject) + ' ' + x.count + '回'; }).join("、") + '<span class="small muted">(合計 ' + m.total + '回)</span></div>';
-              html += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? "月謝 " + yen(m.monthly) + "（旧条件・先生に再提案を依頼してください）" : "30分あたり " + yen(m.rate30) + "（実施時間で計算）") : "料金条件が未確認です。先生からの再提案をお待ちください。") + (m.revision != null ? "・第" + esc(m.revision) + "版" : "") + '</p>';
-              if (m.status === "proposed" && m.termsKnown && m.revision != null) html += '<div class="row" style="margin-top:6px"><button class="btn-primary btn-sm" data-action="' + (family ? 'fa-planok' : 'planok') + '" data-ym="' + esc(m.ym) + '"' + (activeBusy ? " disabled" : "") + '>この回数と料金を承認する</button><input type="text" id="pl-memo-' + esc(m.ym) + '" value="' + esc(memos[memoKey + ":" + m.ym] || "") + '" data-parent-plan-memo="' + esc(m.ym) + '" aria-label="' + esc(m.ym) + 'の相談" placeholder="見送る場合の理由や相談(任意)" maxlength="100" style="flex:1;min-width:160px"><button class="btn-quiet btn-sm" data-action="' + (family ? 'fa-planng' : 'planng') + '" data-ym="' + esc(m.ym) + '"' + (activeBusy ? " disabled" : "") + '>見送る・相談する</button></div>';
-              else if (m.status === "declined" && m.memo) html += '<div class="small muted">' + esc(m.memo) + '</div>';
+              html += '<div style="padding:12px 0;border-bottom:1px solid var(--line)"><strong>'+esc(Number(m.ym.slice(0,4))+'年'+Number(m.ym.slice(5)))+'月</strong>'+(m.status==='approved'?' <span class="tag green">承認済み</span>':m.status==='declined'?' <span class="tag gray">見送り</span>':'');
+              html += '<p>'+m.rows.map(function(x){return esc(x.subject)+'　'+(m.lessonMin?esc(m.lessonMin)+'分 × ':'')+esc(x.count)+'回まで';}).join('<br>')+'</p><p><strong>'+(m.termsKnown&&m.lessonMin?'1回 '+yen(m.rate30*m.lessonMin/30):'授業時間・料金は先生に確認してください')+'</strong></p>';
+              if(m.status==='proposed'&&m.termsKnown&&m.revision!=null)html+='<div class="row"><button class="btn-primary btn-sm" data-action="'+(family?'fa-planok':'planok')+'" data-ym="'+esc(m.ym)+'"'+(activeBusy?' disabled':'')+'>承認する</button><button class="btn-quiet btn-sm" data-action="'+(family?'fa-planng':'planng')+'" data-ym="'+esc(m.ym)+'"'+(activeBusy?' disabled':'')+'>見送る</button></div>';
+              if(m.memo)html+='<p class="note">'+esc(m.memo)+'</p>';
               html += '</div>';
             });
-            html += '<div class="note">承認いただいた月の回数と料金で授業を確定・実施・請求します。回数や料金を変更する場合は、あらためて承認をお願いします。請求済みの金額は履歴に残ります。</div></div>';
+            html += '</div>';
           }
           }
           if(section==='records') html += renderPublishedRecords(d.lessonRecords);
@@ -1075,7 +1074,21 @@
             if(parentSection()==='home'||parentSection()==='schedule')h += renderFamilyCalendar();
             if(parentSection()==='billing')h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
-            if (F.confirm && parentSection() === "billing") h += '<div class="card" role="region" aria-label="月間計画の回答確認"><strong>' + esc((F.childrenData[F.confirm.studentId] || {}).name) + 'さん・' + esc(F.confirm.ym) + '</strong><p>第' + F.confirm.expectedRevision + '版の回数と料金を' + (F.confirm.approve ? '承認します。' : '見送り・相談として先生に伝えます。') + '</p><button class="btn-primary" data-action="fa-decide"' + dis + '>この内容で回答する</button> <button class="btn-quiet" data-action="fa-cancel"' + dis + '>やめる</button></div>';
+            if(F.confirm&&parentSection()==='billing'){
+              var confirmation=F.confirm;
+              h+='<div class="card" role="region" aria-label="授業計画の回答確認"><strong>'+esc((F.childrenData[confirmation.studentId]||{}).name)+'・'+esc(confirmation.ym)+'</strong>';
+              if(confirmation.stage==='reduce'){
+                h+='<p>承認できる回数を選んでください。0回の場合は今回は見送ります。</p>';
+                confirmation.rows.forEach(function(r,index){h+='<p><label>'+esc(r.subject)+' <select id="fa-reduce-'+index+'">';for(var n=0;n<=r.count;n++)h+='<option value="'+n+'"'+(n===confirmation.approvedCounts[index].count?' selected':'')+'>'+n+'回</option>';h+='</select></label></p>';});
+                h+='<label>先生への伝言（任意）<textarea id="fa-plan-message" maxlength="500">'+esc(confirmation.memo||'')+'</textarea></label><p><button class="btn-primary" data-action="fa-plan-review">この内容を確認する</button></p>';
+              }else{
+                h+='<p>'+confirmation.approvedCounts.map(function(r){return esc(r.subject)+' '+r.count+'回まで';}).join('、')+'</p>';
+                h+=confirmation.approve?'<p>この回数以内で授業の計画を立てることができます。授業実施前であれば、いつでもシステムまたはLINEから計画の見直しを申し出ることができます。承認しますか？</p>':'<p>今回は見送ります。先生にこの内容を伝えますか？</p>';
+                if(confirmation.memo)h+='<p>'+esc(confirmation.memo)+'</p>';
+                h+='<button class="btn-primary" data-action="fa-decide"'+dis+'>'+(confirmation.approve?'承認する':'今回は見送る')+'</button> ';
+              }
+              h+='<button class="btn-quiet" data-action="fa-cancel"'+dis+'>戻る</button></div>';
+            }
             if(parentSection()!=='settings') familyVisibleChildren().forEach(function(c,index){
               h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
               h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId) : F.busy ? '<p>読み込んでいます…</p>' : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">子どもの情報を再読み込み</button>';
@@ -1113,12 +1126,16 @@
           else if (action === "fa-planok" || action === "fa-planng") {
             var childId=btn.getAttribute("data-child"), childData=F.childrenData[childId], ym = btn.getAttribute("data-ym"), m = (childData && childData.planMonths || []).filter(function (x) { return x.ym === ym; })[0];
             if (!m || m.status !== 'proposed' || !m.termsKnown || !Number.isSafeInteger(m.revision)) { F.error = '最新の提案を確認してください。'; familyRender(); return; }
-            var memo = val('pl-memo-' + childId + '-' + ym); F.memos[childId + ':' + ym] = memo;
-            F.confirm = { studentId: childId, ym: ym, approve: action === "fa-planok", expectedRevision: m.revision, memo: memo }; familyRender();
+            F.confirm={studentId:childId,ym:ym,approve:action==='fa-planok',expectedRevision:m.revision,memo:'',stage:action==='fa-planok'?'review':'reduce',rows:m.rows,approvedCounts:m.rows.map(function(r){return {subject:r.subject,count:action==='fa-planok'?Number(r.count):Math.max(0,Number(r.count)-1)};})};familyRender();
+          } else if(action==='fa-plan-review'&&F.confirm&&F.confirm.stage==='reduce'){
+            var c=F.confirm,selected=c.rows.map(function(r,index){return {subject:r.subject,count:Number(val('fa-reduce-'+index))};});
+            c.approvedCounts=selected;c.memo=val('fa-plan-message');
+            if(selected.some(function(r,i){return !Number.isInteger(r.count)||r.count<0||r.count>Number(c.rows[i].count);})||!selected.some(function(r,i){return r.count<Number(c.rows[i].count);})){F.error='案内より少ない回数を選んでください。';familyRender();return;}
+            c.approvedCounts=selected;c.approve=selected.some(function(r){return r.count>0;});c.memo=val('fa-plan-message');c.stage='review';F.error='';familyRender();
           } else if (action === "fa-cancel") { F.confirm = null; familyRender(); }
           else if (action === "fa-decide" && F.confirm && (F.home.children||[]).some(function(c){return sameId(c.studentId,F.confirm.studentId);})) {
             var confirmation = F.confirm;
-            familyRequest("familyPlanDecide", Object.assign({ ftoken: familyToken() }, confirmation), function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); loadFamilyNotices(); });
+            familyRequest("familyPlanDecide", {ftoken:familyToken(),studentId:confirmation.studentId,ym:confirmation.ym,approve:confirmation.approve,expectedRevision:confirmation.expectedRevision,memo:confirmation.memo,approvedCounts:confirmation.approvedCounts}, function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); loadFamilyNotices(); });
           }
         }
 
