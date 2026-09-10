@@ -100,3 +100,6 @@ test('calendar overlap chains keep all four lessons without claiming four people
 test('selected calendar day exposes add button and carries date into student offer',async()=>{
  const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/aria-label="この日に予定を追加"/);ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');assert.equal(ui.requests.length,1);
 });
+test('home calendar preserves past selection and shows its lessons without add action',async()=>{
+ const ui=createUI('admin',{hash:'#home'});ui.requests[0].reply({data:{today:'2026-09-08',slots:[{id:'old',date:'2026-09-05',start:'13:00',min:60,status:'booked',studentId:'test-a',studentName:'【テスト】過去授業',subject:'英語'}],lessonsToday:[],lessonsWeek:[],pending:[],unpaid:[],students:[],meetings:[]}});await flush();ui.click('calday',{'data-date':'2026-09-05'});assert.match(ui.html(),/9\/5\(土\)の予定/);assert.match(ui.html(),/【テスト】過去授業/);assert.doesNotMatch(ui.html(),/data-action="calendar-add"/);
+});

@@ -641,7 +641,7 @@
           (d.wishes || []).forEach(function (x) { var it = hit(x.date); it.wish++; (it.wishL = it.wishL || []).push(x); });
           (d.allEvents || []).forEach(function (e) { var dd = e.date; for (var ei = 0; ei < 61 && dd <= e.dateTo; ei++) { var it = hit(dd); it.ev++; (it.evL = it.evL || []).push(e); dd = addDaysStr(dd, 1); } });
           (function () { var byD = {}; hs.forEach(function (s) { (byD[s.date] = byD[s.date] || []).push(s); }); Object.keys(byD).forEach(function (dd) { hit(dd).rows = groupOverlap(byD[dd]); }); })();
-          if (!selDate || selDate < d.today) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
+          if (!selDate) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
           html += '<h2>全体の予定表 <a class="btn-quiet btn-sm" href="#lessons" style="margin-left:auto">授業を案内する・変更する</a></h2>';
           html += renderCal(hinfo, d.today, { noNg: true, boxes: true });
           var hday = hs.filter(function (s) { return s.date === selDate; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });

@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-10-group-membership' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-10-calendar-history' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1920,9 +1920,9 @@ function kanriDashboard_() {
   // 返事がないまま日付が過ぎた案内(直近90日)。ホームで「実施済み/未実施」を選んでもらう
   var expSince = addDays_(today, -90);
   var expired = slots.filter(function (s) { return s.status === 'offered' && s.date < today && s.date >= expSince; }).map(slim).sort(slotSort_);
-  // ホームの全体予定表用: 今後70日の確定・承認待ちと、生徒の授業できない日
+  // ホームの全体予定表用: 保存済みの過去の授業と今後70日の確定・承認待ち
   var horizon = addDays_(today, 70);
-  var upcomingAll = slots.filter(function (s) { return s.date >= today && s.date < horizon && (s.status === 'booked' || s.status === 'offered'); }).map(slim).sort(slotSort_);
+  var upcomingAll = slots.filter(function (s) { return s.date < horizon && (s.status === 'booked' || s.status === 'offered'); }).map(slim).sort(slotSort_);
   var blockedUp = blockedRows_().filter(function (b) { return b.date >= today && b.date < horizon; })
     .map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, studentId: String(b.studentId || ''), studentName: nameOf[String(b.studentId)] || studentName_(b.studentId), note: String(b.note || '') }; });
   var payments = ledgerRows_('入金管理');

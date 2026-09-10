@@ -67,3 +67,8 @@ test('record badge index is reused and invalidated by record and draft writes',(
  c.lessonPut_('lessonReportDrafts','recordId','synthetic-record',{recordId:'synthetic-record',body:'draft'});
  assert.equal(c.lessonMetadata_('test-a','prep-slot').lessonDraftStatus,'draft');
 });
+test('home calendar includes saved historical booked and offered lessons',()=>{
+ const h=fixture(),sh=h.spreadsheet.getSheetByName('slots');
+ for(const [id,status] of [['past-done','booked'],['past-offer','offered'],['past-cancel','free']])sh.appendRow([id,'2025-01-01','14:00',60,status,'test-a',true,'','','英語','']);
+ const ids=h.context().kanriDashboard_().slots.map(s=>s.id);assert.ok(ids.includes('past-done'));assert.ok(ids.includes('past-offer'));assert.ok(!ids.includes('past-cancel'));
+});
