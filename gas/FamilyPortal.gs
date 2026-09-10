@@ -166,8 +166,16 @@ function familyChallenge_(token,kinds) {
   if(!/^[a-f0-9]{64}$/.test(p[2])||!parentEqual_(c.secretHash,parentDigest_('family-challenge',c.id,p[2]))){c.failCount=Number(c.failCount||0)+1;if(c.failCount>=PARENT_MAX_FAILURES_)c.usedAt=familyStamp_();familyChallengeWrite_(c);return null;}
   return {challenge:c,account:a};
 }
+// Show only the address bound to a valid proof; opening the page does not verify it.
+function familyVerificationInfo_(req) {
+  var v=familyChallenge_(req.challenge,['verify','emailChange']);
+  if(!v)return {error:'この認証リンクは期限切れか、すでに使用されています。',verificationUnavailable:true};
+  var c=v.challenge,a=v.account;
+  if(c.kind==='verify'&&(a.status!=='pending'||String(a.email)!==String(c.email)))return {error:'この認証リンクは現在の登録内容と一致しません。',verificationUnavailable:true};
+  return {ok:true,email:String(c.email),registration:c.kind==='verify'};
+}
 function familyVerify_(req) {
-  var v=familyChallenge_(req.challenge,['verify','emailChange']);if(!v)return familyError_('確認リンクが無効か期限切れです。もう一度確認メールを申し込んでください');
+  var v=familyChallenge_(req.challenge,['verify','emailChange']);if(!v)return {error:'この認証リンクは期限切れか、すでに使用されています。',verificationUnavailable:true};
   var c=v.challenge,a=v.account;
   if(!familyEmailAvailable_(String(c.email),a.id))return familyError_('このメールでは登録できません。先生へご相談ください');
   if(c.kind==='verify'&&(a.status!=='pending'||String(a.email)!==String(c.email)))return familyError_('確認リンクが無効です');
@@ -223,6 +231,7 @@ function familyDispatch_(req) {
   try { switch(req.action){
     case 'familyRegister':return familyRegister_(req);
     case 'familyVerify':return familyVerify_(req);
+    case 'familyVerificationInfo':return familyVerificationInfo_(req);
     case 'familyCompleteRegistration':return familyCompleteRegistration_(req);
     case 'familyResendVerification':return familyResendVerification_(req);
     case 'familyLogin':return familyLogin_(req);

@@ -33,6 +33,8 @@ test('verification and reset challenges are stripped from the URL and never copi
   const secret = 'challenge-test-secret';
   const ui = createUI('student', { hash: '#family?verify=' + secret, local: new Map() });
   assert.equal(ui.location.hash, '#family'); assert.equal(ui.requests.length, 0); assert.equal(ui.html().includes(secret), false);
+  await flush();assert.equal(ui.requests[0].body.action,'familyVerificationInfo');ui.requests[0].reply({ok:true,email:'parent@example.invalid',registration:true});await flush();ui.requests.shift();
+  assert.match(ui.html(),/parent@example.invalid/);assert.ok(!ui.html().includes('確認メールを再送'));assert.ok(!ui.html().includes('ログインへ'));
   ui.click('fa-verify'); assert.equal(ui.requests[0].body.challenge, secret);
   ui.requests[0].reply({ ok: true, verified: true }); await flush(); assert.match(ui.html(), /メールアドレスを確認しました/);
   assert.equal(JSON.stringify([...ui.writes, ...ui.logs]).includes(secret), false);
@@ -136,8 +138,8 @@ test('a failed verification mail is reported as unsent while registration remain
 });
 
 test('an expired verification link provides a working resend route without reloading', async () => {
-  const ui = createUI('student', { hash: '#family?verify=expired-challenge' }); ui.click('fa-verify');
-  ui.requests.at(-1).reply({ error: '確認リンクが期限切れです' }); await flush();
+  const ui = createUI('student', { hash: '#family?verify=expired-challenge' }); await flush();
+  ui.requests.at(-1).reply({ error: '確認リンクが期限切れです',verificationUnavailable:true }); await flush();
   ui.click('fa-mode', { 'data-step': 'resend' }); ui.input('fa-email', 'parent@example.invalid'); ui.submit('family-auth-form');
   assert.equal(ui.requests.at(-1).body.action, 'familyResendVerification');
   assert.equal(ui.requests.at(-1).body.challenge, undefined);
@@ -154,7 +156,7 @@ test('invite link opens registration, scrubs URL and survives validation errors 
 
 
 test('verified email opens password-only form, then completes signup and logs in',async()=>{
- const ui=createUI('student',{hash:'#family?verify=signup-proof'});ui.click('fa-verify');
+ const ui=createUI('student',{hash:'#family?verify=signup-proof'});await flush();ui.requests[0].reply({ok:true,email:'parent@example.invalid',registration:true});await flush();ui.requests.shift();ui.click('fa-verify');
  ui.requests[0].reply({ok:true,passwordRequired:true,email:'parent@example.invalid'});await flush();
  assert.match(ui.html(),/メール確認済み/);assert.ok(!ui.html().includes('id="fa-email"'));
  ui.input('fa-pass',' short ');ui.input('fa-pass2',' short ');ui.submit('family-auth-form');assert.equal(ui.requests.length,1);
@@ -167,11 +169,20 @@ test('verified email opens password-only form, then completes signup and logs in
  assert.equal(JSON.stringify(ui.writes).includes('signup-proof'),false);assert.equal(JSON.stringify(ui.writes).includes('long password'),false);
 });
 test('password setup failure offers resend; successful save with login network error offers login',async()=>{
- const ui=createUI('student',{hash:'#family?verify=signup-proof'});ui.click('fa-verify');
+ const ui=createUI('student',{hash:'#family?verify=signup-proof'});await flush();ui.requests[0].reply({ok:true,email:'parent@example.invalid',registration:true});await flush();ui.requests.shift();ui.click('fa-verify');
  ui.requests[0].reply({ok:true,passwordRequired:true,email:'parent@example.invalid'});await flush();
  ui.input('fa-pass',' long password ');ui.input('fa-pass2',' long password ');ui.submit('family-auth-form');
  ui.requests[1].reply({error:'リンクが期限切れです'});await flush();assert.match(ui.html(),/確認メールを再送/);
  ui.input('fa-pass',' long password ');ui.input('fa-pass2',' long password ');ui.submit('family-auth-form');
  ui.requests[2].reply({ok:true,registered:true,email:'parent@example.invalid'});await flush();ui.requests[3].fail();await flush();
  assert.match(ui.html(),/登録が完了しました/);assert.ok(ui.html().includes('id="fa-email"'));
+});
+
+test('verification lookup network failure offers reload, never resends mail or verifies automatically',async()=>{
+ const ui=createUI('student',{hash:'#family?verify=lookup-proof'});await flush();
+ assert.equal(ui.requests[0].body.action,'familyVerificationInfo');assert.ok(!ui.html().includes('data-action="fa-verify"'));
+ ui.requests[0].fail();await flush();assert.match(ui.html(),/もう一度読み込む/);assert.ok(!ui.html().includes('data-step="resend"'));
+ ui.click('fa-verification-retry');ui.requests[1].reply({ok:true,email:'changed@example.invalid',registration:false});await flush();
+ assert.match(ui.html(),/changed@example.invalid/);assert.match(ui.html(),/このメールアドレスで認証する/);assert.ok(!ui.html().includes('次に、ログイン用'));
+ assert.ok(!ui.html().includes('data-step="login"'));assert.ok(!ui.html().includes('data-step="resend"'));
 });

@@ -65,3 +65,15 @@ test('password setup rejects wrong-purpose, altered and expired proofs',()=>{
   assert.ok(h.family('familyCompleteRegistration',{challenge:challenge+'x',pass:PASS}).error);
   h.advance(31*60000);assert.ok(h.family('familyCompleteRegistration',{challenge,pass:PASS}).error);
 });
+
+test('confirmation address comes from a valid proof without activating, consuming or changing the account',()=>{
+ const {h,c,challenge,account}=fixture();const before=JSON.stringify(account()),proofs=JSON.stringify(h.rows('familyChallenges'));
+ const info=h.family('familyVerificationInfo',{challenge,email:'attacker@example.invalid'});
+ assert.equal(info.email,EMAIL);assert.equal(info.registration,true);assert.equal(info.verified,undefined);
+ assert.equal(JSON.stringify(account()),before);assert.equal(JSON.stringify(h.rows('familyChallenges')),proofs);
+ assert.ok(h.family('familyCompleteRegistration',{challenge,pass:PASS}).error);
+ const bad=h.family('familyVerificationInfo',{challenge:'invalid'});assert.equal(bad.verificationUnavailable,true);assert.equal(bad.email,undefined);
+ h.family('familyVerify',{challenge});h.family('familyCompleteRegistration',{challenge,pass:PASS});
+ assert.equal(h.family('familyVerificationInfo',{challenge}).verificationUnavailable,true);
+ h.family('familyResetRequest',{email:EMAIL});assert.equal(h.family('familyVerificationInfo',{challenge:h.latestChallenge('reset')}).verificationUnavailable,true);
+});
