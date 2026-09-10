@@ -4,11 +4,12 @@ var FAMILY_ACCOUNT_COLS_ = ['id','label','status','email','verifiedAt','passSalt
 var FAMILY_LINK_COLS_ = ['id','familyId','studentId','active','linkedAt','updatedAt'];
 var FAMILY_CHALLENGE_COLS_ = ['id','familyId','kind','email','secretHash','expiresAt','usedAt','createdAt','failCount','securityVersion'];
 var FAMILY_OUTBOX_COLS_ = ['id','eventKey','familyId','studentId','kind','ym','revision','email','status','createdAt','sentAt','attempts','error'];
+var FAMILY_NOTICE_READ_COLS_ = ['id','familyId','noticeId','readAt'];
 var FAMILY_PORTAL_URL_ = 'https://www.stepwise-education.jp/yoyaku/#family';
 var FAMILY_CHALLENGE_MS_ = 30 * 60 * 1000;
 
 function ensureFamilySchema_() {
-  var definitions={familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_};
+  var definitions={familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_};
   Object.keys(definitions).forEach(function(name){
     var sh=ss_().getSheetByName(name),cols=definitions[name];
     if(sh&&sh.getLastRow()&&(sh.getLastColumn()!==cols.length||sh.getRange(1,1,1,cols.length).getValues()[0].join('|')!==cols.join('|')))throw new Error(name+'の列構成を確認してください。自動上書きは行いません');
@@ -240,6 +241,7 @@ function familyDispatch_(req) {
     case 'familyResetConfirm':return familyResetConfirm_(req);
     case 'familyEmailChange':return familyEmailChange_(req);
     case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false)};}
+    case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
     case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:billingParentDecideForStudent_(b.student,req);}
     default:return familyError_('操作が見つかりません');
@@ -383,4 +385,28 @@ function familyAdmin_(req) {
     familyInvalidate_(a);a.status=req.active?(a.verifiedAt&&a.passHash?'active':'pending'):'disabled';a.inviteHash='';a.inviteExpiresAt='';familySave_(a);return {ok:true,family:familyView_(a)};
   }
   return familyError_('操作が見つかりません');
+}
+
+// Account-scoped notice receipts are distinct from approvals and lesson-report receipts.
+function familyNotices_(account,req){
+  var children=familyChildren_(account,false),items=[],reads=familyRows_('familyNoticeReads').filter(function(r){return String(r.familyId)===String(account.id);});
+  function add(id,c,title,section,priority,required,at){items.push({id:id,studentId:String(c.studentId),name:c.name,title:title,section:section,priority:priority,required:!!required,createdAt:String(at||''),read:reads.some(function(r){return String(r.noticeId)===id;})});}
+  var events=readRows_('studentEmailOutbox'),messages=readRows_('contactMessages'),cancellations=readRows_('cancellationRequests');
+  children.forEach(function(c){
+    var sid=String(c.studentId),student=findStudent_(sid);if(!student)return;
+    var response=parentDataForStudent_(student);if(!response.ok)throw Error('Notice data unavailable');var d=response.data;
+    (d.planMonths||[]).filter(function(m){return m.status==='proposed';}).forEach(function(m){add('plan:'+sid+':'+m.ym+':'+m.revision,c,m.ym+'の回数・料金をご確認ください','billing',0,true);});
+    (d.payments||[]).filter(function(p){return p.status!=='取消'&&p.status!=='入金済';}).forEach(function(p){add('bill:'+sid+':'+p.ym+':'+p.amount+':'+p.billDate,c,p.ym+'のお支払いをご確認ください','billing',0,true,p.billDate);});
+    (d.lessonRecords||[]).forEach(function(r){add('record:'+sid+':'+r.recordId+':'+r.revision,c,(r.lessonDate||r.date||'')+' '+(r.subject||'')+'の授業報告','records',2,false,r.updatedAt);});
+    messages.filter(function(m){return String(m.studentId)===sid&&m.reply;}).forEach(function(m){add('reply:'+m.id+':'+m.revision,c,'先生から返信が届いています','contacts',2,false,m.updatedAt);});
+    cancellations.filter(function(r){return String(r.studentId)===sid&&['approved','rejected'].indexOf(String(r.status))>=0;}).forEach(function(r){var slot=JSON.parse(r.slotJson||'{}');add('cancel:'+r.id+':'+r.status,c,(slot.date||'')+' '+(slot.start||'')+'の取消申請：'+(r.status==='approved'?'承認されました':'予定どおりです'),'schedule',1,false,r.decidedAt);});
+    events.filter(function(e){return String(e.studentId)===sid&&['offered','changed','cancelled'].indexOf(String(e.kind))>=0;}).forEach(function(e){var slots=JSON.parse(e.snapshotJson||'[]'),slot=slots[slots.length-1]||{};add('schedule:'+e.id,c,(slot.date||'')+' '+(slot.start||'')+' '+({offered:'授業の案内が届いています',changed:'授業が変更されました',cancelled:'授業が取り消されました'}[e.kind]),'schedule',1,false,e.createdAt);});
+  });
+  if(req.action==='familyNoticeRead'){
+    var item=items.filter(function(x){return x.id===req.noticeId;})[0];if(!item)return {error:'通知が更新されています。一覧を更新してください。'};
+    if(!item.read){ensureFamilySchema_();familyWrite_('familyNoticeReads',FAMILY_NOTICE_READ_COLS_,{id:familyId_(),familyId:account.id,noticeId:item.id,readAt:familyStamp_()});}
+    item.read=true;
+  }
+  items.sort(function(a,b){return a.priority-b.priority||b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id);});
+  return {ok:true,notices:items};
 }

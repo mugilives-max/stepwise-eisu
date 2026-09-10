@@ -937,9 +937,10 @@
         }
 
         /* ---------- 家族の保護者認証: 専用リンク方式とは別のセッション ---------- */
+        var notices={items:[],open:false,busy:false,error:"",seq:0};
         var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
         function familyToken() { return ssGet("sw_ft_v1") || ""; }
-        function familyClear() { ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -988,7 +989,8 @@
           F.confirm = null;
           list.forEach(function(c){delete F.childrenData[c.studentId];});
           function next(index) {
-            if (index >= list.length || !F.home) return;
+            if (!F.home) return;
+            if(index >= list.length){loadFamilyNotices();return;}
             var child = list[index];
             familyRequest("familyData", {ftoken:familyToken(),studentId:child.studentId}, function(res){
               F.childrenData[child.studentId]=res.data;
@@ -1000,10 +1002,11 @@
         function familyLoadHome() {
           if (F.busy || !familyToken()) return;
           if (ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
-          F.childrenData = Object.create(null); F.confirm = null;
+          F.childrenData = Object.create(null); F.confirm = null; notices.items=[];
           familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; familyLoadChild(); });
         }
         function familyLogout() {
+          notices.items=[];notices.open=false;++notices.seq;notices.busy=false;
           if (F.busy) return;
           if (!familyToken()) { familyClear(); familyRender(); return; }
           F.home = null; F.childrenData = Object.create(null); F.confirm = null; F.step = "logout"; ssSet("sw_ft_v1:logout", "1");
@@ -1047,7 +1050,7 @@
             if (!res.ftoken) { F.error = "ログインを確認できませんでした。"; return; }
             ssSet("sw_ft_v1", res.ftoken); ssDel("sw_ft_v1:logout");
             if (familyToken() !== res.ftoken) { apiPost({ action: "familyLogout", ftoken: res.ftoken }).catch(function () {}); F.error = "このブラウザではログインを保持できません。セッション保存を許可してお試しください。"; return; }
-            F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; F.studentId=""; F.childrenData=Object.create(null); if (children.length) familyLoadChild();
+            F.home = res; F.step = "home"; F.message = ""; F.challenge = ""; var children = res.children || []; F.studentId=""; F.childrenData=Object.create(null); if (children.length) familyLoadChild(); else loadFamilyNotices();
         }
         function renderFamily() {
           var dis = F.busy ? " disabled" : "", h = '<h1>保護者ページ</h1><p class="sub">メールアドレスでログインし、登録されたお子さまの情報を確認できます。</p>';
@@ -1064,6 +1067,8 @@
           }
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
+            if(notices.open)h+=renderFamilyNotices();
+            if(parentSection()==='settings') h += '<p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
             if(parentSection()==='settings') h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             else if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             if(parentSection()==='home'||parentSection()==='schedule')h += renderFamilyCalendar();
@@ -1094,6 +1099,7 @@
         }
         function familyClick(action, btn) {
           if (route() !== "family") return;
+          if(["fa-notices","fa-notice-refresh","fa-notice-open"].indexOf(action)>=0){familyNoticeClick(action,btn);return;}
           if(action==='fa-calprev'||action==='fa-calnext'){familyCalendarMonth.setMonth(familyCalendarMonth.getMonth()+(action==='fa-calnext'?1:-1));familyCalendarDay='';familyRender();return;}
           if(action==='fa-calday'){familyCalendarDay=btn.getAttribute('data-date');familyRender();return;}
           if (F.busy) return;
@@ -1111,7 +1117,7 @@
           } else if (action === "fa-cancel") { F.confirm = null; familyRender(); }
           else if (action === "fa-decide" && F.confirm && (F.home.children||[]).some(function(c){return sameId(c.studentId,F.confirm.studentId);})) {
             var confirmation = F.confirm;
-            familyRequest("familyPlanDecide", Object.assign({ ftoken: familyToken() }, confirmation), function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); });
+            familyRequest("familyPlanDecide", Object.assign({ ftoken: familyToken() }, confirmation), function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); loadFamilyNotices(); });
           }
         }
 
@@ -1131,10 +1137,36 @@
           });
           Object.keys(familyPanels).forEach(function(key){if(!active[key]){familyPanels[key].services.clear();familyPanels[key].reads.clear();}});
         }
+        function loadFamilyNotices(action,id,done){
+          if(notices.busy||!familyToken()||!F.home)return;
+          var token=familyToken(),seq=++notices.seq;notices.busy=true;notices.error='';familyRender();
+          apiPost({action:action||'familyNotices',ftoken:token,noticeId:id}).then(function(r){
+            if(seq!==notices.seq||token!==familyToken())return;
+            notices.busy=false;
+            if(r.error){if(r.familyAuthRequired)familyClear();notices.error=r.error;familyRender();return;}
+            notices.items=r.notices||[];if(done)done();familyRender();
+          }).catch(function(){if(seq!==notices.seq||token!==familyToken())return;notices.busy=false;notices.error='通知を読み込めませんでした。再試行してください。';familyRender();});
+        }
+        function renderFamilyNotices(){
+          var h='<section class="card" id="family-notices" aria-label="通知"><div class="row between"><h2>お知らせ</h2><button class="btn-quiet btn-sm" data-action="fa-notices">閉じる</button></div><p class="note">既読になっても、必要な承認やお支払いは完了しません。</p><button class="btn-quiet btn-sm" data-action="fa-notice-refresh"'+(notices.busy?' disabled':'')+'>最新のお知らせを確認</button>';
+          if(notices.busy)h+='<p role="status">確認しています…</p>';
+          if(notices.error)h+='<p role="alert">'+esc(notices.error)+'</p>';
+          notices.items.forEach(function(n){h+='<p><button class="btn-quiet" style="text-align:left;width:100%" data-action="fa-notice-open" data-notice="'+esc(n.id)+'"'+(notices.busy?' disabled':'')+'><span class="tag '+(n.required?'red':n.read?'gray':'blue')+'">'+(n.required?'要対応':n.read?'既読':'未読')+'</span> '+esc(n.name)+'<br>'+esc(n.title)+(n.required&&n.read?'（確認済み・未対応）':'')+'</button></p>';});
+          if(!notices.items.length&&!notices.busy&&!notices.error)h+='<p>お知らせはありません。</p>';
+          return h+'</section>';
+        }
+        function familyNoticeClick(action,btn){
+          if(action==='fa-notices'){notices.open=!notices.open;familyRender();return;}
+          if(action==='fa-notice-refresh'){loadFamilyNotices();return;}
+          if(action==='fa-notice-open'){
+            var n=notices.items.filter(function(n){return n.id===btn.getAttribute('data-notice');})[0];if(!n)return;
+            loadFamilyNotices('familyNoticeRead',n.id,function(){F.studentId=n.studentId;F.confirm=null;notices.open=false;location.hash='#family/'+n.section;});
+          }
+        }
         var parentHeaderActions=document.getElementById('parent-header-actions');
-        if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action="fa-logout"]');if(btn)familyClick('fa-logout',btn);});
+        if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action="fa-notices"]');if(btn)familyNoticeClick('fa-notices',btn);});
         function render() {
-          if(parentHeaderActions)parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" style="white-space:nowrap" data-action="fa-logout"'+(F.busy?' disabled':'')+'>ログアウト</button>':'';
+          if(parentHeaderActions){var count=notices.items.filter(function(n){return n.required||!n.read;}).length;parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" data-action="fa-notices" aria-label="お知らせ '+count+'件" aria-expanded="'+notices.open+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(count?' <span class="tag red">'+count+'</span>':'')+(notices.error?' !':'')+'</button>':'';}
           renderStudent(); if(wishReview && wishReview.key===myKey()) app.innerHTML=wishReviewHTML();
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }

@@ -78,7 +78,7 @@ test('family auth expiry removes protected data without clearing the legacy pare
 });
 
 test('a failed family logout hides data and remains a retry after refresh until server revocation succeeds', async () => {
-  const ui = await readyFamily(); ui.click('fa-logout'); assert.equal(ui.html().includes('今後の授業'), false); ui.requests.at(-1).fail(); await flush();
+  const ui = await readyFamily(); ui.navigate('#family/settings'); ui.click('fa-logout'); assert.equal(ui.html().includes('今後の授業'), false); ui.requests.at(-1).fail(); await flush();
   assert.equal(ui.session.get('sw_ft_v1:logout'), '1');
   const refreshed = createUI('student', { hash: '#family', session: ui.session }); assert.equal(refreshed.requests.length, 0); assert.match(refreshed.html(), /ログアウトを再試行/);
   refreshed.click('fa-logout'); refreshed.requests.at(-1).reply({ ok: true }); await flush(); assert.equal(refreshed.session.has('sw_ft_v1'), false); assert.equal(refreshed.session.has('sw_ft_v1:logout'), false);
@@ -224,4 +224,11 @@ test('parent home calendar precedes summaries, combines children, filters dates 
  assert.match(ui.html(),/2026-09-10 2件/);ui.click('fa-calday',{'data-date':'2026-09-10'});assert.match(ui.html(),/9\/10.*の授業/);
  ui.change('fa-child','child-b');assert.match(ui.html(),/2026-09-10 1件/);assert.ok(!ui.html().includes('英語 【テスト】子A'));
  assert.ok(!ui.html().includes('先生休み'));const count=ui.requests.length;ui.click('fa-calnext');assert.match(ui.html(),/2026年10月/);assert.equal(ui.requests.length,count);ui.click('fa-calprev');assert.match(ui.html(),/2026年9月/);
+});
+
+
+test('notification bell opens all-child priorities; reading retains required status and routes to the correct child',async()=>{
+ const ui=await readyFamily();const notice={id:'plan:b:2',studentId:'child-b',name:'【テスト】子B',title:'料金の確認',section:'billing',priority:0,required:true,read:false};
+ assert.equal(ui.requests.at(-1).body.action,'familyNotices');ui.requests.at(-1).reply({ok:true,notices:[notice]});await flush();assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);assert.ok(!ui.el('parent-header-actions').innerHTML.includes('fa-logout'));
+ ui.click('fa-notices');assert.match(ui.html(),/要対応/);ui.click('fa-notice-open',{'data-notice':notice.id});assert.equal(ui.requests.at(-1).body.action,'familyNoticeRead');assert.equal(ui.requests.at(-1).body.noticeId,notice.id);ui.requests.at(-1).reply({ok:true,notices:[{...notice,read:true}]});await flush();assert.equal(ui.location.hash,'#family/billing');assert.equal(ui.el('fa-child').value,'child-b');assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);ui.navigate('#family/settings');assert.match(ui.html(),/data-action="fa-logout"/);
 });
