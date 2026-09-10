@@ -459,7 +459,7 @@
           if (h.indexOf("#lesson-pair?") === 0) { var pq=new URLSearchParams(h.slice(13)); return {page:'lessonPair',slotId:pq.get('slot') || '',otherSlotId:pq.get('with') || ''}; }
           if (h.indexOf("#lesson?") === 0) { var q = new URLSearchParams(h.slice(8)); return { page: "lesson", id: q.get("student") || "", slotId: q.get("slot") || "", recordId: q.get("record") || "" }; }
           if (h.indexOf("#s=") === 0) { var sq = new URLSearchParams(h.slice(1)), section = sq.get("tab") || "overview"; return { page: "student", id: sq.get("s") || "", section: ["overview","settings","progress","billing"].indexOf(section) >= 0 ? section : "overview" }; }
-          if (h === "#students") return { page: "students" };
+          if (h === "#students" || h.indexOf("#students?") === 0) return { page: "students", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
           if (h === "#families" || h.indexOf("#families?")===0) return { page: "families", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
           if (h === "#lessons") return { page: "lessons" };
           if (h === "#settings") return { page: "settings" };
@@ -477,8 +477,7 @@
           nav.innerHTML =
             '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
             '<a href="#lessons" class="' + (r.page === "lessons" ? "on" : "") + '">授業</a>' +
-            '<a href="#students" class="' + (r.page === "students" || r.page === "student" ? "on" : "") + '">生徒</a>' +
-            '<a href="#families" class="' + (r.page === "families" ? "on" : "") + '">保護者・通知</a>' +
+            '<a href="#students" class="' + (r.page === "students" || r.page === "student" || r.page === "families" ? "on" : "") + '">生徒</a>' +
             '<a href="#settings" class="' + (r.page === "settings" ? "on" : "") + '">設定</a>' +
             '<a href="#" data-action="logout">ログアウト</a>' +
             (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
@@ -489,7 +488,7 @@
         function load(force) {
           if (!token()) { authM = "login"; render(); return; }
           var r = route();
-          if (r.page === "families") { loadFamilies(); return; }
+          if (r.page === "families" || r.page === "students") loadFamilies();
           if (r.page === 'lessonPair') { loadLessonPair(force); return; }
           if (r.page === "lesson") { loadLesson(force); return; }
           var key = keyOf(r);
@@ -703,7 +702,7 @@
             });
             html += '<div class="note">記録は残っています。カルテの「予約ページの設定」から戻せます。</div></div>';
           }
-          app.innerHTML = html;
+          app.innerHTML = html + renderFamilies(true);
         }
 
         var EXAM_SUBJ = ["国語", "数学", "社会", "理科", "英語"];
@@ -792,7 +791,7 @@
             '<div class="row">' + "" + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定・宿題'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
-          html += '<p><a class="btn-quiet btn-sm" href="#families?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></p>';
+          html += '<p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></p>';
           if (section === 'overview') {
           html += unrecordedCard(s.unrecordedLessons || (s.lessons || []).filter(function(l){return l.status==='booked' && !l.done && l.date<(s.today || today());}),false,s);
           // この生徒の予定表
@@ -875,7 +874,7 @@
             (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
           html += '<div class="note">「リンクをコピー」は今のリンクをコピーするだけです(何度押しても同じ)。リンクが他人に知られたときだけ「再発行」してください。前のリンクは使えなくなります。</div></div>';
 
-          html += '<h2>保護者</h2><div class="card"><p>生徒をグループにまとめ、1つの保護者ログインを共有します。お子さまが1人の場合も同じ方法です。</p><a class="btn-quiet btn-sm" href="#families?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></div>';
+          html += '<h2>保護者</h2><div class="card"><p>生徒をグループにまとめ、1つの保護者ログインを共有します。お子さまが1人の場合も同じ方法です。</p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></div>';
           }
           if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する
@@ -1299,7 +1298,7 @@
         function render() {
           if (authM === "login") { renderLogin(); return; }
           var r = route();
-          if (r.page === "families") renderFamilies();
+          if (r.page === "families") { if (D) renderStudents(); else renderFamilies(); }
           else if (r.page === 'lessonPair') { renderLessonPair(); return; }
           else if (r.page === "lesson") renderLesson();
           else if (r.page === "student" && cur) renderStudent();
@@ -1329,7 +1328,7 @@
 
         /* ---------- 家族と通知: 招待コード・メールを永続キャッシュへ入れない ---------- */
         var FT = { data: null, busy: false, error: "", edit: null, confirm: null, invite: null, auth: "", seq: 0 };
-        function familyAdminRender() { if (route().page === "families") render(); }
+        function familyAdminRender() { if (route().page === "families" || route().page === "students") render(); }
         function loadFamilies() {
           var seq = ++FT.seq, auth = token(); FT.busy = true; FT.error = ""; familyAdminRender();
           admin("familyList", {}).then(function (res) {
@@ -1347,12 +1346,12 @@
             loadFamilies();
           }).catch(function (er) { if (auth !== token()) return; FT.busy = false; FT.confirm = null; FT.error = er.message + "。結果が不明な場合は、一覧を更新してから操作してください。"; familyAdminRender(); });
         }
-        function renderFamilies() {
+        function renderFamilies(embedded) {
           renderNav(); var d = FT.auth === token() ? FT.data : null, dis = FT.busy ? ' disabled' : '';
-          var h = '<h1>生徒グループと保護者ログイン</h1><p class="sub">生徒グループごとに保護者ログインを1つ使います。父母などが同じログインを複数端末で共有できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
+          var h = '<h2 id="parent-notifications">保護者・通知</h2><p class="sub">生徒グループごとに保護者ログインを1つ使います。父母などが同じログインを複数端末で共有できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
           if (FT.invite && FT.auth === token()) h += '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクからメールアドレスを入力し、届いたメールで確認してからパスワードを設定すると利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
-          if (!d) { app.innerHTML = h + (FT.busy ? '<p>読み込んでいます…</p>' : ''); return; }
+          if (!d) { h += FT.busy ? '<p>読み込んでいます…</p>' : ''; if (embedded) return h; app.innerHTML = h; return; }
           var students = d.students || [], families = d.families || [], targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
           if(targetStudent) h += '<div class="card"><h2>'+esc(targetStudent.name)+'さんの保護者</h2><p>1人でも同じグループとして扱います。兄弟は下の移動先を選んでまとめてください。移動先の保護者ログインを引き続き使います。</p></div>';
           if (FT.confirm) h += '<div class="card" role="region" aria-label="家族の変更確認"><strong>' + esc(FT.confirm.label) + '</strong><p>' + esc(FT.confirm.description) + '</p><button class="btn-primary" data-action="family-confirm"' + dis + '>この内容で実行</button> <button class="btn-quiet" data-action="family-cancel"' + dis + '>やめる</button></div>';
@@ -1379,10 +1378,11 @@
             var kind = { planProposed: '回数・料金の確認依頼', invoiceCreated: '請求', invoiceVoided: '請求取消', emailVerification: 'メール確認', passwordReset: 'パスワード再設定' }[n.kind] || '保護者への連絡';
             h += '<div class="card"><strong>' + esc(n.label || '家族') + '</strong> ' + esc(n.ym || '') + '・' + kind + '<p>' + esc(labels[n.status] || n.status) + (n.error ? '：' + esc(n.error) : '') + '</p>' + (n.retryable ? '<button class="btn-quiet btn-sm" data-action="family-notify" data-id="' + esc(n.id) + '"' + dis + '>送信先を確認して再試行</button>' : (n.status === 'failed' || n.status === 'pending') && /emailVerification|passwordReset/.test(n.kind) ? '<p class="note">保護者ページから確認・再設定メールを再発行してください。</p>' : '') + '</div>';
           });
+          if (embedded) return h;
           app.innerHTML = h;
         }
         function familyAdminClick(action, btn) {
-          if (FT.busy || route().page !== "families") return;
+          if (FT.busy || (route().page !== "families" && route().page !== "students")) return;
           if (action === "family-refresh") { loadFamilies(); return; }
           if (action === "family-confirm") { familyDo(); return; }
           if (action === "family-cancel") { FT.confirm = null; render(); return; }

@@ -17,7 +17,7 @@ test('parent sections separate billing, reports and account settings without rel
   ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count);assert.equal(ui.el('fa-child').value,'child-a');
 });
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
-async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#families' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); await flush(); return ui; }
+async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#students' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); ui.requests[1].reply({ok:true,data:{students:[],inactive:[]}}); await flush(); return ui; }
 
 test('registration collects only email and keeps a correction route while waiting', async () => {
   const ui=createUI('student',{hash:'#family?invite=fi1.synthetic.invite-secret'});
@@ -101,11 +101,11 @@ test('late family data cannot replace the student page after route departure', a
 
 test('teacher family creation confirms exact children, reveals invitation once, and never caches it', async () => {
   const ui = await teacherReady(); ui.click('family-single',{'data-id':'child-a'});
-  assert.equal(ui.requests.length, 1); assert.match(ui.html(), /1人の生徒グループ/); assert.equal(ui.confirms(), 0);
+  assert.equal(ui.requests.length, 2); assert.match(ui.html(), /1人の生徒グループ/); assert.equal(ui.confirms(), 0);
   ui.click('family-confirm'); assert.equal(ui.requests.at(-1).body.studentId, 'child-a'); assert.equal(ui.requests.at(-1).body.op, 'familyEnsureGroup');
   ui.requests.at(-1).reply({ ok: true, family: { label: '【テスト】きょうだい' }, inviteCode: 'fi1.synthetic.private-invite', expiresAt: 1790000000000 }); await flush();
   ui.requests.at(-1).reply(familyList()); await flush(); assert.match(ui.html(), /private-invite/);
-  assert.equal(JSON.stringify(ui.writes).includes('private-invite'), false); assert.equal(ui.local.has('sw_kanri_c'), false); assert.equal(JSON.stringify(ui.logs).includes('private-invite'), false);
+  assert.equal(JSON.stringify(ui.writes).includes('private-invite'), false); assert.equal((ui.local.get('sw_kanri_c') || '').includes('private-invite'), false); assert.equal(JSON.stringify(ui.logs).includes('private-invite'), false);
   ui.click('family-hidecode'); assert.equal(ui.html().includes('private-invite'), false);
 });
 
@@ -120,13 +120,13 @@ test('teacher notification retries exclude uncertain and nonretryable authentica
 test('teacher unlink sends only the final child list after explicit confirmation', async () => {
   const ui = await teacherReady(familyList({ families: [{ id: 'family-a', label: '【テスト】きょうだい', status: 'active', configured: true, children: [{ studentId: 'child-a', name: '子A' }, { studentId: 'child-b', name: '子B' }] }] }));
   ui.click('family-edit', { 'data-id': 'family-a' }); ui.check('data-family-child', 'child-b', false); ui.click('family-save');
-  assert.equal(ui.requests.length, 1); ui.click('family-confirm');
+  assert.equal(ui.requests.length, 2); ui.click('family-confirm');
   assert.equal(ui.requests.at(-1).body.op, 'familySetChildren'); assert.equal(ui.requests.at(-1).body.familyId, 'family-a'); assert.deepEqual(ui.requests.at(-1).body.studentIds, ['child-a']);
 });
 
 test('teacher mail retries display a confirmation and send only the selected retryable notification', async () => {
   const ui = await teacherReady(familyList({ notifications: [{ id: 'invoice-failed', familyId: 'family-a', label: '【テスト】通知対象', kind: 'invoiceCreated', status: 'failed', retryable: true }] }));
-  ui.click('family-notify', { 'data-id': 'invoice-failed' }); assert.equal(ui.requests.length, 1); assert.match(ui.html(), /確認済みメールへ/);
+  ui.click('family-notify', { 'data-id': 'invoice-failed' }); assert.equal(ui.requests.length, 2); assert.match(ui.html(), /確認済みメールへ/);
   ui.click('family-confirm'); assert.equal(ui.requests.at(-1).body.op, 'familyRetryNotifications'); assert.deepEqual(ui.requests.at(-1).body.ids, ['invoice-failed']);
 });
 
@@ -186,3 +186,15 @@ test('verification lookup network failure offers reload, never resends mail or v
  assert.match(ui.html(),/changed@example.invalid/);assert.match(ui.html(),/このメールアドレスで認証する/);assert.ok(!ui.html().includes('次に、ログイン用'));
  assert.ok(!ui.html().includes('data-step="login"'));assert.ok(!ui.html().includes('data-step="resend"'));
 });
+
+ test('student list includes parent management below students and keeps legacy links usable', async()=>{
+  const ui=await teacherReady();
+  assert.ok(ui.html().indexOf('生徒を追加') < ui.html().indexOf('保護者・通知'));
+  assert.match(ui.html(),/通知の状況/);
+  assert.doesNotMatch(ui.el('nav').innerHTML, /保護者・通知/);
+  assert.match(ui.el('nav').innerHTML, /href="#students" class="on"/);
+  ui.navigate('#families?student=child-a');
+  ui.requests.findLast(r=>r.body.op==='familyList').reply(familyList());
+  ui.requests.findLast(r=>r.body.op==='kanriDashboard').reply({ok:true,data:{students:[],inactive:[]}});
+  await flush();assert.match(ui.html(),/生徒一覧/);assert.match(ui.html(),/子Aさんの保護者/);
+ });
