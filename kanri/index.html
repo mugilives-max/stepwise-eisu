@@ -506,6 +506,7 @@
             : isLessons(r)
               ? admin("state").then(function (res) { return res.admin; })
               : admin("kanriDashboard").then(function (res) { return res.data; });
+          if (r.page === "student" && r.section === "settings") loadFamilies();
           p.then(function (data) {
             if (seq !== loadSeq) return; // 別の画面に移っていたら捨てる
             cachePut(key, data);
@@ -874,7 +875,7 @@
             (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
           html += '<div class="note">「リンクをコピー」は今のリンクをコピーするだけです(何度押しても同じ)。リンクが他人に知られたときだけ「再発行」してください。前のリンクは使えなくなります。</div></div>';
 
-          html += studentParentInviteHtml(s);
+          html += studentParentInviteHtml(s) + studentFamilySettingsHtml(s);
           }
           if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する
@@ -1328,7 +1329,7 @@
 
         /* ---------- 家族と通知: 招待コード・メールを永続キャッシュへ入れない ---------- */
         var FT = { data: null, busy: false, error: "", edit: null, confirm: null, invite: null, auth: "", seq: 0 };
-        function familyAdminRender() { if (route().page === "families" || route().page === "students") render(); }
+        function familyAdminRender() { var r=route(); if (r.page === "families" || r.page === "students" || r.page === "student" && r.section === "settings" && cur && sameId(cur.id,r.id)) render(); }
         function loadFamilies() {
           var seq = ++FT.seq, auth = token(); FT.busy = true; FT.error = ""; familyAdminRender();
           admin("familyList", {}).then(function (res) {
@@ -1386,6 +1387,20 @@
           if (!FT.invite || FT.auth !== token()) return '';
           return '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクからメールアドレスを入力し、届いたメールで確認してからパスワードを設定すると利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
         }
+        function studentFamilySettingsHtml(s) {
+          var h='<h2>家族設定</h2><div class="card">', d=FT.auth===token()?FT.data:null;
+          if(FT.error) return h+'<p role="alert">'+esc(FT.error)+'</p><button class="btn-quiet" data-action="family-settings-refresh">もう一度読み込む</button></div>';
+          if(!d || FT.busy) return h+'<p>同じグループの生徒を読み込んでいます…</p></div>';
+          var groups=(d.families||[]).filter(function(f){return (f.children||[]).some(function(c){return sameId(c.studentId,s.id);});});
+          if(!groups.length) h+='<p>まだグループに登録されていません。</p>';
+          groups.forEach(function(f){
+            var others=(f.children||[]).filter(function(c){return !sameId(c.studentId,s.id);});
+            h+='<p><strong>'+esc(f.label)+'</strong></p>';
+            if(!others.length) h+='<p>同じグループの他の生徒はいません。</p>';
+            else h+='<p>同じグループの他の生徒</p><ul>'+others.map(function(c){return '<li><a href="#s='+encodeURIComponent(c.studentId)+'&tab=settings">'+esc(c.name)+'</a></li>';}).join('')+'</ul>';
+          });
+          return h+'<a class="btn-quiet btn-sm" href="#students?student='+encodeURIComponent(s.id)+'">グループの変更・管理</a></div>';
+        }
         function studentParentInviteHtml(s) {
           var own = studentInvite.id === String(s.id) && studentInvite.auth === token();
           return '<h2>保護者</h2><div class="card"><p>この生徒が所属するグループの保護者登録案内を作成します。兄弟が同じグループにいる場合は、共通の案内になります。</p><p class="note">作成すると以前の登録案内は使えなくなります。登録済みの保護者は、ログイン画面のパスワード再設定をご利用ください。</p><button class="btn-primary" data-action="family-student-invite"' + (studentInvite.busy ? ' disabled' : '') + '>' + (own && studentInvite.busy ? '案内を作成しています…' : '保護者の登録案内を作成') + '</button><p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></p>' + (own && studentInvite.error ? '<p role="alert">' + esc(studentInvite.error) + '</p>' : '') + '</div>' + (own && FT.invite && FT.invite.studentId === String(s.id) ? familyInviteHtml() : '');
@@ -1400,6 +1415,7 @@
           }).catch(function(er){studentInvite.busy=false;if(token()!==auth)return;studentInvite.error=er.message;if(route().page==='student'&&route().id===id)render();});
         }
         function familyAdminClick(action, btn) {
+          if(action === "family-settings-refresh" && route().page === "student" && route().section === "settings") { if(!FT.busy)loadFamilies();return; }
           if(action === "family-student-invite") { issueStudentParentInvite(); return; }
           var studentCopy = route().page === "student" && route().section === "settings" && ["family-copy","family-hidecode"].indexOf(action) >= 0 && FT.invite && FT.invite.studentId === route().id && FT.auth === token();
           if (FT.busy || (!studentCopy && route().page !== "families" && route().page !== "students")) return;
