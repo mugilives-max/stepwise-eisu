@@ -97,3 +97,6 @@ test('calendar overlap chains keep all four lessons without claiming four people
   assert.equal(ui.html().includes('同じ時間帯の授業(4人)'), false);
   assert.equal(ui.html().includes('2人同時'), false);
 });
+test('selected calendar day exposes add button and carries date into student offer',async()=>{
+ const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/aria-label="この日に予定を追加"/);ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');assert.equal(ui.requests.length,1);
+});

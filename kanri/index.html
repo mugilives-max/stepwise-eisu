@@ -346,7 +346,7 @@
         /* ---------- 授業ページ(予約ページの先生モードから移植) ---------- */
         var A = null; // 予約システムの全データ(slots/students/blocked/log)
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
-        var selDate = null, selManual = false, offerDraft = null;
+        var selDate = null, selManual = false, offerDraft = null, pendingDayOffer = null;
         var homeOffOpen = null; // ホームで「先生の休みにする」フォームを開いている日付
         function isLessons(r) { return r.page === "lessons" || r.page === "settings"; }
         function viewOf() { var p = route().page; return p === "student" ? "student" : (p === "lessons" || p === "settings") ? "lessons" : "home"; }
@@ -513,6 +513,7 @@
             var editing = editProfile || editEmail || editFee;
             if (r.page === "student") { if (!editing || !cached) cur = data; } else if (isLessons(r)) A = data; else D = data;
             authM = "ok"; busy = false; syncMsg = ""; render();
+            if (r.page === "lessons" && pendingDayOffer) { var selectedDay=pendingDayOffer;pendingDayOffer=null;boardOpenOffer(selectedDay,"17:00",60); }
           }).catch(function (e) {
             if (seq !== loadSeq) return;
             busy = false; syncMsg = "";
@@ -646,7 +647,7 @@
           var hday = hs.filter(function (s) { return s.date === selDate; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
           var hOff = (d.teacherOff || []).filter(function (o) { return o.date === selDate; });
           var hAllDay = hOff.some(function (o) { return !o.start; });
-          html += '<h2>' + fmtD(selDate) + 'の予定 <span class="cnt">' + hday.length + '件</span>' + (selDate >= d.today ? '<span style="margin-left:auto;display:inline-flex;gap:6px">' + (hOff.length ? '<button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(hOff.map(function (o) { return o.id; }).join(",")) + '"' + (busy ? ' disabled' : '') + '>先生の休みを解除</button>' : '') + (hAllDay ? '' : '<button class="btn-ghost btn-sm" data-action="homeoff" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>' + (homeOffOpen === selDate ? 'やめる' : '先生の休みにする') + '</button>') + '</span>' : '') + '</h2>';
+          html += '<h2>' + fmtD(selDate) + 'の予定 ' + calendarAddButton(selDate,d.today) + '<span class="cnt">' + hday.length + '件</span>' + (selDate >= d.today ? '<span style="margin-left:auto;display:inline-flex;gap:6px">' + (hOff.length ? '<button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(hOff.map(function (o) { return o.id; }).join(",")) + '"' + (busy ? ' disabled' : '') + '>先生の休みを解除</button>' : '') + (hAllDay ? '' : '<button class="btn-ghost btn-sm" data-action="homeoff" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>' + (homeOffOpen === selDate ? 'やめる' : '先生の休みにする') + '</button>') + '</span>' : '') + '</h2>';
           if (homeOffOpen === selDate && selDate >= d.today) {
             html += '<div class="card" style="margin-bottom:10px;border-color:var(--amber)"><div class="row"><strong>' + fmtD(selDate) + '</strong><span class="small muted">終日なら時間は空欄のまま</span></div>';
             html += '<div class="row" style="margin-top:8px"><input type="time" id="ho-start" step="900"><span class="muted">〜</span><input type="time" id="ho-end" step="900"><input type="text" id="ho-note" placeholder="メモ(任意。例: 学会、旅行)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="homeoffsave" data-date="' + selDate + '"' + (busy ? ' disabled' : '') + '>登録</button></div></div>';
@@ -686,6 +687,9 @@
 
         var newStudentDraft = null;
         document.addEventListener("input", function(ev) { if(newStudentDraft && (ev.target.id==='n-name'||ev.target.id==='n-email')) newStudentDraft[ev.target.id==='n-name'?'name':'email']=ev.target.value; });
+        function calendarAddButton(date,today) {
+          return date>=today ? '<button class="btn-primary" data-action="calendar-add" data-date="'+esc(date)+'" aria-label="この日に予定を追加" title="この日に予定を追加" style="border-radius:50%;width:36px;height:36px;padding:0;font-size:24px;margin-left:8px">＋</button>' : '';
+        }
         function renderStudents() {
           renderNav();
           var html = '<h1>生徒一覧</h1><p class="sub">タップするとカルテを開きます</p><div class="grid" style="margin-top:14px">';
@@ -817,7 +821,7 @@
             var dayN = (s.blocked || []).filter(function (b) { return b.date === selDate; });
             var dayW = (s.wishes || []).filter(function (x) { return x.date === selDate; });
             var dayO = (s.teacherOff || []).filter(function (o) { return o.date === selDate; });
-            html += '<div class="card" style="margin-top:10px"><div class="row between"><strong>' + fmtD(selDate) + '</strong>' + (selDate >= tdy && s.active !== false ? '<button class="btn-ghost btn-sm" data-action="dayoffer" data-date="' + selDate + '">この日に案内する</button>' : "") + '</div>';
+            html += '<div class="card" style="margin-top:10px"><div class="row between"><strong>' + fmtD(selDate) + '</strong>' + (selDate >= tdy && s.active !== false ? '<button class="btn-ghost btn-sm" data-action="dayoffer" data-date="' + selDate + '" aria-label="この日に予定を追加" title="この日に予定を追加" style="border-radius:50%;width:36px;height:36px;padding:0;font-size:24px">＋</button>' : "") + '</div>';
             dayO.forEach(function (o) { html += offLine(o); });
             if (!dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) html += '<div class="empty">この日の予定はありません</div>';
             dayL.forEach(function (l) { html += '<div class="line"><span class="t">' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' ' + (l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : l.req ? '<span class="tag red">取消依頼中</span>' : l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>') + '</span>' + (l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : "") + '</div>'; });
@@ -1178,7 +1182,7 @@
           (A.wishes || []).forEach(function (x) { var it = info[x.date] || (info[x.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.wish = (it.wish || 0) + 1; });
           (A.events || []).forEach(function (e) { var d = e.date; for (var ei = 0; ei < 61 && d <= e.dateTo; ei++) { var it = info[d] || (info[d] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ev = (it.ev || 0) + 1; d = addDaysStr(d, 1); } });
           html += renderCal(info, today);
-          html += '<h2>' + fmtD(selDate) + 'の授業</h2>';
+          html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + '</h2>';
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。上のフォームから案内できます(日付は選択済み)。</div>';
           var dayWish = (A.wishes || []).filter(function (x) { return x.date === selDate; });
@@ -2133,6 +2137,11 @@
             case 'board-detailclose': boardDetail=null;render();break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } render(); break;
+            case "calendar-add":
+              var chosenDay=btn.getAttribute('data-date');
+              if(route().page==='lessons')boardOpenOffer(chosenDay,'17:00',60);
+              else {pendingDayOffer=chosenDay;location.hash='#lessons';}
+              break;
             case "calday":
               selDate = btn.getAttribute("data-date"); selManual = true;
               offerDraft = { studentId: val("f-student"), subject: val("f-subject"), deliveryMode: val("f-delivery"), start: val("f-start"), min: val("f-min"), date: selDate, wishId: offerDraft && offerDraft.wishId };
