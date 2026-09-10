@@ -874,7 +874,7 @@
             (s.active === false ? '<button class="btn-ghost btn-sm" data-action="setactive" data-on="1"' + (busy ? " disabled" : "") + '>予約ページに戻す</button>' : '<button class="btn-quiet btn-sm" data-action="setactive" data-on="0"' + (busy ? " disabled" : "") + '>予約ページから外す</button>') + '</div>';
           html += '<div class="note">「リンクをコピー」は今のリンクをコピーするだけです(何度押しても同じ)。リンクが他人に知られたときだけ「再発行」してください。前のリンクは使えなくなります。</div></div>';
 
-          html += '<h2>保護者</h2><div class="card"><p>生徒をグループにまとめ、1つの保護者ログインを共有します。お子さまが1人の場合も同じ方法です。</p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></div>';
+          html += studentParentInviteHtml(s);
           }
           if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する
@@ -1350,7 +1350,7 @@
           renderNav(); var d = FT.auth === token() ? FT.data : null, dis = FT.busy ? ' disabled' : '';
           var h = '<h2 id="parent-notifications">保護者・通知</h2><p class="sub">生徒グループごとに保護者ログインを1つ使います。父母などが同じログインを複数端末で共有できます。</p><p><button class="btn-quiet" data-action="family-refresh"' + dis + '>一覧を更新</button></p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
-          if (FT.invite && FT.auth === token()) h += '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクからメールアドレスを入力し、届いたメールで確認してからパスワードを設定すると利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
+          h += familyInviteHtml();
           if (!d) { h += FT.busy ? '<p>読み込んでいます…</p>' : ''; if (embedded) return h; app.innerHTML = h; return; }
           var students = d.students || [], families = d.families || [], targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
           if(targetStudent) h += '<div class="card"><h2>'+esc(targetStudent.name)+'さんの保護者</h2><p>1人でも同じグループとして扱います。兄弟は下の移動先を選んでまとめてください。移動先の保護者ログインを引き続き使います。</p></div>';
@@ -1381,8 +1381,28 @@
           if (embedded) return h;
           app.innerHTML = h;
         }
+        var studentInvite = { id: '', auth: '', busy: false, error: '' };
+        function familyInviteHtml() {
+          if (!FT.invite || FT.auth !== token()) return '';
+          return '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクからメールアドレスを入力し、届いたメールで確認してからパスワードを設定すると利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
+        }
+        function studentParentInviteHtml(s) {
+          var own = studentInvite.id === String(s.id) && studentInvite.auth === token();
+          return '<h2>保護者</h2><div class="card"><p>この生徒が所属するグループの保護者登録案内を作成します。兄弟が同じグループにいる場合は、共通の案内になります。</p><p class="note">作成すると以前の登録案内は使えなくなります。登録済みの保護者は、ログイン画面のパスワード再設定をご利用ください。</p><button class="btn-primary" data-action="family-student-invite"' + (studentInvite.busy ? ' disabled' : '') + '>' + (own && studentInvite.busy ? '案内を作成しています…' : '保護者の登録案内を作成') + '</button><p><a class="btn-quiet btn-sm" href="#students?student=' + encodeURIComponent(s.id) + '">生徒グループ・保護者ログイン</a></p>' + (own && studentInvite.error ? '<p role="alert">' + esc(studentInvite.error) + '</p>' : '') + '</div>' + (own && FT.invite && FT.invite.studentId === String(s.id) ? familyInviteHtml() : '');
+        }
+        function issueStudentParentInvite() {
+          var r=route(); if (r.page !== 'student' || r.section !== 'settings' || !cur || studentInvite.busy) return;
+          var id=String(cur.id), auth=token(); studentInvite={id:id,auth:auth,busy:true,error:''}; FT.invite=null; render();
+          admin('familyEnsureGroup',{studentId:id}).then(function(res){
+            if(token()!==auth) { studentInvite.busy=false; return; }
+            studentInvite.busy=false; FT.auth=auth; FT.invite={code:res.inviteCode,expiresAt:res.expiresAt,label:(res.family||{}).label||'保護者',studentId:id};
+            if(route().page==='student' && route().id===id) render();
+          }).catch(function(er){studentInvite.busy=false;if(token()!==auth)return;studentInvite.error=er.message;if(route().page==='student'&&route().id===id)render();});
+        }
         function familyAdminClick(action, btn) {
-          if (FT.busy || (route().page !== "families" && route().page !== "students")) return;
+          if(action === "family-student-invite") { issueStudentParentInvite(); return; }
+          var studentCopy = route().page === "student" && route().section === "settings" && ["family-copy","family-hidecode"].indexOf(action) >= 0 && FT.invite && FT.invite.studentId === route().id && FT.auth === token();
+          if (FT.busy || (!studentCopy && route().page !== "families" && route().page !== "students")) return;
           if (action === "family-refresh") { loadFamilies(); return; }
           if (action === "family-confirm") { familyDo(); return; }
           if (action === "family-cancel") { FT.confirm = null; render(); return; }

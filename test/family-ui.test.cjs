@@ -198,3 +198,18 @@ test('verification lookup network failure offers reload, never resends mail or v
   ui.requests.findLast(r=>r.body.op==='kanriDashboard').reply({ok:true,data:{students:[],inactive:[]}});
   await flush();assert.match(ui.html(),/生徒一覧/);assert.match(ui.html(),/子Aさんの保護者/);
  });
+const settingsCard=require('./helpers/operations-ui-harness.cjs').card;
+test('student settings issues invitation for the current student group and copies it without caching',async()=>{
+ const ui=createUI('admin',{hash:'#s=test-a&tab=settings'});ui.requests[0].reply({ok:true,data:settingsCard()});await flush();
+ ui.click('family-student-invite');assert.equal(ui.requests.at(-1).body.op,'familyEnsureGroup');assert.equal(ui.requests.at(-1).body.studentId,'test-a');
+ ui.requests.at(-1).reply({ok:true,family:{label:'【テスト】兄弟グループ'},inviteCode:'fi1.synthetic.settings',expiresAt:1790000000000});await flush();
+ assert.match(ui.html(),/兄弟グループの登録案内/);ui.click('family-copy');await flush();assert.match(ui.clipboard,/fi1.synthetic.settings/);
+ assert.equal(JSON.stringify(ui.writes).includes('fi1.synthetic.settings'),false);
+ ui.click('family-hidecode');assert.doesNotMatch(ui.html(),/fi1.synthetic.settings/);
+});
+test('student settings keeps registered-parent errors visible and late invitations off another student',async()=>{
+ const ui=createUI('admin',{hash:'#s=test-a&tab=settings'});ui.requests[0].reply({ok:true,data:settingsCard()});await flush();
+ ui.click('family-student-invite');ui.requests.at(-1).reply({error:'登録済みの保護者はメールからパスワードを再設定してください'});await flush();assert.match(ui.html(),/role="alert"/);
+ ui.click('family-student-invite');const pending=ui.requests.at(-1);ui.navigate('#s=test-b&tab=settings');ui.requests.at(-1).reply({ok:true,data:settingsCard({id:'test-b',name:'【テスト】別生徒'})});await flush();
+ pending.reply({ok:true,family:{label:'別グループ'},inviteCode:'fi1.synthetic.other',expiresAt:1790000000000});await flush();assert.doesNotMatch(ui.html(),/fi1.synthetic.other/);
+});
