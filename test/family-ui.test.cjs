@@ -25,7 +25,7 @@ test('registration collects only email and keeps a correction route while waitin
   ui.input('fa-email',' Parent@Example.Invalid ');ui.submit('family-auth-form');
   assert.equal(ui.requests[0].body.pass,undefined);assert.equal(ui.requests[0].body.email,'parent@example.invalid');
   ui.requests[0].reply({ok:true,verificationRequired:true,mailStatus:'sent'});await flush();
-  assert.match(ui.html(),/メール確認待ち/);assert.match(ui.html(),/parent@example.invalid/);assert.match(ui.html(),/メールアドレスを修正/);
+  assert.match(ui.html(),/メールを開いて登録を続けてください/);assert.match(ui.html(),/parent@example.invalid/);assert.match(ui.html(),/メールアドレスを修正/);
   assert.equal(ui.session.has('sw_ft_v1'),false);assert.equal(JSON.stringify(ui.writes).includes('invite-secret'),false);
 });
 
