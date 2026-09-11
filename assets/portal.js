@@ -451,6 +451,7 @@
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">授業不可</button></div>';
             }
           }
+          if (route() === 'home' && selMode) html += renderSelBar(D, true);
           return html + '</div>';
         }
 
@@ -531,12 +532,12 @@
         }
 
         // 予定ページの画面下: 日付を選択中のバー(授業できない日・希望・予定共有)
-        function renderSelBar(D) {
+        function renderSelBar(D, inline) {
           if (!selMode) return "";
           var blocked = D.blocked;
           var selDates = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
           var selTxt = selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し)";
-          var html = '<div class="confirmbar selbar ' + selMode + '"><div class="inner">';
+          var html = '<div class="confirmbar selbar ' + selMode + '"' + (inline ? ' style="position:static;margin-top:14px;padding:14px 0 0;box-shadow:none"' : '') + '><div class="inner">';
           if (selMode === "ng") {
             var ngByDate = {};
             blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
@@ -582,7 +583,7 @@
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
 
-          // 予定表(見るだけ。先生の休みは表示しない)
+          // 予定表と日付ごとの登録(先生の休みは表示しない)
           html += '<h2>予定表 <a href="#schedule" class="small" style="font-weight:500;margin-left:6px">希望・共有・授業できない日の登録 →</a></h2>';
           html += renderCal(D.info, today, false);
           html += renderDayDetail(D, false, false);
@@ -1291,8 +1292,8 @@
               var calEl0 = document.querySelector(".cal"); if (calEl0) calEl0.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "dayact":
-              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; if(route()!=="schedule")location.hash="#schedule"; render();
-              var calEl2 = document.querySelector(".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
+              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; render();
+              var calEl2 = document.querySelector(route() === "home" ? ".selbar" : ".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "selstart":
               selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();
