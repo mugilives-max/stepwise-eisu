@@ -567,6 +567,9 @@
         // 画面下の確認バー(確定・再調整・取消依頼・取り下げ)。ホーム・予定ページ共通
         function renderPendingBar(D) {
           if (!pending) return "";
+          if (pending.kind === "remove") {
+            return '<div class="confirmbar"><div class="inner"><div class="msg">' + pending.text + '</div><div class="row"><button class="btn-danger" data-action="doremove"' + (busy ? ' disabled' : '') + '>' + (busy ? '処理しています…' : esc(pending.verb)) + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div></div></div>';
+          }
           var s = null, slots = D.slots;
           for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
           if (!s) return "";
@@ -1398,8 +1401,9 @@
               studentAction({ action: "cancelReq", slotId: pending.slotId, requestId:pending.requestId, k: myKey(), reason: reason }, "キャンセル申請を受け付けました"); break;
             case "askwithdraw": pending = { kind: "withdraw", slotId: id }; render(); break;
             case "dowithdraw": studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました"); break;
-            case "delwish": studentAction({ action: "unwish", k: myKey(), wishId: id }, "授業可能日時を取り消しました"); break;
-            case "delevent": studentAction({ action: "eventDel", k: myKey(), eventId: id }, "予定を取り消しました"); break;
+            case "delwish": { var dw = (S.wishes || []).filter(function (w) { return String(w.id) === String(id); })[0]; pending = { kind: "remove", verb: "取り消す", text: "授業できる時間帯" + (dw ? " " + fmtDateW(dw.date) + " " + esc(dw.start) + "〜" + esc(dw.end) : "") + " の登録を取り消しますか?", body: { action: "unwish", k: myKey(), wishId: id }, ok: "授業可能日時を取り消しました" }; render(); break; }
+            case "delevent": { var de = (S.events || []).filter(function (e) { return String(e.id) === String(id); })[0]; pending = { kind: "remove", verb: "削除する", text: "重要な予定" + (de ? "「" + esc(de.title) + "」（" + fmtDateW(de.date) + (de.dateTo && de.dateTo !== de.date ? "〜" + fmtDateW(de.dateTo) : "") + "）" : "") + " を削除しますか?", body: { action: "eventDel", k: myKey(), eventId: id }, ok: "予定を取り消しました" }; render(); break; }
+            case "doremove": if (pending && pending.kind === "remove") studentAction(pending.body, pending.ok); break;
             case "taskadd":
               var tt = val("f-ttitle"), ty = val("f-ttype"), dm = val("f-tdue-mode"), td = dm === 'date' ? val("f-tdue") : '', ds = dm === 'nextLesson' ? val("f-tdue-subject") : '', taskKey = myKey();
               if (!tt) { toast("内容を入れてください"); return; }
@@ -1408,9 +1412,9 @@
               if (dm === 'nextLesson' && !ds) { toast('期限にする授業の科目を入れてください'); return; }
               studentAction({ action: "taskAdd", k: taskKey, type: ty, title: tt, due: td, dueMode: dm, dueSubject: ds }, "追加しました", function () { delete taskDrafts[taskKey]; }); break;
             case "taskdel": studentAction({ action: "taskDel", k: myKey(), taskId: id }, "削除しました"); break;
-            case "delblock":
-              var sids = btn.getAttribute("data-ids");
-              studentAction({ action: "unblock", k: myKey(), blockIds: sids ? sids.split(",") : [id] }, "解除しました"); break;
+            case "delblock": {
+              var sids = btn.getAttribute("data-ids"), bids = sids ? sids.split(",") : [id], db = (S.blocked || []).filter(function (b) { return String(b.id) === String(bids[0]); })[0];
+              pending = { kind: "remove", verb: "解除する", text: "授業できない日" + (db ? " " + fmtDateW(db.date) + (db.start ? " " + esc(db.start) + "〜" + esc(db.end) : "（終日）") : "") + " を解除しますか?<br><span class='small muted'>解除すると、この日時にも授業の案内が来るようになります。</span>", body: { action: "unblock", k: myKey(), blockIds: bids }, ok: "解除しました" }; render(); break; }
             case "parentmode": if (busy) return; parentStep = parentStep === "setup" ? "pass" : "setup"; parentNotice = ""; render(); break;
             case "parentresume": if (busy) return; loadParent(ssGet(parentSessionKey()) || ""); break;
             case "parentclose": parentPlanMemos = Object.create(null); parentPlanNotice = ""; logoutParent(); break;
