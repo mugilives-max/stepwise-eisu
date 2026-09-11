@@ -199,8 +199,18 @@ function billingPlanSubmit_(req) {
   for(var c=0;c<clean.length;c++){var set=billingPlanSet_({studentId:id,ym:ym,subject:clean[c].subject,kind:clean[c].kind,count:clean[c].count,expectedRevision:rev()});if(set.error)return set;}
   memoClear_();
   if(req.comment!==undefined&&typeof planCommentSave_==='function'){var pc=planCommentSave_({studentId:id,ym:ym,comment:req.comment});if(pc.error)return pc;}
+  var out={ok:true,rate30:rate30,lessonMin:lessonMin,lessonFee:Math.round(rate30*lessonMin/30),rows:clean.length};
+  if(req.propose===false||String(req.propose)==='false'){
+    // 下書き: 授業時間と料金を月間承認の行に控えるだけで、案内(提案)はしない。提案済み・承認済みの月なら、その提案を取り下げて下書きに戻す(保護者が古い条件のまま承認できないように)
+    memoClear_();var cur=billingAgreement_(id,ym),fresh=!cur,changed=false;
+    if(!cur)cur={id:billingId_(),studentId:id,ym:ym,revision:0,status:'draft',rate30:'',monthly:'',planJson:JSON.stringify(billingPlanList_(id,ym)),approvedPlanJson:''};
+    if(cur.status!=='draft'){changed=true;cur.revision=Number(cur.revision)+1;cur.status='draft';cur.approvedPlanJson='';cur.proposedAt='';cur.approvedAt='';cur.approvedVia='';cur.consentDate='';cur.memo='';var ps=planSetStatus_(id,ym,'draft','','',false);if(ps&&ps.error)return ps;}
+    cur.rate30=rate30;cur.monthly=0;cur.lessonMin=lessonMin;billingWriteAgreement_(cur);
+    if(fresh||changed)billingAudit_(cur,'planChanged',cur.id+':'+cur.revision+':changed');
+    out.draft=true;out.revision=Number(cur.revision);return out;
+  }
   var pr=billingPlanPropose_({studentId:id,ym:ym,expectedRevision:rev(),rate30:rate30,monthly:0,lessonMin:lessonMin});if(pr.error)return pr;
-  return {ok:true,rate30:rate30,lessonMin:lessonMin,lessonFee:Math.round(rate30*lessonMin/30),rows:clean.length};
+  out.revision=pr.revision;return out;
 }
 function billingPlanPropose_(req) {
   var id=String(req.studentId||''),ym=String(req.ym||''),st=findStudent_(id);

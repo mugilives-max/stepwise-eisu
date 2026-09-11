@@ -81,3 +81,21 @@ test('planSubmit saves rows, lesson time, per-lesson fee and comment, then propo
   assert.deepEqual(json(c2.billingPlanList_('test-a', '2026-09')), [{ subject: '数学', count: 3 }]); assert.equal(c2.planComment_('test-a', '2026-09'), '');
   assert.equal(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.planStatus, 'proposed');
 });
+
+test('planSubmit with propose:false keeps a draft: terms are stored, nothing is proposed, and a sent proposal is withdrawn', () => {
+  const h = createSchedulingHarness(); ok(h.admin('state'));
+  const submit = args => h.admin('planSubmit', { studentId: 'test-a', ym: '2026-09', ...args });
+  const d = ok(submit({ rows: [{ subject: '英語', count: 4 }], lessonMin: 90, lessonFee: 4500, comment: '下書き', propose: false }));
+  assert.equal(d.draft, true); assert.equal(d.rate30, 1500);
+  let b = h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing; assert.equal(b.planStatus, 'draft');
+  let a = h.context().billingAgreement_('test-a', '2026-09'); assert.equal(a.status, 'draft'); assert.equal(Number(a.rate30), 1500); assert.equal(Number(a.lessonMin), 90); assert.equal(a.proposedAt, '');
+  assert.equal(json(h.context().studentState_('synthetic-link-a')).planMonths.length, 0, 'students do not see drafts');
+  rejected(h.admin('planApproveTeacher', { studentId: 'test-a', ym: '2026-09', expectedRevision: rev(h), via: '電話', consentDate: '2026-09-06', memo: 'x' }));
+  ok(submit({ rows: [{ subject: '英語', count: 4 }], lessonMin: 90, lessonFee: 4500, comment: '送信', expectedRevision: rev(h) }));
+  assert.equal(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.planStatus, 'proposed');
+  const d2 = ok(submit({ rows: [{ subject: '英語', count: 4 }], lessonMin: 90, lessonFee: 6000, comment: '送信', propose: false, expectedRevision: rev(h) }));
+  assert.equal(d2.draft, true);
+  a = h.context().billingAgreement_('test-a', '2026-09'); assert.equal(a.status, 'draft'); assert.equal(Number(a.rate30), 2000); assert.equal(a.proposedAt, '');
+  assert.equal(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.planStatus, 'draft');
+  assert.equal(json(h.context().studentState_('synthetic-link-a')).planMonths.length, 0);
+});
