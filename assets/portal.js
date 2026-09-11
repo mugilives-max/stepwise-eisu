@@ -350,7 +350,7 @@
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
                 if (l.st === "event") { marks += '<span class="callbl ' + (l.kind === "test" ? "ts" : "ev") + '">' + esc(l.text) + "</span>"; return; }
-                var lc = l.st === "offer" ? " of" : (l.st === "done" || l.st === "past") ? " dn" : "";
+                var lc = l.st === "offer" ? " of" : l.st === "past" ? " dn" : "";
                 marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
               });
               if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
@@ -360,9 +360,8 @@
             else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
           h += '</div><div class="callegend">';
-          h += '<span><span class="callbl" style="display:inline">科目</span> 授業(確定)</span>';
-          h += '<span><span class="callbl of" style="display:inline">科目</span> 授業登録(未確定)</span>';
-          h += '<span><span class="callbl dn" style="display:inline">科目</span> 実施済み</span>';
+          h += '<span><span class="callbl" style="display:inline">授業</span></span>';
+          h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
           h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
           h += '<span><span class="callbl ts" style="display:inline">テスト</span> テスト・模試</span>';
           h += '<span><span class="calmark">×</span> 授業できない日</span>';
@@ -440,7 +439,7 @@
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
-                html += '<details style="width:100%"><summary class="chip done" style="cursor:pointer;display:list-item;list-style-position:inside">実施済 ' + label + '</summary><div style="padding:12px 4px">';
+                html += '<details style="width:100%"><summary class="chip mine" style="cursor:pointer;display:list-item;list-style-position:inside">実施済 ' + label + '</summary><div style="padding:12px 4px">';
                 if (record) {
                   html += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
                   html += '<h3 style="font-size:15px;margin:10px 0 6px">授業の内容</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
