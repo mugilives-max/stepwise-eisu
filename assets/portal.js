@@ -512,13 +512,25 @@
             return out;
           }
           var proposedRows = 0; proposed.forEach(function (m) { proposedRows += Object.keys(m.plan).length; });
+          // 保護者のマイページでは、案内の下で直接承認・回数調整できる(保護者メニューと同じ確認カードを使う)
+          var famChild = route() === 'family' ? familyMypageChild() : null, famMonths = famChild && F.childrenData[famChild.studentId] ? (F.childrenData[famChild.studentId].planMonths || []) : [];
+          if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) folds.plan = true;
           var ymNow = today.slice(0, 7), nowCounts = counts(ymNow), nowHasLessons = Object.keys(nowCounts).length > 0;
           if (!months.length && !nowHasLessons) return '';
           var html = foldHead('plan', '授業計画', proposedRows ? proposedRows + '件の案内' : approved.length ? '承認済み' : (+ymNow.slice(5)) + '月') + '<div class="card">';
+          if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) html += renderFamilyPlanConfirm(F.busy ? ' disabled' : '');
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内 <span class="small muted" style="font-weight:400">保護者の承認待ち</span></h3>';
           if (!proposedRows) html += '<div class="empty">新しい案内はありません</div>';
-          proposed.forEach(function (m) { Object.keys(m.plan).forEach(function (k) { html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(k) + '</strong> ' + m.plan[k] + '回</span><span class="tag amber">保護者の承認待ち</span></div>'; }); });
-          if (proposedRows) html += '<div class="note">保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると下の実施計画に移ります。</div>';
+          proposed.forEach(function (m) {
+            Object.keys(m.plan).forEach(function (k) { html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(k) + '</strong> ' + m.plan[k] + '回</span><span class="tag amber">保護者の承認待ち</span></div>'; });
+            if (famChild) {
+              var fm = famMonths.filter(function (x) { return x.ym === m.ym; })[0], famDis = F.busy ? ' disabled' : '';
+              if (fm && fm.status === 'proposed' && fm.termsKnown && Number.isSafeInteger(fm.revision)) html += '<div class="row" style="margin:8px 0 4px;gap:8px"><button class="btn-primary btn-sm" data-action="fa-planok" data-child="' + esc(famChild.studentId) + '" data-ym="' + esc(m.ym) + '"' + famDis + '>承認する</button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="' + esc(famChild.studentId) + '" data-ym="' + esc(m.ym) + '"' + famDis + '>回数を調整・見送る</button><span class="small muted">' + (fm.lessonMin ? '1回 ' + yen(fm.rate30 * fm.lessonMin / 30) + '（' + esc(fm.lessonMin) + '分）' : '') + '</span></div>';
+              else if (fm && fm.status === 'proposed') html += '<div class="small muted" style="margin:6px 0">料金の条件がまだ設定されていません。先生の連絡をお待ちください。</div>';
+              else if (!fm) html += '<div class="small muted" style="margin:6px 0">承認の内容を読み込んでいます…</div>';
+            }
+          });
+          if (proposedRows) html += '<div class="note">' + (famChild ? '「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。' : '保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると下の実施計画に移ります。') + '</div>';
           html += '<h3 style="margin:14px 0 6px;font-size:15px">実施計画 <span class="small muted" style="font-weight:400">承認済み</span></h3>';
           var remainTotal = 0, shown = 0;
           approved.forEach(function (m) {
@@ -1010,6 +1022,25 @@
           kinds.forEach(function (kv) { h += '<label style="display:block;padding:6px 0"><input type="checkbox" data-action="fa-mailpref" data-kind="' + kv[0] + '"' + (prefs[kv[0]] === false ? '' : ' checked') + dis + '> ' + kv[1] + '</label>'; });
           return h + '<p class="note">オフにした項目はメールを送りません（保護者ページのお知らせでは引き続き確認できます）。変更はすぐに保存されます。メールアドレスの確認や再設定のメールは対象外です。</p></div>';
         }
+        // 授業計画の回答(承認・回数調整)の確認カード。保護者メニューとマイページの授業計画で共用
+        function renderFamilyPlanConfirm(dis) {
+          if (!F.confirm) return '';
+          var h = '';
+              var confirmation=F.confirm;
+          h+='<div class="card" role="region" aria-label="授業計画の回答確認"><strong>'+esc((F.childrenData[confirmation.studentId]||{}).name)+'・'+esc(confirmation.ym)+'</strong>';
+          if(confirmation.stage==='reduce'){
+            h+='<p>承認できる回数を選んでください。0回の場合は今回は見送ります。</p>';
+            confirmation.rows.forEach(function(r,index){h+='<p><label>'+esc(lessonLabel(r))+' <select id="fa-reduce-'+index+'">';for(var n=0;n<=r.count;n++)h+='<option value="'+n+'"'+(n===confirmation.approvedCounts[index].count?' selected':'')+'>'+n+'回</option>';h+='</select></label></p>';});
+            h+='<label>先生への伝言（任意）<textarea id="fa-plan-message" maxlength="500">'+esc(confirmation.memo||'')+'</textarea></label><p><button class="btn-primary" data-action="fa-plan-review">この内容を確認する</button></p>';
+          }else{
+            h+='<p>'+confirmation.approvedCounts.map(function(r){return esc(lessonLabel(r))+' '+r.count+'回まで';}).join('、')+'</p>';
+            h+=confirmation.approve?'<p>この回数以内で授業の計画を立てることができます。授業実施前であれば、いつでもシステムまたはLINEから計画の見直しを申し出ることができます。承認しますか？</p>':'<p>今回は見送ります。先生にこの内容を伝えますか？</p>';
+            if(confirmation.memo)h+='<p>'+esc(confirmation.memo)+'</p>';
+            h+='<button class="btn-primary" data-action="fa-decide"'+dis+'>'+(confirmation.approve?'承認する':'今回は見送る')+'</button> ';
+          }
+          h+='<button class="btn-quiet" data-action="fa-cancel"'+dis+'>戻る</button></div>';
+          return h;
+        }
         function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = '';
           if (!c) return '<p>子どもの紐付けを先生にご依頼ください。</p>';
@@ -1133,21 +1164,7 @@
             h += '<h2>請求・料金承認</h2>';
             h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
-            if(F.confirm){
-              var confirmation=F.confirm;
-              h+='<div class="card" role="region" aria-label="授業計画の回答確認"><strong>'+esc((F.childrenData[confirmation.studentId]||{}).name)+'・'+esc(confirmation.ym)+'</strong>';
-              if(confirmation.stage==='reduce'){
-                h+='<p>承認できる回数を選んでください。0回の場合は今回は見送ります。</p>';
-                confirmation.rows.forEach(function(r,index){h+='<p><label>'+esc(lessonLabel(r))+' <select id="fa-reduce-'+index+'">';for(var n=0;n<=r.count;n++)h+='<option value="'+n+'"'+(n===confirmation.approvedCounts[index].count?' selected':'')+'>'+n+'回</option>';h+='</select></label></p>';});
-                h+='<label>先生への伝言（任意）<textarea id="fa-plan-message" maxlength="500">'+esc(confirmation.memo||'')+'</textarea></label><p><button class="btn-primary" data-action="fa-plan-review">この内容を確認する</button></p>';
-              }else{
-                h+='<p>'+confirmation.approvedCounts.map(function(r){return esc(lessonLabel(r))+' '+r.count+'回まで';}).join('、')+'</p>';
-                h+=confirmation.approve?'<p>この回数以内で授業の計画を立てることができます。授業実施前であれば、いつでもシステムまたはLINEから計画の見直しを申し出ることができます。承認しますか？</p>':'<p>今回は見送ります。先生にこの内容を伝えますか？</p>';
-                if(confirmation.memo)h+='<p>'+esc(confirmation.memo)+'</p>';
-                h+='<button class="btn-primary" data-action="fa-decide"'+dis+'>'+(confirmation.approve?'承認する':'今回は見送る')+'</button> ';
-              }
-              h+='<button class="btn-quiet" data-action="fa-cancel"'+dis+'>戻る</button></div>';
-            }
+            h += renderFamilyPlanConfirm(dis);
             familyVisibleChildren().forEach(function(c,index){
               h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
               h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId,'billing') : F.busy ? '<p>読み込んでいます…</p>' : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">子どもの情報を再読み込み</button>';
@@ -1198,7 +1215,7 @@
           } else if (action === "fa-cancel") { F.confirm = null; familyRender(); }
           else if (action === "fa-decide" && F.confirm && (F.home.children||[]).some(function(c){return sameId(c.studentId,F.confirm.studentId);})) {
             var confirmation = F.confirm;
-            familyRequest("familyPlanDecide", {ftoken:familyToken(),studentId:confirmation.studentId,ym:confirmation.ym,approve:confirmation.approve,expectedRevision:confirmation.expectedRevision,memo:confirmation.memo,approvedCounts:confirmation.approvedCounts}, function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); loadFamilyNotices(); });
+            familyRequest("familyPlanDecide", {ftoken:familyToken(),studentId:confirmation.studentId,ym:confirmation.ym,approve:confirmation.approve,expectedRevision:confirmation.expectedRevision,memo:confirmation.memo,approvedCounts:confirmation.approvedCounts}, function (res) { F.confirm = null; F.childrenData[confirmation.studentId] = res.data; delete F.memos[confirmation.studentId + ':' + confirmation.ym]; F.message = res.notificationWarning || (confirmation.approve ? '承認しました。' : '先生に相談を伝えました。'); familyLoadChildState(confirmation.studentId); loadFamilyNotices(); });
           }
         }
 

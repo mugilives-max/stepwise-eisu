@@ -584,3 +584,7 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - ナビは「ホーム／授業の記録／成績／保護者メニュー」の4つ。保護者メニューは上から「請求・料金承認」（請求一覧、授業計画の承認・調整、子どもごとのお支払い状況）、「先生への連絡」（子どもごとの連絡欄）、「保護者の設定」（メール確認状態、メールアドレス変更、メール通知のオン／オフ、ログアウト）。旧 `#family/billing` `#family/contacts` `#family/settings` は保護者メニューとして開く。
 - メール通知の設定: 新シート `familyEmailPrefs`（familyId, planProposed, invoiceCreated, invoiceVoided, updatedAt。'1'/'0'、行がなければ全部オン、初回保存時に自動作成）。`familyHome` が `emailPrefs` を返し、`familyEmailPrefs` で保存。`familyNotifySafe_` はオフの種類を `familyOutbox` に `skipped` と理由を残して送らず、先生の再試行対象にもならない。認証メール（確認・再設定）は対象外。
 - テスト: `test/family-portal.test.cjs`（設定の保存と通知の抑止）、`test/family-ui.test.cjs`（メニューの構成とトグル）。
+
+### 保護者はマイページの「授業計画」から直接承認できる（2026-09-11）
+
+保護者ページのホーム（子どものマイページ）の「授業計画」の案内行の下に「承認する」「回数を調整・見送る」と1回の料金を表示し、押すと同じ折り畳みの中に確認カード（保護者メニューと同じ `renderFamilyPlanConfirm`）を出して回答する。回答後は子どもの状態を取り直して「実施計画」に反映。承認の条件（料金設定済み・最新の提案）は従来どおり `familyPlanDecide` が検査する。生徒本人のページの表示は変更なし。GAS 変更なし。画面テスト1件追加。
