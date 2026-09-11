@@ -649,9 +649,7 @@
             html += '</div>';
           })();
 
-          html += renderNextLesson(D);
           html += renderOffers(D);
-          html += renderUpcoming(D, true);
 
           html += '<div class="note" style="margin-top:18px">授業可能日時・予定の共有・授業できない日は「予定」、実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者」タブにあります。</div>';
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
