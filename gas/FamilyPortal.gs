@@ -5,11 +5,14 @@ var FAMILY_LINK_COLS_ = ['id','familyId','studentId','active','linkedAt','update
 var FAMILY_CHALLENGE_COLS_ = ['id','familyId','kind','email','secretHash','expiresAt','usedAt','createdAt','failCount','securityVersion'];
 var FAMILY_OUTBOX_COLS_ = ['id','eventKey','familyId','studentId','kind','ym','revision','email','status','createdAt','sentAt','attempts','error'];
 var FAMILY_NOTICE_READ_COLS_ = ['id','familyId','noticeId','readAt'];
+// 保護者へのメール通知の種類別オン・オフ。行がなければ全部オン。認証メール(確認・再設定)は対象外
+var FAMILY_EMAIL_PREF_COLS_ = ['familyId','planProposed','invoiceCreated','invoiceVoided','updatedAt'];
+var FAMILY_MAIL_KINDS_ = ['planProposed','invoiceCreated','invoiceVoided'];
 var FAMILY_PORTAL_URL_ = 'https://www.stepwise-education.jp/yoyaku/#family';
 var FAMILY_CHALLENGE_MS_ = 30 * 60 * 1000;
 
 function ensureFamilySchema_() {
-  var definitions={familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_};
+  var definitions={familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
   Object.keys(definitions).forEach(function(name){
     var sh=ss_().getSheetByName(name),cols=definitions[name];
     if(sh&&sh.getLastRow()&&(sh.getLastColumn()!==cols.length||sh.getRange(1,1,1,cols.length).getValues()[0].join('|')!==cols.join('|')))throw new Error(name+'の列構成を確認してください。自動上書きは行いません');
@@ -60,6 +63,17 @@ function familyChildren_(a,includeInactive) {
   });return out;
 }
 function familyPublic_(a) { return {id:String(a.id),label:String(a.label),email:String(a.email)}; }
+function familyEmailPrefRow_(familyId){var rows=ss_().getSheetByName('familyEmailPrefs')?familyRows_('familyEmailPrefs'):[];return rows.filter(function(r){return String(r.familyId)===String(familyId);})[0]||null;}
+function familyEmailPrefs_(familyId){var r=familyEmailPrefRow_(familyId),p={};FAMILY_MAIL_KINDS_.forEach(function(k){p[k]=!r||String(r[k])!=='0';});return p;}
+function familyEmailPrefsSave_(req){
+  var auth=familyRequire_(req);if(auth.error)return auth;var a=auth.account,input=req.prefs;
+  if(!input||typeof input!=='object'||Array.isArray(input)||!Object.keys(input).length||Object.keys(input).some(function(k){return FAMILY_MAIL_KINDS_.indexOf(k)<0||typeof input[k]!=='boolean';}))return familyError_('通知設定の内容を確認してください');
+  if(!ss_().getSheetByName('familyEmailPrefs')){ensureSheet_(ss_(),'familyEmailPrefs',FAMILY_EMAIL_PREF_COLS_);memoClear_();}
+  var r=familyEmailPrefRow_(a.id)||{familyId:String(a.id)},current=familyEmailPrefs_(a.id);
+  FAMILY_MAIL_KINDS_.forEach(function(k){r[k]=(k in input?input[k]:current[k])?'1':'0';});r.updatedAt=familyStamp_();
+  familyWrite_('familyEmailPrefs',FAMILY_EMAIL_PREF_COLS_,r);
+  return {ok:true,emailPrefs:familyEmailPrefs_(a.id)};
+}
 // Read-only statement of existing child invoices; does not issue or pay again.
 function familyBilling_(a,includeInactive) {
   var children=familyChildren_(a,includeInactive),months={};
@@ -240,7 +254,8 @@ function familyDispatch_(req) {
     case 'familyResetRequest':return familyResetRequest_(req);
     case 'familyResetConfirm':return familyResetConfirm_(req);
     case 'familyEmailChange':return familyEmailChange_(req);
-    case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false)};}
+    case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false),emailPrefs:familyEmailPrefs_(h.account.id)};}
+    case 'familyEmailPrefs':return familyEmailPrefsSave_(req);
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
     case 'familyStudentState':{var fs=familyChildRequire_(req);if(fs.error)return fs;var st=studentState_(String(fs.student&&fs.student.code||''));if(st&&typeof st==='object'){delete st.emailStatus;st.viewer='family';}return st;}
@@ -290,7 +305,11 @@ function familyNotifySafe_(kind,studentId,eventKey,detail) {
   try {
     if(['planProposed','invoiceCreated','invoiceVoided'].indexOf(kind)<0)return {ok:false};
     var matches=familyRows_('familyAccounts').filter(function(a){return a.status==='active'&&a.verifiedAt&&familyChildren_(a,false).some(function(s){return s.studentId===String(studentId);});});
-    var states=[];matches.forEach(function(a){var out=familyOutboxAdd_(eventKey,a,String(studentId),kind,detail),mail=familyBusinessMail_(out);states.push(familyDeliverOutbox_(out,a,mail.subject,mail.body,false).status);});
+    var states=[];matches.forEach(function(a){
+      var out=familyOutboxAdd_(eventKey,a,String(studentId),kind,detail);
+      if(out.status==='pending'&&!familyEmailPrefs_(a.id)[kind]){out.status='skipped';out.error='保護者の通知設定でオフのため送信しません';familyWrite_('familyOutbox',FAMILY_OUTBOX_COLS_,out);states.push('skipped');return;}
+      var mail=familyBusinessMail_(out);states.push(familyDeliverOutbox_(out,a,mail.subject,mail.body,false).status);
+    });
     return {ok:true,statuses:states};
   }catch(e){return {ok:false,warning:'保護者通知の記録を確認してください'};}
 }

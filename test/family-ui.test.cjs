@@ -16,7 +16,7 @@ test('parent sections separate billing, reports and account settings without rel
   ui.navigate('#family/records');{const st=ui.requests.find(r=>r.body.action==='familyStudentState');st.reply({...state(),viewer:'family',history:[{id:'h1',date:'2026-09-02',start:'17:00',min:90,subject:'英語',done:true}],lessonRecords:[{recordId:'r1',revision:2,date:'2026-09-02',start:'17:00',min:90,subject:'英語',content:'本文',homework:[]}]});await flush();}
   assert.match(ui.html(),/data-folder="英語"/);ui.click('histopen',{'data-folder':'英語'});assert.match(ui.html(),/先生からの授業記録/);assert.match(ui.html(),/<details class="card" data-parent-record="r1" data-record-revision="2"><summary><span data-read-label class="tag">確認中<\/span>/);assert.ok(!ui.html().includes('承認する'));assert.ok(!ui.html().includes('メールアドレスを変更'));
   const count2=ui.requests.length; // 既読の取得(recordReadStatus)は StepwiseLessonRead を読み込む実ブラウザでのみ動く
-  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2);assert.equal(ui.el('fa-child'),undefined);
+  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2);assert.match(ui.el('tabs').innerHTML,/href="#family\/menu" class="on"[^>]*>保護者メニュー/);
 });
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
 async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#students' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); ui.requests[1].reply({ok:true,data:{students:[],inactive:[]}}); await flush(); return ui; }
@@ -266,4 +266,20 @@ test('the family 成績 tab is the child grades page with the exam-report panel 
   g.reply({ ok: true, grades: [{ date: '2026-09-01', test: '中間', subject: '英語', score: 80, max: 100, dev: null, rank: '' }], exams: [] }); await flush();
   assert.match(ui.html(), /成績推移 <span class="cnt">1件/); assert.match(ui.html(), /中間/);
   ui.navigate('#family/home'); assert.doesNotMatch(ui.html(), /data-action="fa-mytab"/); assert.match(ui.html(), /<h2>予定表<\/h2>/);
+});
+
+test('the 保護者メニュー tab combines billing, contact and settings, with mail notification toggles saved at once', async () => {
+  const ui = loggedUI(); ui.requests[0].reply({ ...home(), emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: true } }); await flush();
+  ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子B') }); await flush();
+  ui.navigate('#family/menu');
+  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '授業の記録', '成績', '保護者メニュー']);
+  const html = ui.html(); const order = ['<h2>請求・料金承認</h2>', '<h2>先生への連絡</h2>', '<h2>保護者の設定</h2>', 'メール通知'].map(t => html.indexOf(t));
+  assert.ok(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), JSON.stringify(order));
+  assert.match(html, /承認する/); assert.match(html, /メールアドレスを変更/); assert.match(html, /id="family-contact-0"/); assert.match(html, /id="family-contact-1"/);
+  assert.equal((html.match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 3);
+  ui.check('data-kind', 'invoiceVoided', false);
+  assert.deepEqual(ui.requests.at(-1).body, { action: 'familyEmailPrefs', ftoken: 'test-family-token', prefs: { planProposed: true, invoiceCreated: true, invoiceVoided: false } });
+  ui.requests.at(-1).reply({ ok: true, emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: false } }); await flush();
+  assert.match(ui.html(), /メール通知の設定を保存しました/); assert.equal((ui.html().match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 2);
+  ui.navigate('#family/billing'); assert.match(ui.el('tabs').innerHTML, /href="#family\/menu" class="on"/);
 });

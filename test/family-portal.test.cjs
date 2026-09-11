@@ -426,3 +426,18 @@ test('a family session reads a linked child state and acts for the child through
   rejected(h.family('studentEmailPrefs',{ftoken:v.ftoken,studentId:'test-a',prefs:{offered:false}}));
   assert.equal(h.rows('wishes').length,1);
 });
+
+test('family mail preferences default on, save per family, and skip only the kinds turned off', () => {
+  const h = createFamilyHarness(); const v = verified(h); h.mailbox.length = 0;
+  assert.deepEqual(ok(h.family('familyHome', { ftoken: v.ftoken })).emailPrefs, { planProposed: true, invoiceCreated: true, invoiceVoided: true });
+  rejected(h.family('familyEmailPrefs', { prefs: { invoiceCreated: false } })); rejected(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { other: false } })); rejected(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { invoiceCreated: 'no' } }));
+  assert.deepEqual(ok(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { invoiceCreated: false } })).emailPrefs, { planProposed: true, invoiceCreated: false, invoiceVoided: true });
+  assert.equal(h.rows('familyEmailPrefs').length, 1);
+  const notify = (kind, key) => JSON.parse(JSON.stringify(h.context().familyNotifySafe_(kind, 'test-a', key, { ym: '2026-09', revision: 1 })));
+  assert.deepEqual(ok(notify('invoiceCreated', 'pref-one')).statuses, ['skipped']); assert.equal(h.mailbox.length, 0);
+  const out = h.rows('familyOutbox').find(r => r.eventKey === 'pref-one'); assert.equal(out.status, 'skipped'); assert.match(out.error, /通知設定/);
+  rejected(h.admin('familyRetryNotifications', { ids: [out.id] })); assert.equal(h.mailbox.length, 0);
+  assert.deepEqual(ok(notify('invoiceVoided', 'pref-two')).statuses, ['sent']); assert.equal(h.mailbox.length, 1);
+  ok(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { invoiceCreated: true } })); assert.deepEqual(ok(notify('invoiceCreated', 'pref-three')).statuses, ['sent']); assert.equal(h.mailbox.length, 2);
+  assert.deepEqual(ok(notify('invoiceCreated', 'pref-one')).statuses, ['skipped']); assert.equal(h.mailbox.length, 2);
+});
