@@ -272,3 +272,14 @@ test('calendar shows every lesson of a day without a +N summary', async () => {
   const cell = ui.html().match(/data-date="2026-09-15">15<span class="calmarks"><\/span>([^]*?)<\/button>/)[1];
   assert.equal((cell.match(/class="calbox"/g) || []).length, 5); assert.doesNotMatch(cell, /callbl more/);
 });
+
+test('approved addon lines are folded into their parent plan and proposed addons are marked 追加', async () => {
+  const { line } = require('./helpers/operations-ui-harness.cjs');
+  const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }],
+    planLines:[line({ id:'p', status:'approved', approvedCount:4, comment:'通常の予習' }), line({ id:'x', parentId:'p', addon:true, count:2, approvedCount:2, status:'approved', startDate:'2026-09-20', endDate:'2026-09-30', period:'2026/9/20〜9/30', month:'', comment:'テスト前に演習を増やすため' }), line({ id:'y', parentId:'p', addon:true, count:1, status:'proposed', startDate:'2026-09-25', endDate:'2026-09-30', period:'2026/9/25〜9/30', month:'', comment:'さらに1回' })] };
+  const ui = await studentReady(s);
+  assert.match(ui.html(), /<span class="tag amber">案内<\/span><span class="time">9\/25〜9\/30<\/span><span class="who"><strong>英語<\/strong> <span class="tag gray">通常<\/span> <span class="tag gray">追加<\/span> ＋1回/);
+  assert.match(ui.html(), /実施 1・予定 0<span class="muted">／計画 4回＋追加 2回<\/span><\/span><span class="small"[^>]*>あと 5 回<\/span>/);
+  assert.match(ui.html(), /<strong>追加（9\/20〜9\/30・＋2回）：<\/strong>テスト前に演習を増やすため/);
+  assert.equal((ui.html().match(/<span class="tag green">承認済み<\/span>/g) || []).length, 1, 'the approved addon is not listed as a separate row');
+});

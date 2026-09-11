@@ -65,5 +65,13 @@ test('the admin plan card lists lines with status, opens one editor at a time, a
   r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineSave'); assert.equal(r.lineId, 'a1'); assert.equal(r.kind, '演習'); assert.equal(r.propose, false); assert.equal(r.comment, '講習の続き'); assert.equal(r.lessonMin, 60); assert.equal(r.lessonFee, 3000);
   // from default
   ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines, defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
+  // addon (topping) on the approved line: same subject/kind locked, period inside the parent, comment required by the label, parentId in the payload
+  ui.click('pe-addon', { 'data-line': 'a1' });
+  assert.match(ui.html(), /追加案内（トッピング）/); assert.match(ui.html(), /<select id="pe-subject" data-pe-field="subject" disabled>/); assert.match(ui.html(), /<input type="date" id="pe-start" data-pe-field="startDate" value="2026-09-22" min="2026-09-22" max="2026-10-05">/);
+  assert.equal(ui.el('pe-count').value, '1'); assert.equal(ui.el('pe-fee').value, '3000'); assert.match(ui.html(), /なぜ追加が必要か/); assert.doesNotMatch(ui.html(), /data-action="pe-month"/);
+  ui.input('pe-count', '2'); ui.input('pe-comment', 'テスト前に演習を増やすため'); ui.click('pe-send');
+  r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineSave'); assert.equal(r.parentId, 'a1'); assert.equal(r.lineId, undefined); assert.equal(r.subject, '数学'); assert.equal(r.kind, '演習'); assert.equal(r.count, 2); assert.equal(r.propose, true); assert.equal(r.comment, 'テスト前に演習を増やすため');
+  ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines: lines.concat([line({ id: 'x1', subject: '数学', kind: '演習', parentId: 'a1', addon: true, count: 2, status: 'proposed', startDate: '2026-09-22', endDate: '2026-10-05', period: '2026/9/22〜10/5', month: '', lessonMin: 60, lessonFee: 3000, comment: 'テスト前' })]), defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
+  assert.match(ui.html(), /<div class="plan-gr" data-line="x1"><div class="plan-gc">数学<span class="sub">追加<\/span><\/div><div class="plan-gc">演習<\/div><div class="plan-gc">＋2回<\/div>/); assert.doesNotMatch(ui.html(), /data-action="pe-addon" data-line="x1"/);
   ui.click('pl-fromdefault'); r = ui.requests.at(-1).body; assert.equal(r.op, 'planLinesFromDefault'); assert.equal(r.ym, '2026-10');
 });

@@ -354,16 +354,11 @@ function schedulingWrite_(w) {
 }
 function schedulingSnapshot_(s) { return {id:String(s.id),studentId:String(s.studentId),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||'')}; }
 function schedulingBatchGate_(slots,allSlots) {
-  var aggregate=Object.create(null);
+  // 先に確定したものを確定済みとして次を判定する(同じ案内の枠を分け合う)
+  var accepted=[];
   for(var i=0;i<slots.length;i++){
-    var s=slots[i],gate=billingSlotAllowed_(s)||schedulingCapacityError_(s,allSlots,s.id);if(gate)return {slotId:s.id,error:gate.error,errorCode:gate.errorCode};
-    if(s.status==='booked')continue;
-    var line=planLineMatch_(planLinesFor_(s.studentId),s),key=line?line.id:'none|'+String(s.studentId)+'|'+String(s.subject);
-    if(!aggregate[key]){
-      aggregate[key]={limit:line?planLineLimit_(line):0,count:line?planLineBooked_(line,allSlots).length:0};
-    }
-    aggregate[key].count++;
-    if(aggregate[key].count>aggregate[key].limit)return {slotId:s.id,error:'選択した授業をすべて確定すると承認回数を超えます',errorCode:'planLimit'};
+    var s=slots[i],gate=billingSlotAllowed_(s,accepted)||schedulingCapacityError_(s,allSlots,s.id);if(gate)return {slotId:s.id,error:gate.error,errorCode:gate.errorCode};
+    if(s.status!=='booked')accepted.push(Object.assign({},s,{status:'booked'}));
   }
   return null;
 }

@@ -76,7 +76,7 @@ test('booking is gated by the matching line across month boundaries and counts t
   rejected(h.accept(out.id), 'approvalRequired'); rejected(h.accept(eng.id), 'approvalRequired');
   // the line cannot shrink below or away from booked lessons, nor be deleted
   rejected(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-10-05', count: 1, expectedRevision: 1 }), 'bookedOver');
-  rejected(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-09-30', count: 2, expectedRevision: 1 }), 'bookedOutside');
+  rejected(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-09-30', count: 2, expectedRevision: 1 }), 'bookedOver');
   rejected(h.admin('planLineDelete', { studentId: 'test-a', lineId: sent.line.id }), 'bookedExists');
   ok(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-10-10', count: 3, expectedRevision: 1 }));
   // batch acceptance also uses the line limit
@@ -145,4 +145,38 @@ test('legacy month agreements, plans and comments migrate to lines once', () => 
   assert.equal(ls[1].approvedVia, 'LINE'); assert.equal(ls[1].consentDate, '2026-07-21');
   c.memoClear_(); c.planLinesMigrate_(); assert.equal(lines(h).length, 4, 'migration is idempotent');
   assert.equal(json(h.context().studentState_('synthetic-link-a')).planLines.map(l => l.status).join(','), 'proposed');
+});
+
+test('addon lines top up an approved line: same subject and kind, period inside the parent, own comment and approval, summed booking limit', () => {
+  const h = createSchedulingHarness();
+  const parent = ok(save(h, { subject: '数学', count: 2, propose: true, comment: '通常の予習' })); h.approveLine(parent.line.id);
+  const addon = args => save(h, { subject: '数学', parentId: parent.line.id, count: 1, startDate: '2026-09-20', endDate: '2026-09-30', comment: '定期テスト前に演習量を増やすため', ...args });
+  rejected(addon({ subject: '英語' })); rejected(addon({ endDate: '2026-10-05' })); rejected(addon({ parentId: 'nope' }), 'notFound');
+  // a new plain line over the same period is still an overlap, and the error points at the addon route
+  assert.match(rejected(save(h, { subject: '数学', startDate: '2026-09-20', endDate: '2026-09-30' }), 'overlap').error, /追加/);
+  const a1 = ok(addon({ propose: true }));
+  assert.equal(a1.line.addon, true); assert.equal(a1.line.parentId, parent.line.id); assert.equal(a1.line.comment, '定期テスト前に演習量を増やすため'); assert.equal(a1.line.status, 'proposed');
+  // a second addon may overlap the first one
+  const a2 = ok(addon({ count: 2, startDate: '2026-09-25', endDate: '2026-09-30', lessonFee: 6000, comment: '追加分は講習料金' }));
+  assert.equal(a2.line.rate30, 2000);
+  const st = json(h.context().studentState_('synthetic-link-a'));
+  assert.deepEqual(st.planLines.map(l => [l.subject, l.count, l.addon, l.status]), [['数学', 1, true, 'proposed'], ['数学', 2, false, 'approved']]);
+  // the parent cannot be deleted while addons exist; an addon can be deleted while unused
+  rejected(h.admin('planLineDelete', { studentId: 'test-a', lineId: parent.line.id }), 'addonExists');
+  // booking: parent limit 2, addon not yet approved → third lesson is over the limit
+  const s1 = h.seedSlot({ date: '2026-09-10' }), s2 = h.seedSlot({ date: '2026-09-12' }), s3 = h.seedSlot({ date: '2026-09-22' }), s4 = h.seedSlot({ date: '2026-09-26' });
+  ok(h.accept(s1.id)); ok(h.accept(s2.id)); rejected(h.accept(s3.id), 'planLimit');
+  h.approveLine(a1.line.id); ok(h.accept(s3.id));
+  rejected(h.accept(s4.id), 'planLimit');
+  h.approveLine(a2.line.id); ok(h.accept(s4.id));
+  // billing: the first two lessons use the parent rate, the next the addon rates in order
+  h.advance(40 * 86400000);
+  for (const id of [s1.id, s2.id, s3.id, s4.id]) h.setRow('slots', 'id', id, { done: true });
+  const p = preview(h); assert.equal(p.canBill, true, p.reason);
+  assert.deepEqual(p.lessons.map(l => [l.date, l.lineId === parent.line.id ? 'parent' : l.lineId === a1.line.id ? 'a1' : l.lineId === a2.line.id ? 'a2' : '?', l.amount]), [['2026-09-10', 'parent', 3000], ['2026-09-12', 'parent', 3000], ['2026-09-22', 'a1', 3000], ['2026-09-26', 'a2', 4000]]);
+  assert.equal(p.amount, 13000);
+  // the parent's count cannot drop below what its lessons need once the addons are full
+  rejected(save(h, { lineId: parent.line.id, subject: '数学', count: 1, expectedRevision: h.context().planLine_('test-a', parent.line.id).revision }), 'bookedOver');
+  // the month summary counts parent and addons
+  assert.equal(h.context().billingMonthInfo_('test-a', '2026-09').total, 5);
 });

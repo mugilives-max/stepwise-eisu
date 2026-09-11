@@ -2,7 +2,7 @@
    行ごとに 下書き(draft) → 案内送信(proposed) → 承認(approved)/見送り(declined) と進み、行ごとに版(revision)を持つ。
    月は期間の特別な場合(1日〜月末)。同じ科目・種類で期間が重なる行は作れない(実施した授業がどの行の分か決められなくなる)。
    請求は今までどおり月ごと。実施した授業を日付・科目・種類の合う承認済みの行に当てはめ、行の単価で時間按分する。 */
-var PLAN_LINE_COLS_ = ['id','studentId','subject','kind','count','startDate','endDate','lessonMin','rate30','comment','status','revision','proposedAt','approvedAt','approvedVia','consentDate','memo','approvedCount','createdAt','updatedAt'];
+var PLAN_LINE_COLS_ = ['id','studentId','subject','kind','count','startDate','endDate','lessonMin','rate30','comment','status','revision','proposedAt','approvedAt','approvedVia','consentDate','memo','approvedCount','createdAt','updatedAt','parentId'];
 var PLAN_LINE_MAX_DAYS_ = 366;
 var PLAN_LINE_STATUSES_ = ['draft','proposed','approved','declined'];
 
@@ -26,7 +26,7 @@ function planLineNorm_(r, row) {
   return { _row: row, id: String(r.id || ''), studentId: String(r.studentId || ''), subject: String(r.subject || ''), kind: kindNorm_(r.kind), count: Number(r.count) || 0,
     startDate: planDate_(r.startDate), endDate: planDate_(r.endDate), lessonMin: Number(r.lessonMin) || 0, rate30: Number(r.rate30) || 0, comment: String(r.comment || ''),
     status: String(r.status || '') || 'draft', revision: Number(r.revision) || 0, proposedAt: String(r.proposedAt || ''), approvedAt: String(r.approvedAt || ''), approvedVia: String(r.approvedVia || ''),
-    consentDate: planDate_(r.consentDate), memo: String(r.memo || ''), approvedCount: r.approvedCount === '' || r.approvedCount == null ? null : Number(r.approvedCount), createdAt: String(r.createdAt || ''), updatedAt: String(r.updatedAt || '') };
+    consentDate: planDate_(r.consentDate), memo: String(r.memo || ''), approvedCount: r.approvedCount === '' || r.approvedCount == null ? null : Number(r.approvedCount), createdAt: String(r.createdAt || ''), updatedAt: String(r.updatedAt || ''), parentId: String(r.parentId || '') };
 }
 function planLineWrite_(l) {
   l.updatedAt = billingStamp_(); if (!l.createdAt) l.createdAt = l.updatedAt;
@@ -64,6 +64,33 @@ function planLineMatch_(lines, slot, statuses) {
 function planLineBooked_(l, slots, exceptId) {
   return (slots || readRows_('slots')).filter(function (s) { return String(s.studentId) === l.studentId && s.status === 'booked' && String(s.subject || '') === l.subject && kindNorm_(s.kind) === l.kind && planLineCovers_(l, String(s.date || '')) && String(s.id) !== String(exceptId || ''); });
 }
+// 追加案内(トッピング): 承認済みの案内の枠を使い切ったとき、同じ科目・種類で回数を足す行。parentId で親にひも付き、期間は親の中に収まる
+function planLineIsAddon_(l) { return !!(l && l.parentId); }
+function planLineParentOf_(lines, l) { return l && l.parentId ? lines.filter(function (x) { return x.id === l.parentId; })[0] || null : null; }
+function planLineAddonsOf_(lines, l) { return lines.filter(function (x) { return x.parentId === l.id; }); }
+// 確定授業の割り当て: 生徒の確定授業を日付順に、その日を含む承認済みの行(親 → 追加の順、追加は開始日順)のうち枠の残っている行へ当てる。
+// 返り値は slotId → {line, candidates}。candidates=0 なら科目・種類・日付の合う承認済みの行がない、line=null なら枠が足りない
+function planAssign_(lines, slots) {
+  var approved = lines.filter(function (l) { return l.status === 'approved'; }), cap = {}, map = {};
+  approved.forEach(function (l) { cap[l.id] = planLineLimit_(l); });
+  var booked = slots.filter(function (s) { return s.status === 'booked'; }).slice().sort(function (a, b) { var ka = String(a.date) + ' ' + String(a.start) + ' ' + String(a.id), kb = String(b.date) + ' ' + String(b.start) + ' ' + String(b.id); return ka < kb ? -1 : ka > kb ? 1 : 0; });
+  booked.forEach(function (s) {
+    var cands = approved.filter(function (l) { return String(s.studentId) === l.studentId && l.subject === String(s.subject || '') && l.kind === kindNorm_(s.kind) && planLineCovers_(l, String(s.date || '')); })
+      .sort(function (a, b) { return ((a.parentId ? 1 : 0) - (b.parentId ? 1 : 0)) || (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0); });
+    var hit = cands.filter(function (l) { return cap[l.id] > 0; })[0];
+    map[String(s.id)] = { line: hit || null, candidates: cands.length };
+    if (hit) cap[hit.id]--;
+  });
+  return map;
+}
+function planUnassigned_(map) { var n = 0; Object.keys(map).forEach(function (k) { if (!map[k].line) n++; }); return n; }
+function planStudentSlots_(studentId, slots) { return (slots || readRows_('slots')).filter(function (s) { return String(s.studentId) === String(studentId); }); }
+// 行の変更・削除・回数調整で、確定済みの授業が枠から外れないかを、変更後の行で割り当て直して確かめる(外れる授業が増えれば不可)
+function planLinesChangeError_(studentId, lines, nextLines, message, code) {
+  var slots = planStudentSlots_(studentId);
+  if (planUnassigned_(planAssign_(nextLines, slots)) > planUnassigned_(planAssign_(lines, slots))) return billingError_(message, code);
+  return null;
+}
 // 期間に請求済みの月があれば、その行は変更できない(請求の根拠を変えない)
 function planLineLocked_(l) {
   var months = planLineMonths_(l);
@@ -72,7 +99,7 @@ function planLineLocked_(l) {
 }
 function planLineView_(l) {
   return { id: l.id, subject: l.subject, kind: l.kind, count: l.count, approvedCount: l.approvedCount, startDate: l.startDate, endDate: l.endDate, period: planPeriodLabel_(l), month: planLineIsMonth_(l) ? l.startDate.slice(0, 7) : '',
-    lessonMin: l.lessonMin, rate30: l.rate30, lessonFee: planLineFee_(l), comment: l.comment, status: l.status, revision: l.revision, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedVia: l.approvedVia, consentDate: l.consentDate, memo: l.memo, updatedAt: l.updatedAt };
+    lessonMin: l.lessonMin, rate30: l.rate30, lessonFee: planLineFee_(l), comment: l.comment, status: l.status, revision: l.revision, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedVia: l.approvedVia, consentDate: l.consentDate, memo: l.memo, updatedAt: l.updatedAt, parentId: l.parentId || '', addon: !!l.parentId };
 }
 function planLineSort_(a, b) { return a.startDate === b.startDate ? (a.subject + a.kind).localeCompare(b.subject + b.kind) : (a.startDate < b.startDate ? 1 : -1); }
 // 監査(approvalEvents)は月間承認と同じ列に書く: ym には期間、planJson には行の内容
@@ -106,23 +133,37 @@ function planLineSave_(req) {
     l = lines.filter(function (x) { return x.id === lineId; })[0];
     if (!l) return billingError_('案内が見つかりません。最新の画面を読み直してください', 'notFound');
     check = billingRevisionCheck_(req, l, false) || planLineLocked_(l); if (check) return check;
-    // 確定済みの授業を外す変更はできない(回数を減らす・期間から外す)
-    var booked = planLineBooked_(l);
-    if (booked.some(function (s) { return String(s.subject || '') !== subject || kindNorm_(s.kind) !== kind || s.date < start || s.date > end; })) return billingError_('確定済みの授業が期間・科目・種類から外れます。先に授業を取り消すか、変更内容を見直してください', 'bookedOutside');
-    if (booked.length > count) return billingError_('確定済みの授業数(' + booked.length + '回)より少ない回数にはできません', 'bookedOver');
+  }
+  // 追加案内: 親は同じ生徒の追加でない行。科目・種類は親に合わせ、期間は親の中
+  var parentId = l ? l.parentId : String(req.parentId || ''), parent = null;
+  if (parentId) {
+    parent = lines.filter(function (x) { return x.id === parentId; })[0];
+    if (!parent || parent.parentId) return billingError_('追加案内の元になる案内が見つかりません。最新の画面を読み直してください', 'notFound');
+    if (parent.status === 'declined') return billingError_('見送られた案内には追加できません。新しい案内を作ってください');
+    if (subject !== parent.subject || kind !== parent.kind) return billingError_('追加案内の科目・種類は元の案内と同じにしてください');
+    if (start < parent.startDate || end > parent.endDate) return billingError_('追加案内の期間は元の案内の期間（' + planPeriodLabel_(parent) + '）の中にしてください');
   }
   check = planLineLocked_({ studentId: id, startDate: start, endDate: end }); if (check) return check;
-  var clash = lines.filter(function (x) { return x.id !== lineId && x.status !== 'declined' && x.subject === subject && x.kind === kind && x.startDate <= end && x.endDate >= start; })[0];
-  if (clash) return billingError_('同じ科目・種類で期間が重なる案内があります（' + planPeriodLabel_(clash) + '）。期間を分けるか、その案内を変更してください', 'overlap');
+  if (!parentId) {
+    var clash = lines.filter(function (x) { return x.id !== lineId && !x.parentId && x.status !== 'declined' && x.subject === subject && x.kind === kind && x.startDate <= end && x.endDate >= start; })[0];
+    if (clash) return billingError_('同じ科目・種類で期間が重なる案内があります（' + planPeriodLabel_(clash) + '）。期間を分けるか、その案内を変更するか、その案内への「追加」にしてください', 'overlap');
+    if (l && planLineAddonsOf_(lines, l).some(function (a) { return a.status !== 'declined' && (a.startDate < start || a.endDate > end); })) return billingError_('追加案内の期間が元の案内の外に出てしまいます。先に追加案内の期間を見直してください', 'addonOutside');
+  }
   var previous = l ? l.status : '';
-  if (!l) l = { id: billingId_(), studentId: id, revision: 0, createdAt: '' };
+  if (l) {
+    // 確定済みの授業を外す変更はできない(回数を減らす・期間から外す)。変更後の行で割り当て直して確かめる
+    var nextLine = Object.assign({}, l, { subject: subject, kind: kind, count: count, startDate: start, endDate: end, status: 'approved', approvedCount: count });
+    var nextLines = lines.map(function (x) { return x.id === l.id ? nextLine : x; });
+    check = planLinesChangeError_(id, lines, nextLines, '確定済みの授業がこの案内の回数・期間に収まらなくなります。先に授業を取り消すか、変更内容を見直してください', 'bookedOver'); if (check) return check;
+  }
+  if (!l) l = { id: billingId_(), studentId: id, revision: 0, createdAt: '', parentId: parentId };
   l.subject = subject; l.kind = kind; l.count = count; l.startDate = start; l.endDate = end; l.lessonMin = lessonMin; l.rate30 = rate30; l.comment = comment;
   l.revision = Number(l.revision) + 1; l.approvedAt = ''; l.approvedVia = ''; l.consentDate = ''; l.memo = ''; l.approvedCount = null;
   l.status = propose ? 'proposed' : 'draft'; l.proposedAt = propose ? billingStamp_() : '';
   planLineWrite_(l);
   billingAudit_(planLineAuditable_(l), propose ? 'proposed' : 'planChanged', l.id + ':' + l.revision + ':' + (propose ? 'proposed' : 'changed'), previous ? { previousStatus: previous } : undefined);
-  addLog_('先生が' + studentName_(id) + 'さんの授業計画 ' + kindLabel_(subject, kind) + ' ' + planPeriodLabel_(l) + ' ' + count + '回を' + (propose ? '案内' : '下書き保存'));
-  var notice = propose ? billingNotifyResult_('planProposed', id, l.id + ':' + l.revision + ':proposed', { ym: planPeriodLabel_(l), lineId: l.id, revision: l.revision, subject: kindLabel_(subject, kind) }) : {};
+  addLog_('先生が' + studentName_(id) + 'さんの授業計画 ' + kindLabel_(subject, kind) + ' ' + planPeriodLabel_(l) + ' ' + (parentId ? '追加' : '') + count + '回を' + (propose ? '案内' : '下書き保存'));
+  var notice = propose ? billingNotifyResult_('planProposed', id, l.id + ':' + l.revision + ':proposed', { ym: planPeriodLabel_(l), lineId: l.id, revision: l.revision, subject: kindLabel_(subject, kind) + (parentId ? '（追加）' : '') }) : {};
   return Object.assign({ ok: true, line: planLineView_(l), invalidated: previous === 'approved' }, notice);
 }
 
@@ -131,7 +172,9 @@ function planLineDelete_(req) {
   var id = String(req.studentId || ''); if (!systemStudent_(id)) return billingError_('生徒が見つかりません', 'notFound');
   var l = planLine_(id, String(req.lineId || '')); if (!l) return { ok: true, replayed: true };
   var check = billingRevisionCheck_(req, l, false) || planLineLocked_(l); if (check) return check;
-  if (planLineBooked_(l).length) return billingError_('確定済みの授業がある案内は削除できません。先に授業を取り消すか、回数・期間を変更してください', 'bookedExists');
+  var lines = planLinesFor_(id);
+  if (planLineAddonsOf_(lines, l).length) return billingError_('追加案内がある案内は削除できません。先に追加案内を削除してください', 'addonExists');
+  check = planLinesChangeError_(id, lines, lines.filter(function (x) { return x.id !== l.id; }), '確定済みの授業がある案内は削除できません。先に授業を取り消すか、回数・期間を変更してください', 'bookedExists'); if (check) return check;
   billingAudit_(planLineAuditable_(l), 'deleted', l.id + ':' + l.revision + ':deleted');
   sheet_('planLines').deleteRow(l._row);
   addLog_('先生が' + studentName_(id) + 'さんの授業計画 ' + kindLabel_(l.subject, l.kind) + ' ' + planPeriodLabel_(l) + ' を削除');
@@ -162,7 +205,12 @@ function planLineApprove_(req, id, parent) {
   var booked = planLineBooked_(l);
   var retrospective = l.endDate < today || booked.some(function (s) { return s.date < date; });
   if (!parent && retrospective && !memo) return billingError_('授業後・過去の期間の承諾は、経緯をメモに残してください');
-  if (parent && booked.length > approvedCount) return billingError_('確定済みの授業数より少なくする場合は、先に先生へ授業の取消・見直しをご相談ください');
+  if (parent) {
+    var linesNow = planLinesFor_(id), decided = Object.assign({}, l, { status: approve ? 'approved' : 'declined', approvedCount: approvedCount });
+    var withFull = linesNow.map(function (x) { return x.id === l.id ? Object.assign({}, l, { status: 'approved', approvedCount: l.count }) : x; });
+    var withDecided = linesNow.map(function (x) { return x.id === l.id ? decided : x; });
+    if (approvedCount < l.count && planLinesChangeError_(id, withFull, withDecided, 'x', 'x')) return billingError_('確定済みの授業数より少なくする場合は、先に先生へ授業の取消・見直しをご相談ください');
+  }
   l.status = approve ? 'approved' : 'declined'; l.approvedCount = approvedCount; l.approvedAt = approve ? billingStamp_() : ''; l.approvedVia = approve ? via : ''; l.consentDate = date; l.memo = memo;
   // 承諾の記録が保存できなければ承認を有効にしない
   billingAudit_(planLineAuditable_(l), l.status, l.id + ':' + l.revision + ':' + l.status);
@@ -205,7 +253,7 @@ function billingMonthInfo_(studentId, ym) {
   var lines = all.filter(function (l) { return l.status !== 'declined'; });
   var status = !all.length ? 'none' : !lines.length ? 'declined' : lines.every(function (l) { return l.status === 'approved'; }) ? 'approved' : lines.some(function (l) { return l.status === 'proposed'; }) ? 'proposed' : 'draft';
   var total = 0; lines.forEach(function (l) { total += planLineLimit_(l); });
-  return { ym: ym, status: status, total: total, revision: 0, rows: lines.map(function (l) { return { subject: l.subject, kind: l.kind, count: planLineLimit_(l), status: l.status }; }),
+  return { ym: ym, status: status, total: total, revision: 0, rows: lines.map(function (l) { return { subject: l.subject, kind: l.kind, count: planLineLimit_(l), status: l.status, addon: !!l.parentId }; }),
     approvedVia: lines.filter(function (l) { return l.status === 'approved'; }).map(function (l) { return l.approvedVia; }).filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; }).join('・'),
     lines: all.sort(planLineSort_).map(planLineView_) };
 }

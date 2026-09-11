@@ -70,15 +70,16 @@ function billingRevisionCheck_(req,a,required) {
 }
 function billingRevisionValid_(v) { return (typeof v==='number'||typeof v==='string'&&/^\d+$/.test(v)) && Number.isSafeInteger(Number(v)) && Number(v)>=0; }
 function billingMoney_(value) { return billingRevisionValid_(value) && Number(value)<=10000000; }
-function billingSlotAllowed_(slot) {
+// 確定してよいか: この授業を確定済みとして割り当て直し、枠から外れる授業が増えなければよい。extra は同じ処理で先に確定した授業(一括確定)
+function billingSlotAllowed_(slot,extra) {
   if(!billingSlotValid_(slot))return billingError_('授業の日付・時刻・分数・科目を確認してください');
   var id=String(slot.studentId||''),ym=String(slot.date||'').slice(0,7);
   var check=billingMonthUnlocked_(id,ym);if(check)return check;
   if(!findStudent_(id))return billingError_('在籍生徒の授業だけを確定・実施できます','notFound');
-  var l=planLineMatch_(planLinesFor_(id),slot);
-  if(!l)return billingError_('この授業(科目・種類・日付)の回数と料金について、保護者の承認が必要です','approvalRequired');
-  var booked=planLineBooked_(l,undefined,slot.id).length,limit=planLineLimit_(l);
-  if(!limit||booked+1>limit)return billingError_('この案内の承認回数(' + limit + '回)を超えます。回数を変更し、再承認を得てください','planLimit');
+  var lines=planLinesFor_(id),others=planStudentSlots_(id).filter(function(s){return String(s.id)!==String(slot.id);}).concat((extra||[]).filter(function(s){return String(s.studentId)===id&&String(s.id)!==String(slot.id);}).map(function(s){return Object.assign({},s,{status:'booked'});}));
+  var mine=Object.assign({},slot,{studentId:id,status:'booked'}),before=planAssign_(lines,others),after=planAssign_(lines,others.concat([mine])),me=after[String(slot.id)];
+  if(!me||!me.candidates)return billingError_('この授業(科目・種類・日付)の回数と料金について、保護者の承認が必要です','approvalRequired');
+  if(!me.line||planUnassigned_(after)>planUnassigned_(before))return billingError_('この案内の承認回数を超えます。追加の案内を送るか、回数を変更して再承認を得てください','planLimit');
   return null;
 }
 function billingSlotMutable_(slot) { return slot.studentId?billingMonthUnlocked_(slot.studentId,String(slot.date).slice(0,7)):null; }
@@ -94,17 +95,17 @@ function billingInvoiceView_(p) {
 }
 // 実施済み授業ごとに、該当する承認済みの案内の単価で計算する。案内のない授業は生徒の基本単価で仮計算(provisional)
 function billingMonthCalc_(id,ym) {
-  var st=systemStudent_(id)||{},base=Number(st.rate30)||0,lines=planLinesFor_(id);
-  var slots=readRows_('slots').filter(function(s){return String(s.studentId)===id&&s.status==='booked'&&String(s.date||'').slice(0,7)===ym;});
+  var st=systemStudent_(id)||{},base=Number(st.rate30)||0,lines=planLinesFor_(id),all=planStudentSlots_(id),assign=planAssign_(lines,all);
+  var slots=all.filter(function(s){return s.status==='booked'&&String(s.date||'').slice(0,7)===ym;});
   var done=slots.filter(function(s){return s.done===true||String(s.done)==='true';}).sort(slotSort_);
   var amount=0,provisional=false,rates={};
   var lessons=done.map(function(s){
-    var l=planLineMatch_(lines,s),rate=l?l.rate30:base;if(!l)provisional=true;rates[rate]=true;
+    var l=(assign[String(s.id)]||{}).line||null,rate=l?l.rate30:base;if(!l)provisional=true;rates[rate]=true;
     var amt=Math.round((Number(s.min)||0)/30*rate);amount+=amt;
     return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:amt,rate30:rate,lineId:l?l.id:'',lineRevision:l?l.revision:0,lineCount:l?planLineLimit_(l):0};
   });
   var keys=Object.keys(rates);
-  return {amount:amount,provisional:provisional,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,slots:slots,done:done,lines:lines};
+  return {amount:amount,provisional:provisional,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,slots:slots,done:done,lines:lines,assign:assign};
 }
 function billingFee_(studentId,minutes,ym) {
   ym=ym||todayStr_().slice(0,7);
@@ -121,11 +122,7 @@ function billingPreview_(studentId,ym) {
   var slots=calc.slots,done=calc.done,minutes=done.reduce(function(n,s){return n+(Number(s.min)||0);},0),fee=billingFee_(id,minutes,ym),reason='';
   if(invoices.length)reason=invoices.length>1?'この月の請求が重複しています。台帳を確認してください':'この月は請求を記録済みです';
   else {
-    if(slots.some(function(s){return !planLineMatch_(calc.lines,s);}))reason='承認されていない科目・回数の授業があります';
-    if(!reason){
-      var over=calc.lines.filter(function(l){return l.status==='approved'&&planLineOverlapsMonth_(l,ym);}).some(function(l){return planLineBooked_(l).length>planLineLimit_(l);});
-      if(over)reason='承認されていない科目・回数の授業があります';
-    }
+    if(slots.some(function(s){return !(calc.assign[String(s.id)]||{}).line;}))reason='承認されていない科目・回数の授業があります';
     if(!reason && slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
     if(!reason && slots.some(function(s){return !(s.done===true||String(s.done)==='true');}))reason='未実施の確定授業が残っています。実施・取消の確認後に請求してください';
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';

@@ -525,7 +525,7 @@
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内 <span class="small muted" style="font-weight:400">保護者の承認待ち</span></h3>';
           if (!proposed.length) html += '<div class="empty">新しい案内はありません</div>';
           proposed.forEach(function (l) {
-            html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + ' ' + esc(l.count) + '回' + (planFee(l) ? '<span class="muted">・' + esc(planFee(l)) + '</span>' : '') + '</span><span class="tag amber">保護者の承認待ち</span></div>';
+            html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + ' ' + (l.addon ? '<span class="tag gray">追加</span> ＋' : '') + esc(l.count) + '回' + (planFee(l) ? '<span class="muted">・' + esc(planFee(l)) + '</span>' : '') + '</span><span class="tag amber">保護者の承認待ち</span></div>';
             if (l.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(l.comment) + '</div>';
             if (famChild) {
               var fl = famLines.filter(function (x) { return x.id === l.id; })[0], famDis = F.busy ? ' disabled' : '';
@@ -536,10 +536,14 @@
           if (proposed.length) html += '<div class="note">' + (famChild ? '「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。' : '保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると下の実施計画に移ります。') + '</div>';
           html += '<h3 style="margin:14px 0 6px;font-size:15px">実施計画 <span class="small muted" style="font-weight:400">承認済み</span></h3>';
           var remainTotal = 0, shown = 0;
-          approved.forEach(function (l) {
-            var n = lessonsOf(l), goal = planLimit(l), remain = Math.max(0, goal - n.done - n.plan); remainTotal += remain; shown++;
-            html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">／計画 ' + goal + '回</span></span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : '<span class="tag green">日程確定</span>') + '</div>';
+          // 追加案内(承認済み)は親の行にまとめる: 計画 4回＋追加 2回。親が承認済みでない追加案内はそのまま1行
+          var approvedIds = {}; approved.forEach(function (l) { approvedIds[l.id] = true; });
+          approved.filter(function (l) { return !(l.addon && approvedIds[l.parentId]); }).forEach(function (l) {
+            var addons = approved.filter(function (a) { return a.addon && a.parentId === l.id; }), extraGoal = 0; addons.forEach(function (a) { extraGoal += planLimit(a); });
+            var n = lessonsOf(l), goal = planLimit(l) + extraGoal, remain = Math.max(0, goal - n.done - n.plan); remainTotal += remain; shown++;
+            html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + (l.addon ? ' <span class="tag gray">追加</span>' : '') + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">／計画 ' + planLimit(l) + '回' + (extraGoal ? '＋追加 ' + extraGoal + '回' : '') + '</span></span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : '<span class="tag green">日程確定</span>') + '</div>';
             if (l.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(l.comment) + '</div>';
+            addons.forEach(function (a) { if (a.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>追加（' + esc(planShort(a)) + '・＋' + esc(planLimit(a)) + '回）：</strong>' + esc(a.comment) + '</div>'; });
           });
           extraKeys.forEach(function (label) { var n = extra[label], mm = /^(.*)（(.+)）$/.exec(label); shown++; html += '<div class="slotline"><span class="tag gray">' + (+ymNow.slice(5)) + '月</span><span class="time"></span><span class="who"><strong>' + esc(mm ? mm[1] : label) + '</strong> ' + kindTag(mm ? mm[2] : '') + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">（計画外）</span></span></div>'; });
           if (!shown) html += '<div class="empty">承認済みの計画はありません</div>';
@@ -980,7 +984,7 @@
             html += '<div class="card">';
             pls.forEach(function (l) {
               html += '<div style="padding:12px 0;border-bottom:1px solid var(--line)"><strong>'+esc(planPeriod(l))+'</strong>'+(l.status==='approved'?' <span class="tag green">承認済み</span>':l.status==='declined'?' <span class="tag gray">見送り</span>':' <span class="tag amber">承認待ち</span>');
-              html += '<p>'+esc(planName(l))+'　'+(l.lessonMin?esc(l.lessonMin)+'分 × ':'')+esc(planLimit(l))+'回まで</p>'+(l.comment?'<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>'+esc(l.comment)+'</p>':'')+'<p><strong>'+(planFee(l)?'1回 '+yen(l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30)):'授業時間・料金は先生に確認してください')+'</strong></p>';
+              html += '<p>'+esc(planName(l))+(l.addon?' <span class="tag gray">追加</span>':'')+'　'+(l.lessonMin?esc(l.lessonMin)+'分 × ':'')+(l.addon?'＋':'')+esc(planLimit(l))+'回まで</p>'+(l.comment?'<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>'+esc(l.comment)+'</p>':'')+'<p><strong>'+(planFee(l)?'1回 '+yen(l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30)):'授業時間・料金は先生に確認してください')+'</strong></p>';
               if(l.status==='proposed'&&l.revision!=null)html+='<div class="row"><button class="btn-primary btn-sm" data-action="'+(family?'fa-planok':'planok')+'" data-line="'+esc(l.id)+'"'+(activeBusy?' disabled':'')+'>承認する</button><button class="btn-quiet btn-sm" data-action="'+(family?'fa-planng':'planng')+'" data-line="'+esc(l.id)+'"'+(activeBusy?' disabled':'')+'>'+(family?'回数を調整・見送る':'見送る')+'</button></div>';
               if(l.memo)html+='<p class="note">'+esc(l.memo)+'</p>';
               html += '</div>';
@@ -1038,7 +1042,7 @@
             for (var n = 0; n <= Number(l.count || 0); n++) h += '<option value="' + n + '"' + (n === c.approvedCount ? ' selected' : '') + '>' + n + '回</option>';
             h += '</select></label></p><label>先生への伝言（任意）<textarea id="fa-plan-message" maxlength="500">' + esc(c.memo || '') + '</textarea></label><p><button class="btn-primary" data-action="fa-plan-review">この内容を確認する</button></p>';
           } else {
-            h += '<p>' + esc(planName(l)) + ' ' + c.approvedCount + '回まで' + (planFee(l) ? '（' + esc(planFee(l)) + '）' : '') + '</p>';
+            h += '<p>' + esc(planName(l)) + (l.addon ? '（追加）' : '') + ' ' + (l.addon ? '＋' : '') + c.approvedCount + '回まで' + (planFee(l) ? '（' + esc(planFee(l)) + '）' : '') + '</p>' + (l.comment ? '<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>' + esc(l.comment) + '</p>' : '');
             h += c.approve ? '<p>この回数以内で授業の計画を立てることができます。授業実施前であれば、いつでもシステムまたはLINEから計画の見直しを申し出ることができます。承認しますか？</p>' : '<p>今回は見送ります。先生にこの内容を伝えますか？</p>';
             if (c.memo) h += '<p>' + esc(c.memo) + '</p>';
             h += '<button class="btn-primary" data-action="fa-decide"' + dis + '>' + (c.approve ? '承認する' : '今回は見送る') + '</button> ';
