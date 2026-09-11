@@ -435,7 +435,7 @@
             ds2.forEach(function (s) {
               if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
               var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "") + (s.deliveryMode === 'in_person' ? '' : '・' + deliveryLabel(s.deliveryMode));
-              if (s.st === "mine") html += '<div class="row" style="width:100%;gap:8px"><span class="chip mine">✓ ' + label + '</span>' + cancelControl(s, true) + '</div>';
+              if (s.st === "mine") html += '<div class="row" style="width:100%;gap:8px"><span class="chip mine">✓ ' + label + '</span>' + (s.req ? '<span class="tag amber">キャンセル申請中</span>' : '') + cancelControl(s, true) + '</div>';
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
@@ -469,7 +469,7 @@
           if (next) {
             var untilTxt = next.date === today ? "今日" : next.date === addDaysStr(today, 1) ? "明日" : Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) + "日後";
             html += '<div class="card next"><div class="in">' + untilTxt + '</div><div class="when">' + fmtDateW(next.date) + " " + next.start + "〜" + endTime(next.start, next.min) + '</div>';
-            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + deliveryTag(next) + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">取消を依頼中</span>' : "") + '</div>';
+            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + deliveryTag(next) + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">キャンセル申請中</span>' : "") + '</div>';
             html += '<div class="row" style="margin-top:10px">';
             if (next.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(next.meet) + '">Meetに参加</a>';
             html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
@@ -499,7 +499,7 @@
           if (upcoming.length > 1 || (upcoming.length === 1 && !(hasNextCard && next))) {
             html += '<div class="card">';
             upcoming.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + (s.req ? ' <span class="tag red">取消を依頼中</span>' : "") + "</span>";
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + (s.req ? ' <span class="tag red">キャンセル申請中</span>' : "") + "</span>";
               html += deliveryTag(s);
               if (s.meet) html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meet</a>';
               html += cancelControl(s) + "</div>";
@@ -510,7 +510,7 @@
           } else {
             html += '<div class="empty">確定している授業はありません</div>';
           }
-          html += '<div class="note">取消には理由と先生の承認が必要です。24時間前までは通常申請、それ以降は病気・大幅な電車遅延などの例外申請です。承認までは予定を保持します。受付時刻で期限を判定します。</div>';
+          html += '<div class="note">キャンセルは各授業から申請できます。申請後は「キャンセル申請中」と表示されます。</div>';
           return html;
         }
 
@@ -529,9 +529,12 @@
             html += '<div class="msg">' + when + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
             html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "cancel") {
-            html += '<div class="msg">' + when + " の授業の取消を先生に依頼しますか?<br><span class='small muted'>先生が確認してから取消になります。それまでは予定のままです。</span></div>";
-            html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px"><p>24時間前を過ぎた申請は原則取消不可のため、例外として認められる事情を記入してください。</p>';
-            html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "取消を依頼する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
+            var deadline = S.cancelDeadlineH || 24;
+            var late = (new Date(s.date + 'T' + s.start + ':00+09:00').getTime() - Date.now()) / 3600000 < deadline;
+            html += '<div class="msg">' + when + ' のキャンセル申請</div>';
+            html += '<p>' + (late ? '授業開始まで' + deadline + '時間を切っています。病気や大幅な電車の遅れなど、やむを得ない事情がある場合は記載してください。' : 'キャンセルの理由を記入してください。') + '</p>';
+            html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px">';
+            html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + '>' + (busy ? '申請しています…' : 'キャンセルを申請する') + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "withdraw") {
             html += '<div class="msg">' + when + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
             html += '<div class="row"><button class="btn-primary" data-action="dowithdraw"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "依頼を取り下げる") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
@@ -1352,7 +1355,7 @@
               var reason = val("f-creason");
               if(!reason.trim()){toast('取消の理由を入力してください');return;}
               pending.reason=reason;
-              studentAction({ action: "cancelReq", slotId: pending.slotId, requestId:pending.requestId, k: myKey(), reason: reason }, "取消未確定・先生の確認待ちです"); break;
+              studentAction({ action: "cancelReq", slotId: pending.slotId, requestId:pending.requestId, k: myKey(), reason: reason }, "キャンセル申請を受け付けました"); break;
             case "askwithdraw": pending = { kind: "withdraw", slotId: id }; render(); break;
             case "dowithdraw": studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました"); break;
             case 'wish-confirm': wishSend(); break;

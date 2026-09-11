@@ -33,7 +33,7 @@ function createUI(kind = 'student', options = {}) {
   const storage = map => ({ getItem: k => map.get(k) ?? null, setItem(k, v) { writes.push([k, String(v)]); map.set(k, String(v)); }, removeItem: k => map.delete(k) });
   let requestId = 0, confirmCount = 0;
   const location = { hash: options.hash || (kind === 'admin' ? '#s=test-a' : '#home'), search: options.search || '', pathname: kind === 'admin' ? '/kanri/' : '/yoyaku/', href: 'https://example.invalid/' + (kind === 'admin' ? 'kanri/' : 'yoyaku/') };
-  const context = { crypto: require('node:crypto').webcrypto, document: { getElementById: id => elements.get(id) || null, addEventListener: (k, f) => on('document:' + k, f), querySelector: () => null, querySelectorAll: () => [] },
+  const context = { Date: options.now ? class extends Date { constructor(...args) { super(...(args.length ? args : [options.now])); } static now() { return new Date(options.now).getTime(); } } : Date, crypto: require('node:crypto').webcrypto, document: { getElementById: id => elements.get(id) || null, addEventListener: (k, f) => on('document:' + k, f), querySelector: () => null, querySelectorAll: () => [] },
     window: { scrollTo() {}, addEventListener: (k, f) => on('window:' + k, f), crypto: { randomUUID: () => 'test-request-' + (++requestId) } }, location,
     history: { replaceState(a, b, url) { replaced.push(url); const u = new URL(url, location.href); location.hash = u.hash; location.search = u.search; } },
     URL, URLSearchParams, navigator: { clipboard: { writeText: value => { ui.clipboard = value; return Promise.resolve(); } } },
