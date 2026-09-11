@@ -52,7 +52,7 @@ test('plans and offers carry the kind; 通常 stays out of the approval JSON so 
   // student state
   const state = json(h.context().studentState_('synthetic-link-a'));
   assert.deepEqual(state.slots.filter(s => s.st === 'offer').map(s => [s.date, s.kind]), [['2026-09-15', '演習'], ['2026-09-16', ''], ['2026-09-17', '演習']]);
-  assert.deepEqual(state.planMonths, [{ ym: '2026-09', status: 'approved', plan: { '英語': 3, '英語（演習）': 2 }, rows: [{ subject: '英語', kind: '', count: 3 }, { subject: '英語', kind: '演習', count: 2 }] }]);
+  assert.deepEqual(state.planMonths, [{ ym: '2026-09', status: 'approved', plan: { '英語': 3, '英語（演習）': 2 }, rows: [{ subject: '英語', kind: '', count: 3 }, { subject: '英語', kind: '演習', count: 2 }], comment: '' }]);
   // billing check matches subject and kind
   h.seedSlot({ date: '2026-09-01', start: '16:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '演習' });
   h.seedSlot({ date: '2026-09-02', start: '16:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '演習' });

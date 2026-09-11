@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-rows' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-comment' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -164,7 +164,7 @@ function studentState_(code) {
   var planRowsNow = planRows_(), ymNow = today.slice(0, 7);
   var planMonths = [ymNow, nextYm_(ymNow)].map(function (ym) {
     var info = planMonthInfo_(me.id, ym, planRowsNow), pf = planFor_(me.id, ym, planRowsNow);
-    return { ym: ym, status: String(info.status || 'none'), plan: pf.plan, rows: pf.rows };
+    return { ym: ym, status: String(info.status || 'none'), plan: pf.plan, rows: pf.rows, comment: String(info.comment || '') };
   }).filter(function (m) { return (m.status === 'proposed' || m.status === 'approved') && Object.keys(m.plan).length > 0; });
   var tasks = tasksFor_(me.id, 45);
   return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planMonths: planMonths, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
@@ -597,6 +597,25 @@ function planRows_() {
 }
 
 // その月の承認状況(月行がなければ none)。行ごとの status を月として集約: どれかが declined→declined、全部 approved→approved、どれかが proposed→proposed、それ以外→draft
+/* 授業計画のコメント(先生 → 生徒・保護者への自由文: 何のための授業か、なぜこの回数か)。月ごとに1つ。提案・承認とは独立で、書き換えても承認は失効しない */
+var PLAN_COMMENT_COLS_ = ['studentId', 'ym', 'comment', 'updatedAt'];
+function ensurePlanCommentsSheet_() { if (!ss_().getSheetByName('planComments')) { ensureSheet_(ss_(), 'planComments', PLAN_COMMENT_COLS_); memoClear_(); } }
+function planCommentRows_() { return ss_().getSheetByName('planComments') ? readRows_('planComments').map(function (r, i) { r._row = i + 2; return r; }) : []; }
+function planComment_(studentId, ym) { var r = planCommentRows_().filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === String(ym); })[0]; return r ? String(r.comment || '') : ''; }
+function planCommentSave_(req) {
+  var id = String(req.studentId || ''), ym = String(req.ym || '');
+  if (!systemStudent_(id)) return { error: '生徒が見つかりません' };
+  if (!billingMonthValid_(ym)) return { error: '月の形式は YYYY-MM です' };
+  var comment = String(req.comment == null ? '' : req.comment).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
+  if (comment.length > 500) return { error: 'コメントは500文字以内で入力してください' };
+  ensurePlanCommentsSheet_();
+  var sh = sheet_('planComments'), r = planCommentRows_().filter(function (x) { return String(x.studentId) === id && planYm_(x.ym) === ym; })[0];
+  var row = [id, ym, billingText_(comment), new Date()];
+  if (r) sh.getRange(r._row, 1, 1, PLAN_COMMENT_COLS_.length).setValues([row]); else { sh.appendRow(row); sh.getRange(sh.getLastRow(), 1, 1, 2).setNumberFormat('@'); }
+  memoClear_();
+  addLog_('先生が' + studentName_(id) + 'さんの' + ym + 'の授業計画コメントを' + (comment ? '保存' : '削除'));
+  return { ok: true, comment: comment };
+}
 function planMonthInfoLegacy_(studentId, ym, rows) {
   rows = rows || planRows_();
   var mine = rows.filter(function (x) { return x.studentId === String(studentId); });
@@ -611,7 +630,7 @@ function planMonthInfoLegacy_(studentId, ym, rows) {
   var first = month[0] || {};
   var total = 0; src.forEach(function (x) { total += x.count; });
   return { ym: ym, rows: src.map(function (x) { return { subject: x.subject, count: x.count, status: x.status }; }), fromDefault: !month.length && defaults.length > 0, total: total,
-    status: status, proposedAt: first.proposedAt || '', approvedAt: first.approvedAt || '', approvedVia: first.approvedVia || '', memo: month.map(function (x) { return x.memo; }).filter(Boolean)[0] || '' };
+    status: status, proposedAt: first.proposedAt || '', approvedAt: first.approvedAt || '', approvedVia: first.approvedVia || '', memo: month.map(function (x) { return x.memo; }).filter(Boolean)[0] || '', comment: planComment_(studentId, ym) };
 }
 
 function planMonthInfo_(studentId, ym, rows) { return billingMonthInfo_(studentId, ym, rows); }
@@ -1259,6 +1278,7 @@ function admin_(req) {
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
+    case 'planCommentSave': return kanriWrap_(req, planCommentSave_(req), req.studentId);
     case 'lessonKinds': return { ok: true, lessonKinds: lessonKindsPublic_() };
     case 'lessonKindSave': { var lk = lessonKindSave_(req); return lk.error ? lk : { ok: true, lessonKinds: lk.lessonKinds, admin: adminState_() }; }
     case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);
@@ -1734,7 +1754,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk20')) return;
+  if (cache.get('schemaOk21')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1760,7 +1780,8 @@ function ensureSchema_() {
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
   if (typeof ensureLessonKindsSheet_ === 'function') { ensureLessonKindsSheet_(); ensureKindColumns_(); }
-  cache.put('schemaOk20', '1', 21600);
+  ensurePlanCommentsSheet_();
+  cache.put('schemaOk21', '1', 21600);
 }
 
 function readRows_(name) {

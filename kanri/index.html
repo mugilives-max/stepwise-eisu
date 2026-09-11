@@ -1794,7 +1794,7 @@
         }
         function planInput(s, m) {
           var key = s.id + ":" + m.ym, saved = planInputs[key];
-          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, lessonMin: m.lessonMin || 90, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: 0, via: "LINE", consentDate: today(), memo: "", dirty: false };
+          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, lessonMin: m.lessonMin || 90, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: 0, via: "LINE", consentDate: today(), memo: "", comment: m.comment || "", dirty: false };
           return saved;
         }
         function renderPlanCard(s) {
@@ -1809,6 +1809,7 @@
             h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin? m.lessonMin+'分・1回 '+yen(m.rate30*m.lessonMin/30):'授業時間を設定してください')) : 'この月の料金はまだ提案されていません。') + '</p>';
             if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。<button class="btn-quiet btn-sm" data-action="reload">最新の計画を確認</button></p>';
             if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '</p>';
+            h += '<label class="small" for="pl-comment-' + esc(m.ym) + '">生徒・保護者へのコメント（何のための授業か、なぜこの回数か。案内と実施計画に表示）</label><textarea id="pl-comment-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="comment" rows="2" maxlength="500" style="width:100%;box-sizing:border-box"' + (dis ? ' disabled' : '') + '>' + esc(f.comment || '') + '</textarea><div class="row" style="margin:4px 0 8px"><button class="btn-quiet btn-sm" data-action="plancomment"' + attrs + (dis ? ' disabled' : '') + '>コメントを保存</button></div>';
             if ((m.rows || []).length && !dis) {
               if (m.status === "approved") h += '<details class="add"><summary>料金を変更して再承認を依頼</summary><p class="note">再提案すると現在の承認が失効します。請求済みなら、先に未入金請求を取り消してください。</p>';
               h += '<div class="row"><label>1回の授業時間 <input type="number" data-plan-ym="'+esc(m.ym)+'" data-plan-field="lessonMin" min="30" max="240" step="30" value="'+esc(f.lessonMin)+'" style="width:90px"> 分</label></div>';
@@ -1902,7 +1903,7 @@
           var sid = s.id, inputKey = sid + ":" + m.ym, planAuth = token();
           busy = true; render();
           admin(op, payload).then(function (res) {
-            delete planInputs[inputKey]; cacheClear(); if (token() === planAuth && authM === "ok") { applyResult(res, {page:"student",id:sid,section:"billing"}); toast(op === "planPropose" ? "保護者に提案しました" : "承諾を記録しました"); }
+            delete planInputs[inputKey]; cacheClear(); if (token() === planAuth && authM === "ok") { applyResult(res, {page:"student",id:sid,section:"billing"}); toast(op === "planPropose" ? "保護者に提案しました" : op === "planCommentSave" ? "コメントを保存しました" : "承諾を記録しました"); }
           }).catch(function (er) { if (planInputs[inputKey]) planInputs[inputKey].error = er.message; toast(er.message + "。入力は保持しています"); }).then(function () { busy = false; render(); });
         }
         document.addEventListener("input", function (ev) {
@@ -2271,6 +2272,12 @@
               var fd = document.getElementById("f-date"); if (fd) fd.scrollIntoView({ behavior: "smooth", block: "center" });
               toast(fmtD(btn.getAttribute("data-date")) + " を案内フォームに入れました");
               break;
+            case "plancomment": {
+              var pcYm = btn.getAttribute("data-ym"), pcInfo = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === pcYm; })[0];
+              if (!pcInfo) return;
+              planWrite("planCommentSave", cur, pcInfo, { studentId: cur.id, ym: pcYm, comment: planInput(cur, pcInfo).comment || "" });
+              break;
+            }
             case "planpropose":
             case "planapprove":
               var planYm = btn.getAttribute("data-ym"), monthInfo = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === planYm; })[0];

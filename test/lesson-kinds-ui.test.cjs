@@ -36,3 +36,12 @@ test('students see the kind next to the subject and plan labels stay consistent'
   assert.match(ui.html(), /英語（演習）/);
   assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">演習<\/span> 実施 0・予定 0<span class="muted">／計画 1回<\/span>/);
 });
+
+test('the admin plan card has a comment box that saves through planCommentSave', async () => {
+  const { adminReady, card } = require('./helpers/operations-ui-harness.cjs');
+  const c = card({ plan: { month: '2026-09', current: {}, fromDefault: false, monthRows: [], defaultRows: [], months: [{ ym: '2026-09', status: 'proposed', revision: 3, termsKnown: true, lessonMin: 90, rate30: 1500, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4, comment: '既存のコメント' }] } });
+  const ui = await adminReady(c, 'billing');
+  assert.match(ui.html(), /<textarea id="pl-comment-2026-09" data-plan-ym="2026-09" data-plan-field="comment"[^>]*>既存のコメント<\/textarea>/);
+  ui.input('pl-comment-2026-09', '英検対策なので回数を増やします'); ui.click('plancomment', { 'data-ym': '2026-09' });
+  const r = ui.requests.at(-1); assert.equal(r.body.op, 'planCommentSave'); assert.equal(r.body.studentId, 'test-a'); assert.equal(r.body.ym, '2026-09'); assert.equal(r.body.comment, '英検対策なので回数を増やします');
+});

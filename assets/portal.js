@@ -526,6 +526,7 @@
           if (!proposedRows) html += '<div class="empty">新しい案内はありません</div>';
           proposed.forEach(function (m) {
             planRows(m).forEach(function (r) { html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(r.subject) + '</strong> ' + kindTag(r.kind) + ' ' + r.count + '回</span><span class="tag amber">保護者の承認待ち</span></div>'; });
+            if (m.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(m.comment) + '</div>';
             if (famChild) {
               var fm = famMonths.filter(function (x) { return x.ym === m.ym; })[0], famDis = F.busy ? ' disabled' : '';
               if (fm && fm.status === 'proposed' && fm.termsKnown && Number.isSafeInteger(fm.revision)) html += '<div class="row" style="margin:8px 0 4px;gap:8px"><button class="btn-primary btn-sm" data-action="fa-planok" data-child="' + esc(famChild.studentId) + '" data-ym="' + esc(m.ym) + '"' + famDis + '>承認する</button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="' + esc(famChild.studentId) + '" data-ym="' + esc(m.ym) + '"' + famDis + '>回数を調整・見送る</button><span class="small muted">' + (fm.lessonMin ? '1回 ' + yen(fm.rate30 * fm.lessonMin / 30) + '（' + esc(fm.lessonMin) + '分）' : '') + '</span></div>';
@@ -542,6 +543,7 @@
               seen[r.label] = true; var n = c[r.label] || { done: 0, plan: 0 }, goal = Number(r.count) || 0, remain = Math.max(0, goal - n.done - n.plan); remainTotal += remain; shown++;
               html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(r.subject) + '</strong> ' + kindTag(r.kind) + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">／計画 ' + goal + '回</span></span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : '<span class="tag green">日程確定</span>') + '</div>';
             });
+            if (m.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(m.comment) + '</div>';
             Object.keys(c).forEach(function (label) {
               if (seen[label]) return; var n = c[label], mm = /^(.*)（(.+)）$/.exec(label); shown++;
               html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(mm ? mm[1] : label) + '</strong> ' + kindTag(mm ? mm[2] : '') + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">（計画外）</span></span></div>';
@@ -986,7 +988,7 @@
             html += '<div class="card">';
             pms.forEach(function (m) {
               html += '<div style="padding:12px 0;border-bottom:1px solid var(--line)"><strong>'+esc(Number(m.ym.slice(0,4))+'年'+Number(m.ym.slice(5)))+'月</strong>'+(m.status==='approved'?' <span class="tag green">承認済み</span>':m.status==='declined'?' <span class="tag gray">見送り</span>':'');
-              html += '<p>'+m.rows.map(function(x){return esc(lessonLabel(x))+'　'+(m.lessonMin?esc(m.lessonMin)+'分 × ':'')+esc(x.count)+'回まで';}).join('<br>')+'</p><p><strong>'+(m.termsKnown&&m.lessonMin?'1回 '+yen(m.rate30*m.lessonMin/30):'授業時間・料金は先生に確認してください')+'</strong></p>';
+              html += '<p>'+m.rows.map(function(x){return esc(lessonLabel(x))+'　'+(m.lessonMin?esc(m.lessonMin)+'分 × ':'')+esc(x.count)+'回まで';}).join('<br>')+'</p>'+(m.comment?'<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>'+esc(m.comment)+'</p>':'')+'<p><strong>'+(m.termsKnown&&m.lessonMin?'1回 '+yen(m.rate30*m.lessonMin/30):'授業時間・料金は先生に確認してください')+'</strong></p>';
               if(m.status==='proposed'&&m.termsKnown&&m.revision!=null)html+='<div class="row"><button class="btn-primary btn-sm" data-action="'+(family?'fa-planok':'planok')+'" data-ym="'+esc(m.ym)+'"'+(activeBusy?' disabled':'')+'>承認する</button><button class="btn-quiet btn-sm" data-action="'+(family?'fa-planng':'planng')+'" data-ym="'+esc(m.ym)+'"'+(activeBusy?' disabled':'')+'>見送る</button></div>';
               if(m.memo)html+='<p class="note">'+esc(m.memo)+'</p>';
               html += '</div>';

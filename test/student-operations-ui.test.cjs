@@ -227,8 +227,9 @@ test('the offers section is a collapsed details block with one select-all / clea
 
 test('the 授業計画 fold separates proposed notices from the approved plan with counts', async () => {
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }], plan:{ '英語':4 }, planStatus:'approved',
-    planMonths:[{ ym:'2026-09', status:'approved', plan:{ '英語':4 } }, { ym:'2026-10', status:'proposed', plan:{ '英語':3, '数学':2 } }] };
+    planMonths:[{ ym:'2026-09', status:'approved', plan:{ '英語':4 }, comment:'入試に向けて長文を仕上げます' }, { ym:'2026-10', status:'proposed', plan:{ '英語':3, '数学':2 }, comment:'10月は模試対策で\n回数を増やします' }] };
   const ui = await studentReady(s);
+  assert.match(ui.html(), /<strong>数学<\/strong> <span class="tag gray">通常<\/span> 2回[^]*?<div class="note"[^>]*><strong>先生から：<\/strong>10月は模試対策で\n回数を増やします<\/div>/); assert.match(ui.html(), /／計画 4回[^]*?<strong>先生から：<\/strong>入試に向けて長文を仕上げます/);
   assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画 <span class="cnt">2件の案内<\/span>/);
   assert.match(ui.html(), /案内 <span[^>]*>保護者の承認待ち<\/span><\/h3><div class="slotline"><span class="tag amber">案内<\/span><span class="time">10月<\/span><span class="who"><strong>英語<\/strong> <span class="tag gray">通常<\/span> 3回<\/span><span class="tag amber">保護者の承認待ち<\/span><\/div><div class="slotline"><span class="tag amber">案内<\/span><span class="time">10月<\/span><span class="who"><strong>数学<\/strong> <span class="tag gray">通常<\/span> 2回/);
   assert.match(ui.html(), /保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう/);
