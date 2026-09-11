@@ -96,7 +96,8 @@
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
         var NL = { text: '', busy: false, proposal: null, error: '' }; // 文章で予定を伝える
-        var offersOpen = false; // ホームの「授業登録」は折り畳み。開閉は再描画をまたいで保持
+        var folds = { tasks: true, offers: false, plan: false }; // ホームの折り畳み(やることリスト・授業登録・授業計画の案内)。開閉は再描画をまたいで保持
+        function foldHead(key, title, cnt) { return '<details class="fold ' + key + '" data-fold="' + key + '"' + (folds[key] ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>' + title + (cnt ? ' <span class="cnt">' + cnt + '</span>' : '') + '</h2></summary>'; }
         function studentEmailReadChallenge() {
           if (location.hash.indexOf('#student-email?') !== 0) return;
           SE.challenge = new URLSearchParams(location.hash.slice(15)).get('verify') || ''; SE.message = ''; SE.error = ''; SE.busy = false; ++SE.seq;
@@ -495,21 +496,21 @@
           if (!order.length) return '';
           var planned = order.filter(function (k) { return target[k]; }), planText = planned.map(function (k) { return esc(k) + target[k] + '回'; }).join('・');
           var remainTotal = 0; planned.forEach(function (k) { remainTotal += Math.max(0, target[k] - bySub[k].done - bySub[k].plan); });
-          var h = '<h2>授業計画の案内</h2><div class="card">';
+          var h = foldHead('plan', '授業計画の案内', planned.length && S.planStatus === 'proposed' ? '保護者の承認待ち' : planned.length && S.planStatus === 'approved' ? '保護者承認済み' : month + '月') + '<div class="card">';
           if (planned.length && S.planStatus === 'proposed') h += '<p style="margin:0 0 4px;font-weight:700;font-size:15.5px">' + month + '月は ' + planText + ' の授業計画が届いています。</p><p style="margin:0 0 10px">保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち</span></p>';
           else if (planned.length && S.planStatus === 'approved') h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業計画は ' + planText + ' です。 <span class="tag green">保護者承認済み</span></p>';
           else if (planned.length) h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業計画は ' + planText + ' です。</p>';
           else h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業</p>';
           h += '<div class="row" style="gap:8px 18px">' + order.map(function (k) { var c = bySub[k]; return '<span><strong>' + esc(k) + '</strong> 実施 ' + c.done + '・予定 ' + c.plan + (target[k] ? '<span class="muted">／計画 ' + target[k] + '回</span>' : '') + '</span>'; }).join('') + '</div>';
           if (remainTotal) h += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
-          return h + '</div>';
+          return h + '</div></details>';
         }
 
         function renderOffers(D) {
           var offers = D.offers, b = acceptBatch(), html = renderBatch(b);
           var selectable = offers.slice(0, 31), allSelected = selectable.every(function (s) { return b.selected[s.id]; });
           if (!offers.length) return html;
-          html += '<details class="offers" data-offers' + (offersOpen ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2></summary>';
+          html += foldHead('offers', '授業登録', offers.length + '件・返事をお願いします');
           html += '<div class="card" style="border-color:#d99a2b">';
           html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
@@ -685,7 +686,7 @@
           app.innerHTML = renderHomePage();
         }
 
-        /* ---------- ホーム: 予定表・予定の編集(選んだ日の内訳。登録・取消はここから)・やることリスト・授業計画の案内・授業登録(折り畳み) ---------- */
+        /* ---------- ホーム: 予定表・予定の編集(選んだ日の内訳。登録・取消はここから)・やることリスト(折り畳み、既定は開)・授業登録(折り畳み)・授業計画の案内(折り畳み) ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
@@ -704,7 +705,7 @@
             var open = tasks.filter(function (t) { return !t.done; });
             var doneT = tasks.filter(function (t) { return t.done; });
             var nextL = mine.filter(function (s) { return s.date >= today; })[0];
-            html += '<h2>やることリスト' + (open.length ? ' <span class="cnt">' + open.length + '件</span>' : '') + '</h2>';
+            html += foldHead('tasks', 'やることリスト', open.length ? open.length + '件' : '');
             if (tests.length || nextL) {
               html += '<div class="countdown" style="margin-bottom:10px">';
               tests.slice(0, 2).forEach(function (e) {
@@ -722,11 +723,11 @@
             });
             html += renderTaskAdd();
             if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(taskDueText(t)) + '・' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
-            html += '</div>';
+            html += '</div></details>';
           })();
 
-          html += renderMonthSummary(D);
           html += renderOffers(D);
+          html += renderMonthSummary(D);
 
           html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者ページ」にあります。</div>';
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
@@ -1392,7 +1393,7 @@
           }
         });
 
-        app.addEventListener("toggle", function (ev) { var d = ev.target; if (d && d.hasAttribute && d.hasAttribute("data-offers")) offersOpen = !!d.open; }, true);
+        app.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && Object.prototype.hasOwnProperty.call(folds, key)) folds[key] = !!d.open; }, true);
         app.addEventListener("change", function (ev) {
           var el = ev.target;
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }

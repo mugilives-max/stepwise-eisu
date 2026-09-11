@@ -175,7 +175,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const s = { ...state(), blocked:[{ id:'b1', date:'2026-09-16', note:'部活' }], events:[{ id:'e1', date:'2026-09-17', dateTo:'2026-09-17', title:'大会', kind:'event' }] };
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
-  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /<h2>予定の編集<\/h2>[^]*<h2>やることリスト[^]*<details class="offers"/);
+  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /<h2>予定の編集<\/h2>[^]*<details class="fold tasks" data-fold="tasks" open><summary><h2>[^]*?やることリスト[^]*<details class="fold offers" data-fold="offers"><summary>/);
   ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定共有</);
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
@@ -216,7 +216,7 @@ test('the sentence card is hidden while the API key is not configured', async ()
 
 test('the offers section is a collapsed details block with one select-all / clear toggle', async () => {
   const ui = await studentReady();
-  assert.match(ui.html(), /<details class="offers" data-offers><summary><h2>[^]*?授業登録 <span class="cnt">2件・返事をお願いします/);
+  assert.match(ui.html(), /<details class="fold offers" data-fold="offers"><summary><h2>[^]*?授業登録 <span class="cnt">2件・返事をお願いします/);
   assert.doesNotMatch(ui.html(), /全件選択|選択を解除|data-action="batchclear"/); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</);
   ui.click('batchall'); assert.doesNotMatch(ui.html(), /data-action="batchall"/); assert.match(ui.html(), /data-action="batchclear"[^>]*>選択解除</);
   ui.check('data-accept-id', 'slot-b', false); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</);
@@ -226,9 +226,9 @@ test('the offers section is a collapsed details block with one select-all / clea
 test('the lesson plan notice explains what to do and sits above the 授業登録 fold', async () => {
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }], plan:{ '英語':4 }, planStatus:'proposed' };
   const ui = await studentReady(s);
-  assert.match(ui.html(), /<h2>授業計画の案内<\/h2><div class="card"><p[^>]*>9月は 英語4回 の授業計画が届いています。<\/p><p[^>]*>保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち<\/span>/);
+  assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画の案内 <span class="cnt">保護者の承認待ち<\/span><\/h2><\/summary><div class="card"><p[^>]*>9月は 英語4回 の授業計画が届いています。<\/p><p[^>]*>保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち<\/span>/);
   assert.match(ui.html(), /<strong>英語<\/strong> 実施 1・予定 0<span class="muted">／計画 4回<\/span>/); assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
-  assert.doesNotMatch(ui.html(), /<details class="offers"|選んだ日時を確認する/);
+  assert.doesNotMatch(ui.html(), /<details class="fold offers"|選んだ日時を確認する/);
   const approved = await studentReady({ ...s, planStatus:'approved' }); assert.match(approved.html(), /9月の授業計画は 英語4回 です。 <span class="tag green">保護者承認済み<\/span>/);
-  const offers = await studentReady({ ...state(), plan:{ '英語':4 }, planStatus:'proposed' }); assert.match(offers.html(), /<h2>授業計画の案内<\/h2>[^]*<details class="offers"[^]*2件・返事をお願いします/);
+  const offers = await studentReady({ ...state(), plan:{ '英語':4 }, planStatus:'proposed' }); assert.match(offers.html(), /<details class="fold offers"[^]*2件・返事をお願いします[^]*<details class="fold plan"[^]*授業計画の案内/);
 });

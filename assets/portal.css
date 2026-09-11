@@ -101,11 +101,11 @@
       .callbl.wi { color: #2f8a4c; font-weight: 700; }
       .daylist { margin: 0 -2px; }
       .daylist .slotline .time:empty { display: none; }
-      details.offers > summary { list-style: none; cursor: pointer; }
-      details.offers > summary::-webkit-details-marker { display: none; }
-      details.offers > summary h2 { margin-bottom: 8px; }
-      details.offers > summary .mk::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); }
-      details.offers[open] > summary .mk::before { content: '▾'; }
+      details.fold > summary { list-style: none; cursor: pointer; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary h2 { margin-bottom: 8px; }
+      details.fold > summary .mk::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); }
+      details.fold[open] > summary .mk::before { content: '▾'; }
       .empty { color: var(--muted); font-size: 13.5px; padding: 8px 2px; }
       .slotline { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
       .slotline:last-child { border-bottom: none; }
