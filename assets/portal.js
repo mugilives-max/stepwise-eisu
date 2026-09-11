@@ -657,7 +657,7 @@
           app.innerHTML = renderHomePage();
         }
 
-        /* ---------- ホーム: 予定表・選んだ日の内訳(登録・取消はここから)・今月の授業・やること・授業登録 ---------- */
+        /* ---------- ホーム: 予定表・予定の編集(選んだ日の内訳。登録・取消はここから)・やることリスト・今月の授業・授業登録 ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
@@ -668,6 +668,34 @@
           html += renderCal(D.info, today, true);
           html += '<h2>予定の編集</h2>';
           html += renderDayDetail(D, true, true);
+
+          // テストまでのカウントダウン + やること(宿題・持ち物)
+          (function () {
+            var tests = events.filter(function (e) { return e.kind === "test" && e.dateTo >= today; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+            var tasks = (S.tasks || []).filter(function (t) { return !t.withdrawnAt && !t.withdrawn; });
+            var open = tasks.filter(function (t) { return !t.done; });
+            var doneT = tasks.filter(function (t) { return t.done; });
+            var nextL = mine.filter(function (s) { return s.date >= today; })[0];
+            html += '<h2>やることリスト' + (open.length ? ' <span class="cnt">' + open.length + '件</span>' : '') + '</h2>';
+            if (tests.length || nextL) {
+              html += '<div class="countdown" style="margin-bottom:10px">';
+              tests.slice(0, 2).forEach(function (e) {
+                var days = Math.round((new Date(e.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5);
+                html += '<div class="cd"><div class="small muted">' + esc(e.title) + ' <span class="muted">' + fmtDateW(e.date) + '</span></div><div class="n" style="color:#7a4fc9">' + (days === 0 ? "今日" : days + '<small>日後</small>') + '</div></div>';
+              });
+              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。予定表で日付を選び、＋の「予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
+              html += '</div>';
+            }
+            html += '<div class="card">';
+            if (!open.length) html += '<div class="empty">いま登録されている宿題・持ち物はありません</div>';
+            open.forEach(function (t) {
+              var over = t.due && t.due < today;
+              html += '<label class="task"><input type="checkbox" data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + esc(t.title) + ' <span class="due' + (over ? " over" : "") + '">' + esc(taskDueText(t)) + (over ? '(期限切れ)' : '') + '</span>' + (t.createdBy === "teacher" ? ' <span class="small muted">先生から</span>' : '') + '</span>' + (t.createdBy === "student" ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '">削除</button>' : '') + '</label>';
+            });
+            html += renderTaskAdd();
+            if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(taskDueText(t)) + '・' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
+            html += '</div>';
+          })();
 
           // 今月の授業
           (function () {
@@ -691,34 +719,6 @@
             });
             var stTag = S.planStatus === "approved" ? '<span class="tag green">保護者承認済み</span>' : S.planStatus === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : "";
             html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>' : "") + '</div>';
-          })();
-
-          // テストまでのカウントダウン + やること(宿題・持ち物)
-          (function () {
-            var tests = events.filter(function (e) { return e.kind === "test" && e.dateTo >= today; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-            var tasks = (S.tasks || []).filter(function (t) { return !t.withdrawnAt && !t.withdrawn; });
-            var open = tasks.filter(function (t) { return !t.done; });
-            var doneT = tasks.filter(function (t) { return t.done; });
-            var nextL = mine.filter(function (s) { return s.date >= today; })[0];
-            html += '<h2>やること' + (open.length ? ' <span class="cnt">' + open.length + '件</span>' : '') + '</h2>';
-            if (tests.length || nextL) {
-              html += '<div class="countdown" style="margin-bottom:10px">';
-              tests.slice(0, 2).forEach(function (e) {
-                var days = Math.round((new Date(e.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5);
-                html += '<div class="cd"><div class="small muted">' + esc(e.title) + ' <span class="muted">' + fmtDateW(e.date) + '</span></div><div class="n" style="color:#7a4fc9">' + (days === 0 ? "今日" : days + '<small>日後</small>') + '</div></div>';
-              });
-              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。予定表で日付を選び、＋の「予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
-              html += '</div>';
-            }
-            html += '<div class="card">';
-            if (!open.length) html += '<div class="empty">いま登録されている宿題・持ち物はありません</div>';
-            open.forEach(function (t) {
-              var over = t.due && t.due < today;
-              html += '<label class="task"><input type="checkbox" data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + esc(t.title) + ' <span class="due' + (over ? " over" : "") + '">' + esc(taskDueText(t)) + (over ? '(期限切れ)' : '') + '</span>' + (t.createdBy === "teacher" ? ' <span class="small muted">先生から</span>' : '') + '</span>' + (t.createdBy === "student" ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '">削除</button>' : '') + '</label>';
-            });
-            html += renderTaskAdd();
-            if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(taskDueText(t)) + '・' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
-            html += '</div>';
           })();
 
           html += renderOffers(D);

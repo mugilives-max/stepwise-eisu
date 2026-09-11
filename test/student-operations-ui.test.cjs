@@ -175,7 +175,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const s = { ...state(), blocked:[{ id:'b1', date:'2026-09-16', note:'部活' }], events:[{ id:'e1', date:'2026-09-17', dateTo:'2026-09-17', title:'大会', kind:'event' }] };
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
-  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/);
+  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /<h2>予定の編集<\/h2>[^]*<h2>やることリスト[^]*<details class="offers"/);
   ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定を共有/);
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
