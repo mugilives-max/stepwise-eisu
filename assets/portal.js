@@ -11,7 +11,7 @@
         var busy = false;
         var pending = null;      // 確認バー {kind, slotId}
         var acceptBatches = Object.create(null), stateSeq = 0, stateKey = "";
-        var selDate = null, selManual = false;
+        var selDate = null, selManual = false, dayAddOpen = false;
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
         var panel = "";          // "" | "wish" | "event" | "ng"
         var wishKind = "want";   // want=この日時 / ok=この時間帯のどこかで
@@ -428,7 +428,7 @@
           var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
           var dayToff = dayOffs.some(function (o) { return !o.start; });
-          var html = '<div style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">' + fmtDateW(selDate) + '</div>';
+          var html = '<div style="margin-top:10px"><div class="row" style="margin-bottom:6px"><span class="small muted">' + fmtDateW(selDate) + '</span>'+(selDate>=today?'<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">＋</button>':'')+'</div>';
           if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
           else {
             html += '<div class="chips">';
@@ -445,13 +445,11 @@
             html += '</div>';
           }
           if (selDate >= today) {
-            if (withActions) {
+            if (dayAddOpen) {
               html += '<div class="row" style="margin-top:10px;gap:6px"><span class="small muted">この日に:</span>' +
                 (dayToff ? "" : '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>') +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button>' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">' + (dayNg.length ? "授業できない日を解除" : "授業できない日にする") + '</button></div>';
-            } else {
-              html += '<div class="small muted" style="margin-top:8px">授業の希望・予定の共有・授業できない日の登録は <a href="#schedule">「予定」ページ</a> から</div>';
             }
           }
           return html + '</div>';
@@ -1282,7 +1280,9 @@
             case "closebar": pending = null; render(); break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
+            case "dayadd": dayAddOpen=!dayAddOpen;render();break;
             case "calday":
+              dayAddOpen=false;
               if (selMode) { var nd = btn.getAttribute("data-date"); selDays[nd] = !selDays[nd]; render(); break; }
               selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
             case "panel":
@@ -1292,7 +1292,7 @@
               var calEl0 = document.querySelector(".cal"); if (calEl0) calEl0.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "dayact":
-              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; render();
+              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; if(route()!=="schedule")location.hash="#schedule"; render();
               var calEl2 = document.querySelector(".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "selstart":
