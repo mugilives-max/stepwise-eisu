@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-family-menu' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-rows' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -164,7 +164,7 @@ function studentState_(code) {
   var planRowsNow = planRows_(), ymNow = today.slice(0, 7);
   var planMonths = [ymNow, nextYm_(ymNow)].map(function (ym) {
     var info = planMonthInfo_(me.id, ym, planRowsNow), pf = planFor_(me.id, ym, planRowsNow);
-    return { ym: ym, status: String(info.status || 'none'), plan: pf.plan };
+    return { ym: ym, status: String(info.status || 'none'), plan: pf.plan, rows: pf.rows };
   }).filter(function (m) { return (m.status === 'proposed' || m.status === 'approved') && Object.keys(m.plan).length > 0; });
   var tasks = tasksFor_(me.id, 45);
   return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planMonths: planMonths, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };

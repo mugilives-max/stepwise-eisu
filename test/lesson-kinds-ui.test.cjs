@@ -34,5 +34,5 @@ test('students see the kind next to the subject and plan labels stay consistent'
   s.planMonths = [{ ym: '2026-09', status: 'approved', plan: { '英語': 2, '英語（演習）': 1 } }];
   const ui = await studentReady(s);
   assert.match(ui.html(), /英語（演習）/);
-  assert.match(ui.html(), /<strong>英語（演習）<\/strong> 実施 0・予定 0<span class="muted">／計画 1回<\/span>/);
+  assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">演習<\/span> 実施 0・予定 0<span class="muted">／計画 1回<\/span>/);
 });

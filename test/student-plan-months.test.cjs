@@ -13,8 +13,8 @@ test('student state lists this and next month plans with their approval status o
   const r = h.admin('planSet', { studentId: 'test-a', ym: '2026-11', subject: '英語', count: 5 }); assert.equal(r.ok, true, JSON.stringify(r));
   const state = json(h.context().studentState_('synthetic-link-a'));
   assert.deepEqual(state.planMonths, [
-    { ym: '2026-09', status: 'approved', plan: { '英語': 4 } },
-    { ym: '2026-10', status: 'proposed', plan: { '英語': 3, '数学': 2 } }
+    { ym: '2026-09', status: 'approved', plan: { '英語': 4 }, rows: [{ subject: '英語', kind: '', count: 4 }] },
+    { ym: '2026-10', status: 'proposed', plan: { '英語': 3, '数学': 2 }, rows: [{ subject: '英語', kind: '', count: 3 }, { subject: '数学', kind: '', count: 2 }] }
   ]);
   assert.deepEqual(state.plan, { '英語': 4 }); assert.equal(state.planStatus, 'approved');
   assert.deepEqual(json(h.context().studentState_('synthetic-link-b').planMonths), []);

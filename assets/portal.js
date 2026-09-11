@@ -59,6 +59,9 @@
         function fmtDY(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return p[0] + "/" + (+p[1]) + "/" + (+p[2]); }
         function cT(t) { return String(t || "").replace(/^0/, "").replace(/:00$/, ""); } // 13:00→13, 09:30→9:30
         function lessonLabel(s) { if (!s) return ""; var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); } // 科目＋種類(通常は省略)
+        function planName(r) { return String(r && r.subject || "") + "（" + (r && r.kind ? r.kind : "通常") + "）"; } // 授業計画では通常も明示
+        function kindTag(kind) { return '<span class="tag gray">' + esc(kind || '通常') + '</span>'; }
+        function planRows(m) { if (Array.isArray(m.rows) && m.rows.length) return m.rows.map(function (r) { return { subject: r.subject, kind: r.kind || '', count: r.count, label: lessonLabel(r) }; }); return Object.keys(m.plan || {}).map(function (k) { var mm = /^(.*)（(.+)）$/.exec(k); return { subject: mm ? mm[1] : k, kind: mm ? mm[2] : '', count: m.plan[k], label: k }; }); }
         function endTime(start, min) { var p = start.split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
         function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
@@ -522,7 +525,7 @@
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内 <span class="small muted" style="font-weight:400">保護者の承認待ち</span></h3>';
           if (!proposedRows) html += '<div class="empty">新しい案内はありません</div>';
           proposed.forEach(function (m) {
-            Object.keys(m.plan).forEach(function (k) { html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(k) + '</strong> ' + m.plan[k] + '回</span><span class="tag amber">保護者の承認待ち</span></div>'; });
+            planRows(m).forEach(function (r) { html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(r.subject) + '</strong> ' + kindTag(r.kind) + ' ' + r.count + '回</span><span class="tag amber">保護者の承認待ち</span></div>'; });
             if (famChild) {
               var fm = famMonths.filter(function (x) { return x.ym === m.ym; })[0], famDis = F.busy ? ' disabled' : '';
               if (fm && fm.status === 'proposed' && fm.termsKnown && Number.isSafeInteger(fm.revision)) html += '<div class="row" style="margin:8px 0 4px;gap:8px"><button class="btn-primary btn-sm" data-action="fa-planok" data-child="' + esc(famChild.studentId) + '" data-ym="' + esc(m.ym) + '"' + famDis + '>承認する</button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="' + esc(famChild.studentId) + '" data-ym="' + esc(m.ym) + '"' + famDis + '>回数を調整・見送る</button><span class="small muted">' + (fm.lessonMin ? '1回 ' + yen(fm.rate30 * fm.lessonMin / 30) + '（' + esc(fm.lessonMin) + '分）' : '') + '</span></div>';
@@ -534,11 +537,14 @@
           html += '<h3 style="margin:14px 0 6px;font-size:15px">実施計画 <span class="small muted" style="font-weight:400">承認済み</span></h3>';
           var remainTotal = 0, shown = 0;
           approved.forEach(function (m) {
-            var c = counts(m.ym), keys = Object.keys(m.plan);
-            Object.keys(c).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
-            keys.forEach(function (k) {
-              var n = c[k] || { done: 0, plan: 0 }, goal = m.plan[k] || 0, remain = goal ? Math.max(0, goal - n.done - n.plan) : 0; remainTotal += remain; shown++;
-              html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(k) + '</strong> 実施 ' + n.done + '・予定 ' + n.plan + (goal ? '<span class="muted">／計画 ' + goal + '回</span>' : '<span class="muted">（計画外）</span>') + '</span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : goal ? '<span class="tag green">日程確定</span>' : '') + '</div>';
+            var c = counts(m.ym), seen = {};
+            planRows(m).forEach(function (r) {
+              seen[r.label] = true; var n = c[r.label] || { done: 0, plan: 0 }, goal = Number(r.count) || 0, remain = Math.max(0, goal - n.done - n.plan); remainTotal += remain; shown++;
+              html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(r.subject) + '</strong> ' + kindTag(r.kind) + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">／計画 ' + goal + '回</span></span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : '<span class="tag green">日程確定</span>') + '</div>';
+            });
+            Object.keys(c).forEach(function (label) {
+              if (seen[label]) return; var n = c[label], mm = /^(.*)（(.+)）$/.exec(label); shown++;
+              html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(mm ? mm[1] : label) + '</strong> ' + kindTag(mm ? mm[2] : '') + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">（計画外）</span></span></div>';
             });
           });
           if (!approved.length && nowHasLessons) Object.keys(nowCounts).forEach(function (k) { var n = nowCounts[k]; shown++; html += '<div class="slotline"><span class="tag gray">' + (+ymNow.slice(5)) + '月</span><span class="time"></span><span class="who"><strong>' + esc(k) + '</strong> 実施 ' + n.done + '・予定 ' + n.plan + '</span></div>'; });
@@ -1030,10 +1036,10 @@
           h+='<div class="card" role="region" aria-label="授業計画の回答確認"><strong>'+esc((F.childrenData[confirmation.studentId]||{}).name)+'・'+esc(confirmation.ym)+'</strong>';
           if(confirmation.stage==='reduce'){
             h+='<p>承認できる回数を選んでください。0回の場合は今回は見送ります。</p>';
-            confirmation.rows.forEach(function(r,index){h+='<p><label>'+esc(lessonLabel(r))+' <select id="fa-reduce-'+index+'">';for(var n=0;n<=r.count;n++)h+='<option value="'+n+'"'+(n===confirmation.approvedCounts[index].count?' selected':'')+'>'+n+'回</option>';h+='</select></label></p>';});
+            confirmation.rows.forEach(function(r,index){h+='<p><label>'+esc(planName(r))+' <select id="fa-reduce-'+index+'">';for(var n=0;n<=r.count;n++)h+='<option value="'+n+'"'+(n===confirmation.approvedCounts[index].count?' selected':'')+'>'+n+'回</option>';h+='</select></label></p>';});
             h+='<label>先生への伝言（任意）<textarea id="fa-plan-message" maxlength="500">'+esc(confirmation.memo||'')+'</textarea></label><p><button class="btn-primary" data-action="fa-plan-review">この内容を確認する</button></p>';
           }else{
-            h+='<p>'+confirmation.approvedCounts.map(function(r){return esc(lessonLabel(r))+' '+r.count+'回まで';}).join('、')+'</p>';
+            h+='<p>'+confirmation.approvedCounts.map(function(r){return esc(planName(r))+' '+r.count+'回まで';}).join('、')+'</p>';
             h+=confirmation.approve?'<p>この回数以内で授業の計画を立てることができます。授業実施前であれば、いつでもシステムまたはLINEから計画の見直しを申し出ることができます。承認しますか？</p>':'<p>今回は見送ります。先生にこの内容を伝えますか？</p>';
             if(confirmation.memo)h+='<p>'+esc(confirmation.memo)+'</p>';
             h+='<button class="btn-primary" data-action="fa-decide"'+dis+'>'+(confirmation.approve?'承認する':'今回は見送る')+'</button> ';

@@ -290,10 +290,10 @@ test('a parent approves the proposed lesson plan directly from the mypage 授業
   ui.navigate('#family/home');
   const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planMonths: [{ ym: '2026-09', status: 'proposed', plan: { '英語': 4 } }] }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
-  assert.match(ui.html(), /<strong>英語<\/strong> 4回<\/span><span class="tag amber">保護者の承認待ち<\/span><\/div><div class="row"[^>]*><button class="btn-primary btn-sm" data-action="fa-planok" data-child="child-a" data-ym="2026-09">承認する<\/button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="child-a" data-ym="2026-09">回数を調整・見送る<\/button><span class="small muted">1回 [^<]*3,000[^<]*（90分）<\/span>/);
+  assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">通常<\/span> 4回<\/span><span class="tag amber">保護者の承認待ち<\/span><\/div><div class="row"[^>]*><button class="btn-primary btn-sm" data-action="fa-planok" data-child="child-a" data-ym="2026-09">承認する<\/button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="child-a" data-ym="2026-09">回数を調整・見送る<\/button><span class="small muted">1回 [^<]*3,000[^<]*（90分）<\/span>/);
   assert.doesNotMatch(ui.html(), /保護者の方に伝えて/);
   ui.click('fa-planok', { 'data-child': 'child-a' });
-  assert.match(ui.html(), /<details class="fold plan" data-fold="plan" open>/); assert.match(ui.html(), /授業計画の回答確認[^]*英語 4回まで[^]*承認しますか/);
+  assert.match(ui.html(), /<details class="fold plan" data-fold="plan" open>/); assert.match(ui.html(), /授業計画の回答確認[^]*英語（通常） 4回まで[^]*承認しますか/);
   ui.click('fa-decide');
   const req = ui.requests.at(-1).body; assert.equal(req.action, 'familyPlanDecide'); assert.equal(req.studentId, 'child-a'); assert.equal(req.ym, '2026-09'); assert.equal(req.approve, true); assert.equal(req.expectedRevision, 7);
   assert.deepEqual((req.approvedCounts || []).map(r => [r.subject, r.count]), [['英語', 4]]);
