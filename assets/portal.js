@@ -468,7 +468,8 @@
               else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
             dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
-            dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">授業可</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
+            dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">授業可</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="helpwish" aria-label="授業可の説明" aria-expanded="' + helpWish + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
+            if (dayWishes.length && helpWish) html += '<div class="note" style="margin:4px 0 8px">授業ができる時間帯として登録した内容です。先生はこの時間帯を優先して授業を案内します。時間帯すべてが授業になるわけではなく、案内が届いてから確定します。</div>';
             html += '</div>';
           }
           if (selDate >= today) {
@@ -821,7 +822,7 @@
 
         // 授業の記録: 科目＋種類ごとのフォルダをカードで並べ、開くとそのフォルダの中身(公開された授業記録と実施済みの授業、日付の新しい順)を表示する
         var histFolder = null;
-        var helpToff = false; // 「登録不可」の説明(？ボタン)の開閉
+        var helpToff = false, helpWish = false; // 「登録不可」「授業可」の説明(？ボタン)の開閉
         function historyFolders() {
           var done = (S.history || []).filter(function (x) { return x.done; }), records = (S.lessonRecords || []).slice(), used = {};
           function recordFor(x) { return records.filter(function (r) { return r.date === x.date && r.start === x.start && r.subject === (x.subject || '') && Number(r.min) === Number(x.min); })[0] || null; }
@@ -1403,6 +1404,7 @@
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
             case "histopen": histFolder = btn.getAttribute("data-folder"); render(); window.scrollTo(0, 0); break;
             case "helptoff": helpToff = !helpToff; render(); break;
+            case "helpwish": helpWish = !helpWish; render(); break;
             case "histback": histFolder = null; render(); break;
             case "dayadd": dayAddOpen=!dayAddOpen;render();break;
             case "calday":
