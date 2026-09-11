@@ -41,7 +41,7 @@ function sendLine(ui, count) { ui.click('pe-open', { 'data-line': 'line-1' }); i
 
 test('default count saves send subject, kind and count without a month or revision', async () => {
   const ui = await ready(planCard([line()]));
-  assert.match(ui.html(), /<div class="plan-gr" data-line="line-1"><div class="plan-gc">英語<\/div><div class="plan-gc">通常<\/div><div class="plan-gc">4回<\/div><div class="plan-gc">9月<\/div><div class="plan-gc">90分<span class="sub">4,500円<\/span><\/div><\/div>/);
+  assert.match(ui.html(), /<div class="plan-gr" data-line="line-1"><div class="plan-gc">英語<\/div><div class="plan-gc">通常<\/div><div class="plan-gc">4回<\/div><div class="plan-gc">9月<\/div><div class="plan-gc">90分<\/div><div class="plan-gc">4,500円<\/div><\/div>/);
   setPlan(ui, 6);
   const body = ui.requests.at(-1).body;
   assert.equal(body.op, 'planSet'); assert.equal(body.studentId, 'test-a'); assert.equal(body.ym, undefined); assert.equal(Object.hasOwn(body, 'expectedRevision'), false);

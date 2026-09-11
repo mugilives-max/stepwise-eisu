@@ -91,7 +91,7 @@
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
       /* 案内の一覧: 表計算ソフトのような罫線つきの表(gap を罫線色で埋める) */
-      .plan-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; max-width: 100%; }
+      .plan-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content) minmax(0, max-content); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; max-width: 100%; }
       .plan-gh { background: var(--bg-soft, #f3f5f8); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 8px; min-width: 0; overflow-wrap: anywhere; }
       .plan-gr { display: contents; }
       .plan-gc { background: #fff; padding: 6px 7px; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
@@ -900,7 +900,7 @@
           if (section === 'billing') {
           // 今月の確定した会計条件だけを表示する
           var tm = s.thisMonth || {}, currentBilling = s.billing;
-          html += '<h2>今月の授業と請求 <span class="cnt">' + esc(s.month) + '</span></h2><div class="grid2"><div class="card"><div class="muted small">実施済み</div><div class="stat">' + esc(tm.count || 0) + '<small>回 / ' + esc(tm.minutes || 0) + '分</small></div></div><div class="card"><div class="muted small">今月の授業料</div>' + (currentBilling && (currentBilling.canBill || currentBilling.invoice) ? '<div class="stat">' + yen(currentBilling.invoice ? currentBilling.invoice.amount : currentBilling.amount) + '</div>' : '<div class="stat">未確定</div><div class="small">' + esc(currentBilling && currentBilling.reason || '下の「請求内容を確認」から計算してください') + '</div>') + '</div></div><p class="note">実施状態と授業記録の保存は別操作です。請求は下の「請求・入金管理」で確認してください。</p>';
+          var thisMonthHtml = '<h2>今月の授業と請求 <span class="cnt">' + esc(s.month) + '</span></h2><div class="grid2"><div class="card"><div class="muted small">実施済み</div><div class="stat">' + esc(tm.count || 0) + '<small>回 / ' + esc(tm.minutes || 0) + '分</small></div></div><div class="card"><div class="muted small">今月の授業料</div>' + (currentBilling && (currentBilling.canBill || currentBilling.invoice) ? '<div class="stat">' + yen(currentBilling.invoice ? currentBilling.invoice.amount : currentBilling.amount) + '</div>' : '<div class="stat">未確定</div><div class="small">' + esc(currentBilling && currentBilling.reason || '下の「請求内容を確認」から計算してください') + '</div>') + '</div></div><p class="note">実施状態と授業記録の保存は別操作です。請求は下の「請求・入金管理」で確認してください。</p>';
 
           html += renderPlanCard(s);
 
@@ -1013,7 +1013,7 @@
           html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。次回授業を選ぶと、指定科目の確定済み授業に期限が連動します。予定がなければ「予定未定」と表示します。</div></div>';
 
           }
-          if (section === 'billing') html += renderBilling(s);
+          if (section === 'billing') html += thisMonthHtml + renderBilling(s);
           if (section === 'progress') {
 
           // 面談
@@ -1849,13 +1849,13 @@
         function renderPlanGroup(s, label, gl, f, dis) {
           if (!gl.length) return '';
           var h = '<h3 class="plan-group" style="margin:14px 0 4px;font-size:14px">' + label + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
-          h += '<div class="plan-grid"><div class="plan-gh">科目</div><div class="plan-gh">種類</div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間<span class="sub" style="display:block;font-size:11px">1回の料金</span></div>';
+          h += '<div class="plan-grid"><div class="plan-gh">科目</div><div class="plan-gh">種類</div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間</div><div class="plan-gh">1回の料金</div>';
           // 追加案内は親の直後に並べる(親が同じ表にいるとき)
           var ordered = [], inGroup = {}; gl.forEach(function (l) { inGroup[l.id] = true; });
           gl.forEach(function (l) { if (!l.parentId || !inGroup[l.parentId]) { ordered.push(l); gl.forEach(function (a) { if (a.parentId === l.id) ordered.push(a); }); } });
           ordered.forEach(function (l) {
             var attrs = ' data-line="' + esc(l.id) + '"', fee = l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * l.lessonMin / 30);
-            h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + (l.parentId ? '<span class="sub">追加</span>' : '') + '</div><div class="plan-gc">' + esc(l.kind || '通常') + '</div><div class="plan-gc">' + (l.parentId ? '＋' : '') + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分<span class="sub">' + yen(fee) + '</span></div></div>';
+            h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + (l.parentId ? '<span class="sub">追加</span>' : '') + '</div><div class="plan-gc">' + esc(l.kind || '通常') + '</div><div class="plan-gc">' + (l.parentId ? '＋' : '') + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分</div><div class="plan-gc">' + yen(fee) + '</div></div>';
             var sub = '';
             if (l.comment) sub += '<div class="small" style="white-space:pre-wrap;margin:2px 0">' + esc(l.comment) + '</div>';
             if (l.status === "approved") sub += '<div class="small muted" style="margin:2px 0">承諾: ' + esc(l.consentDate || l.approvedAt || "—") + '・' + esc(l.approvedVia || "") + (l.memo ? '・' + esc(l.memo) : "") + '</div>';
