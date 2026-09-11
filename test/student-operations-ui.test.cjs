@@ -176,7 +176,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
   assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /<h2>予定の編集<\/h2>[^]*<h2>やることリスト[^]*<details class="offers"/);
-  ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定を共有/);
+  ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定共有</);
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
   ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
@@ -221,4 +221,12 @@ test('the offers section is a collapsed details block with one select-all / clea
   ui.click('batchall'); assert.doesNotMatch(ui.html(), /data-action="batchall"/); assert.match(ui.html(), /data-action="batchclear"[^>]*>選択解除</);
   ui.check('data-accept-id', 'slot-b', false); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</);
   ui.click('batchall'); ui.click('batchclear'); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</); assert.equal((ui.html().match(/data-accept-id="[^"]+" checked/g) || []).length, 0);
+});
+
+test('the monthly lesson counts live inside the 授業登録 details even without offers', async () => {
+  const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }], plan:{ '英語':4 }, planStatus:'proposed' };
+  const ui = await studentReady(s);
+  assert.match(ui.html(), /<details class="offers" data-offers><summary><h2>[^]*?授業登録 <span class="cnt">返事待ちの案内はありません<\/span>/);
+  assert.match(ui.html(), /<details class="offers"[^]*9月の授業[^]*英語[^]*1<span class="muted">\/4<\/span>回[^]*保護者の承認待ち[^]*<\/details>/);
+  assert.doesNotMatch(ui.html(), /選んだ日時を確認する/);
 });
