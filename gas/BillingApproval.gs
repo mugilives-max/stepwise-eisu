@@ -1,4 +1,4 @@
-/* 月間承認と請求。Code.gsと同じApps Scriptプロジェクトへ配置する。 */
+/* 請求と入金。授業計画(案内)の行は PlanLines.gs。monthAgreements は旧: 月間承認(行への移行元として残す)。Code.gsと同じApps Scriptプロジェクトへ配置する。 */
 var BILLING_AGREEMENT_COLS_ = ['id','studentId','ym','revision','status','planJson','rate30','monthly','proposedAt','approvedAt','approvedVia','consentDate','memo','updatedAt','lessonMin','approvedPlanJson'];
 var BILLING_EVENT_COLS_ = ['id','studentId','ym','revision','event','recordedAt','consentDate','via','memo','snapshotJson'];
 var BILLING_PAYMENT_COLS_ = ['年月','生徒ID','氏名','請求額','請求日','入金日','入金方法','状態','備考','請求ID','承認版','料金方式','確定単価(30分)','確定月謝','実施分数','実施回数','実績JSON','取消日時','取消理由','処理ID','入金版'];
@@ -35,23 +35,6 @@ function ensureBillingSchema_() {
   }
   memoClear_();
 }
-function billingAgreement_(studentId,ym) {
-  var match = null;
-  readRows_('monthAgreements').forEach(function(r,i) {
-    if (String(r.studentId) === String(studentId) && String(r.ym) === String(ym)) {
-      if (match) throw new Error('月間承認が重複しています。台帳を確認してください');
-      match = r; match._row=i+2;
-    }
-  });
-  return match;
-}
-function billingWriteAgreement_(a) {
-  a.updatedAt=billingStamp_();
-  var sh=billingEnsureColumns_(ss_(),'monthAgreements',BILLING_AGREEMENT_COLS_), row=a._row || sh.getLastRow()+1;
-  var vals=BILLING_AGREEMENT_COLS_.map(function(k){var v=a[k] == null ? '' : a[k];return typeof v==='string'?billingText_(v):v;});
-  sh.getRange(row,1,1,vals.length).setNumberFormat('@').setValues([vals]);
-  a._row=row;
-}
 function billingAudit_(a,event,id,extra) {
   var existing=readRows_('approvalEvents').filter(function(r){return String(r.id)===String(id);})[0];
   var snapshot={plan:billingPlanJson_(a),rate30:Number(a.rate30)||0,monthly:Number(a.monthly)||0};
@@ -71,40 +54,6 @@ function billingPlanJson_(a) {
   if(!a || !a.planJson)return [];
   try { var p=JSON.parse(String(a.planJson));return Array.isArray(p)?p:[]; } catch(e){throw new Error('月間承認の保存内容を確認してください');}
 }
-function billingPlanList_(studentId,ym,rows) {
-  var map=Object.create(null), duplicate=false;
-  (rows||planRows_()).forEach(function(r){
-    if(String(r.studentId)!==String(studentId) || String(r.ym)!==ym)return;
-    var key=String(r.subject)+'\u0000'+kindNorm_(r.kind);
-    if(Object.prototype.hasOwnProperty.call(map,key))duplicate=true;
-    if(Number(r.count)>0)map[key]=Number(r.count);
-  });
-  if(duplicate)throw new Error('同じ科目・種類の計画が重複しています');
-  // 通常(空)は kind を持たせない(既存の承認 JSON と一致させる)
-  return Object.keys(map).sort().map(function(k){var p=k.split('\u0000'),e={subject:p[0],count:map[k]};if(p[1])e.kind=p[1];return e;});
-}
-function billingApprovedPlan_(a){return a&&a.approvedPlanJson?JSON.parse(a.approvedPlanJson):billingPlanJson_(a);}
-function billingAgreementCurrent_(a) {
-  return !!a && a.status==='approved' && JSON.stringify(billingPlanJson_(a))===JSON.stringify(billingPlanList_(a.studentId,String(a.ym)));
-}
-function billingMonthInfo_(studentId,ym,rows) {
-  var info=planMonthInfoLegacy_(studentId,ym,rows),a=billingAgreement_(studentId,ym);
-  info.revision=a?Number(a.revision)||0:0;
-  info.termsKnown=!!a && a.rate30!=='' && a.monthly!=='';
-  info.rate30=info.termsKnown?Number(a.rate30):null;info.monthly=info.termsKnown?Number(a.monthly):null;
-  info.lessonMin=a&&a.lessonMin?Number(a.lessonMin):null;
-  if(a&&a.status==='approved'&&a.approvedPlanJson){info.rows=billingApprovedPlan_(a);info.total=info.rows.reduce(function(n,r){return n+Number(r.count);},0);}
-  info.consentDate=a?String(a.consentDate||''):'';
-  if(a){
-    var current=JSON.stringify(billingPlanJson_(a))===JSON.stringify(billingPlanList_(studentId,ym,rows));
-    info.status=current?String(a.status):'draft';
-    info.proposedAt=String(a.proposedAt||'');info.approvedAt=String(a.approvedAt||'');
-    info.approvedVia=String(a.approvedVia||'');info.memo=String(a.memo||'');
-  } else if(info.status==='approved' || info.status==='proposed') {
-    info.status='draft';info.memo='月の料金と回数を確認して、あらためて提案してください';
-  }
-  return info;
-}
 function billingInvoiceRows_(studentId,ym) {
   return ledgerRows_('入金管理').filter(function(p){return String(p['生徒ID'])===String(studentId) && (!ym || String(p['年月'])===String(ym));});
 }
@@ -120,185 +69,16 @@ function billingRevisionCheck_(req,a,required) {
   return null;
 }
 function billingRevisionValid_(v) { return (typeof v==='number'||typeof v==='string'&&/^\d+$/.test(v)) && Number.isSafeInteger(Number(v)) && Number(v)>=0; }
-function billingPlanSet_(req) {
-  var id=String(req.studentId||''),ym=String(req.ym||''),subject=String(req.subject||'').trim();
-  if(!systemStudent_(id))return billingError_('生徒が見つかりません','notFound');
-  if(ym!=='default' && !billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
-  if(!subject || subject.length>20 || /^[=+@-]/.test(subject))return billingError_('科目を20文字以内で選んでください');
-  var kind=kindNorm_(req.kind);if(!kindValid_(kind))return kindError_();
-  var count=Number(req.count);if(!Number.isInteger(count)||count<0||count>31)return billingError_('回数は0〜31の整数です');
-  var a=ym==='default'?null:billingAgreement_(id,ym), check=ym==='default'?null:(billingMonthUnlocked_(id,ym)||billingRevisionCheck_(req,a,false));
-  if(check)return check;
-  var rows=readRows_('plans'),found=-1;
-  for(var i=0;i<rows.length;i++)if(String(rows[i].studentId)===id && planYm_(rows[i].ym)===ym && String(rows[i].subject)===subject && kindNorm_(rows[i].kind)===kind){if(found>=0)return billingError_('科目・種類の計画が重複しています');found=i;}
-  if(found>=0 && Number(rows[found].count)===count || found<0 && count===0){
-    // Only an unproposed draft made by planSet can finish an interrupted write.
-    // planPropose stamps proposedAt before its own intermediate draft is saved.
-    if(a && a.status==='draft' && !a.proposedAt){
-      var snapshot=JSON.stringify(billingPlanList_(id,ym));
-      var eventId=a.id+':'+a.revision+':changed';
-      var auditExists=readRows_('approvalEvents').some(function(e){return String(e.id)===eventId;});
-      var statusPending=rows.some(function(p){return String(p.studentId)===id && planYm_(p.ym)===ym && (p.status!=='draft'||p.approvedAt||p.approvedVia||p.memo);});
-      if(String(a.planJson)!==snapshot || statusPending || !auditExists){
-        check=billingRevisionCheck_(req,a,true);if(check)return check;
-        var snapshotPending=String(a.planJson)!==snapshot;a.planJson=snapshot;
-        // Validate an existing receipt before touching a conflicting snapshot.
-        if(auditExists)billingAudit_(a,'planChanged',eventId);
-        if(statusPending)planSetStatus_(id,ym,'draft','','',false);
-        if(snapshotPending)billingWriteAgreement_(a);
-        if(!auditExists)billingAudit_(a,'planChanged',eventId);
-      }
-    }
-    return {ok:true};
-  }
-  // 先に承認を無効化する。計画の保存途中で失敗しても古い承認を使えない。
-  if(ym!=='default'){
-    a=a||{id:billingId_(),studentId:id,ym:ym,revision:0,rate30:'',monthly:''};
-    a.revision=Number(a.revision)+1;a.status='draft';a.approvedPlanJson='';a.proposedAt='';a.approvedAt='';a.approvedVia='';a.consentDate='';a.memo='';
-    billingWriteAgreement_(a);
-  }
-  var sh=sheet_('plans');
-  if(found>=0){if(count===0)sh.deleteRow(found+2);else sh.getRange(found+2,5).setValue(count);}
-  else sh.getRange(sh.getLastRow()+1,1,1,11).setNumberFormat('@').setValues([[uid_(),id,ym,subject,count,'draft','','','','',kind]]);
-  if(ym!=='default'){
-    planSetStatus_(id,ym,'draft','','',false);
-    a.planJson=JSON.stringify(billingPlanList_(id,ym));billingWriteAgreement_(a);
-    billingAudit_(a,'planChanged',a.id+':'+a.revision+':changed');
-  }
-  return {ok:true};
-}
 function billingMoney_(value) { return billingRevisionValid_(value) && Number(value)<=10000000; }
-// 先生: 月の科目・種類・回数、1回の授業時間と1回の授業料、コメントをまとめて保存し、そのまま保護者へ提案する(1回の処理)。
-// 内部では従来の planSet / コメント保存 / planPropose を順に呼ぶ(30分単価 = 1回の授業料×30÷授業時間、四捨五入)。
-function billingPlanSubmit_(req) {
-  var id=String(req.studentId||''),ym=String(req.ym||''),st=findStudent_(id);
-  if(!st)return billingError_('在籍生徒を選んでください','notFound');
-  if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
-  var rows=Array.isArray(req.rows)?req.rows:[];
-  if(!rows.length)return billingError_('科目と回数を1つ以上入力してください');
-  var seen={},clean=[];
-  for(var i=0;i<rows.length;i++){
-    var subject=String(rows[i]&&rows[i].subject||'').trim(),kind=kindNorm_(rows[i]&&rows[i].kind),count=Number(rows[i]&&rows[i].count);
-    if(!subject||subject.length>20||/^[=+@-]/.test(subject))return billingError_('科目を20文字以内で選んでください');
-    if(!kindValid_(kind))return kindError_();
-    if(!Number.isInteger(count)||count<1||count>31)return billingError_('回数は1〜31の整数で入力してください');
-    var key=subject+'\u0000'+kind;if(seen[key])return billingError_('同じ科目・種類が重複しています');seen[key]=true;clean.push({subject:subject,kind:kind,count:count});
-  }
-  var lessonMin=Number(req.lessonMin),fee=Number(req.lessonFee);
-  if(!Number.isInteger(lessonMin)||lessonMin<30||lessonMin>240||lessonMin%30)return billingError_('1回の授業時間は30〜240分の30分刻みで入力してください');
-  if(!Number.isInteger(fee)||fee<0||fee>10000000)return billingError_('1回の授業料を整数で入力してください');
-  var rate30=Math.round(fee*30/lessonMin);
-  var a=billingAgreement_(id,ym),check=billingMonthUnlocked_(id,ym)||billingRevisionCheck_(req,a,false);if(check)return check;
-  // 同じ処理の中で何度も書くので、書く前にシートのキャッシュを捨てて最新の版を読む(1回ずつの操作と同じ状態にする)
-  function rev(){memoClear_();var cur=billingAgreement_(id,ym);return cur?Number(cur.revision):0;}
-  var existing=planRows_().filter(function(r){return r.studentId===id&&r.ym===ym;});
-  for(var e=0;e<existing.length;e++){
-    var ek=existing[e].subject+'\u0000'+kindNorm_(existing[e].kind);
-    if(!seen[ek]){var del=billingPlanSet_({studentId:id,ym:ym,subject:existing[e].subject,kind:existing[e].kind,count:0,expectedRevision:rev()});if(del.error)return del;}
-  }
-  for(var c=0;c<clean.length;c++){var set=billingPlanSet_({studentId:id,ym:ym,subject:clean[c].subject,kind:clean[c].kind,count:clean[c].count,expectedRevision:rev()});if(set.error)return set;}
-  memoClear_();
-  if(req.comment!==undefined&&typeof planCommentSave_==='function'){var pc=planCommentSave_({studentId:id,ym:ym,comment:req.comment});if(pc.error)return pc;}
-  var out={ok:true,rate30:rate30,lessonMin:lessonMin,lessonFee:Math.round(rate30*lessonMin/30),rows:clean.length};
-  if(req.propose===false||String(req.propose)==='false'){
-    // 下書き: 授業時間と料金を月間承認の行に控えるだけで、案内(提案)はしない。提案済み・承認済みの月なら、その提案を取り下げて下書きに戻す(保護者が古い条件のまま承認できないように)
-    memoClear_();var cur=billingAgreement_(id,ym),fresh=!cur,changed=false;
-    if(!cur)cur={id:billingId_(),studentId:id,ym:ym,revision:0,status:'draft',rate30:'',monthly:'',planJson:JSON.stringify(billingPlanList_(id,ym)),approvedPlanJson:''};
-    if(cur.status!=='draft'){changed=true;cur.revision=Number(cur.revision)+1;cur.status='draft';cur.approvedPlanJson='';cur.proposedAt='';cur.approvedAt='';cur.approvedVia='';cur.consentDate='';cur.memo='';var ps=planSetStatus_(id,ym,'draft','','',false);if(ps&&ps.error)return ps;}
-    cur.rate30=rate30;cur.monthly=0;cur.lessonMin=lessonMin;billingWriteAgreement_(cur);
-    if(fresh||changed)billingAudit_(cur,'planChanged',cur.id+':'+cur.revision+':changed');
-    out.draft=true;out.revision=Number(cur.revision);return out;
-  }
-  var pr=billingPlanPropose_({studentId:id,ym:ym,expectedRevision:rev(),rate30:rate30,monthly:0,lessonMin:lessonMin});if(pr.error)return pr;
-  out.revision=pr.revision;return out;
-}
-function billingPlanPropose_(req) {
-  var id=String(req.studentId||''),ym=String(req.ym||''),st=findStudent_(id);
-  if(!st)return billingError_('在籍生徒を選んでください','notFound');
-  if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
-  var a=billingAgreement_(id,ym),check=billingMonthUnlocked_(id,ym)||billingRevisionCheck_(req,a,false);if(check)return check;
-  if(req.monthly!=null && Number(req.monthly)!==0)return billingError_('固定月謝は使いません。実施分の30分単価を指定してください');
-  var lessonMin=Number(req.lessonMin==null?(a&&a.lessonMin||90):req.lessonMin);
-  if(!Number.isInteger(lessonMin)||lessonMin<30||lessonMin>240||lessonMin%30)return billingError_('授業時間は30〜240分の30分刻みで指定してください');
-  var rate=req.rate30,monthly=0;
-  if(rate==null){
-    if(ym<todayStr_().slice(0,7))return billingError_('過去月は、その月に合意する単価を明示してください','termsRequired');
-    rate=Number(st.rate30)||0;
-  }
-  if(!billingMoney_(rate))return billingError_('単価は0〜10,000,000円の整数です');
-  var p=billingPlanList_(id,ym);
-  if(!p.length){
-    p=billingPlanList_(id,'default');if(!p.length)return billingError_('先に科目と回数を登録してください');
-  }
-  a=a||{id:billingId_(),studentId:id,ym:ym,revision:0};
-  a.revision=Number(a.revision)+1;a.status='draft';a.planJson=JSON.stringify(p);a.rate30=Number(rate);a.monthly=Number(monthly);
-  a.lessonMin=lessonMin;a.approvedPlanJson='';
-  a.approvedAt='';a.approvedVia='';a.consentDate='';a.memo='';a.proposedAt=billingStamp_();billingWriteAgreement_(a);
-  var res=planSetStatus_(id,ym,'proposed','','',true);if(res.error)return res;
-  a.status='proposed';billingWriteAgreement_(a);billingAudit_(a,'proposed',a.id+':'+a.revision+':proposed');
-  var notice=billingNotifyResult_('planProposed',id,a.id+':'+a.revision+':proposed',{ym:ym,revision:a.revision});
-  return Object.assign({ok:true,revision:a.revision},notice);
-}
-function billingApprove_(req,id,parent) {
-  var ym=String(req.ym||'');if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
-  var a=billingAgreement_(id,ym),check=billingRevisionCheck_(req,a,true);if(check)return check;
-  if(!a || a.rate30==='' || a.monthly==='')return billingError_('月の回数と料金の提案がありません','approvalRequired');
-  if(Number(a.monthly)>0)return billingError_('旧固定月謝の提案です。実施分の単価で再提案してください','legacyTerms');
-  if(JSON.stringify(billingPlanJson_(a))!==JSON.stringify(billingPlanList_(id,ym)))return billingError_('計画が変わっています。先生に再提案を依頼してください','conflict');
-  var approve=parent?(req.approve===true || String(req.approve)==='true'):true;
-  var selected=billingPlanJson_(a);
-  if(parent&&req.approvedCounts!==undefined){
-    if(!Array.isArray(req.approvedCounts)||req.approvedCounts.length!==selected.length)return billingError_('科目ごとの回数を確認してください');
-    var supplied=req.approvedCounts;
-    selected=selected.map(function(p){var matches=supplied.filter(function(r){return r.subject===p.subject&&kindNorm_(r.kind)===kindNorm_(p.kind);});var e={subject:p.subject,count:matches.length===1?matches[0].count:-1};if(kindNorm_(p.kind))e.kind=kindNorm_(p.kind);return e;});
-    if(selected.some(function(p,i){return !Number.isInteger(p.count)||p.count<0||p.count>billingPlanJson_(a)[i].count;}))return billingError_('案内された回数以内で選択してください');
-    approve=selected.some(function(p){return p.count>0;});
-  }
-  if((approve&&a.status==='approved')||(!approve&&a.status==='declined')){
-    if(JSON.stringify(billingApprovedPlan_(a))!==JSON.stringify(selected))return billingError_('回答済みの内容と異なります。最新の計画を確認してください','conflict');
-    return {ok:true,replayed:true};
-  }
-  check=billingMonthUnlocked_(id,ym);if(check)return check;
-  if(a.status!=='proposed')return billingError_('現在の提案を読み直してください','conflict');
-  var date=parent?todayStr_():String(req.consentDate||'');
-  if(!billingDateValid_(date)||date>todayStr_())return billingError_('実際に承諾を得た日を、今日以前の日付で入力してください');
-  var via=parent?'保護者ページ':String(req.via||'').trim(),memo=String(req.memo||'').trim();
-  if(!via||via.length>40||memo.length>500)return billingError_('承諾方法と500文字以内のメモを入力してください');
-  var retrospective=ym<todayStr_().slice(0,7)||readRows_('slots').some(function(s){return String(s.studentId)===String(id)&&s.date.slice(0,7)===ym&&s.date<date&&(s.status==='booked'||s.status==='offered');});
-  if(!parent && retrospective && !memo)return billingError_('授業後・過去月の承諾は、経緯をメモに残してください');
-  var booked=readRows_('slots').filter(function(s){return String(s.studentId)===String(id)&&String(s.date).slice(0,7)===ym&&s.status==='booked';});
-  if(parent&&req.approvedCounts!==undefined&&selected.some(function(p){return booked.filter(function(s){return String(s.subject)===p.subject&&kindNorm_(s.kind)===kindNorm_(p.kind);}).length>p.count;}))return billingError_('確定済みの授業数より少なくする場合は、先に先生へ授業の取消・見直しをご相談ください');
-  a.approvedPlanJson=JSON.stringify(selected);a.lessonMin=Number(a.lessonMin)||90;
-  a.status=approve?'approved':'declined';a.approvedAt=approve?billingStamp_():'';a.approvedVia=approve?via:'';a.consentDate=date;a.memo=memo;
-  // 承諾日時と実際の記録日時を別に残す。監査保存失敗時は承認を有効にしない。
-  billingAudit_(a,a.status,a.id+':'+a.revision+':'+a.status);
-  planSetStatus_(id,ym,a.status,a.approvedVia,memo,false);billingWriteAgreement_(a);
-  return {ok:true};
-}
-function billingApproveTeacher_(req) {
-  var id=String(req.studentId||'');if(!systemStudent_(id))return billingError_('生徒が見つかりません','notFound');
-  return billingApprove_(req,id,false);
-}
-function billingParentDecide_(req) {
-  var auth=parentRequire_(req);if(auth.error)return auth;
-  return billingParentDecideForStudent_(auth.student,req);
-}
-function billingParentDecideForStudent_(student,req) {
-  var res=billingApprove_(req,String(student.id),true);if(res.error)return res;
-  if(!res.replayed && !isTestStudent_(student))notify_('【月間計画の回答】'+student.name+'さん '+req.ym,'保護者ページから月間計画への回答がありました。管理画面でご確認ください。');
-  return {ok:true,data:parentDataForStudent_(student).data};
-}
 function billingSlotAllowed_(slot) {
   if(!billingSlotValid_(slot))return billingError_('授業の日付・時刻・分数・科目を確認してください');
   var id=String(slot.studentId||''),ym=String(slot.date||'').slice(0,7);
   var check=billingMonthUnlocked_(id,ym);if(check)return check;
   if(!findStudent_(id))return billingError_('在籍生徒の授業だけを確定・実施できます','notFound');
-  var a=billingAgreement_(id,ym);
-  if(!billingAgreementCurrent_(a))return billingError_('この月の回数と料金について、保護者の承認が必要です','approvalRequired');
-  var plan=billingApprovedPlan_(a),subject=String(slot.subject||''),limit=0;
-  plan.forEach(function(p){if(p.subject===subject)limit=Number(p.count);});
-  var booked=readRows_('slots').filter(function(s){return String(s.studentId)===id&&s.status==='booked'&&s.date.slice(0,7)===ym&&String(s.subject||'')===subject&&String(s.id)!==String(slot.id);}).length;
-  if(!limit||booked+1>limit)return billingError_('この科目の承認回数を超えます。月の回数を変更し、再承認を得てください','planLimit');
+  var l=planLineMatch_(planLinesFor_(id),slot);
+  if(!l)return billingError_('この授業(科目・種類・日付)の回数と料金について、保護者の承認が必要です','approvalRequired');
+  var booked=planLineBooked_(l,undefined,slot.id).length,limit=planLineLimit_(l);
+  if(!limit||booked+1>limit)return billingError_('この案内の承認回数(' + limit + '回)を超えます。回数を変更し、再承認を得てください','planLimit');
   return null;
 }
 function billingSlotMutable_(slot) { return slot.studentId?billingMonthUnlocked_(slot.studentId,String(slot.date).slice(0,7)):null; }
@@ -312,46 +92,64 @@ function billingSavedLessons_(p) {
 function billingInvoiceView_(p) {
   return {id:String(p['請求ID']||''),ym:String(p['年月']),amount:Number(p['請求額'])||0,status:String(p['状態']||''),billDate:String(p['請求日']||''),paidDate:String(p['入金日']||''),method:String(p['入金方法']||''),revision:Number(p['承認版'])||0,paymentRevision:Number(p['入金版'])||0,voidedAt:String(p['取消日時']||''),voidReason:String(p['取消理由']||''),lessons:billingSavedLessons_(p)};
 }
+// 実施済み授業ごとに、該当する承認済みの案内の単価で計算する。案内のない授業は生徒の基本単価で仮計算(provisional)
+function billingMonthCalc_(id,ym) {
+  var st=systemStudent_(id)||{},base=Number(st.rate30)||0,lines=planLinesFor_(id);
+  var slots=readRows_('slots').filter(function(s){return String(s.studentId)===id&&s.status==='booked'&&String(s.date||'').slice(0,7)===ym;});
+  var done=slots.filter(function(s){return s.done===true||String(s.done)==='true';}).sort(slotSort_);
+  var amount=0,provisional=false,rates={};
+  var lessons=done.map(function(s){
+    var l=planLineMatch_(lines,s),rate=l?l.rate30:base;if(!l)provisional=true;rates[rate]=true;
+    var amt=Math.round((Number(s.min)||0)/30*rate);amount+=amt;
+    return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:amt,rate30:rate,lineId:l?l.id:'',lineRevision:l?l.revision:0,lineCount:l?planLineLimit_(l):0};
+  });
+  var keys=Object.keys(rates);
+  return {amount:amount,provisional:provisional,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,slots:slots,done:done,lines:lines};
+}
 function billingFee_(studentId,minutes,ym) {
   ym=ym||todayStr_().slice(0,7);
   var invoices=billingActiveInvoices_(studentId,ym),p=invoices[0];
   if(p)return {amount:Number(p['請求額'])||0,mode:String(p['料金方式']||'recorded'),rate30:Number(p['確定単価(30分)'])||0,monthly:Number(p['確定月謝'])||0,locked:true};
-  var a=billingAgreement_(studentId,ym),st=systemStudent_(studentId)||{};
-  var known=!!a&&a.rate30!==''&&a.monthly!=='';
-  var monthly=Number(known?a.monthly:st.monthly)||0,rate=Number(known?a.rate30:st.rate30)||0;
-  return {amount:Math.round(Number(minutes||0)/30*rate),mode:'time',rate30:rate,monthly:0,locked:false,provisional:!known,legacyTerms:known&&monthly>0};
+  var calc=billingMonthCalc_(String(studentId||''),ym);
+  return {amount:calc.amount,mode:'time',rate30:calc.rate30,monthly:0,locked:false,provisional:calc.provisional,legacyTerms:false};
 }
 function billingPreview_(studentId,ym) {
   var id=String(studentId||'');
   if(!systemStudent_(id))return billingError_('生徒が見つかりません','notFound');
   if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
-  var a=billingAgreement_(id,ym),info=billingMonthInfo_(id,ym),invoices=billingActiveInvoices_(id,ym);
-  var slots=readRows_('slots').filter(function(s){return String(s.studentId)===id&&s.status==='booked'&&s.date.slice(0,7)===ym;});
-  var done=slots.filter(function(s){return s.done===true||String(s.done)==='true';}).sort(slotSort_);
-  var minutes=done.reduce(function(n,s){return n+(Number(s.min)||0);},0),fee=billingFee_(id,minutes,ym),reason='';
+  var info=billingMonthInfo_(id,ym),invoices=billingActiveInvoices_(id,ym),calc=billingMonthCalc_(id,ym);
+  var slots=calc.slots,done=calc.done,minutes=done.reduce(function(n,s){return n+(Number(s.min)||0);},0),fee=billingFee_(id,minutes,ym),reason='';
   if(invoices.length)reason=invoices.length>1?'この月の請求が重複しています。台帳を確認してください':'この月は請求を記録済みです';
-  else if(!billingAgreementCurrent_(a))reason='この月の回数と料金の承認が必要です';
-  else if(fee.legacyTerms)reason='旧固定月謝の承認が残っています。実施分の単価で再提案・承認してください';
   else {
-    var plan=billingApprovedPlan_(a),counts=Object.create(null);slots.forEach(function(s){var lb=kindLabel_(s.subject,s.kind);counts[lb]=(counts[lb]||0)+1;});
-    Object.keys(counts).forEach(function(sub){var p=plan.filter(function(x){return kindLabel_(x.subject,x.kind)===sub;})[0];if(!p||counts[sub]>p.count)reason='承認されていない科目・回数の授業があります';});
+    if(slots.some(function(s){return !planLineMatch_(calc.lines,s);}))reason='承認されていない科目・回数の授業があります';
+    if(!reason){
+      var over=calc.lines.filter(function(l){return l.status==='approved'&&planLineOverlapsMonth_(l,ym);}).some(function(l){return planLineBooked_(l).length>planLineLimit_(l);});
+      if(over)reason='承認されていない科目・回数の授業があります';
+    }
     if(!reason && slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
     if(!reason && slots.some(function(s){return !(s.done===true||String(s.done)==='true');}))reason='未実施の確定授業が残っています。実施・取消の確認後に請求してください';
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';
     if(!reason && !(fee.amount>0))reason='請求対象の授業料がありません';
   }
-  var cumulativeMinutes=0,allocated=0;
-  return {ym:ym,amount:fee.amount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:done.length,planStatus:info.status,revision:info.revision,canBill:!reason,reason:reason,provisional:!!fee.provisional,
+  return {ym:ym,amount:fee.amount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:done.length,planStatus:info.status,revision:0,canBill:!reason,reason:reason,provisional:!!fee.provisional,
     invoice:invoices.length?billingInvoiceView_(invoices[0]):null,
-    lessons:done.map(function(s){cumulativeMinutes+=Number(s.min)||0;var total=Math.round(cumulativeMinutes/30*fee.rate30),amount=total-allocated;allocated=total;return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:amount};})};
+    lessons:fee.locked?billingSavedLessons_(invoices[0]):calc.lessons,lines:info.lines};
 }
 function billingMonths_(id) {
   var seen={},current=todayStr_().slice(0,7);seen[current]=true;seen[nextYm_(current)]=true;
   readRows_('slots').forEach(function(s){if(String(s.studentId)===String(id)&&billingMonthValid_(s.date.slice(0,7)))seen[s.date.slice(0,7)]=true;});
-  planRows_().forEach(function(p){if(String(p.studentId)===String(id)&&billingMonthValid_(p.ym))seen[p.ym]=true;});
-  readRows_('monthAgreements').forEach(function(a){if(String(a.studentId)===String(id)&&billingMonthValid_(String(a.ym)))seen[String(a.ym)]=true;});
+  planLinesFor_(String(id)).forEach(function(l){planLineMonths_(l).forEach(function(ym){seen[ym]=true;});});
   billingInvoiceRows_(id).forEach(function(p){if(billingMonthValid_(String(p['年月'])))seen[String(p['年月'])]=true;});
   return Object.keys(seen).sort().reverse().map(function(ym){return billingPreview_(id,ym);});
+}
+// 請求・入金の監査行(approvalEvents)に使う擬似的な合意: 請求IDを id にする
+// 請求の根拠(行ID・版・単価)を授業スナップショットから作る。発行時も再送時も同じ文字列になるので、監査の照合が一致する
+function billingInvoiceLineRefs_(lessons) {
+  var seen={},out=[];(lessons||[]).forEach(function(l){var key=String(l.lineId||'')+':'+String(l.lineRevision||0)+':'+String(l.rate30||0);if(!l.lineId||seen[key])return;seen[key]=true;out.push({id:String(l.lineId),revision:Number(l.lineRevision)||0,count:Number(l.lineCount)||0,rate30:Number(l.rate30)||0});});
+  return JSON.stringify(out);
+}
+function billingInvoiceAudit_(id,ym,invoiceId,revision,extra) {
+  return Object.assign({id:String(invoiceId||'invoice'),studentId:String(id),ym:String(ym),revision:Number(revision)||0,planJson:'',rate30:0,monthly:0},extra||{});
 }
 function billingAddInvoice_(req) {
   var id=String(req.studentId||''),ym=String(req.ym||''),requestId=String(req.requestId||'');
@@ -360,8 +158,7 @@ function billingAddInvoice_(req) {
   if(previous.length){
     var old=previous[0];
     if(String(old['生徒ID'])!==id||String(old['年月'])!==ym||(req.amount!=null&&Number(req.amount)!==Number(old['請求額'])))return billingError_('同じ処理IDで内容を変更できません','conflict');
-    var originalAgreement=billingAgreement_(id,ym);
-    if(originalAgreement && Number(originalAgreement.revision)===Number(old['承認版']))billingAudit_(originalAgreement,'invoiced',String(old['請求ID'])+':issued',{invoiceId:String(old['請求ID']),amount:Number(old['請求額']),minutes:Number(old['実施分数'])});
+    billingAudit_(billingInvoiceAudit_(id,ym,old['請求ID'],old['承認版'],{planJson:billingInvoiceLineRefs_(billingSavedLessons_(old)),rate30:Number(old['確定単価(30分)'])||0}),'invoiced',String(old['請求ID'])+':issued',{invoiceId:String(old['請求ID']),amount:Number(old['請求額']),minutes:Number(old['実施分数'])});
     var oldNotice=!old['取消日時']&&old['状態']!=='取消'?billingNotifyResult_('invoiceCreated',id,String(old['請求ID'])+':issued',{ym:ym,revision:old['承認版']}):{};
     return Object.assign({ok:true,invoice:billingInvoiceView_(old),replayed:true},oldNotice);
   }
@@ -369,14 +166,14 @@ function billingAddInvoice_(req) {
   if(!preview.canBill)return billingError_(preview.reason,preview.invoice?'invoiceExists':'approvalRequired');
   if(req.amount!=null && Number(req.amount)!==preview.amount)return billingError_('請求額が最新の実績・承認内容と一致しません','conflict');
   if(req.paidDate || req.unpaid || req.billDate && req.billDate!==todayStr_())return billingError_('請求日・金額はサーバーで確定します。入金は請求後に記録してください');
-  var a=billingAgreement_(id,ym),invoiceId=billingId_(),st=systemStudent_(id);
+  var invoiceId=billingId_(),st=systemStudent_(id),a=billingInvoiceAudit_(id,ym,invoiceId,0,{planJson:billingInvoiceLineRefs_(preview.lessons),rate30:preview.rate30});
   LEDGER_COLS['入金管理']=BILLING_PAYMENT_COLS_.slice();
   var o={'年月':ym,'生徒ID':id,'氏名':st.name,'請求額':preview.amount,'請求日':todayStr_(),'状態':'未入金','備考':billingText_(String(req.note||'').slice(0,200)),
-    '請求ID':invoiceId,'承認版':a.revision,'料金方式':preview.mode,'確定単価(30分)':preview.rate30,'確定月謝':preview.monthly,'実施分数':preview.minutes,'実施回数':preview.count,'実績JSON':JSON.stringify(preview.lessons),'処理ID':requestId};
+    '請求ID':invoiceId,'承認版':0,'料金方式':preview.mode,'確定単価(30分)':preview.rate30,'確定月謝':preview.monthly,'実施分数':preview.minutes,'実施回数':preview.count,'実績JSON':JSON.stringify(preview.lessons),'処理ID':requestId};
   // 請求の根拠・処理IDを1行に保存。後続ログが失敗しても再送はこの行を見つける。
   ledgerAppend_('入金管理',o);
   billingAudit_(a,'invoiced',invoiceId+':issued',{invoiceId:invoiceId,amount:preview.amount,minutes:preview.minutes});
-  var notice=billingNotifyResult_('invoiceCreated',id,invoiceId+':issued',{ym:ym,revision:a.revision});
+  var notice=billingNotifyResult_('invoiceCreated',id,invoiceId+':issued',{ym:ym,revision:0});
   return Object.assign({ok:true,invoice:billingInvoiceView_(o)},notice);
 }
 function billingFindInvoice_(req) {
@@ -395,7 +192,7 @@ function billingVoidInvoice_(req) {
   }
   if(p['状態']==='入金済'||p['入金日'])return billingError_('入金済みの請求は取り消せません。入金の誤登録なら理由付きで訂正してください');
   if(!reason||reason.length>500)return billingError_('取消理由を500文字以内で入力してください');
-  var a=billingAgreement_(req.studentId,String(p['年月']))||{studentId:req.studentId,ym:p['年月'],revision:p['承認版'],memo:reason};
+  var a=billingInvoiceAudit_(req.studentId,p['年月'],p['請求ID'],p['承認版'],{memo:reason});
   billingAudit_(a,'invoiceVoided',String(p['請求ID'])+':void',{reason:reason,invoiceId:req.invoiceId});
   var sh=ledgerSheet_('入金管理'),vals=sh.getRange(p._row,1,1,BILLING_PAYMENT_COLS_.length).getValues()[0];
   vals[7]='取消';vals[17]=billingStamp_();vals[18]=reason;billingWriteInvoiceRow_(p._row,vals);
@@ -413,7 +210,7 @@ function billingSetPaid_(req) {
   if(String(p['入金日']||'')===paid && String(p['入金方法']||'')===method)return {ok:true,replayed:true};
   if(Number(req.expectedPaymentRevision)!==revision)return billingError_('入金状態が変更されています。最新の請求画面を読み直してください','conflict');
   if(!unpaid && (p['入金日'] || p['状態']==='入金済'))return billingError_('この請求は既に入金を記録済みです。訂正する場合は理由を付けて入金記録を戻してください','conflict');
-  var a=billingAgreement_(req.studentId,String(p['年月']))||{studentId:req.studentId,ym:p['年月'],revision:p['承認版']};
+  var a=billingInvoiceAudit_(req.studentId,p['年月'],p['請求ID'],p['承認版']);
   billingAudit_(a,unpaid?'paymentCorrected':'paid',String(req.invoiceId)+':payment:'+(revision+1),{invoiceId:req.invoiceId,previousDate:p['入金日']||'',date:paid,method:method,reason:reason,paymentRevision:revision+1});
   var vals=ledgerSheet_('入金管理').getRange(p._row,1,1,BILLING_PAYMENT_COLS_.length).getValues()[0];
   vals[5]=paid;vals[6]=method;vals[7]=unpaid?'未入金':'入金済';vals[20]=revision+1;
@@ -438,19 +235,4 @@ function prepareStepwise20260908() {
     var summary={reservation:ss_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};}),ledger:ledger_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};})};
     Logger.log(JSON.stringify(summary));return summary;
   } finally {lock.releaseLock();}
-}
-
-// One-time, user-authorized duration backfill. Run in the editor; never approves or sends mail.
-function migratePendingPlanDuration90(){
-  var lock=LockService.getScriptLock();lock.waitLock(30000);
-  try{
-    memoClear_();var rows=readRows_('monthAgreements'),targets=rows.filter(function(a){return a.status==='proposed'&&!a.lessonMin;});
-    if(!targets.length){console.log('対象 0件');return;}
-    var source=ss_(),copy=DriveApp.getFileById(source.getId()).makeCopy('授業時間追加前バックアップ_'+billingStamp_());
-    var backup=SpreadsheetApp.openById(copy.getId());
-    if(JSON.stringify(source.getSheetByName('monthAgreements').getDataRange().getValues())!==JSON.stringify(backup.getSheetByName('monthAgreements').getDataRange().getValues()))throw Error('Backup mismatch');
-    PropertiesService.getScriptProperties().setProperty('PLAN_DURATION_BACKUP',copy.getId());
-    targets.forEach(function(t){var a=billingAgreement_(t.studentId,t.ym);if(a.status!=='proposed'||a.lessonMin)return;a.lessonMin=90;a.revision=Number(a.revision)+1;billingAudit_(a,'durationAdded',a.id+':'+a.revision+':duration90');billingWriteAgreement_(a);});
-    memoClear_();console.log('90分追加 '+targets.length+'件（承認・メール送信なし）');
-  }finally{lock.releaseLock();}
 }

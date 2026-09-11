@@ -31,37 +31,38 @@ test('the settings page manages lesson kinds and lists lessons with their kind',
 
 test('students see the kind next to the subject and plan labels stay consistent', async () => {
   const s = state([slot('slot-a', { subject: '英語', kind: '演習' }), slot('slot-b', { subject: '英語', kind: '' })]);
-  s.planMonths = [{ ym: '2026-09', status: 'approved', plan: { '英語': 2, '英語（演習）': 1 } }];
+  const { line } = require('./helpers/operations-ui-harness.cjs');
+  s.planLines = [line({ id: 'l1', status: 'approved', approvedCount: 2, count: 2 }), line({ id: 'l2', kind: '演習', status: 'approved', approvedCount: 1, count: 1 })];
   const ui = await studentReady(s);
   assert.match(ui.html(), /英語（演習）/);
   assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">演習<\/span> 実施 0・予定 0<span class="muted">／計画 1回<\/span>/);
 });
 
-test('the admin plan card saves a draft (no proposal) or sends the notice, and offers the LINE text only after sending', async () => {
-  const { adminReady, card } = require('./helpers/operations-ui-harness.cjs');
-  const month = extra => ({ ym: '2026-09', status: 'draft', revision: 3, termsKnown: true, lessonMin: 90, rate30: 1500, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4, comment: '既存のコメント', ...extra });
-  const ui = await adminReady(card({ plan: { month: '2026-09', current: {}, fromDefault: false, monthRows: [], defaultRows: [], months: [month()] } }), 'billing');
-  assert.match(ui.html(), /<textarea id="pl-comment-2026-09" data-plan-ym="2026-09" data-plan-field="comment"[^>]*>既存のコメント<\/textarea>/);
-  assert.match(ui.html(), /<div class="muted">下書き<\/div><div>英語（通常）4回・90分・1回 4,500円<\/div>/); assert.doesNotMatch(ui.html(), /コメントだけ保存|plancopy/);
-  ui.input('pl-comment-2026-09', '英検対策なので回数を増やします'); ui.click('plandraft', { 'data-ym': '2026-09' });
-  const r = ui.requests.at(-1).body; assert.equal(r.op, 'planSubmit'); assert.equal(r.propose, false); assert.equal(r.comment, '英検対策なので回数を増やします'); assert.equal(r.lessonFee, 4500);
-  ui.requests.at(-1).reply({ ok: true, data: card({ plan: { month: '2026-09', current: {}, months: [month({ status: 'proposed', revision: 4 })] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
-  assert.match(ui.html(), /<div class="muted">送信済みの案内<\/div><div>英語（通常）4回・90分・1回 4,500円<\/div>/);
-  assert.match(ui.html(), /案内は送信済みです。LINEで伝える場合:<\/span><button class="btn-quiet btn-sm" data-action="plancopy"/);
-  assert.match(ui.html(), /保存して案内を再送信</);
-});
-
-test('the admin plan card is one form: rows, lesson time, per-lesson fee and comment submitted together, no revision number', async () => {
-  const { adminReady, card } = require('./helpers/operations-ui-harness.cjs');
-  const c = card({ plan: { month: '2026-09', current: {}, fromDefault: false, monthRows: [], defaultRows: [], months: [{ ym: '2026-09', status: 'proposed', revision: 4, termsKnown: true, lessonMin: 90, rate30: 1500, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4, comment: '' }] } });
-  const ui = await adminReady(c, 'billing');
-  assert.doesNotMatch(ui.html(), /第4版|30分単価/); assert.match(ui.html(), /1回の授業料 <input type="number" id="pl-fee-2026-09" data-plan-ym="2026-09" data-plan-field="lessonFee"[^>]*value="4500"/);
-  assert.match(ui.html(), /<select data-plan-row="0" data-plan-rowfield="subject"[^>]*><option value="">科目を選択<\/option><option value="英語" selected>/);
-  assert.match(ui.html(), /設定 → 授業の種類/);
-  ui.click('planrowadd', { 'data-ym': '2026-09' }); assert.match(ui.html(), /data-plan-row="1" data-plan-rowfield="count"/);
-  ui.change('pl-comment-2026-09', 'x'); ui.input('pl-comment-2026-09', '英検対策');
-  ui.click('plansubmit', { 'data-ym': '2026-09' }); assert.equal(ui.requests.length, 1);
-  ui.click('planrowdel', { 'data-i': '1' }); ui.click('plansubmit', { 'data-ym': '2026-09' });
-  const r = ui.requests.at(-1).body; assert.equal(r.op, 'planSubmit'); assert.equal(r.ym, '2026-09'); assert.equal(r.expectedRevision, 4); assert.equal(r.lessonMin, 90); assert.equal(r.lessonFee, 4500); assert.equal(r.comment, '英検対策'); assert.equal(r.propose, true);
-  assert.deepEqual(r.rows, [{ subject: '英語', kind: '通常', count: 4 }]);
+test('the admin plan card lists lines with status, opens one editor at a time, and sends line operations with the line id and revision', async () => {
+  const { adminReady, card, line } = require('./helpers/operations-ui-harness.cjs');
+  const lines = [line({ id: 'p1', status: 'proposed', revision: 3, comment: '既存のコメント' }), line({ id: 'a1', subject: '数学', kind: '演習', status: 'approved', approvedCount: 3, count: 4, startDate: '2026-09-22', endDate: '2026-10-05', period: '2026/9/22〜10/5', month: '', lessonMin: 60, lessonFee: 3000, approvedVia: 'LINE', consentDate: '2026-09-05' }), line({ id: 'd1', subject: '国語', status: 'draft', revision: 1 })];
+  const ui = await adminReady(card({ plan: { lines, defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }), 'billing');
+  assert.match(ui.html(), /<span class="tag amber">承認待ち<\/span> 英語（通常） 4回・2026年9月・90分・1回 3,000円/);
+  assert.match(ui.html(), /<span class="tag green">承認済み（3回）<\/span> 数学（演習） 4回・2026\/9\/22〜10\/5・60分・1回 3,000円/); assert.match(ui.html(), /承諾: 2026-09-05・LINE/);
+  assert.match(ui.html(), /<span class="tag gray">下書き<\/span> 国語（通常）/); assert.match(ui.html(), /data-action="pl-send" data-line="d1" data-rev="1"/);
+  assert.match(ui.html(), /data-action="plancopy" data-line="p1"/); assert.doesNotMatch(ui.html(), /data-action="plancopy" data-line="d1"/);
+  assert.match(ui.html(), /既定から10月の下書きを作る/); assert.doesNotMatch(ui.html(), /第\d+版|30分単価/);
+  // teacher consent record for the proposed line
+  ui.input('pa-memo-p1', 'LINEで承諾'); ui.click('pl-approve', { 'data-line': 'p1' });
+  let r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineApproveTeacher'); assert.equal(r.lineId, 'p1'); assert.equal(r.expectedRevision, 3); assert.equal(r.via, 'LINE'); assert.equal(r.memo, 'LINEで承諾');
+  ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines, defaultRows: [] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
+  // send a draft directly
+  ui.click('pl-send', { 'data-line': 'd1' }); r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineSave'); assert.equal(r.lineId, 'd1'); assert.equal(r.expectedRevision, 1); assert.equal(r.propose, true); assert.equal(r.subject, '国語');
+  ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines, defaultRows: [] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
+  // delete
+  ui.click('pl-delete', { 'data-line': 'd1' }); r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineDelete'); assert.equal(r.lineId, 'd1'); assert.equal(r.expectedRevision, 1);
+  ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines, defaultRows: [] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
+  // editor: opening a second line replaces the first editor; comment travels with the payload
+  ui.click('pe-open', { 'data-line': 'p1' }); assert.equal(ui.el('pe-comment').value, '既存のコメント'); assert.match(ui.html(), /送信済みの案内です/);
+  ui.click('pe-open', { 'data-line': 'a1' }); assert.equal(ui.el('pe-count').value, '4'); assert.equal(ui.el('pe-min').value, '60'); assert.match(ui.html(), /承認済みの案内です。保存すると承認が失効/);
+  ui.input('pe-comment', '講習の続き'); ui.click('pe-draft');
+  r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineSave'); assert.equal(r.lineId, 'a1'); assert.equal(r.kind, '演習'); assert.equal(r.propose, false); assert.equal(r.comment, '講習の続き'); assert.equal(r.lessonMin, 60); assert.equal(r.lessonFee, 3000);
+  // from default
+  ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines, defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
+  ui.click('pl-fromdefault'); r = ui.requests.at(-1).body; assert.equal(r.op, 'planLinesFromDefault'); assert.equal(r.ym, '2026-10');
 });

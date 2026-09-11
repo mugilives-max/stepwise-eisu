@@ -6,7 +6,7 @@ const path = require('node:path');
 const harness = fs.readFileSync(path.join(__dirname, 'operations-ui.test.cjs'), 'utf8').split('\ntest(')[0];
 const { createUI, flush, state } = new Function('require', '__dirname', harness + '\nreturn {createUI, flush, state};')(require, __dirname);
 const home = children => ({ ok: true, family: { id: 'family-a', label: '【テスト】家族', email: 'parent@example.invalid' }, children: children || [{ studentId: 'child-a', name: '【テスト】子A' }, { studentId: 'child-b', name: '【テスト】子B' }] });
-const data = name => ({ name, month: '2026-09', thisMonth: {}, payments: [], upcoming: [{ id: 'slot-a', date: '2026-09-10', start: '17:00', min: 30, status: 'booked', subject: '英語 '+name, deliveryMode: 'online' }], planMonths: [{ ym: '2026-09', status: 'proposed', revision: 7, termsKnown: true, lessonMin:90, rate30: 1000, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4 }] });
+const data = name => ({ name, month: '2026-09', thisMonth: {}, payments: [], upcoming: [{ id: 'slot-a', date: '2026-09-10', start: '17:00', min: 30, status: 'booked', subject: '英語 '+name, deliveryMode: 'online' }], planLines: [{ id: 'line-1', subject: '英語', kind: '', count: 4, approvedCount: null, startDate: '2026-09-01', endDate: '2026-09-30', period: '2026年9月', month: '2026-09', lessonMin: 90, rate30: 1000, lessonFee: 3000, comment: '', status: 'proposed', revision: 7 }] });
 function loggedUI() { return createUI('student', { hash: '#family/billing', session: new Map([['sw_ft_v1', 'test-family-token']]) }); }
 async function readyFamily() { const ui = loggedUI(); ui.requests[0].reply(home()); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); ui.requests.at(-1).reply({ok:true,data:data('【テスト】子B')}); await flush(); return ui; }
 
@@ -60,7 +60,7 @@ test('login uses a separate session token and clears each child before loading t
 
 test('family approval requires a DOM confirmation and sends that child and proposal revision', async () => {
   const ui = await readyFamily(); const before = ui.requests.length;
-  ui.click('fa-planok', { 'data-ym': '2026-09' });
+  ui.click('fa-planok', { 'data-line': 'line-1' });
   assert.equal(ui.requests.length, before); assert.equal(ui.confirms(), 0); assert.match(ui.html(), /授業計画の回答確認/);
   ui.click('fa-decide'); const b = ui.requests.at(-1).body;
   assert.equal(b.action, 'familyPlanDecide'); assert.equal(b.studentId, 'child-a'); assert.equal(b.expectedRevision, 7); assert.equal(b.ftoken, 'test-family-token');
@@ -69,7 +69,7 @@ test('family approval requires a DOM confirmation and sends that child and propo
 });
 
 test('child switch discards the previous approval confirmation and membership refresh removes old private data', async () => {
-  const ui = await readyFamily(); ui.click('fa-planok', { 'data-ym': '2026-09' }); ui.change('fa-child', 'child-b');
+  const ui = await readyFamily(); ui.click('fa-planok', { 'data-line': 'line-1' }); ui.change('fa-child', 'child-b');
   assert.equal(ui.html().includes('data-action="fa-decide"'), false);
   ui.navigate('#family/settings'); ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
   ui.requests.at(-1).reply(home([])); await flush(); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
@@ -288,17 +288,16 @@ test('a parent approves the proposed lesson plan directly from the mypage 授業
   const ui = loggedUI(); ui.requests[0].reply(home([{ studentId: 'child-a', name: '【テスト】子A' }])); await flush();
   ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush();
   ui.navigate('#family/home');
-  const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planMonths: [{ ym: '2026-09', status: 'proposed', plan: { '英語': 4 } }] }); await flush();
+  const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planLines: data('x').planLines }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
-  assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">通常<\/span> 4回<\/span><span class="tag amber">保護者の承認待ち<\/span><\/div><div class="row"[^>]*><button class="btn-primary btn-sm" data-action="fa-planok" data-child="child-a" data-ym="2026-09">承認する<\/button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="child-a" data-ym="2026-09">回数を調整・見送る<\/button><span class="small muted">1回 [^<]*3,000[^<]*（90分）<\/span>/);
+  assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">通常<\/span> 4回<span class="muted">・90分・1回 3,000円<\/span><\/span><span class="tag amber">保護者の承認待ち<\/span><\/div><div class="row"[^>]*><button class="btn-primary btn-sm" data-action="fa-planok" data-child="child-a" data-line="line-1">承認する<\/button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="child-a" data-line="line-1">回数を調整・見送る<\/button>/);
   assert.doesNotMatch(ui.html(), /保護者の方に伝えて/);
   ui.click('fa-planok', { 'data-child': 'child-a' });
   assert.match(ui.html(), /<details class="fold plan" data-fold="plan" open>/); assert.match(ui.html(), /授業計画の回答確認[^]*英語（通常） 4回まで[^]*承認しますか/);
   ui.click('fa-decide');
-  const req = ui.requests.at(-1).body; assert.equal(req.action, 'familyPlanDecide'); assert.equal(req.studentId, 'child-a'); assert.equal(req.ym, '2026-09'); assert.equal(req.approve, true); assert.equal(req.expectedRevision, 7);
-  assert.deepEqual((req.approvedCounts || []).map(r => [r.subject, r.count]), [['英語', 4]]);
-  ui.requests.at(-1).reply({ ok: true, data: { ...data('【テスト】子A'), planMonths: [{ ym: '2026-09', status: 'approved', revision: 8, termsKnown: true, lessonMin: 90, rate30: 1000, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4 }] } }); await flush();
+  const req = ui.requests.at(-1).body; assert.equal(req.action, 'familyPlanDecide'); assert.equal(req.studentId, 'child-a'); assert.equal(req.lineId, 'line-1'); assert.equal(req.approve, true); assert.equal(req.expectedRevision, 7); assert.equal(req.approvedCount, 4);
+  ui.requests.at(-1).reply({ ok: true, data: { ...data('【テスト】子A'), planLines: [{ ...data('x').planLines[0], status: 'approved', approvedCount: 4, revision: 7 }] } }); await flush();
   assert.match(ui.html(), /承認しました。/);
-  const again = ui.requests.filter(r => r.body.action === 'familyStudentState'); assert.equal(again.length, 2); again.at(-1).reply({ ...state(), viewer: 'family', planMonths: [{ ym: '2026-09', status: 'approved', plan: { '英語': 4 } }] }); await flush();
+  const again = ui.requests.filter(r => r.body.action === 'familyStudentState'); assert.equal(again.length, 2); again.at(-1).reply({ ...state(), viewer: 'family', planLines: [{ ...data('x').planLines[0], status: 'approved', approvedCount: 4 }] }); await flush();
   assert.match(ui.html(), /<span class="tag green">承認済み<\/span><span class="time">9月<\/span><span class="who"><strong>英語<\/strong>/); assert.doesNotMatch(ui.html(), /data-action="fa-planok"/);
 });

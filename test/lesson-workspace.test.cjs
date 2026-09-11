@@ -19,11 +19,10 @@ test('shared report renderer escapes content and never truncates body fields',()
  assert.ok(render.view({actualUnit:'<script>x</script>',parentMessage:'a\nb\nc\nd'}).includes('&lt;script&gt;'));assert.ok(render.view({parentMessage:'a\nb\nc\nd'}).includes('a\nb\nc\nd'));
  assert.ok(render.fields({teacher:'" onfocus="bad'},false).includes('&quot;'));assert.ok(render.context({ordinal:null,scheduledCount:0,next:null,beforeTest:null}).includes('予定未定'));
 });
-test('legacy fixed terms block new invoices while historical invoices retain their exact amount',()=>{
- const h=createBillingHarness();h.admin('planSet',{studentId:'test-a',ym:'2026-09',subject:'数学',count:2});h.admin('planPropose',{studentId:'test-a',ym:'2026-09',rate30:1500,monthly:0});
- h.setRow('monthAgreements','studentId','test-a',{monthly:12000,status:'approved'});
- const preview=h.context().billingPreview_('test-a','2026-09');assert.equal(preview.canBill,false);assert.notEqual(preview.amount,12000);
- h.seedPayment({'請求額':12000,'料金方式':'monthly','確定月謝':12000});assert.equal(h.context().billingPreview_('test-a','2026-09').invoice.amount,12000);
+test('a recorded invoice keeps its exact amount even when the current lines would price the month differently',()=>{
+ const h=createBillingHarness();
+ h.seedPayment({'請求額':12000,'料金方式':'monthly','確定月謝':12000});
+ const preview=h.context().billingPreview_('test-a','2026-09');assert.equal(preview.canBill,false);assert.equal(preview.invoice.amount,12000);assert.equal(preview.amount,12000);
 });
 test('family statement sums only linked child invoices and detects duplicate child-months',()=>{
  const h=createBillingHarness(),c=h.context();c.familyChildren_=()=>[{studentId:'test-a',name:'A'},{studentId:'test-b',name:'B'}];

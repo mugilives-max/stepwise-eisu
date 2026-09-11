@@ -83,7 +83,7 @@
 | familyLogin | email、pass | ftoken、家族の表示情報、現在閲覧できる子どもの一覧 |
 | familyHome | ftoken | 家族の表示情報と現在の子ども一覧 |
 | familyData | ftoken、studentId | 指定した子どもの保護者向けデータのみ |
-| familyPlanDecide | ftoken、studentId、ym、approve、expectedRevision | 表示した子どもの回数・料金の版への回答。任意のmemo。更新後の本人データを返す |
+| familyPlanDecide | ftoken、studentId、lineId、approve、expectedRevision、approvedCount(任意) | 表示した子どもの授業計画の案内(行)への回答。approvedCount で案内以内の回数に減らせる(0＝見送り)。任意のmemo。更新後の本人データ(`planLines`)を返す |
 | familyLogout | ftoken | 失効。古いトークンの再送で新しいログインを失効させない |
 | familyResetRequest | email | 共通の受付案内。パスワード設定済みの active / pending に再設定リンクを送る |
 | familyResetConfirm | challenge、pass | 新しいパスワードへ変更し、ログインを失効 |

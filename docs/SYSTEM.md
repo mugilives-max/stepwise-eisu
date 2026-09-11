@@ -80,6 +80,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 | teacherOff | id, date, note, start, end | 先生の休み。1行=1日。start/end が空なら終日、入っていればその時間帯だけ。管理画面のホーム(日付タップ)か授業ページから登録。生徒にはメモを見せない |
 | wishes | id, studentId, date, start, end, note, createdAt, kind | 生徒の希望日程。`kind` は want(この日時に授業をしたい)/ok(この時間帯のどこかで) |
 | events | id, studentId, date, dateTo, title, createdAt, kind | 生徒が共有した予定(大会・見学など)。`kind=test` はテスト・模試(マイページでカウントダウン表示) |
+| planLines | id, studentId, subject, kind, count, startDate, endDate, lessonMin, rate30, comment, status, revision, proposedAt, approvedAt, approvedVia, consentDate, memo, approvedCount, createdAt, updatedAt | 授業計画の案内(行)。生徒×科目×種類×期間。status は draft/proposed/approved/declined、revision は保存ごとに進む。詳細は「授業計画を期間つきの行単位に」の節 |
 | plans | id, studentId, ym, subject, count, status, proposedAt, approvedAt, approvedVia, memo | 月の授業回数(計画)。`ym` は `YYYY-MM` か `default`(毎月の既定)。`status` は draft/proposed/approved/declined。表示互換用の承認欄を残すが、承認の有効性はmonthAgreementsと月別回数の一致で判定 |
 | tasks | id, studentId, type, title, due, createdAt, createdBy, doneAt, sourceRecordId, sourceItemId, sourceRevision, withdrawnAt, dueMode, dueSubject, dueAfter, dueTime | 宿題・持ち物。授業記録由来の課題は元の記録・項目・版を保持し、取り下げても履歴と完了状態を消さない |
 | lessonRecords / lessonPrivateNotes / lessonReportDrafts / lessonWrites / lessonPublicSnapshots | 列・再送・復旧仕様は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md) | 指導記録、先生だけのメモ、未公開の報告、保存処理と公開済み本文の版 |
@@ -125,6 +126,8 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(v52〜: mcpOfferLessons / mcpAddTeacherOff / mcpAddStudentNg / mcpAddStudentWishes。項目ごとの検証と結果、既存と同じ日時は登録済み扱い。v54〜: mcpInboxClaim / mcpInboxResolve と閲覧の mcpInboxList。連絡欄の処理はシート `contactProcessing` に記録)のホワイトリストのみ。書き込み範囲は Script Properties `MCP_WRITE_SCOPE`(test/all。エディタの `mcpEnableWrites` / `mcpRestrictWritesToTest`)。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。仕様は [MCP_OPERATIONS.md 2章](MCP_OPERATIONS.md#2-いま使える機能)。
 
 ### 5-1. 月間承認と請求
+
+> 2026-09-12 以降は「月」ではなく「期間つきの行(案内)」単位に変わった。この節の planSet / planPropose / planApproveTeacher / monthAgreements の説明は旧仕様(移行元)。現行は末尾の「授業計画を期間つきの行単位に」を参照。請求(請求作成・取消・入金)の説明はそのまま有効。
 
 **運用方針との相違（2026-09-09確認）**: 固定月謝は存在せず、実施分だけを請求する。以下の月謝関連の記述は現在のコードに残る挙動であり、採用する運用ルールではない。固定月謝分岐の廃止と、保護者宛ての兄弟合算・子ども別明細の請求書は [Future Work](FUTURE_WORK.md#家族合算の請求) に記録した未実装の修正事項。
 
@@ -620,3 +623,31 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 ### 月間計画フォーム: 下書き保存と案内送信の2ボタン（2026-09-12、GAS `2026-09-12-plan-draft`）
 
 「コメントだけ保存」を廃止。ボタンは「下書きを保存」（`planSubmit` に `propose:false`。回数・コメントを保存し、授業時間と料金は月間承認の行に控えるだけで案内は送らない。提案済み・承認済みの月なら提案を取り下げて下書きに戻す）と「保存して案内を送信」（従来どおり提案まで行う）の2つ。「連絡文をコピー」は案内を送信済み（承認待ち・承認済み）の月にだけ表示する。下書きは生徒・保護者には見えない。
+
+## 授業計画を期間つきの行単位に（2026-09-12、GAS `2026-09-12-plan-lines`）
+
+### 考え方
+- 案内の単位を「月」から「行」に変えた。1行 = 科目・種類・回数・期間（開始日〜終了日）・1回の授業時間・1回の授業料・コメント。月は期間の特別な場合（1日〜月末）。
+- 行ごとに `draft`（下書き）→ `proposed`（案内送信）→ `approved` / `declined`（保護者の承認・見送り）と進み、行ごとに `revision` を持つ（保存するたびに +1。承認済み・送信済みの行を保存すると承認は失効し下書き/再送信に戻る）。
+- 同じ科目・種類で期間が重なる行は作れない（実施した授業がどの行の分か決められなくなるため）。種類が違えば重なってよい（通常の月間計画の上に2週間のテスト対策を重ねる使い方）。
+- 請求は今までどおり月ごと。実施した授業を「科目・種類が同じで日付が期間内の承認済みの行」に当てはめ、その行の単価で時間按分する（1回の授業料×30÷授業時間を四捨五入した `rate30`）。回数の上限は期間全体の累計。当てはまる行のない授業は生徒の基本単価で仮計算し、請求不可の理由になる。
+- 期間が終わって回数が余っても自動では繰り越さない。期間の上限は1年。
+
+### シートと関数（`gas/PlanLines.gs`）
+- シート `planLines`（列は上の表）。監査は従来の `approvalEvents` に書く（id = 行ID:版:イベント、ym 列は `開始~終了`）。
+- `planLineSave_(req)`: {studentId, lineId?, subject, kind, count, startDate, endDate, lessonMin, lessonFee, comment, propose, expectedRevision?}。検証（重なり `overlap`、請求済み月 `invoiceLocked`、確定済み授業を外す変更 `bookedOver` / `bookedOutside`、版 `conflict`）。propose なら保護者へ `planProposed` 通知。
+- `planLineDelete_`（確定済み授業がある行 `bookedExists`・請求済み月は不可）、`planLineApproveTeacher_`（先生の承諾記録。過去の期間・授業後は memo 必須）、`planLineParentDecide_(student, req)`（保護者。`approvedCount` で回数を減らせる、0 = 見送り。確定済み授業数未満には減らせない。同じ回答の再送は `replayed`）。
+- `planLinesFromDefault_`: `plans` の default 行から指定月の下書きを作る（時間・料金は種類の標準、なければ基本単価×90分）。`planSet` は default 行の登録だけ。
+- `billingMonthInfo_(id, ym)`: その月にかかる行の集約（status none/draft/proposed/approved/declined、total、lines）。管理画面の一覧・MCP・請求の状態表示に使う。`planFor_` も行から求める。
+- `BillingApproval.gs` は請求・入金のみに。`billingMonthCalc_` が授業ごとの行照合と金額、`billingPreview_` は `lines` と授業ごとの `lineId / rate30` を返す。請求台帳の `承認版` は常に 0（根拠は `実績JSON` の lineId/lineRevision と `approvalEvents` の invoiced イベントの planJson）。
+- 授業確定のゲート `billingSlotAllowed_` / 一括確定 `schedulingBatchGate_` は行単位（`approvalRequired` / `planLimit`）。
+- 移行 `planLinesMigrate_`: `planLines` シート作成時に一度だけ、`monthAgreements`（approved は approvedPlanJson、他は planJson の各行）と `plans` の月行（合意のない月 → 下書き）と `planComments` を行へ写す。Script Property `PLAN_LINES_MIGRATED` で冪等。旧シートは残す。
+
+### API と画面
+- 先生 op: `planLineSave` / `planLineDelete` / `planLineApproveTeacher` / `planLinesFromDefault` / `planSet`（default のみ）。旧 `planPropose` / `planApproveTeacher` / `planSubmit` / `planCommentSave` は廃止。
+- 保護者: `familyPlanDecide` {ftoken, studentId, lineId, expectedRevision, approve, approvedCount?, memo}。旧 `parentPlanDecide`（k+ptoken）も lineId。
+- 生徒・保護者の状態: `planMonths` を廃止し `planLines`（案内中・承認済みで終了日が今月1日以降。下書き・見送りは出さない。`period` は表示用ラベル「2026年9月」「2026/9/22〜10/5」）。`parentDataForStudent_` も `planLines`。
+- 管理画面の生徒カード: `data.plan = {lines, defaultRows, current}`。「授業計画の案内と保護者の承認」カードは案内の一覧（状態タグ・要約行・コメント・承諾記録）と、1つだけ開く編集フォーム（＋案内を追加 / 編集。科目・種類・回数・期間（今月/来月/翌々月ボタン）・1回の授業時間・1回の授業料・コメント。下書きを保存 / 保存して案内を送信 / キャンセル）。下書きには「案内を送信」、送信済み・承認済みには「連絡文をコピー」、送信済みには「承諾を記録」。既定回数は「既定から◯月の下書きを作る」の雛形。
+- 生徒・保護者の「授業計画」: 案内＝proposed の行（期間・科目・種類・回数・時間・1回料金・コメント。保護者は行ごとに「承認する」「回数を調整・見送る」）、実施計画＝approved の行（期間内の実施・予定回数と残り）、当てはまらない今月の授業は「計画外」。
+- MCP: `get_billing_summary` の形は同じ（planTotal / planStatus は月の集約）。`mcpStudent` の `plan` は行の配列。
+- テスト: `test/plan-lines.test.cjs`（検証・重なり・承認と再送・月またぎの確定ゲート・行単価の請求と請求ロック・既定からの下書き・移行）。共有ヘルパ `scheduling-harness.approve()` は月の行を作って承認、`approveLine(lineId, approvedCount?)` を追加。

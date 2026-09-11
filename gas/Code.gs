@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-plan-draft' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-plan-lines' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -160,14 +160,10 @@ function studentState_(code) {
     .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title, kind: x.kind }; });
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
-  // 授業計画(今月と来月)。提案中(proposed)と承認済み(approved)だけを返し、下書き・未設定は出さない
-  var planRowsNow = planRows_(), ymNow = today.slice(0, 7);
-  var planMonths = [ymNow, nextYm_(ymNow)].map(function (ym) {
-    var info = planMonthInfo_(me.id, ym, planRowsNow), pf = planFor_(me.id, ym, planRowsNow);
-    return { ym: ym, status: String(info.status || 'none'), plan: pf.plan, rows: pf.rows, comment: String(info.comment || '') };
-  }).filter(function (m) { return (m.status === 'proposed' || m.status === 'approved') && Object.keys(m.plan).length > 0; });
+  // 授業計画(案内の行)。案内中(proposed)と承認済み(approved)で、期間が今月以降にかかるものだけを返す。下書き・見送りは出さない
+  var planLines = studentPlanLines_(me.id, today);
   var tasks = tasksFor_(me.id, 45);
-  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planMonths: planMonths, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planLines: planLines, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -596,92 +592,42 @@ function planRows_() {
   }).filter(function (x) { return x.id && x.subject; });
 }
 
-// その月の承認状況(月行がなければ none)。行ごとの status を月として集約: どれかが declined→declined、全部 approved→approved、どれかが proposed→proposed、それ以外→draft
-/* 授業計画のコメント(先生 → 生徒・保護者への自由文: 何のための授業か、なぜこの回数か)。月ごとに1つ。提案・承認とは独立で、書き換えても承認は失効しない */
-var PLAN_COMMENT_COLS_ = ['studentId', 'ym', 'comment', 'updatedAt'];
-function ensurePlanCommentsSheet_() { if (!ss_().getSheetByName('planComments')) { ensureSheet_(ss_(), 'planComments', PLAN_COMMENT_COLS_); memoClear_(); } }
-function planCommentRows_() { return ss_().getSheetByName('planComments') ? readRows_('planComments').map(function (r, i) { r._row = i + 2; return r; }) : []; }
-function planComment_(studentId, ym) { var r = planCommentRows_().filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === String(ym); })[0]; return r ? String(r.comment || '') : ''; }
-function planCommentSave_(req) {
-  var id = String(req.studentId || ''), ym = String(req.ym || '');
-  if (!systemStudent_(id)) return { error: '生徒が見つかりません' };
-  if (!billingMonthValid_(ym)) return { error: '月の形式は YYYY-MM です' };
-  var comment = String(req.comment == null ? '' : req.comment).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
-  if (comment.length > 500) return { error: 'コメントは500文字以内で入力してください' };
-  ensurePlanCommentsSheet_();
-  var sh = sheet_('planComments'), r = planCommentRows_().filter(function (x) { return String(x.studentId) === id && planYm_(x.ym) === ym; })[0];
-  var row = [id, ym, billingText_(comment), new Date()];
-  if (r) sh.getRange(r._row, 1, 1, PLAN_COMMENT_COLS_.length).setValues([row]); else { sh.appendRow(row); sh.getRange(sh.getLastRow(), 1, 1, 2).setNumberFormat('@'); }
-  memoClear_();
-  addLog_('先生が' + studentName_(id) + 'さんの' + ym + 'の授業計画コメントを' + (comment ? '保存' : '削除'));
-  return { ok: true, comment: comment };
+/* 旧 planComments(月ごとのコメント)は行へ移行済み。行のコメントは planLines.comment */
+function planComment_(studentId, ym) { if (!ss_().getSheetByName('planComments')) return ''; var r = readRows_('planComments').filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === String(ym); })[0]; return r ? String(r.comment || '') : ''; }
+function planMonthInfo_(studentId, ym) { return billingMonthInfo_(studentId, ym); }
+// 生徒・保護者に見せる案内の行: 案内中・承認済みで、終了日が今月1日以降のもの(開始日の新しい順)
+function studentPlanLines_(studentId, today) {
+  var from = String(today || todayStr_()).slice(0, 7) + '-01';
+  return planLinesFor_(String(studentId)).filter(function (l) { return (l.status === 'proposed' || l.status === 'approved') && l.endDate >= from; }).sort(planLineSort_).map(planLineView_);
 }
-function planMonthInfoLegacy_(studentId, ym, rows) {
-  rows = rows || planRows_();
-  var mine = rows.filter(function (x) { return x.studentId === String(studentId); });
-  var month = mine.filter(function (x) { return x.ym === ym; });
-  var defaults = mine.filter(function (x) { return x.ym === 'default'; });
-  var src = month.length ? month : defaults;
-  var status = 'none';
-  if (month.length) {
-    var st = month.map(function (x) { return x.status; });
-    status = st.indexOf('declined') >= 0 ? 'declined' : st.every(function (v) { return v === 'approved'; }) ? 'approved' : st.indexOf('proposed') >= 0 ? 'proposed' : 'draft';
-  }
-  var first = month[0] || {};
-  var total = 0; src.forEach(function (x) { total += x.count; });
-  return { ym: ym, rows: src.map(function (x) { return { subject: x.subject, count: x.count, status: x.status }; }), fromDefault: !month.length && defaults.length > 0, total: total,
-    status: status, proposedAt: first.proposedAt || '', approvedAt: first.approvedAt || '', approvedVia: first.approvedVia || '', memo: month.map(function (x) { return x.memo; }).filter(Boolean)[0] || '', comment: planComment_(studentId, ym) };
-}
-
-function planMonthInfo_(studentId, ym, rows) { return billingMonthInfo_(studentId, ym, rows); }
 
 function nextYm_(ym) { var p = ym.split('-'); var d = new Date(+p[0], +p[1], 1); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
 
-// 月の行の status をまとめて更新(既定から月行を作る場合は copyDefault)
-function planSetStatus_(studentId, ym, status, via, memo, copyDefault) {
-  var rows = readRows_('plans');
+// その月にかかる案内の行(見送りを除く)を、科目（種類）→回数 の形でも返す(管理画面の一覧・MCP 用)
+function planFor_(studentId, ym) {
+  var info = billingMonthInfo_(studentId, ym), out = {}, list = [];
+  info.rows.forEach(function (r) { out[kindLabel_(r.subject, r.kind)] = r.count; list.push({ subject: r.subject, kind: r.kind, count: r.count }); });
+  return { plan: out, rows: list, fromDefault: false };
+}
+
+// 保護者(旧: 生徒コード+保護者トークンのページ): 案内の行への承認 / 見送り
+function parentPlanDecide_(req) { var auth = parentRequire_(req); if (auth.error) return auth; return planLineParentDecide_(auth.student, req); }
+
+// 毎月の既定回数(plans シートの ym='default' 行)。新しい月の下書きを作る雛形としてだけ使う
+function planSet_(req) {
+  var id = String(req.studentId || ''), subject = String(req.subject || '').trim();
+  if (!systemStudent_(id)) return { error: '生徒が見つかりません', errorCode: 'notFound' };
+  if (String(req.ym || 'default') !== 'default') return { error: '月ごとの回数は授業計画の案内(行)で入力してください', errorCode: 'validation' };
+  if (!subject || subject.length > 20 || /^[=+@-]/.test(subject)) return { error: '科目を20文字以内で選んでください', errorCode: 'validation' };
+  var kind = kindNorm_(req.kind); if (!kindValid_(kind)) return kindError_();
+  var count = Number(req.count); if (!Number.isInteger(count) || count < 0 || count > 31) return { error: '回数は0〜31の整数です', errorCode: 'validation' };
+  var rows = readRows_('plans'), found = -1;
+  for (var i = 0; i < rows.length; i++) if (String(rows[i].studentId) === id && planYm_(rows[i].ym) === 'default' && String(rows[i].subject) === subject && kindNorm_(rows[i].kind) === kind) { if (found >= 0) return { error: '既定の科目・種類が重複しています', errorCode: 'validation' }; found = i; }
   var sh = sheet_('plans');
-  var found = false;
-  var now = new Date();
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].studentId) !== String(studentId) || planYm_(rows[i].ym) !== ym) continue;
-    found = true;
-    var vals = [[status, status === 'proposed' ? now : (rows[i].proposedAt || ''), status === 'approved' ? now : (status === 'proposed' || status === 'draft' ? '' : rows[i].approvedAt || ''), status === 'approved' ? billingText_(via || '') : (status === 'proposed' || status === 'draft' ? '' : rows[i].approvedVia || ''), billingText_(memo || '')]];
-    sh.getRange(i + 2, 6, 1, 5).setValues(vals);
-  }
-  if (!found && copyDefault) {
-    var defs = rows.filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === 'default' && Number(x.count) > 0; });
-    if (!defs.length) return { error: '計画がありません。先に科目と回数を登録してください' };
-    defs.forEach(function (x) {
-      sh.appendRow([uid_(), String(studentId), ym, String(x.subject), Number(x.count), status, status === 'proposed' ? now : '', status === 'approved' ? now : '', status === 'approved' ? billingText_(via || '') : '', billingText_(memo || ''), kindNorm_(x.kind)]);
-      sh.getRange(sh.getLastRow(), 2, 1, 2).setNumberFormat('@');
-    });
-    found = true;
-  }
-  return found ? { ok: true } : { error: '計画がありません。先に科目と回数を登録してください' };
+  if (found >= 0) { if (count === 0) sh.deleteRow(found + 2); else sh.getRange(found + 2, 5).setValue(count); }
+  else if (count > 0) sh.getRange(sh.getLastRow() + 1, 1, 1, 11).setNumberFormat('@').setValues([[uid_(), id, 'default', subject, count, 'draft', '', '', '', '', kind]]);
+  return { ok: true };
 }
-
-// 先生: 保護者に提案(未承認に戻す)
-function planPropose_(req) { return billingPlanPropose_(req); }
-
-// 先生: LINE・電話などで得た承諾を記録
-function planApproveTeacher_(req) { return billingApproveTeacher_(req); }
-
-// 保護者(保護者ページ): 承認 / 見送り
-function parentPlanDecide_(req) { return billingParentDecide_(req); }
-
-// その月の計画(科目→回数)。月の指定が無ければ既定を使う
-function planFor_(studentId, ym, rows) {
-  rows = rows || planRows_();
-  var mine = rows.filter(function (x) { return x.studentId === String(studentId); });
-  var month = mine.filter(function (x) { return x.ym === ym; });
-  var src = month.length ? month : mine.filter(function (x) { return x.ym === 'default'; });
-  var out = {}, list = [];
-  src.forEach(function (x) { if (x.count > 0) { out[kindLabel_(x.subject, x.kind)] = x.count; list.push({ subject: x.subject, kind: kindNorm_(x.kind), count: x.count }); } });
-  return { plan: out, rows: list, fromDefault: !month.length && src.length > 0 };
-}
-
-function planSet_(req) { return billingPlanSet_(req); }
 
 /* ================= 保護者専用認証 ================= */
 
@@ -845,8 +791,7 @@ function parentDataForStudent_(student) {
     if (!months[m]) { months[m] = { ym: m, count: 0, minutes: 0 }; keys.push(m); }
     months[m].count++; months[m].minutes += Number(l.min) || 0;
   });
-  var prows = planRows_();
-  var planMonths = d.plan.months.filter(function (x) { return x.status !== 'none' && x.status !== 'draft'; });
+  var planLines = studentPlanLines_(String(student.id), todayStr_());
   var upcoming = readRows_('slots').filter(function(s){return String(s.studentId)===String(student.id)&&s.date>=todayStr_()&&(s.status==='offered'||s.status==='booked');})
     .sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);})
     .map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),status:s.status,subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||''),meetUrl:String(s.meetUrl||'')};});
@@ -854,7 +799,7 @@ function parentDataForStudent_(student) {
     billing: {amount:d.billing.amount,mode:d.billing.mode,rate30:d.billing.rate30,monthly:d.billing.monthly,provisional:d.billing.provisional,invoice:d.billing.invoice?{amount:d.billing.invoice.amount,status:d.billing.invoice.status}:null},
     payments: d.payments.map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate, paidDate: p.paidDate, method: p.method, status: p.status }; }),
     grades: d.grades.map(function (g) { return { date: g.date, test: g.test, subject: g.subject, score: g.score, max: g.max, dev: g.dev, rank: g.rank }; }),
-    months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }), planMonths: planMonths } };
+    months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }), planLines: planLines } };
 }
 
 /* ================= 共有予定(生徒・保護者→先生。大会・見学など) ================= */
@@ -1278,15 +1223,15 @@ function admin_(req) {
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
-    case 'planCommentSave': return kanriWrap_(req, planCommentSave_(req), req.studentId);
-    case 'planSubmit': return kanriWrap_(req, billingPlanSubmit_(req), req.studentId);
+    case 'planLineSave': return kanriWrap_(req, planLineSave_(req), req.studentId);
+    case 'planLineDelete': return kanriWrap_(req, planLineDelete_(req), req.studentId);
+    case 'planLineApproveTeacher': return kanriWrap_(req, planLineApproveTeacher_(req), req.studentId);
+    case 'planLinesFromDefault': return kanriWrap_(req, planLinesFromDefault_(req), req.studentId);
     case 'lessonKinds': return { ok: true, lessonKinds: lessonKindsPublic_() };
     case 'lessonKindSave': { var lk = lessonKindSave_(req); return lk.error ? lk : { ok: true, lessonKinds: lk.lessonKinds, admin: adminState_() }; }
     case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);
     case 'taskDel':     return kanriWrap_(req, adminTaskDel_(req), req.studentId);
     case 'taskDone':    return kanriWrap_(req, adminTaskDone_(req), req.studentId);
-    case 'planPropose': return kanriWrap_(req, planPropose_(req), req.studentId);
-    case 'planApproveTeacher': return kanriWrap_(req, planApproveTeacher_(req), req.studentId);
     case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
     case 'setEmail':    return kanriWrap_(req, adminSetEmail_(req));
     case 'setFee':      return kanriWrap_(req, adminSetFee_(req));
@@ -1755,7 +1700,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk21')) return;
+  if (cache.get('schemaOk22')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1777,12 +1722,12 @@ function ensureSchema_() {
   ensureLessonSchema_();
   ensureSlotChangeNotices_();
   ensureBillingSchema_();
+  if (typeof ensurePlanLinesSheet_ === 'function') ensurePlanLinesSheet_();
   if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
   if (typeof ensureLessonKindsSheet_ === 'function') { ensureLessonKindsSheet_(); ensureKindColumns_(); }
-  ensurePlanCommentsSheet_();
-  cache.put('schemaOk21', '1', 21600);
+  cache.put('schemaOk22', '1', 21600);
 }
 
 function readRows_(name) {
@@ -2058,9 +2003,9 @@ function kanriStudent_(studentId,section) {
       paidDate: p['入金日'] || '', method: p['入金方法'] || '', status: p['状態'] || '', note: p['備考'] || '' }; })
     .sort(function (a, b) { return a.ym < b.ym ? 1 : -1; });
   var fee = studentFee_(id, minutes, month), billingMonths = billingMonths_(id);
-  var plan=(function () { var rows = planRows_(); var pf = planFor_(id, month, rows); return { month: month, current: pf.plan, fromDefault: pf.fromDefault,
-      monthRows: rows.filter(function (x) { return x.studentId === id && x.ym === month; }), defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
-      months: billingMonths.map(function(b){return planMonthInfo_(id,b.ym,rows);}) }; })();
+  var plan=(function () { var rows = planRows_(); return { month: month, current: planFor_(id, month).plan, fromDefault: false, monthRows: [],
+      defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
+      lines: planLinesFor_(id).sort(planLineSort_).map(planLineView_) }; })();
   var thisMonth={count:doneMonth.length,minutes:minutes,fee:fee.amount,mode:fee.mode,billed:payments.some(function(p){return p.ym===month && p.status!=='取消';})};
   if (section==='billing') return Object.assign(base,{rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),payments:payments,billing:billingPreview_(id,month),billingMonths:billingMonths,plan:plan,thisMonth:thisMonth});
   var progressData=kanriStudentProgress_(id);
@@ -2339,7 +2284,7 @@ function mcpStudent_(req) {
     feeMode: d.monthly > 0 ? 'monthly' : 'time',
     upcoming: lessons.filter(function (l) { return l.date >= today && (l.status === 'booked' || l.status === 'offered'); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }).slice(0, 20),
     recentDone: lessons.filter(function (l) { return l.date < today && l.status === 'booked' && l.done; }).slice(0, 10),
-    lessonKinds: lessonKindsPublic_(), thisMonth: d.thisMonth, plan: d.plan && d.plan.months, tasks: (d.tasks || []).filter(function (t) { return !t.doneAt; }),
+    lessonKinds: lessonKindsPublic_(), thisMonth: d.thisMonth, plan: d.plan && d.plan.lines, tasks: (d.tasks || []).filter(function (t) { return !t.doneAt; }),
     wishes: d.wishes, blocked: d.blocked, events: d.events,
     latestExam: (d.exams || []).slice(-1)[0] ? (function (e) { return { date: e.date, name: e.name, round: e.round, total5: e.total5, total3: e.total3, subjects: e.subjects }; })((d.exams || []).slice(-1)[0]) : null,
     gradesCount: (d.grades || []).length, paymentsUnpaid: (d.payments || []).filter(function (p) { return p.status !== '入金済' && p.status !== '取消'; }).map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate }; }) };

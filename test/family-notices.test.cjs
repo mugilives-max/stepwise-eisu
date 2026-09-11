@@ -13,7 +13,7 @@ test('notices scope children, exclude auth secrets, persist reads and reject for
 });
 test('reading a notice never approves a plan, pays an invoice or marks a lesson report read',()=>{
  const h=fixture(),ctx=h.context();const account=ctx.familyRequire_({ftoken:h.token}).account;
- ctx.parentDataForStudent_=()=>({ok:true,data:{planMonths:[{ym:'2026-09',status:'proposed',revision:2}],payments:[{ym:'2026-09',amount:1000,status:'未入金',billDate:'2026-09-10'}],lessonRecords:[{recordId:'report-a',revision:1,date:'2026-09-10'}]}});
+ ctx.parentDataForStudent_=()=>({ok:true,data:{planLines:[{id:'line-a',subject:'数学',kind:'',period:'2026年9月',status:'proposed',revision:2,proposedAt:'2026-09-01T00:00:00Z'}],payments:[{ym:'2026-09',amount:1000,status:'未入金',billDate:'2026-09-10'}],lessonRecords:[{recordId:'report-a',revision:1,date:'2026-09-10'}]}});
  const items=ctx.familyNotices_(account,{action:'familyNotices'}).notices;assert.equal(items.filter(x=>x.required).length,2);
  const result=ctx.familyNotices_(account,{action:'familyNoticeRead',noticeId:items[0].id});assert.equal(result.notices[0].required,true);assert.equal(result.notices[0].read,true);assert.equal(h.rows('approvalEvents').length,0);assert.equal(h.rows('lessonReadReceipts').length,0);
 });

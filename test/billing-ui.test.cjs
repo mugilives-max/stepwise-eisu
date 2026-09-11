@@ -16,7 +16,7 @@ function card(overrides = {}) {
     month: '2026-09', today: '2026-09-08', code: 'synthetic-ui-link',
     lessons: [], grades: [], exams: [], payments: [], meetings: [], tasks: [], profile: {},
     thisMonth: { count: 0, minutes: 0, fee: 0 },
-    plan: { current: {}, defaultRows: [], months: [{ ym: '2026-09', status: 'draft', revision: 0, termsKnown: false, rows: [{ subject: '英語', count: 4 }], total: 4 }] },
+    plan: { current: {}, defaultRows: [], lines: [line()] },
     parentAuth: { configured: false }, ...overrides
   };
 }
@@ -32,69 +32,48 @@ function setPayment(ui) {
   ui.input('bill-method-test-invoice', '現金');
   ui.click('billing-paid', { 'data-invoice': 'test-invoice' });
 }
-function setPlan(ui, ym = '2026-09', count = 4) {
-  ui.el('pl-scope').value = ym === 'default' ? 'default' : 'month';
-  ui.el('pl-target').value = ym === 'default' ? '2026-09' : ym;
+function setPlan(ui, count = 4) {
   ui.el('pl-subject').value = '英語'; ui.el('pl-count').value = String(count); ui.click('plansave');
 }
-function month(ym, revision) { return { ...card().plan.months[0], ym, revision }; }
-function planCard(months, overrides = {}) { return card({ plan: { ...card().plan, months }, ...overrides }); }
+function line(overrides = {}) { return { id: 'line-1', subject: '英語', kind: '', count: 4, approvedCount: null, startDate: '2026-09-01', endDate: '2026-09-30', period: '2026年9月', month: '2026-09', lessonMin: 90, rate30: 1500, lessonFee: 4500, comment: '', status: 'proposed', revision: 3, ...overrides }; }
+function planCard(lines, overrides = {}) { return card({ plan: { ...card().plan, lines }, ...overrides }); }
+function sendLine(ui, count) { ui.click('pe-open', { 'data-line': 'line-1' }); if (count != null) ui.input('pe-count', String(count)); ui.click('pe-send'); return ui.requests.at(-1).body; }
 
-test('count saves use the target month revision instead of the displayed month', async () => {
-  const ui = await ready(planCard([month('2026-09', 2), month('2026-10', 7)]));
-  assert.match(ui.html(), /2026-09 <span class="tag/);
-  setPlan(ui, '2026-10', 6);
+test('default count saves send subject, kind and count without a month or revision', async () => {
+  const ui = await ready(planCard([line()]));
+  assert.match(ui.html(), /<span class="tag amber">承認待ち<\/span> 英語（通常） 4回・2026年9月・90分・1回 4,500円/);
+  setPlan(ui, 6);
   const body = ui.requests.at(-1).body;
-  assert.equal(body.op, 'planSet'); assert.equal(body.studentId, 'test-a');
-  assert.equal(body.ym, '2026-10'); assert.equal(body.expectedRevision, 7);
-  assert.equal(body.subject, '英語'); assert.equal(body.count, 6);
+  assert.equal(body.op, 'planSet'); assert.equal(body.studentId, 'test-a'); assert.equal(body.ym, undefined); assert.equal(Object.hasOwn(body, 'expectedRevision'), false);
+  assert.equal(body.subject, '英語'); assert.equal(body.kind, '通常'); assert.equal(body.count, 6);
 });
 
-test('known months with an unavailable revision and missing month lists require refresh before saving', async () => {
-  for (const data of [planCard([month('2026-09', undefined)]), card({ plan: { current: {}, defaultRows: [] } })]) {
-    const ui = await ready(data), before = ui.requests.length;
-    setPlan(ui);
-    assert.equal(ui.requests.length, before);
-    assert.match(ui.el('toast').textContent, /画面を更新/);
-  }
-});
-
-test('new month count saves send revision zero while default changes omit it', async () => {
-  const ui = await ready(); setPlan(ui, '2027-01');
-  assert.equal(ui.requests.at(-1).body.expectedRevision, 0);
-  assert.equal(ui.requests.at(-1).body.ym, '2027-01');
-  const defaults = await ready(); setPlan(defaults, 'default');
-  assert.equal(defaults.requests.at(-1).body.ym, 'default');
-  assert.equal(Object.hasOwn(defaults.requests.at(-1).body, 'expectedRevision'), false);
-});
-
-test('an interrupted count save can be resent with the refreshed draft revision', async () => {
-  const ui = await ready(planCard([month('2026-09', 3)])); setPlan(ui, '2026-09', 5);
-  assert.equal(ui.requests.at(-1).body.expectedRevision, 3);
+test('a line edit sends the line revision and keeps the editor after a network failure so it can be resent', async () => {
+  const ui = await ready(planCard([line({ revision: 3 })]));
+  const body = sendLine(ui, 5);
+  assert.equal(body.op, 'planLineSave'); assert.equal(body.lineId, 'line-1'); assert.equal(body.expectedRevision, 3); assert.equal(body.count, 5); assert.equal(body.propose, true); assert.equal(body.lessonFee, 4500); assert.equal(body.startDate, '2026-09-01'); assert.equal(body.endDate, '2026-09-30');
   ui.requests.at(-1).fail(); await flush();
-  assert.equal(ui.requests.at(-1).body.op, 'kanriStudent');
-  ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 4)]) }); await flush();
-  setPlan(ui, '2026-09', 5);
-  assert.equal(ui.requests.at(-1).body.expectedRevision, 4);
-  assert.equal(ui.requests.at(-1).body.count, 5);
+  assert.equal(ui.el('pe-count').value, '5'); assert.match(ui.html(), /入力は保持しています/);
+  ui.click('pe-send'); assert.equal(ui.requests.at(-1).body.expectedRevision, 3); assert.equal(ui.requests.at(-1).body.count, 5);
+  ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 4, count: 5 })]) }); await flush();
+  assert.equal(ui.el('pe-count'), undefined, 'the editor closes after a successful save'); assert.match(ui.html(), /5回・2026年9月/);
 });
 
-test('a late background read cannot supply the revision for the next count save', async () => {
-  const ui = await ready(planCard([month('2026-09', 1)]));
+test('a late background read cannot supply the revision for the next line save', async () => {
+  const ui = await ready(planCard([line({ revision: 1 })]));
   ui.navigate('#students'); ui.navigate('#s=test-a&tab=billing'); const background = ui.requests.at(-1);
-  setPlan(ui); ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 2)]) }); await flush();
-  background.reply({ ok: true, data: planCard([month('2026-09', 1)]) }); await flush();
-  setPlan(ui); assert.equal(ui.requests.at(-1).body.expectedRevision, 2);
+  sendLine(ui); ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 2 })]) }); await flush();
+  background.reply({ ok: true, data: planCard([line({ revision: 1 })]) }); await flush();
+  assert.equal(sendLine(ui).expectedRevision, 2);
 });
 
-test('late responses for another student cannot supply a count save student or revision', async () => {
-  const ui = await ready(planCard([month('2026-09', 1)])); ui.click('reload'); const oldRead = ui.requests.at(-1);
+test('late responses for another student cannot supply a line save student or revision', async () => {
+  const ui = await ready(planCard([line({ revision: 1 })])); ui.click('reload'); const oldRead = ui.requests.at(-1);
   ui.navigate('#s=test-b&tab=billing');
-  ui.requests.at(-1).reply({ ok: true, data: planCard([month('2026-09', 8)], { id: 'test-b' }) }); await flush();
-  oldRead.reply({ ok: true, data: planCard([month('2026-09', 99)]) }); await flush();
-  setPlan(ui);
-  assert.equal(ui.requests.at(-1).body.studentId, 'test-b');
-  assert.equal(ui.requests.at(-1).body.expectedRevision, 8);
+  ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 8 })], { id: 'test-b' }) }); await flush();
+  oldRead.reply({ ok: true, data: planCard([line({ revision: 99 })]) }); await flush();
+  const body = sendLine(ui);
+  assert.equal(body.studentId, 'test-b'); assert.equal(body.expectedRevision, 8);
 });
 
 test('a failed student switch cannot save the previous student card still on screen', async () => {
@@ -130,17 +109,16 @@ test('a payment response for another student does not cancel the current student
   assert.equal(ui.html().includes('test-invoice'), false);
 });
 
-test('unmodified proposal defaults refresh after a base-fee change at the same plan revision', async () => {
-  const ui = await ready();
-  assert.equal(ui.el('pl-fee-2026-09').value, '4500');
-  ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
-  assert.equal(ui.el('pl-fee-2026-09').value, '6000');
-});
-
-test('an explicitly edited proposal fee survives a base-fee refresh', async () => {
-  const ui = await ready(); ui.input('pl-fee-2026-09', '5250');
-  ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
-  assert.equal(ui.el('pl-fee-2026-09').value, '5250');
+test('a new line is prefilled from the current base fee and an explicitly edited fee survives a refresh', async () => {
+  const ui = await ready(); ui.click('pe-new');
+  assert.equal(ui.el('pe-fee').value, '4500'); assert.equal(ui.el('pe-min').value, '90'); assert.equal(ui.el('pe-start').value, '2026-09-01'); assert.equal(ui.el('pe-end').value, '2026-09-30');
+  ui.click('pe-cancel'); ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
+  ui.click('pe-new'); assert.equal(ui.el('pe-fee').value, '6000');
+  ui.input('pe-fee', '5250'); ui.click('pe-month', { 'data-ym': '2026-11' });
+  ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2500 }) }); await flush();
+  assert.equal(ui.el('pe-fee').value, '5250'); assert.equal(ui.el('pe-start').value, '2026-11-01'); assert.equal(ui.el('pe-end').value, '2026-11-30');
+  ui.click('pe-draft'); const body = ui.requests.at(-1).body;
+  assert.equal(body.op, 'planLineSave'); assert.equal(body.propose, false); assert.equal(body.lineId, undefined); assert.equal(body.lessonFee, 5250); assert.equal(body.startDate, '2026-11-01');
 });
 
 test('invoice creation uses preview amount and repeats the same request after a network error', async () => {

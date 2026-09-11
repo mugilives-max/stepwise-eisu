@@ -195,17 +195,15 @@ test('shared parent logins coexist and device logout cannot terminate another se
 
 test('child approval is scoped to linked child and preserves expected revision requirement', () => {
   const h = createFamilyHarness(); const v = verified(h, create(h, ['test-a']));
-  for (const studentId of ['test-a', 'test-b']) {
-    ok(h.admin('planSet', { studentId, ym: '2026-09', subject: '数学', count: 2 }));
-    ok(h.admin('planPropose', { studentId, ym: '2026-09', rate30: 1500, monthly: 0 }));
-  }
-  rejected(h.family('familyPlanDecide', { ftoken: v.ftoken, studentId: 'test-b', ym: '2026-09', approve: true, expectedRevision: 2 }));
-  rejected(h.family('familyPlanDecide', { ftoken: v.ftoken, studentId: 'test-a', ym: '2026-09', approve: true }));
+  const sent = {};
+  for (const studentId of ['test-a', 'test-b']) sent[studentId] = ok(h.admin('planLineSave', { studentId, subject: '数学', kind: '通常', count: 2, startDate: '2026-09-01', endDate: '2026-09-30', lessonMin: 90, lessonFee: 4500, comment: '', propose: true })).line;
+  rejected(h.family('familyPlanDecide', { ftoken: v.ftoken, studentId: 'test-b', lineId: sent['test-b'].id, approve: true, expectedRevision: 1 }));
+  rejected(h.family('familyPlanDecide', { ftoken: v.ftoken, studentId: 'test-a', lineId: sent['test-a'].id, approve: true }));
   const data = ok(h.family('familyData', { ftoken: v.ftoken, studentId: 'test-a' })).data;
-  const rev = data.planMonths.find(m => m.ym === '2026-09').revision;
-  const result = ok(h.family('familyPlanDecide', { ftoken: v.ftoken, studentId: 'test-a', ym: '2026-09', approve: true, expectedRevision: rev }));
-  assert.equal(result.data.planMonths.find(m => m.ym === '2026-09').status, 'approved');
-  assert.equal(h.rows('monthAgreements').find(a => a.studentId === 'test-b').status, 'proposed');
+  const line = data.planLines.find(l => l.id === sent['test-a'].id); assert.equal(line.status, 'proposed'); assert.equal(line.lessonFee, 4500);
+  const result = ok(h.family('familyPlanDecide', { ftoken: v.ftoken, studentId: 'test-a', lineId: line.id, approve: true, expectedRevision: line.revision, approvedCount: 1 }));
+  assert.equal(result.data.planLines.find(l => l.id === line.id).status, 'approved'); assert.equal(result.data.planLines.find(l => l.id === line.id).approvedCount, 1);
+  assert.equal(h.rows('planLines').find(l => l.studentId === 'test-b').status, 'proposed');
 });
 
 test('notification event key is idempotent; quota zero is safely retryable; unknown send outcome never retries', () => {
@@ -361,11 +359,10 @@ test('existing inactive child link may be retained but never newly linked or res
 
 test('notification failure preserves plan and invoice success while surfacing warning through teacher wrappers', () => {
   const h = createFamilyHarness();const v = verified(h);h.setQuota(0);
-  ok(h.admin('planSet', { studentId:'test-a', ym:'2026-09', subject:'数学', count:2 }));
-  const proposed = ok(h.admin('planPropose', { studentId:'test-a', ym:'2026-09', rate30:1500, monthly:0, from:'kanri' }));
+  const proposed = ok(h.admin('planLineSave', { studentId:'test-a', subject:'数学', kind:'通常', count:2, startDate:'2026-09-01', endDate:'2026-09-30', lessonMin:60, lessonFee:3000, comment:'', propose:true, from:'kanri' }));
   assert.match(proposed.notificationWarning, /保存は完了/);
-  const revision = proposed.data.plan.months.find(m => m.ym === '2026-09').revision;
-  ok(h.family('familyPlanDecide', { ftoken:v.ftoken, studentId:'test-a', ym:'2026-09', approve:true, expectedRevision:revision }));
+  const line = proposed.data.plan.lines[0];
+  ok(h.family('familyPlanDecide', { ftoken:v.ftoken, studentId:'test-a', lineId:line.id, approve:true, expectedRevision:line.revision }));
   const sh=h.spreadsheet.getSheetByName('slots'),slot={id:'synthetic-warning-slot',studentId:'test-a',date:'2026-09-01',start:'10:00',min:60,status:'booked',done:true,subject:'数学'};sh.appendRow(sh.values[0].map(k=>slot[k]??''));
   const bill = ok(h.admin('kanriAddPayment', { studentId:'test-a', ym:'2026-09', requestId:'synthetic-family-warning', from:'kanri' }));
   assert.match(bill.notificationWarning, /メール通知/);assert.equal(bill.invoice.amount, 3000);

@@ -358,11 +358,9 @@ function schedulingBatchGate_(slots,allSlots) {
   for(var i=0;i<slots.length;i++){
     var s=slots[i],gate=billingSlotAllowed_(s)||schedulingCapacityError_(s,allSlots,s.id);if(gate)return {slotId:s.id,error:gate.error,errorCode:gate.errorCode};
     if(s.status==='booked')continue;
-    var key=String(s.studentId)+'|'+s.date.slice(0,7)+'|'+String(s.subject);
+    var line=planLineMatch_(planLinesFor_(s.studentId),s),key=line?line.id:'none|'+String(s.studentId)+'|'+String(s.subject);
     if(!aggregate[key]){
-      var a=billingAgreement_(s.studentId,s.date.slice(0,7)),limit=0;
-      billingPlanJson_(a).forEach(function(p){if(p.subject===s.subject)limit=Number(p.count);});
-      aggregate[key]={limit:limit,count:allSlots.filter(function(b){return b.status==='booked'&&String(b.studentId)===String(s.studentId)&&b.date.slice(0,7)===s.date.slice(0,7)&&b.subject===s.subject;}).length};
+      aggregate[key]={limit:line?planLineLimit_(line):0,count:line?planLineBooked_(line,allSlots).length:0};
     }
     aggregate[key].count++;
     if(aggregate[key].count>aggregate[key].limit)return {slotId:s.id,error:'選択した授業をすべて確定すると承認回数を超えます',errorCode:'planLimit'};

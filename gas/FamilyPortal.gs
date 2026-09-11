@@ -259,7 +259,7 @@ function familyDispatch_(req) {
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
     case 'familyStudentState':{var fs=familyChildRequire_(req);if(fs.error)return fs;var st=studentState_(String(fs.student&&fs.student.code||''));if(st&&typeof st==='object'){delete st.emailStatus;st.viewer='family';}return st;}
-    case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:billingParentDecideForStudent_(b.student,req);}
+    case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:planLineParentDecide_(b.student,req);}
     default:return familyError_('操作が見つかりません');
   }}catch(e){return familyError_('処理を完了できませんでした。入力を保持して再試行してください。登録済みの場合は確認メールを再発行できます');}
 }
@@ -297,7 +297,7 @@ function familyDeliverOutbox_(out,a,subject,body,authMail) {
   return out;
 }
 function familyBusinessMail_(out) {
-  var text={planProposed:'月の回数・料金の確認依頼があります。',invoiceCreated:'月謝の請求内容を記録しました。',invoiceVoided:'月謝の請求を取り消しました。'}[String(out.kind)];
+  var text={planProposed:'授業計画(回数・料金)の確認依頼があります。',invoiceCreated:'月謝の請求内容を記録しました。',invoiceVoided:'月謝の請求を取り消しました。'}[String(out.kind)];
   if(!text)throw new Error('通知種類が不明です');
   return {subject:'【ステップワイズ】'+(out.ym?out.ym+' ':'')+'保護者ページのお知らせ',body:text+'\n保護者ページにログインし、お子さまを選んで内容をご確認ください。\n\n'+FAMILY_PORTAL_URL_};
 }
@@ -415,7 +415,7 @@ function familyNotices_(account,req){
   children.forEach(function(c){
     var sid=String(c.studentId),student=findStudent_(sid);if(!student)return;
     var response=parentDataForStudent_(student);if(!response.ok)throw Error('Notice data unavailable');var d=response.data;
-    (d.planMonths||[]).filter(function(m){return m.status==='proposed';}).forEach(function(m){add('plan:'+sid+':'+m.ym+':'+m.revision,c,m.ym+'の回数・料金をご確認ください','billing',0,true);});
+    (d.planLines||[]).filter(function(l){return l.status==='proposed';}).forEach(function(l){add('plan:'+sid+':'+l.id+':'+l.revision,c,l.period+' '+kindLabel_(l.subject,l.kind)+'の回数・料金をご確認ください','billing',0,true,l.proposedAt);});
     (d.payments||[]).filter(function(p){return p.status!=='取消'&&p.status!=='入金済';}).forEach(function(p){add('bill:'+sid+':'+p.ym+':'+p.amount+':'+p.billDate,c,p.ym+'のお支払いをご確認ください','billing',0,true,p.billDate);});
     (d.lessonRecords||[]).forEach(function(r){add('record:'+sid+':'+r.recordId+':'+r.revision,c,(r.lessonDate||r.date||'')+' '+(r.subject||'')+'の授業報告','records',2,false,r.updatedAt);});
     messages.filter(function(m){return String(m.studentId)===sid&&m.reply;}).forEach(function(m){add('reply:'+m.id+':'+m.revision,c,'先生から返信が届いています','contacts',2,false,m.updatedAt);});
