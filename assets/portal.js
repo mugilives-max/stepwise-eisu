@@ -580,10 +580,15 @@
           app.innerHTML = page === "schedule" ? renderSchedulePage() : renderHomePage();
         }
 
-        /* ---------- ホーム: 今月の授業・やること・予定表(先生の休みなし)・次の授業・授業登録・今後の予定 ---------- */
+        /* ---------- ホーム: 予定表(先生の休みなし)・今月の授業・やること・次の授業・授業登録・今後の予定 ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
+
+          // 予定表(見るだけ。先生の休みは表示しない)
+          html += '<h2>予定表 <a href="#schedule" class="small" style="font-weight:500;margin-left:6px">希望・共有・授業できない日の登録 →</a></h2>';
+          html += renderCal(D.info, today, false);
+          html += renderDayDetail(D, false, false);
 
           // 見出し + 今月の授業
           html += '<h1>' + esc(S.me.name) + 'さんのマイページ</h1><p class="sub">今月の授業・やること・次の授業</p>';
@@ -637,11 +642,6 @@
             if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(taskDueText(t)) + '・' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
             html += '</div>';
           })();
-
-          // 予定表(見るだけ。先生の休みは表示しない)
-          html += '<h2>予定表 <a href="#schedule" class="small" style="font-weight:500;margin-left:6px">希望・共有・授業できない日の登録 →</a></h2>';
-          html += renderCal(D.info, today, false);
-          html += renderDayDetail(D, false, false);
 
           html += renderNextLesson(D);
           html += renderOffers(D);
