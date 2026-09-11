@@ -254,3 +254,14 @@ test('the family マイページ tab shows the child student home and proxies st
   assert.match(ui.html(), /授業不可<\/span><span class="time">終日/);
   ui.click('fa-mytab', { 'data-tab': 'history' }); assert.match(ui.html(), /実施済みの授業はまだありません/);
 });
+
+test('the family 成績 tab is the child grades page with the exam-report panel host', async () => {
+  const ui = await readyFamily(); ui.navigate('#family/grades');
+  const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family' }); await flush();
+  assert.match(ui.html(), /【テスト】子Aさんの成績（保護者が代わりに操作できます）/); assert.match(ui.html(), /先生が記録したテストの結果/);
+  assert.doesNotMatch(ui.html(), /data-action="fa-mytab"/); assert.match(ui.html(), /<section id="family-grades-panel" data-family-child="child-a"/);
+  const g = ui.requests.find(r => r.body.action === 'grades'); assert.ok(g, JSON.stringify(ui.requests.map(r => r.body.action))); assert.equal(g.body.studentId, 'child-a'); assert.equal(g.body.ftoken, 'test-family-token'); assert.equal(g.body.k, undefined);
+  g.reply({ ok: true, grades: [{ date: '2026-09-01', test: '中間', subject: '英語', score: 80, max: 100, dev: null, rank: '' }], exams: [] }); await flush();
+  assert.match(ui.html(), /成績推移 <span class="cnt">1件/); assert.match(ui.html(), /中間/);
+  ui.navigate('#family/home'); assert.doesNotMatch(ui.html(), /data-tab="grades"/); assert.match(ui.html(), /data-tab="history"/);
+});

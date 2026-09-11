@@ -1002,16 +1002,18 @@
           familyRequest('familyStudentState', { ftoken: familyToken(), studentId: id }, function (res) { F.childState[id] = res; var c = familyMypageChild(); if (c && sameId(c.studentId, id)) S = res; });
         }
         function familySelectChild(id) { F.studentId = id; F.confirm = null; G = null; GX = []; gLoading = false; selDate = null; selManual = false; selMode = ''; selDays = {}; dayAddOpen = false; pending = null; histFolder = null; NL = { text: '', busy: false, proposal: null, error: '' }; var c = familyMypageChild(); S = c && F.childState[c.studentId] || null; }
-        function renderFamilyMypage() {
+        // fixedTab: 'grades' なら成績ページだけ(上のナビの「成績」)。空ならホーム内の切り替え(ホーム／授業の記録)
+        function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = '';
           if (!c) return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if ((F.home.children || []).length > 1) h += '<p><label class="small">表示する子ども <select id="fa-mychild">' + F.home.children.map(function (x) { return '<option value="' + esc(x.studentId) + '"' + (sameId(x.studentId, c.studentId) ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label></p>';
           var st = F.childState[c.studentId];
           if (!st || !st.me) { if (!F.busy) familyLoadChildState(c.studentId); return h + '<p>' + esc(c.name) + 'さんのページを読み込んでいます…</p>'; }
           S = st;
-          h += '<nav class="tabs" style="margin:0 0 12px;padding:0;position:static">' + [['home', 'ホーム'], ['grades', '成績'], ['history', '授業の記録']].map(function (t) { return '<a href="#family/home" data-action="fa-mytab" data-tab="' + t[0] + '" class="' + (F.mypageTab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>';
-          h += '<p class="sub">' + esc(c.name) + 'さんのマイページ（保護者が代わりに操作できます）</p>';
-          if (F.mypageTab === 'grades') h += renderGradesPage(); else if (F.mypageTab === 'history') h += renderHistoryPage();
+          var tab = fixedTab || (F.mypageTab === 'history' ? 'history' : 'home');
+          if (!fixedTab) h += '<nav class="tabs" style="margin:0 0 12px;padding:0;position:static">' + [['home', 'ホーム'], ['history', '授業の記録']].map(function (t) { return '<a href="#family/home" data-action="fa-mytab" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>';
+          h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : 'マイページ') + '（保護者が代わりに操作できます）</p>';
+          if (tab === 'grades') h += renderGradesPage() + '<section id="family-grades-panel" data-family-child="' + esc(c.studentId) + '" style="margin-top:18px"></section>'; else if (tab === 'history') h += renderHistoryPage();
           else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
           return h;
         }
@@ -1116,7 +1118,8 @@
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
-            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(); return; }
+            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); return; }
+            if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='settings') h += '<p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
             if(parentSection()==='settings') h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             else if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
@@ -1191,6 +1194,12 @@
           var active=Object.create(null), section=parentSection();
           (F.home.children||[]).forEach(function(c){active[JSON.stringify([familyToken(),c.studentId])]=true;});
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].reads.clear();});
+          var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild();
+          if(section==='grades'&&gradesHost&&gc&&F.childrenData[gc.studentId]){
+            var gkey=JSON.stringify([familyToken(),gc.studentId]);active[gkey]=true;
+            var gpanel=familyPanels[gkey] || (familyPanels[gkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
+            var gtoken=familyToken();gpanel.services.mount(gradesHost,{key:gkey,teacher:false,panel:'exams',call:function(op,payload){return apiPost(Object.assign({},payload,{ftoken:gtoken,studentId:gc.studentId,action:'learningService',op:op}));}});
+          }
           familyVisibleChildren().forEach(function(c,index){
             var host=document.getElementById('family-child-'+index);
             if(!host || !F.childrenData[c.studentId])return;
