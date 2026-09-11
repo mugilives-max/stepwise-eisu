@@ -26,12 +26,21 @@
         var tabs = document.getElementById("tabs");
         function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['home','schedule','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';}
         function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['schedule','予定'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
-        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#schedule": "schedule", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
+        function updateBrand() {
+          var brand = document.getElementById('site-brand'); if (!brand) return;
+          if (!brand.getAttribute('data-default')) { brand.setAttribute('data-default', brand.innerHTML); brand.setAttribute('data-title', document.title || ''); }
+          var r = route(), mine = r !== 'family' && r !== 'parent' && S && S.me && S.me.name ? S.me.name : '';
+          brand.innerHTML = mine ? esc(mine) + 'さんのマイページ<small>ステップワイズ個別指導</small>' : brand.getAttribute('data-default');
+          document.title = mine ? mine + 'さんのマイページ | ステップワイズ個別指導' : brand.getAttribute('data-title');
+        }
         function renderTabs() {
+          updateBrand();
           if (route() === "family" || route() === 'parent') { tabs.innerHTML=parentNavigation(route()==='family');return; }
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
           var p = route();
-          tabs.innerHTML = [["#home", "home", "ホーム"], ["#schedule", "schedule", "予定"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "メール通知"]]
+          tabs.innerHTML = [["#home", "home", "ホーム"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "メール通知"]]
             .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '">' + t[2] + "</a>"; }).join("");
         }
 
@@ -557,7 +566,7 @@
           if (route() === "family") { renderFamily(); return; }
           if (!S || !S.me) { renderGuard(); return; }
           var page = route();
-          if (page !== "home" && page !== "schedule") {
+          if (page !== "home") {
             var hh = previewBanner(false);
             if (page === "grades") hh += renderGradesPage();
             else if (page === "history") hh += renderHistoryPage();
@@ -566,18 +575,29 @@
             app.innerHTML = hh;
             return;
           }
-          app.innerHTML = page === "schedule" ? renderSchedulePage() : renderHomePage();
+          app.innerHTML = renderHomePage();
         }
 
-        /* ---------- ホーム: 予定表(先生の休みなし)・今月の授業・やること・次の授業・授業登録・今後の予定 ---------- */
+        /* ---------- ホーム: 予定表・選んだ日の内訳・予定管理(旧「予定」ページを統合、2026-09-11)・今月の授業・やること・授業登録 ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
 
-          // 予定表と日付ごとの登録(先生の休みは表示しない)
-          html += '<h2>予定表 <a href="#schedule" class="small" style="font-weight:500;margin-left:6px">授業可能日時・予定の登録 →</a></h2>';
+          // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
+          var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };
+          html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
           html += renderCal(D.info, today, true);
-          html += renderDayDetail(D, false, true);
+          html += renderDayDetail(D, true, true);
+
+          // 予定管理(旧「予定」ページから移動)
+          html += '<h2>予定管理</h2><div class="actions">';
+          html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業可能日時</button>';
+          html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
+          html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
+          html += '</div><div class="note">ボタンを押して、上の予定表で日付をタップ。選んだら「選んだ日の予定」の下の入力欄を確認して送ります。</div>';
+          if (panel === "wish") html += renderWishPanel(today);
+          if (panel === "event") html += renderEventPanel(today, D.events);
+          if (panel === "ng") html += renderNgPanel(today, D.blocked);
 
           // 今月の授業
           (function () {
@@ -600,7 +620,7 @@
               html += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + have + (goal ? '<span class="muted">/' + goal + '</span>' : "") + '回</span><span class="small muted">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>';
             });
             var stTag = S.planStatus === "approved" ? '<span class="tag green">保護者承認済み</span>' : S.planStatus === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : "";
-            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。<a href="#schedule">「予定」ページ</a>から希望日を送れます。</div>' : "") + '</div>';
+            html += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。上の「予定管理」から授業可能日時を送れます。</div>' : "") + '</div>';
           })();
 
           // テストまでのカウントダウン + やること(宿題・持ち物)
@@ -617,7 +637,7 @@
                 var days = Math.round((new Date(e.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5);
                 html += '<div class="cd"><div class="small muted">' + esc(e.title) + ' <span class="muted">' + fmtDateW(e.date) + '</span></div><div class="n" style="color:#7a4fc9">' + (days === 0 ? "今日" : days + '<small>日後</small>') + '</div></div>';
               });
-              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。「予定」ページの「予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
+              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。上の「予定管理」の「予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
               html += '</div>';
             }
             html += '<div class="card">';
@@ -633,38 +653,9 @@
 
           html += renderOffers(D);
 
-          html += '<div class="note" style="margin-top:18px">授業可能日時・予定の共有・授業できない日は「予定」、実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者」タブにあります。</div>';
+          html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者ページ」にあります。</div>';
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
           html += renderPendingBar(D);
-          return html;
-        }
-
-        /* ---------- 予定: 予定表(先生の休みも表示)・予定管理・授業登録・今後の予定 ---------- */
-        function renderSchedulePage() {
-          var D = schedData(), today = D.today;
-          var html = previewBanner(true);
-          html += '<h1>予定</h1><p class="sub">授業可能日時・予定の共有・授業できない日の登録</p>';
-
-          var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は画面下で", event: "予定の日をタップ(複数可)。内容は画面下で" };
-          html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : "") + '</h2>';
-          html += renderCal(D.info, today, true);
-          if (!selMode) html += renderDayDetail(D, true, true);
-
-          // 予定管理(予定表の直下)
-          html += '<h2>予定管理</h2><div class="actions">';
-          html += '<button data-action="panel" data-p="wish" class="' + (panel === "wish" ? "on" : "") + '"><span class="ico">🗓</span>授業可能日時</button>';
-          html += '<button data-action="panel" data-p="event" class="' + (panel === "event" ? "on" : "") + '"><span class="ico">📌</span>予定を共有</button>';
-          html += '<button data-action="panel" data-p="ng" class="' + (panel === "ng" ? "on" : "") + '"><span class="ico">✕</span>授業できない日</button>';
-          html += '</div><div class="note">ボタンを押して、上の予定表で日付をタップ。選んだら画面下の内容を確認して送ります。</div>';
-          if (panel === "wish") html += renderWishPanel(today);
-          if (panel === "event") html += renderEventPanel(today, D.events);
-          if (panel === "ng") html += renderNgPanel(today, D.blocked);
-
-          html += renderOffers(D);
-          html += renderUpcoming(D, false);
-
-          html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
-          html += selMode ? renderSelBar(D) : renderPendingBar(D);
           return html;
         }
 
@@ -1165,7 +1156,7 @@
         function studentNoticeItems(){
           if(!S||!S.me)return [];
           var items=[];
-          (S.slots||[]).filter(function(x){return x.st==='offer';}).forEach(function(x){items.push({title:'授業の案内：'+fmtDateW(x.date)+' '+x.start+' '+(x.subject||''),url:'#schedule',required:true});});
+          (S.slots||[]).filter(function(x){return x.st==='offer';}).forEach(function(x){items.push({title:'授業の案内：'+fmtDateW(x.date)+' '+x.start+' '+(x.subject||''),url:'#home',required:true});});
           (S.lessonRecords||[]).slice(0,5).forEach(function(x){items.push({title:'授業の記録：'+fmtDateW(x.date)+' '+(x.subject||''),url:'#history'});});
           return items;
         }
@@ -1182,7 +1173,7 @@
           var page=route(),auth=null;
           if(!previewK){
             if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
-            else if(['home','schedule','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
+            else if(['home','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
           }
           if(window.StepwiseLessonRead){
             if(auth&&(auth.ftoken||auth.ptoken))window.StepwiseLessonRead.mount(app,function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));},JSON.stringify(auth));
