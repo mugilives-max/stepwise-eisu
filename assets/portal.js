@@ -105,12 +105,22 @@
           if (s.pendingEmail) h += '<p>確認待ち：' + esc(s.pendingEmail) + '</p>' + (!SE.message && ['failed','uncertain','suppressed'].indexOf(s.mailStatus) >= 0 ? '<p role="status">' + studentEmailMailMessage(s.mailStatus) + '</p>' : '') + '<button class="btn-quiet" data-action="se-resend"' + dis + '>確認メールを再送</button>';
           h += '<form id="student-email-form"><label for="se-email">自分のメールアドレス</label><input type="email" id="se-email" autocomplete="email" maxlength="254" required value="' + esc(SE.email || s.pendingEmail || s.email || '') + '"' + dis + '><p class="note">確認メールのリンクを開くと通知先になります。変更の確認が終わるまでは、現在の確認済みアドレスを使います。</p><button class="btn-primary" type="submit"' + dis + '>確認メールを送る</button></form>';
           if (s.email || s.pendingEmail) h += SE.removeConfirm ? '<p>メール通知を解除します。</p><button class="btn-quiet" data-action="se-remove"' + dis + '>解除する</button> <button class="btn-quiet" data-action="se-cancel"' + dis + '>やめる</button>' : '<p><button class="btn-quiet" data-action="se-askremove"' + dis + '>通知先を解除する</button></p>';
-          app.innerHTML = h + '</div>';
+          h += '</div>';
+          var prefs = s.prefs || {}, kinds = [['offered', '授業の案内（新しい授業の日時）'], ['changed', '授業の変更（日時・科目・形式）'], ['cancelled', '授業の取消'], ['cancelDeclined', '取消依頼への回答（予定どおり実施）']];
+          h += '<div class="card" style="margin-top:14px"><h2 style="margin:0 0 6px;font-size:16px">メールで受け取る項目</h2>';
+          kinds.forEach(function (kv) { h += '<label style="display:block;padding:6px 0"><input type="checkbox" data-action="se-pref" data-kind="' + kv[0] + '"' + (prefs[kv[0]] === false ? '' : ' checked') + dis + '> ' + kv[1] + '</label>'; });
+          h += '<p class="note">オフにした項目はメールを送りません（生徒ページでは今までどおり確認できます）。変更はすぐに保存されます。受信確認が済むまでは、どの項目もメールは届きません。</p></div>';
+          app.innerHTML = h;
         }
-        function studentEmailSend(action) {
-          if (SE.busy || previewK || ['studentEmailVerify','studentEmailRequest','studentEmailResend','studentEmailRemove'].indexOf(action) < 0) return;
+        function studentEmailPrefSend(kind, on) {
+          var prefs = Object.assign({}, S && S.emailStatus && S.emailStatus.prefs || {}); prefs[kind] = on;
+          studentEmailSend('studentEmailPrefs', { prefs: prefs });
+        }
+        function studentEmailSend(action, extra) {
+          if (SE.busy || previewK || ['studentEmailVerify','studentEmailRequest','studentEmailResend','studentEmailRemove','studentEmailPrefs'].indexOf(action) < 0) return;
           var k = myKey(), seq = ++SE.seq, payload = action === 'studentEmailVerify' ? {action:action,challenge:SE.challenge} : {action:action,k:k};
           if (action === 'studentEmailRequest') { SE.email = val('se-email'); payload.email = SE.email; }
+          if (extra) Object.assign(payload, extra);
           SE.busy = true; SE.error = ''; SE.message = ''; render();
           apiPost(payload).then(function (res) {
             if (seq !== SE.seq || (action !== 'studentEmailVerify' && k !== myKey())) return;
@@ -122,7 +132,7 @@
               if (action === 'studentEmailRemove') SE.email = '';
               SE.removeConfirm = false;
               var status = res.mailStatus || res.emailStatus && res.emailStatus.mailStatus;
-              SE.message = res.message || (action === 'studentEmailRemove' ? 'メール通知を解除しました。' : studentEmailMailMessage(status));
+              SE.message = res.message || (action === 'studentEmailRemove' ? 'メール通知を解除しました。' : action === 'studentEmailPrefs' ? '通知設定を保存しました。' : studentEmailMailMessage(status));
               if (res.verified && myKey()) return loadState().catch(function () { SE.error = '通知先の最新情報を読み込めませんでした。元の生徒専用ページを開き直してください。'; if (route() === 'student-email') render(); });
             }
             if (route() === 'student-email') render();
@@ -1392,6 +1402,7 @@
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
           if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
           if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; } return; }
+          if (el && el.getAttribute("data-action") === "se-pref") { studentEmailPrefSend(el.getAttribute("data-kind"), !!el.checked); return; }
           if (!el || el.getAttribute("data-action") !== "taskdone") return;
           studentAction({ action: "taskDone", k: myKey(), taskId: el.getAttribute("data-id"), done: el.checked }, el.checked ? "できた! ✓" : "未完了に戻しました");
         });

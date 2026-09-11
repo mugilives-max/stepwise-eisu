@@ -148,3 +148,16 @@ test('persisted uncertain mail remains visible after reload and removed preview 
   preview.requests[0].reply(emailState(status)); await flush(); assert.equal(preview.requests[0].body.k, 'test-link-a'); assert.equal(preview.local.get('sw_k'), 'test-link-a');
   assert.equal(preview.html().includes('先生のプレビュー'), false);
 });
+
+test('students toggle mail items per kind, saving immediately and reverting on failure', async () => {
+  const all = { offered:true, changed:true, cancelled:true, cancelDeclined:true }, checked = html => (html.match(/data-action="se-pref"[^>]*checked/g) || []).length;
+  const ui = await studentReady(emailState({ email:'me@example.invalid', verified:true, prefs:all })); ui.navigate('#student-email');
+  assert.match(ui.html(), /メールで受け取る項目/); assert.equal(checked(ui.html()), 4);
+  ui.check('data-kind', 'cancelDeclined', false);
+  assert.deepEqual(ui.requests.at(-1).body, { action:'studentEmailPrefs', k:'test-link-a', prefs:{ ...all, cancelDeclined:false } });
+  ui.requests.at(-1).reply({ ok:true, emailStatus:{ ...emptyEmail(), email:'me@example.invalid', verified:true, prefs:{ ...all, cancelDeclined:false } } }); await flush();
+  assert.match(ui.html(), /通知設定を保存しました/); assert.equal(checked(ui.html()), 3);
+  ui.check('data-kind', 'offered', false); assert.deepEqual(ui.requests.at(-1).body.prefs, { ...all, offered:false, cancelDeclined:false });
+  ui.requests.at(-1).reply({ error:'通知設定の内容を確認してください' }); await flush();
+  assert.match(ui.html(), /通知設定の内容を確認してください/); assert.equal(checked(ui.html()), 3); assert.equal(ui.requests.length, 3);
+});

@@ -2,11 +2,13 @@
  * 公開操作・先生の操作とも Code.gs の ScriptLock 内から呼ぶ。既存のメールを自動確認しない。 */
 var STUDENT_EMAIL_COLS_=['studentId','email','verifiedAt','pendingEmail','challengeId','challengeHash','challengeExpiresAt','challengeFailCount','challengeLinkHash','challengeUsedAt','requestedAt','lastMailStatus','revision','updatedAt'];
 var STUDENT_EMAIL_OUTBOX_COLS_=['id','studentId','eventKey','kind','email','contactRevision','snapshotJson','status','createdAt','sentAt','attempts','error'];
+var STUDENT_EMAIL_PREF_COLS_=['studentId','offered','changed','cancelled','cancelDeclined','updatedAt'];
+var STUDENT_EMAIL_KINDS_=['offered','changed','cancelled','cancelDeclined'];
 var STUDENT_EMAIL_VERIFY_MS_=30*60*1000;
 var STUDENT_EMAIL_VERIFY_URL_='https://www.stepwise-education.jp/yoyaku/#student-email?verify=';
 
 function ensureStudentEmailSchema_(){
-  var schemas={studentEmails:STUDENT_EMAIL_COLS_,studentEmailOutbox:STUDENT_EMAIL_OUTBOX_COLS_};
+  var schemas={studentEmails:STUDENT_EMAIL_COLS_,studentEmailOutbox:STUDENT_EMAIL_OUTBOX_COLS_,studentEmailPrefs:STUDENT_EMAIL_PREF_COLS_};
   Object.keys(schemas).forEach(function(name){var sh=ss_().getSheetByName(name),cols=schemas[name];if(sh&&sh.getLastRow()&&(sh.getLastColumn()!==cols.length||sh.getRange(1,1,1,cols.length).getValues()[0].join('|')!==cols.join('|')))throw new Error('生徒メールの列構成を確認してください。自動上書きは行いません');});
   Object.keys(schemas).forEach(function(name){ensureSheet_(ss_(),name,schemas[name]);});memoClear_();
 }
@@ -28,7 +30,19 @@ function studentEmailVerifiedAddress_(studentOrId){
 }
 function studentEmailStatus_(studentId){
   var s=systemStudent_(studentId),r=s?studentEmailRecord_(studentId):null,verified=s?studentEmailVerifiedAddress_(studentId):'';
-  return {email:s?studentEmailAddress_(s.email):'',verified:!!verified,verifiedAt:verified?String(r.verifiedAt):'',pendingEmail:r?String(r.pendingEmail||''):'',verificationExpiresAt:r&&r.challengeHash&&Number(r.challengeExpiresAt)>Date.now()?Number(r.challengeExpiresAt):0,mailStatus:r?String(r.lastMailStatus||''):''};
+  return {email:s?studentEmailAddress_(s.email):'',verified:!!verified,verifiedAt:verified?String(r.verifiedAt):'',pendingEmail:r?String(r.pendingEmail||''):'',verificationExpiresAt:r&&r.challengeHash&&Number(r.challengeExpiresAt)>Date.now()?Number(r.challengeExpiresAt):0,mailStatus:r?String(r.lastMailStatus||''):'',prefs:studentEmailPrefs_(studentId)};
+}
+/* 通知項目のオン・オフ。行がなければ全項目オン。受信確認メールには適用しない。本人の専用リンクからだけ変更できる。 */
+function studentEmailPrefRow_(studentId){var rows=studentEmailRows_('studentEmailPrefs').filter(function(r){return String(r.studentId)===String(studentId);});return rows[0]||null;}
+function studentEmailPrefs_(studentId){var r=studentEmailPrefRow_(studentId),p={};STUDENT_EMAIL_KINDS_.forEach(function(k){p[k]=!r||String(r[k])!=='0';});return p;}
+function studentEmailPrefsSave_(req){
+  var auth=studentEmailRequire_(req);if(auth.error)return auth;var s=auth.student,input=req.prefs;
+  if(!input||typeof input!=='object'||Array.isArray(input)||!Object.keys(input).length||Object.keys(input).some(function(k){return STUDENT_EMAIL_KINDS_.indexOf(k)<0||typeof input[k]!=='boolean';}))return studentEmailError_('通知設定の内容を確認してください');
+  if(!ss_().getSheetByName('studentEmailPrefs')){ensureSheet_(ss_(),'studentEmailPrefs',STUDENT_EMAIL_PREF_COLS_);memoClear_();}
+  var r=studentEmailPrefRow_(s.id)||{studentId:String(s.id)},current=studentEmailPrefs_(s.id);
+  STUDENT_EMAIL_KINDS_.forEach(function(k){r[k]=(k in input?input[k]:current[k])?'1':'0';});r.updatedAt=studentEmailStamp_();
+  studentEmailWrite_('studentEmailPrefs',STUDENT_EMAIL_PREF_COLS_,r);
+  return {ok:true,emailStatus:studentEmailStatus_(s.id)};
 }
 function studentEmailRequire_(req){var s=findStudentByCode_(String(req.k||''));return s?{student:s}:{error:'生徒専用リンクから開き直してください',badCode:true};}
 function studentEmailSetMirror_(studentId,email){
@@ -86,6 +100,7 @@ function studentEmailDispatch_(req){
     case 'studentEmailRequest':return studentEmailRequest_(req,false);
     case 'studentEmailResend':return studentEmailRequest_(req,true);
     case 'studentEmailRemove':return studentEmailRemove_(req);
+    case 'studentEmailPrefs':return studentEmailPrefsSave_(req);
     case 'studentEmailVerify':return studentEmailVerify_(req);
     default:return studentEmailError_('操作が見つかりません');
   }}catch(e){return studentEmailError_('処理を完了できませんでした。元の生徒ページで登録状況を確認し、必要なら確認メールを再申請してください','serverError');}
@@ -139,6 +154,7 @@ function studentEmailNotify_(student,eventKey,kind,slots){
     current=student&&findStudent_(student.id);if(!current)return {ok:true,status:'skipped',recorded:true};
     snapshots=(slots||[]).map(studentEmailSnapshot_);if(['offered','changed','cancelled','cancelDeclined'].indexOf(kind)<0||!studentEmailSnapshotsValid_(kind,snapshots))throw new Error('通知対象を確認してください');
     var r=studentEmailRecord_(current.id),email=studentEmailVerifiedAddress_(current);out=studentEmailOutboxAdd_(current,eventKey,kind,{email:email,contactRevision:r?Number(r.revision)||0:0,slots:snapshots});
+    if(out.status==='pending'&&!studentEmailPrefs_(current.id)[kind]){out.status='skipped';out.error='本人の通知設定でオフのため送信しません';studentEmailWrite_('studentEmailOutbox',STUDENT_EMAIL_OUTBOX_COLS_,out);return {ok:true,status:'skipped',recorded:true};}
     if(!email&&out.status==='pending'){out.status='skipped';out.error='受信確認済みのメールがないため送信しません';studentEmailWrite_('studentEmailOutbox',STUDENT_EMAIL_OUTBOX_COLS_,out);return {ok:true,status:'skipped',recorded:true};}
     var content=studentEmailBusinessBody_(out),sent=studentEmailDeliverOutbox_(out,current,content.subject,content.body,false),result={ok:true,status:sent.status,recorded:true};
     if(['pending','failed','uncertain'].indexOf(String(sent.status))>=0)result.warning='保存は完了しましたが、生徒へのメール通知を確認してください';return result;

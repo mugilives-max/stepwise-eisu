@@ -178,3 +178,26 @@ test('business send failure with a reserved outbox is distinguished from a missi
   const c=h.context();c.studentEmailOutboxAdd_=()=>{throw new Error('Synthetic cannot create outbox');};
   const absent=c.studentEmailNotifyOffered_(c.findStudent_('test-a'),'no-outbox',[slot()]);assert.equal(absent.recorded,false);assert.equal(absent.ok,false);
 });
+test('notification preferences default on, save only through the linked student, and are echoed in status',()=>{
+  const h=createStudentEmailHarness();verify(h);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.context().studentEmailStatus_('test-a').prefs)),{offered:true,changed:true,cancelled:true,cancelDeclined:true});
+  rejected(h.student('studentEmailPrefs',{k:'missing',prefs:{offered:false}}));
+  rejected(h.student('studentEmailPrefs',{prefs:{offered:'no'}}));rejected(h.student('studentEmailPrefs',{prefs:{reminder:false}}));rejected(h.student('studentEmailPrefs',{prefs:{}}));rejected(h.student('studentEmailPrefs',{}));
+  const saved=ok(h.student('studentEmailPrefs',{prefs:{cancelDeclined:false}}));assert.deepEqual(saved.emailStatus.prefs,{offered:true,changed:true,cancelled:true,cancelDeclined:false});
+  ok(h.student('studentEmailPrefs',{k:'synthetic-link-b',prefs:{offered:false}}));assert.equal(h.context().studentEmailStatus_('test-a').prefs.offered,true);
+  ok(h.student('studentEmailPrefs',{prefs:{cancelDeclined:true,changed:false}}));assert.deepEqual(JSON.parse(JSON.stringify(h.context().studentEmailStatus_('test-a').prefs)),{offered:true,changed:false,cancelled:true,cancelDeclined:true});
+  assert.equal(h.rows('studentEmailPrefs').filter(r=>r.studentId==='test-a').length,1);assert.equal(h.rows('studentEmailPrefs').filter(r=>r.studentId==='test-b').length,1);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.context().studentState_('synthetic-link-a').emailStatus.prefs)),{offered:true,changed:false,cancelled:true,cancelDeclined:true});
+});
+test('a kind turned off is recorded as skipped without mail and cannot be retried, while other kinds and verification still send',()=>{
+  const h=createStudentEmailHarness();verify(h);const sent=h.mailbox.length;
+  ok(h.student('studentEmailPrefs',{prefs:{offered:false}}));
+  const r=notify(h,'synthetic-muted');assert.equal(r.ok,true);assert.equal(r.status,'skipped');assert.equal(r.warning,undefined);
+  assert.equal(out(h,'synthetic-muted').status,'skipped');assert.match(out(h,'synthetic-muted').error,/通知設定/);assert.equal(h.mailbox.length,sent);
+  rejected(h.admin('studentEmailRetryNotification',{studentId:'test-a',notificationId:out(h,'synthetic-muted').id}));assert.equal(h.mailbox.length,sent);
+  assert.equal(notify(h,'synthetic-cancel','cancelled',[slot({status:'booked'})]).status,'sent');assert.equal(h.mailbox.length,sent+1);
+  ok(h.student('studentEmailPrefs',{prefs:{offered:true}}));assert.equal(notify(h,'synthetic-unmuted').status,'sent');assert.equal(h.mailbox.length,sent+2);
+  assert.equal(notify(h,'synthetic-muted').status,'skipped');assert.equal(h.mailbox.length,sent+2);
+  ok(h.student('studentEmailPrefs',{prefs:{offered:false,changed:false,cancelled:false,cancelDeclined:false}}));h.advance(61000);
+  ok(h.student('studentEmailRequest',{email:'next@example.invalid'}));assert.equal(h.mailbox.length,sent+3);
+});

@@ -74,7 +74,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 | slots | id, date, start, min, status, studentId, done, eventId, meetUrl, subject, req, deliveryMode | 授業枠。`status` は open(空き)/offered(案内中=承認待ち)/booked(確定)。`done=true` で実施済み。`eventId`/`meetUrl` はカレンダー連携。`req` は取消依頼のJSON。12列目の `deliveryMode` はその授業の形式 |
 | acceptWrites | id, studentId, requestId, slotsJson, completedJson, status, notificationState, createdAt, updatedAt, lastError | 単件・一括確定の保存と再送の正本。途中処理は同じ生徒・選択内容・処理IDで復旧する |
 | offerEdits / slotChangeNotices | 正確な列順は `Scheduling.gs` / `Code.gs` の定数 | 案内・形式変更の再送、取消と通知の保存復旧 |
-| studentEmails / studentEmailOutbox | 正確な列順は `StudentEmail.gs` の定数 | 生徒メールの受信確認、期限付きの確認情報、通知の送信状態。生徒認証や家族認証とは別 |
+| studentEmails / studentEmailOutbox / studentEmailPrefs | 正確な列順は `StudentEmail.gs` の定数 | 生徒メールの受信確認、期限付きの確認情報、通知の送信状態。生徒認証や家族認証とは別 |
 | familyAccounts / familyLinks / familyChallenges / familyOutbox | 正確な列順は `gas/FamilyPortal.gs` の定数。認証仕様は [PARENT_AUTH.md](PARENT_AUTH.md) | 家族アカウント、先生が確認した子どもの紐付け、メール確認・再設定の記録、保護者通知の送信記録。既存 `parents` と独立 |
 | blocked | id, studentId, date, note, start, end | 生徒の「授業できない日」。start/end が空なら終日、入っていればその時間帯だけ |
 | teacherOff | id, date, note, start, end | 先生の休み。1行=1日。start/end が空なら終日、入っていればその時間帯だけ。管理画面のホーム(日付タップ)か授業ページから登録。生徒にはメモを見せない |
@@ -174,6 +174,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 
 - 生徒専用リンクから本人がメールを登録する。`studentEmailRequest` / `Resend` / `Remove` は `k`、`Verify` は独立した30分・1回限りの確認情報を使う。確認メールのURLは `/yoyaku/#student-email?verify=...`。確認リンクは閲覧権限を付与せず、確認情報の原文は台帳へ保存しない。
 - 既存 `students.email` は維持するが、受信確認するまで業務メールを送らない。確認後の案内・変更・取消（取消依頼を却下した回答を含む）を通知する。確認中のメール変更は旧確認済み宛先を維持し、先生がアドレスを変更すると確認が失効する。専用リンク再発行・停止で未使用の確認リンクが失効する。
+- 生徒は「メール通知」で項目別（案内・変更・取消・取消依頼への回答）にオン・オフを選べる（`studentEmailPrefs`、本人の `k` が必要、`state.emailStatus.prefs` で返す）。行がなければ全項目オン。オフの項目は `studentEmailOutbox` に `skipped` と理由を残し、先生の送信状況から再送できない。受信確認メールには適用しない。先生の生徒設定にはオフの項目を表示する。保存先は `studentEmailPrefs` シート（studentId, offered, changed, cancelled, cancelDeclined, updatedAt。'1'/'0'）で、初回保存時に自動作成する。
 - 同じ通知は `studentEmailOutbox` で重複送信を防ぐ。送信失敗と結果不明を区別し、未送信と確認できるものだけ先生の送信状況から再送する。授業取消の保存と通知予約の間で終了した場合は `slotChangeNotices` から先生の次回読取時に通知を回復する。メール本文に生徒専用リンク・先生メモ・記録本文は載せない。登録・通知解除は家族のメールに影響しない。
 - 今後の授業記録保存は生徒本人・紐付いた保護者へ自動公開する。先生だけのメモと報告下書きは非公開。既存の記録を一括公開せず、既存記録も次の保存時に公開する。無効化で記録の公開を取り消す。保存完了前は直前の公開版を保つ。
 - 宿題期限は日付指定・次の同じ科目の確定授業・期限なし。次回授業がなければ予定未定、予定変更・取消には連動し、完了時点の期限を固定する。授業記録の宿題は記録保存で公開されるが、「やること」への追加・更新は先生の反映操作で行う。詳細と理由は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md) が正本。
@@ -463,3 +464,7 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 ### 生徒の授業可能日時を直接登録に変更（2026-09-11）
 
 生徒画面（ホームの日選択・予定ページの日付入力）から「授業の長さ」の選択と「空き状況を確認」→確認カード→送信の2段階を外し、「登録する」で `wish` / `wishMany` を直接送る。`min` と `availabilitySeen` は送らず、GAS側の既定（60分）で空き状況を判定して記録する。GASの変更・再公開はなし（`wishAvailability` APIは残る）。画面側の確認カード関連コード（wishReview / wishCheck / wishSend）と、その流れ専用のUIテスト5件を削除。保護者ページは同じ `portal.js` を読むため同時に反映。残件: 新規登録の `duration` が60分固定になるため先生の案内フォーム初期値も60分になる（従来は生徒選択の既定90分）。既定値を変える場合はGAS `schedulingWishAvailability_` の既定を要調整。
+
+### 生徒メール通知の項目別オン・オフ（2026-09-11）
+
+生徒の「メール通知」ページに「メールで受け取る項目」を追加し、案内・変更・取消・取消依頼への回答をチェックボックスで個別にオン・オフできるようにした（変更は即保存、失敗時は元に戻す）。GAS は `StudentEmail.gs` のみ変更：`studentEmailPrefs` 操作、`studentEmailStatus_().prefs`、`studentEmailNotify_` でオフの種類を `skipped`（理由「本人の通知設定でオフのため送信しません」）として記録。新シート `studentEmailPrefs` は初回保存時に `ensureSheet_` で作成（既存 `studentEmails` の列は変更しない）。先生の生徒設定にはオフの項目を表示。検証は隔離ハーネスの追加3件（GAS 2件、画面1件）。
