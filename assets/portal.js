@@ -425,27 +425,30 @@
           var html = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>'+(selDate>=today?'<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">＋</button>':'')+'</div>';
           if (!ds2.length && !dayNg.length && !dayOffs.length && !dayWishes.length) html += '<div class="empty">この日の予定はありません</div>';
           else {
-            html += '<div class="chips">';
-            dayOffs.forEach(function (o) { html += '<span class="chip toff">' + (o.start ? '登録不可 ' + o.start + '〜' + o.end : '登録不可（終日）') + '</span>'; });
+            // 授業登録の一覧と同じ行形式(左: 種類のタグ、時刻、内容 / 右: 操作)
+            var dis = (acceptBatch().pending || acceptBatch().busy || acceptBatch().refreshRequired) ? ' disabled' : '';
+            function dayRow(lead, time, who, actions) { return '<div class="slotline">' + lead + '<span class="time">' + time + '</span><span class="who">' + who + '</span>' + actions + '</div>'; }
+            html += '<div class="daylist">';
+            dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', ''); });
             ds2.forEach(function (s) {
-              if (s.st === "event") { html += '<div class="row" style="width:100%;gap:8px"><span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + '</span>' + (s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : '') + '</div>'; return; }
-              var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "") + (s.deliveryMode === 'in_person' ? '' : '・' + deliveryLabel(s.deliveryMode));
-              if (s.st === "mine") html += '<div class="row" style="width:100%;gap:8px"><span class="chip mine">✓ ' + label + '</span>' + (s.req ? '<span class="tag amber">キャンセル申請中</span>' : '') + cancelControl(s, true) + '</div>';
+              if (s.st === "event") { html += dayRow('<span class="tag ' + (s.kind === "test" ? "ts" : "coral") + '"' + (s.kind === "test" ? ' style="background:#f1ecfb;color:#7a4fc9"' : '') + '>' + (s.kind === "test" ? "テスト" : "予定") + '</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
+              var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(s.subject) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
+              if (s.st === "mine") html += dayRow('<span class="tag green">確定</span>', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
-                html += '<details style="width:100%"><summary class="chip mine" style="cursor:pointer;display:list-item;list-style-position:inside">実施済 ' + label + '</summary><div style="padding:12px 4px">';
+                html += '<details class="slotline" style="display:block"><summary style="cursor:pointer;font-weight:600">実施済 ' + time + (s.subject ? ' ' + esc(s.subject) : '') + '</summary><div style="padding:12px 4px">';
                 if (record) {
                   html += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
                   html += '<h3 style="font-size:15px;margin:10px 0 6px">授業の内容</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
                 } else html += '<p class="muted" style="margin:0">授業の内容はまだ公開されていません。</p>';
                 html += '</div></details>';
               }
-              else if (s.st === "past") html += '<span class="chip past">' + label + "</span>";
-              else if (s.st === "offer") html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
+              else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who, '');
+              else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
-            dayNg.forEach(function (b) { html += '<div class="row" style="width:100%;gap:8px"><span class="chip ng">× 授業できない' + (b.start ? " " + b.start + "〜" + b.end : "") + (b.note ? " " + esc(b.note) : "") + '</span>' + (b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : '') + '</div>'; });
-            dayWishes.forEach(function (w) { html += '<div class="row" style="width:100%;gap:8px"><span class="chip wish">授業可 ' + esc(w.start) + '〜' + esc(w.end) + (w.note ? ' ' + esc(w.note) : '') + '</span><span class="small muted">先生の返事待ち</span><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button></div>'; });
+            dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">× 授業できない</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
+            dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">授業可</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
             html += '</div>';
           }
           if (selDate >= today) {

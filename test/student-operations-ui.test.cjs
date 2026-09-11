@@ -167,7 +167,7 @@ test('the home calendar shows registration-unavailable days and times like the s
   const ui = await studentReady(s);
   assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
   assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可12-13:30<\/span>/);
-  ui.click('calday', { 'data-date':'2026-09-15' }); assert.match(ui.html(), /登録不可（終日）/);
+  ui.click('calday', { 'data-date':'2026-09-15' }); assert.match(ui.html(), /<span class="tag gray">登録不可（終日）<\/span>/);
   ui.navigate('#schedule'); assert.match(ui.html(), /登録不可12-13:30/);
 });
 
@@ -180,7 +180,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
   ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
-  ui.click('calday', { 'data-date':'2026-09-16' }); assert.match(ui.html(), /× 授業できない 部活/); ui.click('delblock', { 'data-ids':'b1' }); assert.deepEqual(ui.requests.at(-1).body, { action:'unblock', k:'test-link-a', blockIds:['b1'] });
+  ui.click('calday', { 'data-date':'2026-09-16' }); assert.match(ui.html(), /× 授業できない<\/span><span class="time">終日<\/span><span class="who">部活</); ui.click('delblock', { 'data-ids':'b1' }); assert.deepEqual(ui.requests.at(-1).body, { action:'unblock', k:'test-link-a', blockIds:['b1'] });
   ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
   ui.click('calday', { 'data-date':'2026-09-17' }); assert.match(ui.html(), /大会/); ui.click('delevent', { 'data-id':'e1' }); assert.deepEqual(ui.requests.at(-1).body, { action:'eventDel', k:'test-link-a', eventId:'e1' });
   ui.navigate('#schedule'); assert.equal(ui.el('tabs').innerHTML.includes('class="on">ホーム'), true);

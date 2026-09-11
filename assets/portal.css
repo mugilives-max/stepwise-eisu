@@ -99,6 +99,8 @@
       .chip.ng { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .chip.wish { background: #eaf6ee; border-color: #2f8a4c; color: #2f8a4c; font-weight: 600; }
       .callbl.wi { color: #2f8a4c; font-weight: 700; }
+      .daylist { margin: 0 -2px; }
+      .daylist .slotline .time:empty { display: none; }
       details.offers > summary { list-style: none; cursor: pointer; }
       details.offers > summary::-webkit-details-marker { display: none; }
       details.offers > summary h2 { margin-bottom: 8px; }
