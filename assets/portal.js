@@ -437,7 +437,16 @@
               if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
               var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "") + '・' + deliveryLabel(s.deliveryMode);
               if (s.st === "mine") html += '<span class="chip mine">✓ ' + label + "</span>";
-              else if (s.st === "done") html += '<span class="chip done">実施済 ' + label + "</span>";
+              else if (s.st === "done") {
+                var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
+                var record = records.length === 1 ? records[0] : null;
+                html += '<details style="width:100%"><summary class="chip done" style="cursor:pointer;display:list-item;list-style-position:inside">実施済 ' + label + '</summary><div style="padding:12px 4px">';
+                if (record) {
+                  html += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
+                  html += '<h3 style="font-size:15px;margin:10px 0 6px">授業の内容</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
+                } else html += '<p class="muted" style="margin:0">授業の内容はまだ公開されていません。</p>';
+                html += '</div></details>';
+              }
               else if (s.st === "past") html += '<span class="chip past">' + label + "</span>";
               else if (s.st === "offer") html += '<button class="chip offer" data-action="askaccept" data-id="' + esc(s.id) + '">案内 ' + label + "</button>";
             });
