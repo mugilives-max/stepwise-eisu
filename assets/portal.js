@@ -666,6 +666,7 @@
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
           html += renderCal(D.info, today, true);
+          html += '<h2>予定の編集</h2>';
           html += renderDayDetail(D, true, true);
 
           // 今月の授業
