@@ -91,10 +91,10 @@
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
       /* 案内の一覧: 表計算ソフトのような罫線つきの表(gap を罫線色で埋める) */
-      .plan-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.2fr) auto; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; max-width: 100%; }
+      .plan-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; max-width: 100%; }
       .plan-gh { background: var(--bg-soft, #f3f5f8); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 8px; min-width: 0; overflow-wrap: anywhere; }
       .plan-gr { display: contents; }
-      .plan-gc { background: #fff; padding: 7px 8px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+      .plan-gc { background: #fff; padding: 6px 7px; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
       .plan-gc .sub { display: block; font-size: 12px; color: var(--muted); }
       @media (max-width: 480px) { .plan-gc { padding: 6px 6px; font-size: 14px; } .plan-gh { padding: 4px 6px; font-size: 12px; } }
       .plan-gs { grid-column: 1 / -1; background: #fff; padding: 4px 8px 8px; }
@@ -1840,39 +1840,46 @@
           h += '<div class="row" style="margin:8px 0 0"><button class="btn-quiet btn-sm" data-action="pe-draft">下書きを保存</button><button class="btn-primary btn-sm" data-action="pe-send">' + (f.status === "approved" ? "保存して案内を再送信（承認は失効）" : f.status === "proposed" ? "保存して案内を再送信" : "保存して案内を送信") + '</button><button class="btn-quiet btn-sm" data-action="pe-cancel">キャンセル</button>' + (f.lineId ? '<button class="btn-quiet btn-sm" data-action="pe-delete" style="margin-left:auto;color:var(--danger,#b00020)">この案内を削除</button>' : '') + '</div></div>';
           return h;
         }
+        // 状態ごとの表(罫線つき)。作成カードには下書き、承認状況カードには送信済み・承認済み・見送りを出す
+        function renderPlanGroup(s, label, gl, f, dis) {
+          if (!gl.length) return '';
+          var h = '<h3 class="plan-group" style="margin:14px 0 4px;font-size:14px">' + label + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
+          h += '<div class="plan-grid"><div class="plan-gh">科目<span class="sub" style="display:block;font-size:11px">種類</span></div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間<span class="sub" style="display:block;font-size:11px">1回の料金</span></div>';
+          gl.forEach(function (l) {
+            var attrs = ' data-line="' + esc(l.id) + '"', fee = l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * l.lessonMin / 30);
+            h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + '<span class="sub">' + esc(l.kind || '通常') + '</span></div><div class="plan-gc">' + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分<span class="sub">' + yen(fee) + '</span></div></div>';
+            var sub = '';
+            if (l.comment) sub += '<div class="small" style="white-space:pre-wrap;margin:2px 0">' + esc(l.comment) + '</div>';
+            if (l.status === "approved") sub += '<div class="small muted" style="margin:2px 0">承諾: ' + esc(l.consentDate || l.approvedAt || "—") + '・' + esc(l.approvedVia || "") + (l.memo ? '・' + esc(l.memo) : "") + '</div>';
+            else if (l.status === "declined" && l.memo) sub += '<div class="small muted" style="margin:2px 0">保護者から: ' + esc(l.memo) + '</div>';
+            if (!dis) {
+              sub += '<div class="row" style="margin:4px 0;gap:6px">' + (l.status === "draft" ? '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">送信</button>' : '') + '<button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + ' aria-label="編集" title="編集">✎</button>' + (l.status === "proposed" || l.status === "approved" ? '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>' : '') + '</div>';
+              if (l.status === "proposed") {
+                sub += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pa-via-' + esc(l.id) + '">確認方法</label><select id="pa-via-' + esc(l.id) + '">' + ["LINE", "電話", "対面", "メール"].map(function (v) { return '<option>' + v + '</option>'; }).join("") + '</select><label for="pa-consent-' + esc(l.id) + '">実際の承諾日</label><input type="date" id="pa-consent-' + esc(l.id) + '" value="' + today() + '" max="' + today() + '"><label for="pa-memo-' + esc(l.id) + '">メモ（経緯など）</label><input type="text" id="pa-memo-' + esc(l.id) + '" maxlength="500"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="pl-approve"' + attrs + ' data-rev="' + esc(l.revision) + '">承諾を記録</button></div></details>';
+              }
+              if (f && f.lineId === l.id) sub += renderPlanEditor(s, f);
+            }
+            h += '<div class="plan-gs"' + attrs + '>' + sub + '</div>';
+          });
+          h += '</div>';
+          return h;
+        }
         function renderPlanCard(s) {
           var p = s.plan || {}, lines = planLines(s), dis = busy || s.active === false, f = planEdits[s.id];
-          var h = '<h2>授業計画の案内と保護者の承認</h2><div class="card"><p class="small">科目・種類・回数・期間・1回の授業時間と授業料・コメントを1つの「案内」として送り、案内ごとに保護者が承認します。月をまたぐ期間（定期テスト対策・夏期講習など）も1つの案内にできます。同じ科目・種類で期間が重なる案内は作れません。</p>';
+          var by = function (st) { return lines.filter(function (l) { return l.status === st; }); };
+          var h = '<h2>授業計画の作成</h2><div class="card"><p class="small">科目・種類・回数・期間・1回の授業時間と授業料・コメントを1つの「案内」として作り、保護者へ送ります。月をまたぐ期間（定期テスト対策・夏期講習など）も1つの案内にできます。同じ科目・種類で期間が重なる案内は作れません。</p>';
           if (!dis) {
             h += '<div class="row" style="margin-bottom:8px"><button class="btn-primary btn-sm" data-action="pe-new">＋ 案内を追加</button>' + ((p.defaultRows || []).length ? '<button class="btn-quiet btn-sm" data-action="pl-fromdefault" data-ym="' + esc(addMonths(s.month || thisYm(), 1)) + '">既定から' + (+addMonths(s.month || thisYm(), 1).slice(5)) + '月の下書きを作る</button>' : '') + '</div>';
             if (f && !f.lineId) h += renderPlanEditor(s, f);
           }
-          if (!lines.length) h += '<div class="empty">案内はまだありません</div>';
-          // 状態ごとに見出しを分けて並べる: 送信済み(承認待ち) → 下書き → 承認済み → 見送り
-          var groups = [['proposed', '送信済み（保護者の承認待ち）'], ['draft', '下書き'], ['approved', '承認済み'], ['declined', '見送り']];
-          groups.forEach(function (g) {
-            var gl = lines.filter(function (l) { return l.status === g[0]; }); if (!gl.length) return;
-            h += '<h3 class="plan-group" style="margin:14px 0 4px;font-size:14px">' + g[1] + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
-            h += '<div class="plan-grid"><div class="plan-gh">科目<span class="sub" style="display:block;font-size:11px">種類</span></div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間<span class="sub" style="display:block;font-size:11px">1回の料金</span></div>';
-            gl.forEach(function (l) {
-              var attrs = ' data-line="' + esc(l.id) + '"', fee = l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * l.lessonMin / 30);
-              h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + '<span class="sub">' + esc(l.kind || '通常') + '</span></div><div class="plan-gc">' + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分<span class="sub">' + yen(fee) + '</span></div></div>';
-              var sub = '';
-              if (l.comment) sub += '<div class="small" style="white-space:pre-wrap;margin:2px 0">' + esc(l.comment) + '</div>';
-              if (l.status === "approved") sub += '<div class="small muted" style="margin:2px 0">承諾: ' + esc(l.consentDate || l.approvedAt || "—") + '・' + esc(l.approvedVia || "") + (l.memo ? '・' + esc(l.memo) : "") + '</div>';
-              else if (l.status === "declined" && l.memo) sub += '<div class="small muted" style="margin:2px 0">保護者から: ' + esc(l.memo) + '</div>';
-              if (!dis) {
-                sub += '<div class="row" style="margin:4px 0;gap:6px">' + (l.status === "draft" ? '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">送信</button>' : '') + '<button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + ' aria-label="編集" title="編集">✎</button>' + (l.status === "proposed" || l.status === "approved" ? '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>' : '') + '</div>';
-                if (l.status === "proposed") {
-                  sub += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pa-via-' + esc(l.id) + '">確認方法</label><select id="pa-via-' + esc(l.id) + '">' + ["LINE", "電話", "対面", "メール"].map(function (v) { return '<option>' + v + '</option>'; }).join("") + '</select><label for="pa-consent-' + esc(l.id) + '">実際の承諾日</label><input type="date" id="pa-consent-' + esc(l.id) + '" value="' + today() + '" max="' + today() + '"><label for="pa-memo-' + esc(l.id) + '">メモ（経緯など）</label><input type="text" id="pa-memo-' + esc(l.id) + '" maxlength="500"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="pl-approve"' + attrs + ' data-rev="' + esc(l.revision) + '">承諾を記録</button></div></details>';
-                }
-                if (f && f.lineId === l.id) sub += renderPlanEditor(s, f);
-              }
-              h += '<div class="plan-gs"' + attrs + '>' + sub + '</div>';
-            });
-            h += '</div>';
-          });
+          h += renderPlanGroup(s, '下書き', by('draft'), f, dis);
+          if (!by('draft').length) h += '<div class="empty">下書きはありません</div>';
           h += '<details class="add" style="margin-top:10px"><summary>毎月の既定回数（新しい月の下書きの雛形）</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-kind">種類</label><select id="pl-kind">' + kindOptions("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>既定を保存</button></div><p class="note">「既定から下書きを作る」で、その月の案内の下書きをまとめて作れます（時間・料金は種類の標準、なければ基本単価×90分）。0回で既定から外れます。</p>' + ((p.defaultRows || []).length ? '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回'; }).join("、") + '</p>' : '') + '</details>';
+          h += '</div>';
+          h += '<h2>授業計画の承認状況</h2><div class="card">';
+          var sent = by('proposed'), okd = by('approved'), ng = by('declined');
+          if (!sent.length && !okd.length && !ng.length) h += '<div class="empty">送信済み・承認済みの案内はまだありません</div>';
+          h += renderPlanGroup(s, '送信済み（保護者の承認待ち）', sent, f, dis) + renderPlanGroup(s, '承認済み', okd, f, dis) + renderPlanGroup(s, '見送り', ng, f, dis);
           return h + '</div>';
         }
         function renderBilling(s) {
