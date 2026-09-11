@@ -90,6 +90,10 @@
       table.tb th, table.tb td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
+      table.plan-table th, table.plan-table td { white-space: nowrap; }
+      table.plan-table tr.plan-sub td { white-space: normal; }
+      table.plan-table td.plan-act { text-align: right; }
+      table.plan-table td.plan-act button { display: block; margin: 0 0 4px auto; }
       table.extb td b { font-weight: 700; }
       table.extb tr.exsub td { padding-top: 0; border-bottom: 1px solid var(--line); }
       table.extb tr.exsub td .tag { display: inline-block; margin: 2px 4px 2px 0; }
@@ -1820,7 +1824,7 @@
           var r30 = Number(f.lessonMin) > 0 ? Math.round((Number(f.lessonFee) || 0) * 30 / Number(f.lessonMin)) : 0, eff = Math.round(r30 * Number(f.lessonMin) / 30);
           h += '<p class="note">実施した授業の時間分だけを請求します（30分あたり ' + yen(r30) + (eff !== Number(f.lessonFee) ? '。30分単位に合わせるため1回 ' + yen(eff) + ' として扱います' : '') + '）。回数は予定であり、固定額の購入ではありません。</p>';
           h += '<label class="small" for="pe-comment">生徒・保護者へのコメント（何のための授業か、なぜこの回数か）</label><textarea id="pe-comment" data-pe-field="comment" rows="2" maxlength="500" style="width:100%;box-sizing:border-box">' + esc(f.comment || '') + '</textarea>';
-          h += '<div class="row" style="margin:8px 0 0"><button class="btn-quiet btn-sm" data-action="pe-draft">下書きを保存</button><button class="btn-primary btn-sm" data-action="pe-send">' + (f.status === "approved" ? "保存して案内を再送信（承認は失効）" : f.status === "proposed" ? "保存して案内を再送信" : "保存して案内を送信") + '</button><button class="btn-quiet btn-sm" data-action="pe-cancel">キャンセル</button></div></div>';
+          h += '<div class="row" style="margin:8px 0 0"><button class="btn-quiet btn-sm" data-action="pe-draft">下書きを保存</button><button class="btn-primary btn-sm" data-action="pe-send">' + (f.status === "approved" ? "保存して案内を再送信（承認は失効）" : f.status === "proposed" ? "保存して案内を再送信" : "保存して案内を送信") + '</button><button class="btn-quiet btn-sm" data-action="pe-cancel">キャンセル</button>' + (f.lineId ? '<button class="btn-quiet btn-sm" data-action="pe-delete" style="margin-left:auto;color:var(--danger,#b00020)">この案内を削除</button>' : '') + '</div></div>';
           return h;
         }
         function renderPlanCard(s) {
@@ -1836,25 +1840,22 @@
           groups.forEach(function (g) {
             var gl = lines.filter(function (l) { return l.status === g[0]; }); if (!gl.length) return;
             h += '<h3 class="plan-group" style="margin:14px 0 4px;font-size:14px">' + g[1] + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
-            h += '<div class="tbwrap"><table class="tb plan-table"><tr><th>科目</th><th>種類</th><th>回数</th><th>期間</th><th>時間</th><th>1回の授業料</th></tr>';
+            h += '<div class="tbwrap"><table class="tb plan-table"><tr><th>科目</th><th>種類</th><th>回数</th><th>期間</th><th>時間</th><th>1回の授業料</th><th></th></tr>';
             gl.forEach(function (l) {
               var attrs = ' data-line="' + esc(l.id) + '"', fee = l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * l.lessonMin / 30);
-              h += '<tr class="plan-row"' + attrs + '><td>' + esc(l.subject) + '</td><td>' + esc(l.kind || '通常') + '</td><td>' + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</td><td>' + esc(planPeriod(l)) + '</td><td>' + esc(l.lessonMin) + '分</td><td>' + yen(fee) + '</td></tr>';
+              h += '<tr class="plan-row"' + attrs + '><td>' + esc(l.subject) + '</td><td>' + esc(l.kind || '通常') + '</td><td>' + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</td><td>' + esc(planPeriod(l)) + '</td><td>' + esc(l.lessonMin) + '分</td><td>' + yen(fee) + '</td><td class="plan-act">' + (dis ? '' : (l.status === "draft" ? '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">送信</button>' : '') + '<button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + ' aria-label="編集" title="編集">✎</button>') + '</td></tr>';
               var sub = '';
               if (l.comment) sub += '<div class="small" style="white-space:pre-wrap;margin:2px 0">' + esc(l.comment) + '</div>';
               if (l.status === "approved") sub += '<div class="small muted" style="margin:2px 0">承諾: ' + esc(l.consentDate || l.approvedAt || "—") + '・' + esc(l.approvedVia || "") + (l.memo ? '・' + esc(l.memo) : "") + '</div>';
               else if (l.status === "declined" && l.memo) sub += '<div class="small muted" style="margin:2px 0">保護者から: ' + esc(l.memo) + '</div>';
               if (!dis) {
-                sub += '<div class="row" style="margin:4px 0"><button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + '>編集</button>';
-                if (l.status === "draft") sub += '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">案内を送信</button>';
-                if (l.status === "proposed" || l.status === "approved") sub += '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>';
-                sub += '<button class="btn-quiet btn-sm" data-action="pl-delete"' + attrs + ' data-rev="' + esc(l.revision) + '">削除</button></div>';
+                if (l.status === "proposed" || l.status === "approved") sub += '<div class="row" style="margin:4px 0"><button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button></div>';
                 if (l.status === "proposed") {
                   sub += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pa-via-' + esc(l.id) + '">確認方法</label><select id="pa-via-' + esc(l.id) + '">' + ["LINE", "電話", "対面", "メール"].map(function (v) { return '<option>' + v + '</option>'; }).join("") + '</select><label for="pa-consent-' + esc(l.id) + '">実際の承諾日</label><input type="date" id="pa-consent-' + esc(l.id) + '" value="' + today() + '" max="' + today() + '"><label for="pa-memo-' + esc(l.id) + '">メモ（経緯など）</label><input type="text" id="pa-memo-' + esc(l.id) + '" maxlength="500"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="pl-approve"' + attrs + ' data-rev="' + esc(l.revision) + '">承諾を記録</button></div></details>';
                 }
                 if (f && f.lineId === l.id) sub += renderPlanEditor(s, f);
               }
-              if (sub) h += '<tr class="plan-sub"><td colspan="6" style="border-top:0;padding-top:0">' + sub + '</td></tr>';
+              if (sub) h += '<tr class="plan-sub"><td colspan="7" style="border-top:0;padding-top:0">' + sub + '</td></tr>';
             });
             h += '</table></div>';
           });
@@ -1937,7 +1938,7 @@
           var sid = cur.id, planAuth = token();
           busy = true; render();
           admin(op, Object.assign({ studentId: sid }, payload)).then(function (res) {
-            cacheClear(); if (token() === planAuth && authM === "ok") { if (op === "planLineSave") delete planEdits[sid]; applyResult(res, { page: "student", id: sid, section: "billing" }); toast(okMsg + (res.notificationWarning ? "。" + res.notificationWarning : "")); }
+            cacheClear(); if (token() === planAuth && authM === "ok") { if (op === "planLineSave" || op === "planLineDelete") delete planEdits[sid]; applyResult(res, { page: "student", id: sid, section: "billing" }); toast(okMsg + (res.notificationWarning ? "。" + res.notificationWarning : "")); }
           }).catch(function (er) { if (planEdits[sid] && op === "planLineSave") planEdits[sid].error = er.message; toast(er.message + (op === "planLineSave" ? "。入力は保持しています" : "")); }).then(function () { busy = false; render(); });
         }
         function planEditSubmit(propose) {
@@ -2330,7 +2331,7 @@
             case "pe-draft": planEditSubmit(false); break;
             case "pe-send": planEditSubmit(true); break;
             case "pl-send": { var psL = planLineById(cur, btn.getAttribute("data-line")); if (!psL) return; planEdits[cur.id] = planEditOf(cur, psL); planEditSubmit(true); break; }
-            case "pl-delete": { var pdL = planLineById(cur, btn.getAttribute("data-line")); if (!pdL) return; if (!confirm(planLabel(pdL) + " " + planPeriod(pdL) + " の案内を削除しますか？")) return; planLineWrite("planLineDelete", { lineId: pdL.id, expectedRevision: pdL.revision }, "案内を削除しました"); break; }
+            case "pe-delete": { var pdF = planEdits[cur.id], pdL = pdF && pdF.lineId ? planLineById(cur, pdF.lineId) : null; if (!pdL) return; if (!confirm(planLabel(pdL) + " " + planPeriod(pdL) + " の案内を削除しますか？")) return; planLineWrite("planLineDelete", { lineId: pdL.id, expectedRevision: pdL.revision }, "案内を削除しました"); break; }
             case "pl-fromdefault": { var pfYm = btn.getAttribute("data-ym"); if (!pfYm) return; planLineWrite("planLinesFromDefault", { ym: pfYm }, pfYm + " の下書きを作りました"); break; }
             case "pl-approve": {
               var paL = planLineById(cur, btn.getAttribute("data-line")); if (!paL || paL.status !== "proposed") { toast("画面を更新して案内を確認してください"); return; }
