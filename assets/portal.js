@@ -329,22 +329,23 @@
             if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
             var hasItems = !!(it && it.labels && it.labels.length);
             if (showToff && it && it.toff && !past) cls += " toff";
+            if (it && it.ngAll && !past) cls += " ngday";
             var marks = '<span class="calmarks">';
             if (it && !past) {
               if (it.mine) cls += " mine";
               if (it.offer && !it.mine) marks += '<span class="caldot of"></span>';
-              if (it.ngAll) marks += '<span class="calmark">×</span>';
             }
-            if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
+            if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
             marks += "</span>";
-            if (it && it.ngT && !past) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
+            if (it && it.ngAll && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
+            if (it && it.ngT && !past) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
             if (it && it.wish && !past) marks += '<span class="callbl wi">授業可</span>';
             if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可</span>';
             if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
-                if (l.st === "event") { marks += '<span class="callbl ' + (l.kind === "test" ? "ts" : "ev") + '">' + esc(l.text) + "</span>"; return; }
+                if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + "</span>"; return; }
                 var lc = l.st === "offer" ? " of" : l.st === "past" ? " dn" : "";
                 marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
               });
@@ -357,9 +358,8 @@
           h += '</div><div class="callegend">';
           h += '<span><span class="callbl" style="display:inline">授業</span></span>';
           h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
-          h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
-          h += '<span><span class="callbl ts" style="display:inline">テスト</span> テスト・模試</span>';
-          h += '<span><span class="calmark">×</span> 授業できない日</span>';
+          h += '<span><span class="callbl ev" style="display:inline">予定</span> 重要な予定（テスト・行事など）</span>';
+          h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';
           if (showToff) h += '<span class="callbl to" style="display:inline">登録不可</span>';
           h += "</div></div>";
           return h;
@@ -433,7 +433,7 @@
             html += '<div class="daylist">';
             dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', ''); });
             ds2.forEach(function (s) {
-              if (s.st === "event") { html += dayRow('<span class="tag ' + (s.kind === "test" ? "ts" : "coral") + '"' + (s.kind === "test" ? ' style="background:#f1ecfb;color:#7a4fc9"' : '') + '>' + (s.kind === "test" ? "テスト" : "予定") + '</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
+              if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
               if (s.st === "mine") html += dayRow('<span class="tag green">確定</span>', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), cancelControl(s, true));
               else if (s.st === "done") {
@@ -449,7 +449,7 @@
               else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who, '');
               else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
-            dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">× 授業できない</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
+            dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
             dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">授業可</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
             html += '</div>';
           }
@@ -595,7 +595,7 @@
             blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
             var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
             html += '<div class="msg">授業できない日: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
-            html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。×が付いている日をタップすると解除") + '</div>';
+            html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。斜線の日をタップすると解除") + '</div>';
             html += '<div class="row" style="margin-bottom:6px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-ngstart" step="900"><span class="muted">〜</span><input type="time" id="b-ngend" step="900"></div>';
             html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
           } else if (selMode === "wish") {
