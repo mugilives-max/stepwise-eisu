@@ -167,7 +167,8 @@ test('the home calendar shows registration-unavailable days and times like the s
   const ui = await studentReady(s);
   assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
   assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可12-13:30<\/span>/);
-  ui.click('calday', { 'data-date':'2026-09-15' }); assert.match(ui.html(), /<span class="tag gray">登録不可（終日）<\/span>/);
+  ui.click('calday', { 'data-date':'2026-09-15' }); assert.match(ui.html(), /<span class="tag gray">登録不可（終日）<\/span>/); assert.doesNotMatch(ui.html(), /先生の予定があるため/);
+  ui.click('helptoff'); assert.match(ui.html(), /先生の予定があるため、この時間帯には授業を登録できません/); ui.click('helptoff'); assert.doesNotMatch(ui.html(), /先生の予定があるため/);
   ui.navigate('#schedule'); assert.match(ui.html(), /登録不可12-13:30/);
 });
 

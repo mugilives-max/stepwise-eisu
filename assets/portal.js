@@ -439,7 +439,8 @@
             var dis = (acceptBatch().pending || acceptBatch().busy || acceptBatch().refreshRequired) ? ' disabled' : '';
             function dayRow(lead, time, who, actions) { return '<div class="slotline">' + lead + '<span class="time">' + time + '</span><span class="who">' + who + '</span>' + actions + '</div>'; }
             html += '<div class="daylist">';
-            dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', ''); });
+            dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', '<button class="btn-quiet btn-sm" data-action="helptoff" aria-label="登録不可の説明" aria-expanded="' + helpToff + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button>'); });
+            if (dayOffs.length && helpToff) html += '<div class="note" style="margin:4px 0 8px">先生の予定があるため、この時間帯には授業を登録できません。別の日時を選ぶか、先生にご相談ください。</div>';
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
@@ -791,6 +792,7 @@
 
         // 授業の記録: 科目＋種類ごとのフォルダをカードで並べ、開くとそのフォルダの中身(公開された授業記録と実施済みの授業、日付の新しい順)を表示する
         var histFolder = null;
+        var helpToff = false; // 「登録不可」の説明(？ボタン)の開閉
         function historyFolders() {
           var done = (S.history || []).filter(function (x) { return x.done; }), records = (S.lessonRecords || []).slice(), used = {};
           function recordFor(x) { return records.filter(function (r) { return r.date === x.date && r.start === x.start && r.subject === (x.subject || '') && Number(r.min) === Number(x.min); })[0] || null; }
@@ -1337,6 +1339,7 @@
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
             case "histopen": histFolder = btn.getAttribute("data-folder"); render(); window.scrollTo(0, 0); break;
+            case "helptoff": helpToff = !helpToff; render(); break;
             case "histback": histFolder = null; render(); break;
             case "dayadd": dayAddOpen=!dayAddOpen;render();break;
             case "calday":
