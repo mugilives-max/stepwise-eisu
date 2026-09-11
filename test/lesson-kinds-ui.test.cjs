@@ -42,9 +42,9 @@ test('the admin plan card lists lines with status, opens one editor at a time, a
   const { adminReady, card, line } = require('./helpers/operations-ui-harness.cjs');
   const lines = [line({ id: 'p1', status: 'proposed', revision: 3, comment: '既存のコメント' }), line({ id: 'a1', subject: '数学', kind: '演習', status: 'approved', approvedCount: 3, count: 4, startDate: '2026-09-22', endDate: '2026-10-05', period: '2026/9/22〜10/5', month: '', lessonMin: 60, lessonFee: 3000, approvedVia: 'LINE', consentDate: '2026-09-05' }), line({ id: 'd1', subject: '国語', status: 'draft', revision: 1 })];
   const ui = await adminReady(card({ plan: { lines, defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }), 'billing');
-  assert.match(ui.html(), /<span class="tag amber">承認待ち<\/span> 英語（通常） 4回・2026年9月・90分・1回 3,000円/);
-  assert.match(ui.html(), /<span class="tag green">承認済み（3回）<\/span> 数学（演習） 4回・2026\/9\/22〜10\/5・60分・1回 3,000円/); assert.match(ui.html(), /承諾: 2026-09-05・LINE/);
-  assert.match(ui.html(), /<span class="tag gray">下書き<\/span> 国語（通常）/); assert.match(ui.html(), /data-action="pl-send" data-line="d1" data-rev="1"/);
+  assert.match(ui.html(), /<tr><th>科目<\/th><th>種類<\/th><th>回数<\/th><th>期間<\/th><th>時間<\/th><th>1回の授業料<\/th><\/tr><tr class="plan-row" data-line="p1"><td>英語<\/td><td>通常<\/td><td>4回<\/td><td>2026年9月<\/td><td>90分<\/td><td>3,000円<\/td><\/tr>/);
+  assert.match(ui.html(), /<tr class="plan-row" data-line="a1"><td>数学<\/td><td>演習<\/td><td>4回<br><span class="small muted">承認 3回<\/span><\/td><td>2026\/9\/22〜10\/5<\/td><td>60分<\/td><td>3,000円<\/td><\/tr>/); assert.match(ui.html(), /承諾: 2026-09-05・LINE/);
+  assert.doesNotMatch(ui.html(), /class="tag (amber|gray)">(承認待ち|下書き)</); assert.match(ui.html(), /<tr class="plan-row" data-line="d1"><td>国語<\/td>/); assert.match(ui.html(), /data-action="pl-send" data-line="d1" data-rev="1"/);
   assert.match(ui.html(), /data-action="plancopy" data-line="p1"/); assert.doesNotMatch(ui.html(), /data-action="plancopy" data-line="d1"/);
   assert.match(ui.html(), /既定から10月の下書きを作る/); assert.doesNotMatch(ui.html(), /第\d+版|30分単価/);
   assert.match(ui.html(), /<h3 class="plan-group"[^>]*>送信済み（保護者の承認待ち） <span[^>]*>1件<\/span><\/h3>[^]*data-line="p1"[^]*<h3 class="plan-group"[^>]*>下書き <span[^>]*>1件<\/span><\/h3>[^]*data-line="d1"[^]*<h3 class="plan-group"[^>]*>承認済み <span[^>]*>1件<\/span><\/h3>[^]*data-line="a1"/); assert.doesNotMatch(ui.html(), /plan-group[^>]*>見送り/);
