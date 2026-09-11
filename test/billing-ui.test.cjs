@@ -41,7 +41,7 @@ function sendLine(ui, count) { ui.click('pe-open', { 'data-line': 'line-1' }); i
 
 test('default count saves send subject, kind and count without a month or revision', async () => {
   const ui = await ready(planCard([line()]));
-  assert.match(ui.html(), /<tr class="plan-row" data-line="line-1"><td>英語<\/td><td>通常<\/td><td>4回<\/td><td>2026年9月<\/td><td>90分<\/td><td>4,500円<\/td><td class="plan-act">/);
+  assert.match(ui.html(), /<div class="plan-gr" data-line="line-1"><div class="plan-gc">英語（通常）<\/div><div class="plan-gc">4回<\/div><div class="plan-gc">9月<\/div><div class="plan-gc">90分・4,500円<\/div><\/div>/);
   setPlan(ui, 6);
   const body = ui.requests.at(-1).body;
   assert.equal(body.op, 'planSet'); assert.equal(body.studentId, 'test-a'); assert.equal(body.ym, undefined); assert.equal(Object.hasOwn(body, 'expectedRevision'), false);
@@ -56,7 +56,7 @@ test('a line edit sends the line revision and keeps the editor after a network f
   assert.equal(ui.el('pe-count').value, '5'); assert.match(ui.html(), /入力は保持しています/);
   ui.click('pe-send'); assert.equal(ui.requests.at(-1).body.expectedRevision, 3); assert.equal(ui.requests.at(-1).body.count, 5);
   ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 4, count: 5 })]) }); await flush();
-  assert.equal(ui.el('pe-count'), undefined, 'the editor closes after a successful save'); assert.match(ui.html(), /<td>5回<\/td><td>2026年9月<\/td>/);
+  assert.equal(ui.el('pe-count'), undefined, 'the editor closes after a successful save'); assert.match(ui.html(), /<div class="plan-gc">5回<\/div><div class="plan-gc">9月<\/div>/);
 });
 
 test('a late background read cannot supply the revision for the next line save', async () => {
