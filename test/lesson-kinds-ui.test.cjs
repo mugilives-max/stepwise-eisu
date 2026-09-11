@@ -45,3 +45,18 @@ test('the admin plan card has a comment box that saves through planCommentSave',
   ui.input('pl-comment-2026-09', '英検対策なので回数を増やします'); ui.click('plancomment', { 'data-ym': '2026-09' });
   const r = ui.requests.at(-1); assert.equal(r.body.op, 'planCommentSave'); assert.equal(r.body.studentId, 'test-a'); assert.equal(r.body.ym, '2026-09'); assert.equal(r.body.comment, '英検対策なので回数を増やします');
 });
+
+test('the admin plan card is one form: rows, lesson time, per-lesson fee and comment submitted together, no revision number', async () => {
+  const { adminReady, card } = require('./helpers/operations-ui-harness.cjs');
+  const c = card({ plan: { month: '2026-09', current: {}, fromDefault: false, monthRows: [], defaultRows: [], months: [{ ym: '2026-09', status: 'proposed', revision: 4, termsKnown: true, lessonMin: 90, rate30: 1500, monthly: 0, rows: [{ subject: '英語', count: 4 }], total: 4, comment: '' }] } });
+  const ui = await adminReady(c, 'billing');
+  assert.doesNotMatch(ui.html(), /第4版|30分単価/); assert.match(ui.html(), /1回の授業料 <input type="number" id="pl-fee-2026-09" data-plan-ym="2026-09" data-plan-field="lessonFee"[^>]*value="4500"/);
+  assert.match(ui.html(), /<select data-plan-row="0" data-plan-rowfield="subject"[^>]*><option value="">科目を選択<\/option><option value="英語" selected>/);
+  assert.match(ui.html(), /設定 → 授業の種類/);
+  ui.click('planrowadd', { 'data-ym': '2026-09' }); assert.match(ui.html(), /data-plan-row="1" data-plan-rowfield="count"/);
+  ui.change('pl-comment-2026-09', 'x'); ui.input('pl-comment-2026-09', '英検対策');
+  ui.click('plansubmit', { 'data-ym': '2026-09' }); assert.equal(ui.requests.length, 1);
+  ui.click('planrowdel', { 'data-i': '1' }); ui.click('plansubmit', { 'data-ym': '2026-09' });
+  const r = ui.requests.at(-1).body; assert.equal(r.op, 'planSubmit'); assert.equal(r.ym, '2026-09'); assert.equal(r.expectedRevision, 4); assert.equal(r.lessonMin, 90); assert.equal(r.lessonFee, 4500); assert.equal(r.comment, '英検対策');
+  assert.deepEqual(r.rows, [{ subject: '英語', kind: '通常', count: 4 }]);
+});

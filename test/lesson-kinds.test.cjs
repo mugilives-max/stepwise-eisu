@@ -60,3 +60,24 @@ test('plans and offers carry the kind; 通常 stays out of the approval JSON so 
   h.seedSlot({ date: '2026-09-03', start: '16:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '演習' });
   assert.equal(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.reason, '承認されていない科目・回数の授業があります');
 });
+
+test('planSubmit saves rows, lesson time, per-lesson fee and comment, then proposes in one call', () => {
+  const h = createSchedulingHarness(); ok(h.admin('state')); ok(h.admin('lessonKindSave', { name: '演習', standardMin: 60 }));
+  const submit = args => h.admin('planSubmit', { studentId: 'test-a', ym: '2026-09', ...args });
+  rejected(submit({ rows: [], lessonMin: 90, lessonFee: 4500 }));
+  rejected(submit({ rows: [{ subject: '英語', count: 4 }], lessonMin: 100, lessonFee: 4500 }));
+  rejected(submit({ rows: [{ subject: '英語', count: 4 }, { subject: '英語', kind: '通常', count: 2 }], lessonMin: 90, lessonFee: 4500 }));
+  rejected(submit({ rows: [{ subject: '英語', kind: '講習', count: 4 }], lessonMin: 90, lessonFee: 4500 }));
+  const r = ok(submit({ rows: [{ subject: '英語', count: 4 }, { subject: '英語', kind: '演習', count: 2 }], lessonMin: 90, lessonFee: 4500, comment: '入試対策' }));
+  assert.equal(r.rate30, 1500); assert.equal(r.lessonFee, 4500); assert.equal(r.rows, 2);
+  const b = h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing; assert.equal(b.planStatus, 'proposed'); assert.equal(b.rate30, 1500);
+  const c = h.context();
+  assert.deepEqual(json(c.billingPlanList_('test-a', '2026-09')), [{ subject: '英語', count: 4 }, { subject: '英語', count: 2, kind: '演習' }]);
+  assert.equal(c.planComment_('test-a', '2026-09'), '入試対策');
+  rejected(submit({ rows: [{ subject: '英語', count: 3 }], lessonMin: 90, lessonFee: 4500, expectedRevision: 0 }));
+  const r2 = ok(submit({ rows: [{ subject: '数学', count: 3 }], lessonMin: 60, lessonFee: 5000, comment: '', expectedRevision: rev(h) }));
+  assert.equal(r2.rate30, 2500); assert.equal(r2.lessonFee, 5000);
+  const c2 = h.context();
+  assert.deepEqual(json(c2.billingPlanList_('test-a', '2026-09')), [{ subject: '数学', count: 3 }]); assert.equal(c2.planComment_('test-a', '2026-09'), '');
+  assert.equal(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.planStatus, 'proposed');
+});

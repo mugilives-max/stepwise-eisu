@@ -1794,36 +1794,42 @@
         }
         function planInput(s, m) {
           var key = s.id + ":" + m.ym, saved = planInputs[key];
-          if (!saved || !saved.dirty) saved = planInputs[key] = { revision: m.revision, lessonMin: m.lessonMin || 90, rate30: m.termsKnown ? m.rate30 : s.rate30, monthly: 0, via: "LINE", consentDate: today(), memo: "", comment: m.comment || "", dirty: false };
+          if (!saved || !saved.dirty) { var lm = m.lessonMin || 90, r30 = m.termsKnown ? m.rate30 : s.rate30; saved = planInputs[key] = { revision: m.revision, lessonMin: lm, rate30: r30, lessonFee: Math.round((Number(r30) || 0) * lm / 30), monthly: 0, via: "LINE", consentDate: today(), memo: "", comment: m.comment || "", rows: (m.rows || []).map(function (x) { return { subject: x.subject, kind: x.kind || "", count: Number(x.count) || 0 }; }), dirty: false }; }
           return saved;
         }
         function renderPlanCard(s) {
-          var p = s.plan || {}, h = '<h2>月の授業回数・料金と保護者の承認</h2><div class="card"><p class="small">①月の回数を保存 → ②料金を確認して保護者へ提案 → ③承認後に授業を確定・実施・請求。LINEなどで受けた承諾は、実際の承諾日と内容を記録してください。</p>';
+          var p = s.plan || {}, h = '<h2>月の授業回数・料金と保護者の承認</h2><div class="card"><p class="small">科目・種類・回数、1回の授業時間と授業料、コメントをまとめて入力し「保存して保護者に提案」。承認後に授業を確定・実施・請求します。LINEなどで受けた承諾は、実際の承諾日と内容を記録してください。</p>';
           var months = p.months || [], selectedMonth = billingEditor(s).planYm || s.month;
           if (!months.some(function (m) { return m.ym === selectedMonth; }) && months.length) selectedMonth = months[0].ym;
           if (months.length) h += '<div class="row" style="margin-bottom:12px"><label for="plan-view-month">確認する月</label><select id="plan-view-month">' + months.map(function (m) { return '<option value="' + esc(m.ym) + '"' + (m.ym === selectedMonth ? " selected" : "") + '>' + esc(m.ym) + '</option>'; }).join("") + '</select></div>';
           months.filter(function (m) { return m.ym === selectedMonth; }).forEach(function (m) {
-            var f = planInput(s, m), dis = busy || s.active === false, attrs = ' data-ym="' + esc(m.ym) + '"';
-            h += '<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row between"><strong>' + esc(m.ym) + ' <span class="tag ' + (m.status === "approved" ? "green" : "amber") + '">' + ({ approved: "承認済み", proposed: "承認待ち", declined: "見送り", draft: "未提案", none: "計画なし" }[m.status] || "未提案") + '</span></strong><span class="small muted">' + (m.revision != null ? '第' + esc(m.revision) + '版' : "料金条件の確認が必要") + '</span></div>';
-            h += '<div>' + (m.rows || []).map(function (x) { return esc(lessonLabel(x)) + ' ' + esc(x.count) + '回'; }).join("、") + ' <span class="small muted">合計 ' + esc(m.total || 0) + '回' + (m.fromDefault ? "・既定からの案" : "") + '</span></div>';
-            h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin? m.lessonMin+'分・1回 '+yen(m.rate30*m.lessonMin/30):'授業時間を設定してください')) : 'この月の料金はまだ提案されていません。') + '</p>';
+            var f = planInput(s, m), dis = busy || s.active === false, attrs = ' data-ym="' + esc(m.ym) + '"', ymAttr = ' data-plan-ym="' + esc(m.ym) + '"';
+            h += '<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row between"><strong>' + esc(m.ym) + ' <span class="tag ' + (m.status === "approved" ? "green" : "amber") + '">' + ({ approved: "承認済み", proposed: "承認待ち", declined: "見送り", draft: "未提案", none: "計画なし" }[m.status] || "未提案") + '</span></strong></div>';
+            h += '<p class="small">現在: ' + ((m.rows || []).length ? (m.rows || []).map(function (x) { return esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回'; }).join("、") + '・' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin ? m.lessonMin + '分・1回 ' + yen(m.rate30 * m.lessonMin / 30) : '授業時間が未設定')) : '料金は未提案') : '計画はまだありません') + '</p>';
             if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。<button class="btn-quiet btn-sm" data-action="reload">最新の計画を確認</button></p>';
-            if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '</p>';
-            h += '<label class="small" for="pl-comment-' + esc(m.ym) + '">生徒・保護者へのコメント（何のための授業か、なぜこの回数か。案内と実施計画に表示）</label><textarea id="pl-comment-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="comment" rows="2" maxlength="500" style="width:100%;box-sizing:border-box"' + (dis ? ' disabled' : '') + '>' + esc(f.comment || '') + '</textarea><div class="row" style="margin:4px 0 8px"><button class="btn-quiet btn-sm" data-action="plancomment"' + attrs + (dis ? ' disabled' : '') + '>コメントを保存</button></div>';
-            if ((m.rows || []).length && !dis) {
-              if (m.status === "approved") h += '<details class="add"><summary>料金を変更して再承認を依頼</summary><p class="note">再提案すると現在の承認が失効します。請求済みなら、先に未入金請求を取り消してください。</p>';
-              h += '<div class="row"><label>1回の授業時間 <input type="number" data-plan-ym="'+esc(m.ym)+'" data-plan-field="lessonMin" min="30" max="240" step="30" value="'+esc(f.lessonMin)+'" style="width:90px"> 分</label></div>';
-              h += '<div class="row"><label for="pl-rate-' + esc(m.ym) + '">30分単価</label><input type="number" id="pl-rate-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="rate30" min="0" step="1" value="' + esc(f.rate30 || 0) + '" style="width:110px">円</div><p class="note">実施した授業の時間分だけを請求します。月間回数は予定であり、固定額の購入ではありません。</p>';
-              h += '<div class="row"><button class="btn-primary btn-sm" data-action="planpropose"' + attrs + '>' + (m.status === "approved" ? "現在の承認を取り消して再提案" : m.status === "proposed" ? "この料金で再提案" : "この料金で保護者に提案") + '</button><button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button></div>';
+            if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '。内容を変えて保存すると現在の承認は失効し、再度の承認が必要です。請求済みなら、先に未入金請求を取り消してください。</p>';
+            if (!dis) {
+              h += '<div class="tbwrap"><table class="tb"><tr><th>科目</th><th>種類</th><th>回数</th><th></th></tr>';
+              (f.rows || []).forEach(function (r, i) {
+                h += '<tr><td><select data-plan-row="' + i + '" data-plan-rowfield="subject"' + ymAttr + '>' + [""].concat(LESSON_SUBJECTS.indexOf(r.subject) < 0 && r.subject ? [r.subject] : [], LESSON_SUBJECTS).map(function (o) { return '<option value="' + esc(o) + '"' + (o === r.subject ? ' selected' : '') + '>' + (o || '科目を選択') + '</option>'; }).join("") + '</select></td>';
+                h += '<td><select data-plan-row="' + i + '" data-plan-rowfield="kind"' + ymAttr + '>' + kindOptions(r.kind || "通常") + '</select></td>';
+                h += '<td><input type="number" data-plan-row="' + i + '" data-plan-rowfield="count"' + ymAttr + ' min="1" max="31" value="' + esc(r.count || "") + '" style="width:64px"> 回</td>';
+                h += '<td><button class="btn-quiet btn-sm" data-action="planrowdel" data-i="' + i + '"' + attrs + '>削除</button></td></tr>';
+              });
+              h += '</table></div><div class="row" style="margin:6px 0 10px"><button class="btn-quiet btn-sm" data-action="planrowadd"' + attrs + '>＋ 科目を追加</button><span class="small muted">種類の追加・変更は <a href="#settings">設定 → 授業の種類</a></span></div>';
+              h += '<div class="row"><label>1回の授業時間 <input type="number"' + ymAttr + ' data-plan-field="lessonMin" min="30" max="240" step="30" value="' + esc(f.lessonMin) + '" style="width:90px"> 分</label><label>1回の授業料 <input type="number" id="pl-fee-' + esc(m.ym) + '"' + ymAttr + ' data-plan-field="lessonFee" min="0" step="10" value="' + esc(f.lessonFee == null ? "" : f.lessonFee) + '" style="width:110px"> 円</label></div>';
+              var r30 = f.lessonMin > 0 ? Math.round((Number(f.lessonFee) || 0) * 30 / f.lessonMin) : 0, eff = Math.round(r30 * f.lessonMin / 30);
+              h += '<p class="note">実施した授業の時間分だけを請求します（30分あたり ' + yen(r30) + (eff !== Number(f.lessonFee) ? '。30分単位に合わせるため1回 ' + yen(eff) + ' として扱います' : '') + '）。月間回数は予定であり、固定額の購入ではありません。</p>';
+              h += '<label class="small" for="pl-comment-' + esc(m.ym) + '">生徒・保護者へのコメント（何のための授業か、なぜこの回数か。案内と実施計画に表示）</label><textarea id="pl-comment-' + esc(m.ym) + '"' + ymAttr + ' data-plan-field="comment" rows="2" maxlength="500" style="width:100%;box-sizing:border-box">' + esc(f.comment || '') + '</textarea>';
+              h += '<div class="row" style="margin:8px 0"><button class="btn-primary btn-sm" data-action="plansubmit"' + attrs + '>' + (m.status === "approved" ? "保存して再提案（承認は失効）" : m.status === "proposed" ? "保存して再提案" : "保存して保護者に提案") + '</button><button class="btn-quiet btn-sm" data-action="plancomment"' + attrs + '>コメントだけ保存</button>' + ((m.rows || []).length ? '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>' : '') + '</div>';
               if (m.status === "proposed" && m.termsKnown) {
-                h += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pl-via-' + esc(m.ym) + '">確認方法</label><select id="pl-via-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="via">' + ["LINE","電話","対面","メール"].map(function (v) { return '<option' + (v === f.via ? " selected" : "") + '>' + v + '</option>'; }).join("") + '</select><label for="pl-consent-' + esc(m.ym) + '">実際の承諾日</label><input type="date" id="pl-consent-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="consentDate" max="' + today() + '" value="' + esc(f.consentDate) + '"><label for="pl-note-' + esc(m.ym) + '">確認内容・理由</label><textarea id="pl-note-' + esc(m.ym) + '" data-plan-ym="' + esc(m.ym) + '" data-plan-field="memo" maxlength="500" placeholder="過去の承諾を記録する場合、または授業後の承認の場合は理由が必要です">' + esc(f.memo) + '</textarea></div><p>' + '<button class="btn-ghost btn-sm" data-action="planapprove"' + attrs + '>この提案への承諾を記録</button></p></details>';
+                h += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pl-via-' + esc(m.ym) + '">確認方法</label><select id="pl-via-' + esc(m.ym) + '"' + ymAttr + ' data-plan-field="via">' + ["LINE","電話","対面","メール"].map(function (v) { return '<option' + (v === f.via ? " selected" : "") + '>' + v + '</option>'; }).join("") + '</select><label for="pl-consent-' + esc(m.ym) + '">実際の承諾日</label><input type="date" id="pl-consent-' + esc(m.ym) + '"' + ymAttr + ' data-plan-field="consentDate" value="' + esc(f.consentDate) + '" max="' + today() + '"><label for="pl-memo-' + esc(m.ym) + '">メモ（経緯など）</label><input type="text" id="pl-memo-' + esc(m.ym) + '"' + ymAttr + ' data-plan-field="memo" maxlength="500" value="' + esc(f.memo) + '"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="planapprove"' + attrs + '>承諾を記録</button></div></details>';
               }
-              if (m.status === "approved") h += '</details>';
             }
             h += '</div>';
           });
-          h += '<details class="add"><summary>月の授業回数を登録・変更</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-kind">種類</label><select id="pl-kind">' + kindOptions("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"><label for="pl-scope">適用</label><select id="pl-scope"><option value="month">指定した月</option><option value="default">毎月の既定</option></select><label for="pl-target">対象月</label><input type="month" id="pl-target" value="' + esc(s.month) + '"></div><p><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>回数を保存</button></p><p class="note">過去月も指定できます。0回で科目を削除します。変更・削除するとその月全体の承認が失効し、再提案が必要です。請求済みの月は先に未入金請求を取り消してください。</p></details>';
-          if ((p.defaultRows || []).length) h += '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(lessonLabel(x)) + ' ' + esc(x.count) + '回'; }).join("、") + '</p>';
+          h += '<details class="add"><summary>毎月の既定回数（新しい月の初期値）</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-kind">種類</label><select id="pl-kind">' + kindOptions("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"><input type="hidden" id="pl-scope" value="default"><input type="hidden" id="pl-target" value="' + esc(selectedMonth || s.month) + '"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>既定を保存</button></div><p class="note">月ごとの回数は上の表で入力します。既定は、まだ計画のない月の初期値として使われます。0回で既定から外れます。</p></details>';
+          if ((p.defaultRows || []).length) h += '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回'; }).join("、") + '</p>';
           return h + '</div>';
         }
         function renderBilling(s) {
@@ -1897,13 +1903,14 @@
             billingSend(sid, e);
           }
         }
-        document.addEventListener("change", function (ev) { if (route().page === "student" && cur && ev.target.id === "plan-view-month") { billingEditor(cur).planYm = ev.target.value; render(); return; } if (route().page === "student" && cur && ev.target.getAttribute("data-billing-field") === "ym") { var e = billingEditor(cur); if (!e.busy && !e.pending) { e.ym = ev.target.value; e.preview = null; render(); } } });
+        function planRowInput(el, ym) { var month = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === ym; })[0]; if (!month) return; var inp = planInput(cur, month), i = +el.getAttribute("data-plan-row"), rf = el.getAttribute("data-plan-rowfield"); if (!inp.rows[i]) return; inp.rows[i][rf] = rf === "count" ? (el.value === "" ? "" : Number(el.value)) : el.value; inp.dirty = true; }
+        document.addEventListener("change", function (ev) { if (route().page === "student" && cur && ev.target.getAttribute && ev.target.getAttribute("data-plan-row") != null && ev.target.getAttribute("data-plan-ym")) { planRowInput(ev.target, ev.target.getAttribute("data-plan-ym")); return; } if (route().page === "student" && cur && ev.target.id === "plan-view-month") { billingEditor(cur).planYm = ev.target.value; render(); return; } if (route().page === "student" && cur && ev.target.getAttribute("data-billing-field") === "ym") { var e = billingEditor(cur); if (!e.busy && !e.pending) { e.ym = ev.target.value; e.preview = null; render(); } } });
         function planWrite(op, s, m, payload) {
           if (busy) return;
           var sid = s.id, inputKey = sid + ":" + m.ym, planAuth = token();
           busy = true; render();
           admin(op, payload).then(function (res) {
-            delete planInputs[inputKey]; cacheClear(); if (token() === planAuth && authM === "ok") { applyResult(res, {page:"student",id:sid,section:"billing"}); toast(op === "planPropose" ? "保護者に提案しました" : op === "planCommentSave" ? "コメントを保存しました" : "承諾を記録しました"); }
+            delete planInputs[inputKey]; cacheClear(); if (token() === planAuth && authM === "ok") { applyResult(res, {page:"student",id:sid,section:"billing"}); toast(op === "planPropose" || op === "planSubmit" ? "保存して保護者に提案しました" : op === "planCommentSave" ? "コメントを保存しました" : "承諾を記録しました"); }
           }).catch(function (er) { if (planInputs[inputKey]) planInputs[inputKey].error = er.message; toast(er.message + "。入力は保持しています"); }).then(function () { busy = false; render(); });
         }
         document.addEventListener("input", function (ev) {
@@ -1913,6 +1920,7 @@
             var month = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === ym; })[0];
             if (month) { var inp = planInput(cur, month); inp[field] = el.value; inp.dirty = true; }
           }
+          if (ym && el.getAttribute("data-plan-row") != null) planRowInput(el, ym);
           var e = billingEditor(cur), bf = el.getAttribute("data-billing-field"), id = el.getAttribute("data-invoice"), prop = el.getAttribute("data-invoice-field");
           if (bf === "ym" && !e.busy && !e.pending) { e.ym = el.value; e.preview = null; }
           if (id && prop && e.fields[id]) e.fields[id][prop] = el.value;
@@ -2272,6 +2280,25 @@
               var fd = document.getElementById("f-date"); if (fd) fd.scrollIntoView({ behavior: "smooth", block: "center" });
               toast(fmtD(btn.getAttribute("data-date")) + " を案内フォームに入れました");
               break;
+            case "planrowadd": case "planrowdel": {
+              var prYm = btn.getAttribute("data-ym"), prInfo = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === prYm; })[0]; if (!prInfo) return;
+              var prF = planInput(cur, prInfo); prF.rows = prF.rows || [];
+              if (a === "planrowadd") prF.rows.push({ subject: "", kind: "通常", count: 4 }); else prF.rows.splice(+btn.getAttribute("data-i"), 1);
+              prF.dirty = true; render(); break;
+            }
+            case "plansubmit": {
+              var psYm = btn.getAttribute("data-ym"), psInfo = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === psYm; })[0]; if (!psInfo) return;
+              var psF = planInput(cur, psInfo), psRows = (psF.rows || []).map(function (r) { return { subject: String(r.subject || "").trim(), kind: r.kind || "通常", count: Number(r.count) }; });
+              if (!psRows.length) { toast("科目と回数を1つ以上入力してください"); return; }
+              if (psRows.some(function (r) { return !r.subject; })) { toast("科目を選んでください"); return; }
+              if (psRows.some(function (r) { return !Number.isInteger(r.count) || r.count < 1 || r.count > 31; })) { toast("回数は1〜31の整数で入力してください"); return; }
+              var psMin = Number(psF.lessonMin), psFee = Number(psF.lessonFee);
+              if (!Number.isInteger(psMin) || psMin < 30 || psMin > 240 || psMin % 30) { toast("1回の授業時間は30分刻みで入力してください"); return; }
+              if (!Number.isInteger(psFee) || psFee < 0) { toast("1回の授業料を入力してください"); return; }
+              if (psInfo.status === "approved" && !confirm(psYm + " は承認済みです。保存すると承認が失効し、保護者に再提案します。よろしいですか？")) return;
+              planWrite("planSubmit", cur, psInfo, { studentId: cur.id, ym: psYm, expectedRevision: psInfo.revision == null ? 0 : psInfo.revision, rows: psRows, lessonMin: psMin, lessonFee: psFee, comment: psF.comment || "" });
+              break;
+            }
             case "plancomment": {
               var pcYm = btn.getAttribute("data-ym"), pcInfo = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === pcYm; })[0];
               if (!pcInfo) return;
@@ -2290,10 +2317,11 @@
                 if (!confirm(planYm + " の回数と料金（" + (proposedMonthly > 0 ? "旧料金 " + yen(proposedMonthly) : "30分 " + yen(proposedRate)) + "）を保護者に提案しますか？")) return;
                 planWrite("planPropose", cur, monthInfo, { studentId: sid, ym: planYm, expectedRevision: rev, rate30: proposedRate, monthly: proposedMonthly, lessonMin:Number(planFields.lessonMin) });
               } else {
-                if (Number(planFields.lessonMin) !== Number(monthInfo.lessonMin) || Number(planFields.rate30) !== Number(monthInfo.rate30) || Number(planFields.monthly) !== Number(monthInfo.monthly)) { toast("料金の入力が提案と異なります。先に再提案してください"); return; }
+                var approveRate = Number(planFields.lessonMin) > 0 ? Math.round((Number(planFields.lessonFee) || 0) * 30 / Number(planFields.lessonMin)) : -1;
+                if (Number(planFields.lessonMin) !== Number(monthInfo.lessonMin) || approveRate !== Number(monthInfo.rate30) || Number(planFields.monthly) !== Number(monthInfo.monthly)) { toast("授業時間・授業料の入力が提案と異なります。先に保存して再提案してください"); return; }
                 if (!planFields.consentDate || planFields.consentDate > today()) { toast("実際の承諾日を入力してください"); return; }
                 if ((planYm < thisYm() || (cur.lessons || []).some(function (l) { return l.date.slice(0, 7) === planYm && l.date < planFields.consentDate && (l.status === "booked" || l.status === "offered"); })) && !String(planFields.memo || "").trim()) { toast("過去の承諾を記録する理由・確認内容を入力してください"); return; }
-                if (!confirm(planYm + " の提案第" + rev + "版について、" + planFields.consentDate + " に" + planFields.via + "で保護者の承諾を得たことを記録しますか？")) return;
+                if (!confirm(planYm + " の提案について、" + planFields.consentDate + " に" + planFields.via + "で保護者の承諾を得たことを記録しますか？")) return;
                 planWrite("planApproveTeacher", cur, monthInfo, { studentId: sid, ym: planYm, expectedRevision: rev, via: planFields.via, consentDate: planFields.consentDate, memo: planFields.memo || "" });
               }
               break;

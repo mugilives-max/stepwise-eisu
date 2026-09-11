@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-comment' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-form' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1279,6 +1279,7 @@ function admin_(req) {
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
     case 'planCommentSave': return kanriWrap_(req, planCommentSave_(req), req.studentId);
+    case 'planSubmit': return kanriWrap_(req, billingPlanSubmit_(req), req.studentId);
     case 'lessonKinds': return { ok: true, lessonKinds: lessonKindsPublic_() };
     case 'lessonKindSave': { var lk = lessonKindSave_(req); return lk.error ? lk : { ok: true, lessonKinds: lk.lessonKinds, admin: adminState_() }; }
     case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);

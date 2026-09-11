@@ -168,6 +168,40 @@ function billingPlanSet_(req) {
   return {ok:true};
 }
 function billingMoney_(value) { return billingRevisionValid_(value) && Number(value)<=10000000; }
+// 先生: 月の科目・種類・回数、1回の授業時間と1回の授業料、コメントをまとめて保存し、そのまま保護者へ提案する(1回の処理)。
+// 内部では従来の planSet / コメント保存 / planPropose を順に呼ぶ(30分単価 = 1回の授業料×30÷授業時間、四捨五入)。
+function billingPlanSubmit_(req) {
+  var id=String(req.studentId||''),ym=String(req.ym||''),st=findStudent_(id);
+  if(!st)return billingError_('在籍生徒を選んでください','notFound');
+  if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
+  var rows=Array.isArray(req.rows)?req.rows:[];
+  if(!rows.length)return billingError_('科目と回数を1つ以上入力してください');
+  var seen={},clean=[];
+  for(var i=0;i<rows.length;i++){
+    var subject=String(rows[i]&&rows[i].subject||'').trim(),kind=kindNorm_(rows[i]&&rows[i].kind),count=Number(rows[i]&&rows[i].count);
+    if(!subject||subject.length>20||/^[=+@-]/.test(subject))return billingError_('科目を20文字以内で選んでください');
+    if(!kindValid_(kind))return kindError_();
+    if(!Number.isInteger(count)||count<1||count>31)return billingError_('回数は1〜31の整数で入力してください');
+    var key=subject+'\u0000'+kind;if(seen[key])return billingError_('同じ科目・種類が重複しています');seen[key]=true;clean.push({subject:subject,kind:kind,count:count});
+  }
+  var lessonMin=Number(req.lessonMin),fee=Number(req.lessonFee);
+  if(!Number.isInteger(lessonMin)||lessonMin<30||lessonMin>240||lessonMin%30)return billingError_('1回の授業時間は30〜240分の30分刻みで入力してください');
+  if(!Number.isInteger(fee)||fee<0||fee>10000000)return billingError_('1回の授業料を整数で入力してください');
+  var rate30=Math.round(fee*30/lessonMin);
+  var a=billingAgreement_(id,ym),check=billingMonthUnlocked_(id,ym)||billingRevisionCheck_(req,a,false);if(check)return check;
+  // 同じ処理の中で何度も書くので、書く前にシートのキャッシュを捨てて最新の版を読む(1回ずつの操作と同じ状態にする)
+  function rev(){memoClear_();var cur=billingAgreement_(id,ym);return cur?Number(cur.revision):0;}
+  var existing=planRows_().filter(function(r){return r.studentId===id&&r.ym===ym;});
+  for(var e=0;e<existing.length;e++){
+    var ek=existing[e].subject+'\u0000'+kindNorm_(existing[e].kind);
+    if(!seen[ek]){var del=billingPlanSet_({studentId:id,ym:ym,subject:existing[e].subject,kind:existing[e].kind,count:0,expectedRevision:rev()});if(del.error)return del;}
+  }
+  for(var c=0;c<clean.length;c++){var set=billingPlanSet_({studentId:id,ym:ym,subject:clean[c].subject,kind:clean[c].kind,count:clean[c].count,expectedRevision:rev()});if(set.error)return set;}
+  memoClear_();
+  if(req.comment!==undefined&&typeof planCommentSave_==='function'){var pc=planCommentSave_({studentId:id,ym:ym,comment:req.comment});if(pc.error)return pc;}
+  var pr=billingPlanPropose_({studentId:id,ym:ym,expectedRevision:rev(),rate30:rate30,monthly:0,lessonMin:lessonMin});if(pr.error)return pr;
+  return {ok:true,rate30:rate30,lessonMin:lessonMin,lessonFee:Math.round(rate30*lessonMin/30),rows:clean.length};
+}
 function billingPlanPropose_(req) {
   var id=String(req.studentId||''),ym=String(req.ym||''),st=findStudent_(id);
   if(!st)return billingError_('在籍生徒を選んでください','notFound');

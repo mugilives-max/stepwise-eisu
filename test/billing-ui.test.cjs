@@ -132,15 +132,15 @@ test('a payment response for another student does not cancel the current student
 
 test('unmodified proposal defaults refresh after a base-fee change at the same plan revision', async () => {
   const ui = await ready();
-  assert.equal(ui.el('pl-rate-2026-09').value, '1500');
+  assert.equal(ui.el('pl-fee-2026-09').value, '4500');
   ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
-  assert.equal(ui.el('pl-rate-2026-09').value, '2000');
+  assert.equal(ui.el('pl-fee-2026-09').value, '6000');
 });
 
 test('an explicitly edited proposal fee survives a base-fee refresh', async () => {
-  const ui = await ready(); ui.input('pl-rate-2026-09', '1750');
+  const ui = await ready(); ui.input('pl-fee-2026-09', '5250');
   ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
-  assert.equal(ui.el('pl-rate-2026-09').value, '1750');
+  assert.equal(ui.el('pl-fee-2026-09').value, '5250');
 });
 
 test('invoice creation uses preview amount and repeats the same request after a network error', async () => {
