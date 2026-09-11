@@ -168,16 +168,20 @@ test('the home calendar shows registration-unavailable days and times like the s
   assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
   assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可12-13:30<\/span>/);
   ui.click('calday', { 'data-date':'2026-09-15' }); assert.match(ui.html(), /登録不可（終日）/);
-  ui.navigate('#schedule'); assert.match(ui.html(), /登録不可12-13:30/); assert.match(ui.html(), /予定管理/);
+  ui.navigate('#schedule'); assert.match(ui.html(), /登録不可12-13:30/);
 });
 
-test('the student page has no 予定 tab and manages schedules from the home page', async () => {
-  const ui = await studentReady();
+test('the student page has no 予定 tab and registers or removes schedule items from the selected day', async () => {
+  const s = { ...state(), blocked:[{ id:'b1', date:'2026-09-16', note:'部活' }], events:[{ id:'e1', date:'2026-09-17', dateTo:'2026-09-17', title:'大会', kind:'event' }] };
+  const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
-  assert.match(ui.html(), /予定管理/); assert.doesNotMatch(ui.html(), /href="#schedule"/);
-  ui.click('panel', { 'data-p':'wish' }); assert.match(ui.html(), /予定表で日を選ぶ/); assert.ok(ui.el('f-wdate'));
-  ui.click('selstart', { 'data-m':'wish' }); ui.click('calday', { 'data-date':'2026-09-15' }); assert.ok(ui.el('b-wstart')); assert.match(ui.html(), /授業が可能な日をタップ/);
-  ui.click('selcancel'); assert.equal(ui.el('b-wstart'), undefined);
-  ui.click('panel', { 'data-p':'ng' }); assert.ok(ui.el('f-bdate')); ui.click('panel', { 'data-p':'event' }); assert.ok(ui.el('f-etitle'));
-  ui.navigate('#schedule'); assert.match(ui.html(), /予定管理/); assert.equal(ui.el('tabs').innerHTML.includes('class="on">ホーム'), true);
+  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/);
+  ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定を共有/);
+  ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
+  ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
+  ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
+  ui.click('calday', { 'data-date':'2026-09-16' }); assert.match(ui.html(), /× 授業できない 部活/); ui.click('delblock', { 'data-ids':'b1' }); assert.deepEqual(ui.requests.at(-1).body, { action:'unblock', k:'test-link-a', blockIds:['b1'] });
+  ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
+  ui.click('calday', { 'data-date':'2026-09-17' }); assert.match(ui.html(), /大会/); ui.click('delevent', { 'data-id':'e1' }); assert.deepEqual(ui.requests.at(-1).body, { action:'eventDel', k:'test-link-a', eventId:'e1' });
+  ui.navigate('#schedule'); assert.equal(ui.el('tabs').innerHTML.includes('class="on">ホーム'), true);
 });

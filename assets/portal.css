@@ -97,6 +97,8 @@
       .chip.past { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 600; }
       .chip.ev { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 600; }
       .chip.ng { background: var(--taken); border-color: var(--line); color: var(--muted); }
+      .chip.wish { background: #eaf6ee; border-color: #2f8a4c; color: #2f8a4c; font-weight: 600; }
+      .callbl.wi { color: #2f8a4c; font-weight: 700; }
       .empty { color: var(--muted); font-size: 13.5px; padding: 8px 2px; }
       .slotline { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
       .slotline:last-child { border-bottom: none; }
