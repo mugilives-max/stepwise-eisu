@@ -783,35 +783,45 @@
           return h;
         }
 
-        // 授業の記録: 科目＋種類ごとのフォルダ(折り畳み)。中は日付の新しい順に、公開された授業記録(開ける)と実施済みの授業(行)を並べる
-        function renderHistoryPage() {
-          var h = '<p class="sub">実施済みの授業(直近120日)と先生からの授業記録。科目と種類ごとのフォルダに分けています</p>';
+        // 授業の記録: 科目＋種類ごとのフォルダをカードで並べ、開くとそのフォルダの中身(公開された授業記録と実施済みの授業、日付の新しい順)を表示する
+        var histFolder = null;
+        function historyFolders() {
           var done = (S.history || []).filter(function (x) { return x.done; }), records = (S.lessonRecords || []).slice(), used = {};
           function recordFor(x) { return records.filter(function (r) { return r.date === x.date && r.start === x.start && r.subject === (x.subject || '') && Number(r.min) === Number(x.min); })[0] || null; }
           var folders = {}, order = [];
-          function folder(label) { if (!folders[label]) { folders[label] = { items: [], lessons: 0, records: 0, mins: 0 }; order.push(label); } return folders[label]; }
-          done.forEach(function (x) { var f = folder(x.subject ? lessonLabel(x) : 'その他'), r = recordFor(x); if (r) used[r.recordId || (r.date + ' ' + r.start)] = true; f.items.push({ date: x.date, start: x.start, min: x.min, record: r }); f.lessons++; f.mins += Number(x.min) || 0; if (r) f.records++; });
+          function folder(label) { if (!folders[label]) { folders[label] = { label: label, items: [], lessons: 0, records: 0, mins: 0, last: '' }; order.push(label); } return folders[label]; }
+          done.forEach(function (x) { var f = folder(x.subject ? lessonLabel(x) : 'その他'), r = recordFor(x); if (r) used[r.recordId || (r.date + ' ' + r.start)] = true; f.items.push({ date: x.date, start: x.start, min: x.min, record: r }); f.lessons++; f.mins += Number(x.min) || 0; if (r) f.records++; if (x.date > f.last) f.last = x.date; });
           records.forEach(function (r) {
             if (used[r.recordId || (r.date + ' ' + r.start)]) return;
             var match = (S.history || []).filter(function (x) { return x.date === r.date && x.start === r.start && (x.subject || '') === r.subject; })[0];
-            var f = folder(r.subject ? lessonLabel({ subject: r.subject, kind: match ? match.kind : '' }) : 'その他'); f.items.push({ date: r.date, start: r.start, min: r.min, record: r }); f.records++;
+            var f = folder(r.subject ? lessonLabel({ subject: r.subject, kind: match ? match.kind : '' }) : 'その他'); f.items.push({ date: r.date, start: r.start, min: r.min, record: r }); f.records++; if (r.date > f.last) f.last = r.date;
           });
           order.sort(function (x, y) { return folders[y].lessons - folders[x].lessons || (x < y ? -1 : x > y ? 1 : 0); });
-          if (!order.length) return h + '<div class="empty">実施済みの授業はまだありません</div>';
-          h += '<div class="card" style="padding:10px 14px"><div class="row" style="gap:8px 18px"><span><strong>合計</strong> ' + done.length + '回</span>' + order.map(function (k) { return '<span>' + esc(k) + ' ' + folders[k].lessons + '回</span>'; }).join('') + '</div></div>';
-          order.forEach(function (k) {
-            var f = folders[k], key = 'hist:' + k; if (folds[key] === undefined) folds[key] = order.length === 1;
-            f.items.sort(function (x, y) { return x.date + ' ' + x.start < y.date + ' ' + y.start ? 1 : -1; });
-            h += foldHead(key, '📁 ' + esc(k), f.lessons + '回・' + f.mins + '分' + (f.records ? '・記録 ' + f.records + '件' : ''));
-            h += '<div class="card">';
+          order.forEach(function (k) { folders[k].items.sort(function (x, y) { return x.date + ' ' + x.start < y.date + ' ' + y.start ? 1 : -1; }); });
+          return { order: order, folders: folders, total: done.length };
+        }
+        function renderHistoryPage() {
+          var d = historyFolders(), h = '';
+          if (!d.order.length) return '<p class="sub">実施済みの授業(直近120日)と先生からの授業記録</p><div class="empty">実施済みの授業はまだありません</div>';
+          var f = histFolder && d.folders[histFolder];
+          if (f) {
+            h += '<div class="row" style="margin-bottom:10px"><button class="btn-quiet btn-sm" data-action="histback">← 一覧に戻る</button></div>';
+            h += '<h2>📁 ' + esc(f.label) + ' <span class="cnt">' + f.lessons + '回・' + f.mins + '分' + (f.records ? '・記録 ' + f.records + '件' : '') + '</span></h2><div class="card">';
             if (f.records) h += '<h3 style="margin:0 0 6px;font-size:14px">先生からの授業記録</h3>';
             f.items.forEach(function (it) {
               if (it.record) h += publishedRecordItem(it.record, true);
               else h += '<div class="slotline"><span class="time">' + fmtDateW(it.date) + ' ' + esc(it.start) + '</span><span class="who"><span class="small muted">' + (it.min ? it.min + '分・' : '') + '記録はまだ公開されていません</span></span></div>';
             });
-            h += '</div></details>';
+            return h + '</div>';
+          }
+          h += '<p class="sub">実施済みの授業(直近120日)と先生からの授業記録。科目と種類ごとのフォルダをタップすると開きます</p>';
+          h += '<div class="card" style="padding:10px 14px;margin-bottom:12px"><div class="row" style="gap:8px 18px"><span><strong>合計</strong> ' + d.total + '回</span>' + d.order.map(function (k) { return '<span>' + esc(k) + ' ' + d.folders[k].lessons + '回</span>'; }).join('') + '</div></div>';
+          h += '<div class="folder-grid">';
+          d.order.forEach(function (k) {
+            var fo = d.folders[k];
+            h += '<button class="folder-card" data-action="histopen" data-folder="' + esc(k) + '"><span class="fname">📁 ' + esc(k) + '</span><span class="small muted">' + fo.lessons + '回・' + fo.mins + '分' + (fo.last ? '・最終 ' + fmtDateW(fo.last) : '') + '</span>' + (fo.records ? '<span class="tag blue">記録 ' + fo.records + '件</span>' : '<span class="small muted">記録はまだありません</span>') + '</button>';
           });
-          return h;
+          return h + '</div>';
         }
 
         /* ---------- 画面: 保護者ページ ---------- */
@@ -1320,6 +1330,8 @@
             case "closebar": pending = null; render(); break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
+            case "histopen": histFolder = btn.getAttribute("data-folder"); render(); window.scrollTo(0, 0); break;
+            case "histback": histFolder = null; render(); break;
             case "dayadd": dayAddOpen=!dayAddOpen;render();break;
             case "calday":
               dayAddOpen=false;
@@ -1444,7 +1456,7 @@
           else if (qp) { history.replaceState(null, "", location.pathname + location.hash); }
           else if (qs.toString()) history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
-        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
+        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; histFolder = null; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
         window.addEventListener("storage", function (ev) {
           if (route()==='family')return;
           if (previewK || (ev.key !== "sw_k" && ev.key !== null) || (ev.key !== null && ev.oldValue === ev.newValue)) return;

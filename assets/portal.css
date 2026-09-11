@@ -49,6 +49,10 @@
       .calday.ngday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px, var(--taken) 7px 10px, transparent 10px 14px); }
       .ngswatch { padding: 0 4px; background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px); }
       .toffswatch { padding: 0 4px; background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
+      .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+      .folder-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); cursor: pointer; font: inherit; color: inherit; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+      .folder-card:hover { border-color: var(--primary); }
+      .folder-card .fname { font-size: 17px; font-weight: 700; }
       .callbl.to { color: var(--muted); font-weight: 600; }
       .chip.toff { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .calday.today { border-color: var(--muted); }

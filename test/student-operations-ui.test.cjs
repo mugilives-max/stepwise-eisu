@@ -53,7 +53,7 @@ test('task lists show pending same-subject deadlines and the frozen deadline of 
 
 const published = () => ({ date:'2026-09-07', start:'17:00', subject:'英語', content:'関係代名詞 <復習>', progress:'自分で説明できた', nextFocus:'長文に進む', teacherNote:'PRIVATE_TEACHER_NOTE', reportDraft:'PRIVATE_DRAFT', homework:[{ title:'単語 <再確認>', dueMode:'nextLesson', dueSubject:'英語', due:'', nextLessonPending:true }] });
 test('saved public lesson records show escaped content and deadline only in student and family views', async () => {
-  const ui = await studentReady({ ...state(), lessonRecords:[published()] }); ui.navigate('#history');
+  const ui = await studentReady({ ...state(), lessonRecords:[published()] }); ui.navigate('#history'); assert.match(ui.html(), /data-folder="英語"/); ui.click('histopen', { 'data-folder':'英語' });
   assert.match(ui.html(), /先生からの授業記録/); assert.match(ui.html(), /関係代名詞 &lt;復習&gt;/); assert.match(ui.html(), /次回の英語授業（予定未定）/);
   assert.equal(ui.html().includes('PRIVATE_'), false);
   const family = createUI('student', { hash:'#family/records', session:new Map([['sw_ft_v1','test-family-token']]) });
@@ -238,7 +238,7 @@ test('the 授業計画 fold separates proposed notices from the approved plan wi
   const legacy = await studentReady({ ...state([]), plan:{ '英語':4 }, planStatus:'proposed' }); assert.match(legacy.html(), /1件の案内/);
 });
 
-test('the lesson history is grouped into subject-and-kind folders with records inside', async () => {
+test('the lesson history shows subject-and-kind folder cards that open into their records', async () => {
   const s = { ...state(), history:[
     { id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', kind:'', done:true },
     { id:'h2', date:'2026-09-04', start:'17:00', min:60, subject:'英語', kind:'講習', done:true },
@@ -247,8 +247,12 @@ test('the lesson history is grouped into subject-and-kind folders with records i
     lessonRecords:[{ ...published(), date:'2026-09-05', start:'17:00', min:90, subject:'英語', recordId:'r1' }] };
   const ui = await studentReady(s); ui.navigate('#history');
   assert.match(ui.html(), /<strong>合計<\/strong> 3回<\/span><span>英語 2回<\/span><span>英語（講習） 1回<\/span>/);
-  assert.match(ui.html(), /<details class="fold hist:英語" data-fold="hist:英語"><summary><h2>[^]*?📁 英語 <span class="cnt">2回・180分・記録 1件<\/span>/);
-  assert.match(ui.html(), /<details class="fold hist:英語（講習）" data-fold="hist:英語（講習）"><summary><h2>[^]*?📁 英語（講習） <span class="cnt">1回・60分<\/span>/);
+  assert.match(ui.html(), /<button class="folder-card" data-action="histopen" data-folder="英語"><span class="fname">📁 英語<\/span><span class="small muted">2回・180分・最終 9\/5\(土\)<\/span><span class="tag blue">記録 1件<\/span><\/button>/);
+  assert.match(ui.html(), /data-folder="英語（講習）"><span class="fname">📁 英語（講習）<\/span><span class="small muted">1回・60分・最終 9\/4\(金\)<\/span><span class="small muted">記録はまだありません<\/span>/);
+  assert.doesNotMatch(ui.html(), /数学 1回|関係代名詞/);
+  ui.click('histopen', { 'data-folder':'英語' });
+  assert.match(ui.html(), /<h2>📁 英語 <span class="cnt">2回・180分・記録 1件<\/span><\/h2>/);
   assert.match(ui.html(), /先生からの授業記録<\/h3><details class="card"><summary>9\/5\(土\) 17:00 英語<\/summary>[^]*?関係代名詞 &lt;復習&gt;[^]*?<div class="slotline"><span class="time">9\/2\(水\) 17:00<\/span>/);
-  assert.doesNotMatch(ui.html(), /数学 1回|月ごと/);
+  assert.doesNotMatch(ui.html(), /folder-card/);
+  ui.click('histback'); assert.match(ui.html(), /folder-card/); assert.doesNotMatch(ui.html(), /関係代名詞/);
 });
