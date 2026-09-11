@@ -352,12 +352,11 @@
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
-              lb.slice(0, 3).forEach(function (l) {
+              lb.forEach(function (l) {
                 if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
                 var lc = l.st === "offer" ? " of" : "";
                 marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
               });
-              if (lb.length > 3) marks += '<span class="callbl more">+' + (lb.length - 3) + "</span>";
             }
             var clickable = !past || hasItems; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)
             if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";

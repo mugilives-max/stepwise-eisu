@@ -262,3 +262,9 @@ test('calendar lesson labels show start and end time', async () => {
   const ui = await studentReady(state([slot('slot-a', { date:'2026-09-15', start:'17:00', min:90, subject:'英語', st:'mine' })]));
   assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-18:30<\/span><span class="s">英語<\/span><\/span>/);
 });
+
+test('calendar shows every lesson of a day without a +N summary', async () => {
+  const ui = await studentReady(state(['09:00','11:00','13:00','15:00','17:00'].map((t, i) => slot('slot-' + i, { date:'2026-09-15', start:t, min:60, subject:'英語', st:'mine' }))));
+  const cell = ui.html().match(/data-date="2026-09-15">15<span class="calmarks"><\/span>([^]*?)<\/button>/)[1];
+  assert.equal((cell.match(/class="calbox"/g) || []).length, 5); assert.doesNotMatch(cell, /callbl more/);
+});
