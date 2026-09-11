@@ -184,6 +184,10 @@
         var nav = document.getElementById("nav");
         var WD = ["日","月","火","水","木","金","土"];
         var LESSON_SUBJECTS = ["英語", "数学", "英数", "国語", "理科", "化学", "社会"];
+        // 授業の種類(通常・演習・講習など)。一覧は GAS の lessonKinds(設定ページで管理)。画面上の "" と "通常" は同じ意味
+        function lessonKinds() { var ks = ((A && A.lessonKinds) || []).filter(function (k) { return k.active !== false; }).map(function (k) { return k.name; }); return ks.length ? ks : ["通常"]; }
+        function kindOptions(sel) { var cur = sel || "通常", ks = lessonKinds(); if (ks.indexOf(cur) < 0) ks = ks.concat([cur]); return ks.map(function (k) { return '<option value="' + esc(k) + '"' + (k === cur ? " selected" : "") + ">" + esc(k) + "</option>"; }).join(""); }
+        function lessonLabel(s) { if (!s) return ""; var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); }
         var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "化学": "#087e8b", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
         var FALLBACK_COLORS = ["#6b7280", "#4b5563"];
         var D = null;      // ダッシュボード
@@ -264,7 +268,7 @@
         var slotEdit = null;
         function slotEditSnapshot(s) { return { id: String(s.id), date: s.date, start: s.start, min: Number(s.min), subject: s.subject || "", deliveryMode: s.deliveryMode || "" }; }
         function slotEditPending() { var r = route(), data = r.page === "student" ? cur : isLessons(r) ? A : D; return data && data.pendingEdits || []; }
-        function slotEditPayload(p) { var q = { op: p.op, studentId: p.studentId, slotId: p.slotId, requestId: p.requestId, deliveryMode: p.after.deliveryMode }; if (p.op === "editOffered") Object.assign(q, { expectedSnapshot: p.before, date: p.after.date, start: p.after.start, min: p.after.min, subject: p.after.subject }); else q.expectedMode = p.before.deliveryMode; return q; }
+        function slotEditPayload(p) { var q = { op: p.op, studentId: p.studentId, slotId: p.slotId, requestId: p.requestId, deliveryMode: p.after.deliveryMode }; if (p.op === "editOffered") Object.assign(q, { expectedSnapshot: p.before, date: p.after.date, start: p.after.start, min: p.after.min, subject: p.after.subject, kind: p.after.kind || "通常" }); else q.expectedMode = p.before.deliveryMode; return q; }
         function slotEditResume(p) { slotEdit = { auth: token(), op: p.op, studentId: p.studentId, before: p.before, form: Object.assign({}, p.after), pending: slotEditPayload(p), busy: false, error: "" }; render(); }
         function slotEditOpen(btn, op) {
           if (slotEdit && (slotEdit.busy || slotEdit.pending)) { toast("前の変更結果を先に確認してください"); return; }
@@ -281,6 +285,7 @@
           h += '<div class="card" role="region" aria-label="授業変更" style="margin:16px 0"><h2>' + (modeOnly ? 'この回の授業形式を変更' : '送信済みの案内を修正') + '</h2><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
           if (e.error) h += '<p class="lc-notice" role="alert">' + esc(e.error) + '</p>';
           if (!modeOnly) h += '<div class="row"><label>日付<input type="date" id="se-date" data-slot-edit="date" value="' + esc(f.date) + '"' + dis + '></label><label>開始<input type="time" id="se-start" data-slot-edit="start" value="' + esc(f.start) + '"' + dis + '></label><label>授業時間（分）<input type="number" id="se-min" data-slot-edit="min" min="30" max="240" step="30" value="' + esc(f.min) + '"' + dis + '></label><label>科目<select id="se-subject" data-slot-edit="subject"' + dis + '>' + [""].concat(LESSON_SUBJECTS.indexOf(f.subject) < 0 && f.subject ? [f.subject] : [], LESSON_SUBJECTS).map(function (s) { return '<option value="' + esc(s) + '"' + (s === f.subject ? ' selected' : '') + '>' + esc(s || '選択してください') + '</option>'; }).join('') + '</select></label></div>';
+          if (!modeOnly) h += '<label for="se-kind">種類</label><select id="se-kind" data-slot-edit="kind"' + dis + '>' + kindOptions(f.kind) + '</select>';
           h += '<label for="se-mode">授業形式</label><select id="se-mode" data-slot-edit="deliveryMode"' + dis + '>' + deliveryOptions(f.deliveryMode) + '</select><p class="note">確認済みの生徒メールへ変更を通知します。対面は2人まで、オンラインは1人までです。</p>';
           if (e.pending) h += '<p>変更結果を確認するまで、同じ内容を保持しています。</p><button class="btn-primary" data-action="se-retry"' + (e.busy ? ' disabled' : '') + '>' + (e.busy ? '保存中…' : '同じ内容で結果を確認') + '</button>';
           else if (e.force) h += '<p class="lc-notice">上記の休み・希望時間との重なりを確認したうえで保存します。</p><button class="btn-primary" data-action="se-force">確認して保存</button> <button class="btn-quiet" data-action="se-edit">入力に戻る</button>';
@@ -424,6 +429,7 @@
           if (fixedStudent) h += '<input type="hidden" id="f-student" value="' + esc(fixedStudent.id) + '">';
           else h += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>' + students.map(function (x) { return '<option value="' + esc(x.id) + '"' + (sameId(d.studentId, x.id) ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>';
           h += '<label for="f-subject">科目（必須）</label><select id="f-subject" required aria-required="true"><option value="">科目を選択</option>' + LESSON_SUBJECTS.map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
+          h += '<label for="f-kind">種類（必須）</label><select id="f-kind" required>' + kindOptions(d.kind) + '</select>';
           h += '<label for="f-delivery">この回の形式</label><select id="f-delivery" required>' + deliveryOptions(d.deliveryMode || student.deliveryMode) + '</select>';
           h += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + (d.date || today) + '">';
           h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300">';
@@ -436,7 +442,7 @@
             if (useRows.length) {
               var parts = useRows.map(function (x) {
                 var have = (A.slots || []).filter(function (s) { return sameId(s.studentId, d.studentId) && s.status === "booked" && s.date.slice(0, 7) === ymNow && (s.subject || "その他") === x.subject; }).length;
-                return esc(x.subject) + ' ' + have + '/' + x.count + '回' + (have < x.count ? '(あと' + (x.count - have) + ')' : '');
+                return esc(lessonLabel(x)) + ' ' + have + '/' + x.count + '回' + (have < x.count ? '(あと' + (x.count - have) + ')' : '');
               });
               var stRows = mRows.length ? mRows : [];
               var stAll = stRows.length ? (stRows.some(function (x) { return x.status === "declined"; }) ? "declined" : stRows.every(function (x) { return x.status === "approved"; }) ? "approved" : stRows.some(function (x) { return x.status === "proposed"; }) ? "proposed" : "draft") : "none";
@@ -570,7 +576,7 @@
         }
         function lessonLine(s, withDate) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-          h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(s.subject) + "</span>" : "") + "</span>";
+          h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + "</span>" : "") + "</span>";
           if (s.status === "offered") h += '<span class="tag amber">承認待ち</span>';
           else if (s.req) h += '<span class="tag red">取消依頼中</span>';
           else if (s.done) h += '<span class="tag gray">実施済</span>';
@@ -624,7 +630,7 @@
             html += '<h2 style="margin-top:16px">取消依頼 <span class="cnt">' + cr.length + '件・返事が必要です</span></h2><div class="card" style="border-color:var(--danger)">';
             cr.forEach(function (s) {
               html += '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span>';
-              html += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + '</a>' + (s.subject ? ' <span class="muted small">' + esc(s.subject) + '</span>' : '') +
+              html += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + '</a>' + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + '</span>' : '') +
                 '<div class="small"><strong>' + (s.req && s.req.requestType === 'exception' ? '期限後の例外申請' : s.req && s.req.requestType === 'normal' ? '24時間前までの通常申請' : '取消依頼') + '</strong> ' + (s.req && s.req.reason ? '理由: ' + esc(s.req.reason) : '<span class="muted">理由なし</span>') + (s.req && s.req.at ? ' <span class="muted">受付: ' + esc(fmtAuthTime(s.req.at)) + '</span>' : '') + '</div></span>';
               html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>取消を承認</button>';
               html += '<button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>予定どおり行う</button></div>';
@@ -825,7 +831,7 @@
             html += '<div class="card" style="margin-top:10px"><div class="row between"><strong>' + fmtD(selDate) + '</strong>' + (selDate >= tdy && s.active !== false ? '<button class="btn-ghost btn-sm" data-action="dayoffer" data-date="' + selDate + '" aria-label="この日に予定を追加" title="この日に予定を追加" style="border-radius:50%;width:36px;height:36px;padding:0;font-size:24px">＋</button>' : "") + '</div>';
             dayO.forEach(function (o) { html += offLine(o); });
             if (!dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) html += '<div class="empty">この日の予定はありません</div>';
-            dayL.forEach(function (l) { html += '<div class="line"><span class="t">' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' ' + (l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : l.req ? '<span class="tag red">取消依頼中</span>' : l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>') + '</span>' + (l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : "") + '</div>'; });
+            dayL.forEach(function (l) { html += '<div class="line"><span class="t">' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' ' + (l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : l.req ? '<span class="tag red">取消依頼中</span>' : l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>') + '</span>' + (l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : "") + '</div>'; });
             dayE.forEach(function (e) { html += '<div class="line"><span class="w"><span class="tag coral">共有予定</span> ' + esc(e.title) + (e.date !== e.dateTo ? ' <span class="small muted">(' + evRange(e) + ')</span>' : "") + '</span></div>'; });
             dayN.forEach(function (b) { html += '<div class="line"><span class="w"><span class="tag gray">授業できない</span>' + ngWhen(b) + ' <span class="small muted">' + esc(b.note) + '</span></span></div>'; });
             dayW.forEach(function (x) { html += wishRow(x, false); });
@@ -941,7 +947,7 @@
           html += '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2><div class="card">';
           if (upcoming.length) {
             upcoming.forEach(function (l) {
-              html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
+              html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
               html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
               html += '</span>';
               if (l.status === "booked") {
@@ -975,7 +981,7 @@
           html += '<h2>授業履歴 <span class="cnt">直近' + Math.min(20, pastL.length) + '件</span></h2><div class="card">';
           if (pastL.length) {
             pastL.slice(0, 20).forEach(function (l) {
-              html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(l.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
+              html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
               html += l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag amber">実施未記録</span>';
               html += lessonEntry(l, s.id);
               if (l.status === "booked") html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (l.done ? "0" : "1") + '" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
@@ -1093,7 +1099,7 @@
         function expiredRow(s, withName) {
           var h = '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span><span class="w">';
           if (withName) h += '<a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + '</a> ';
-          h += (s.subject ? esc(s.subject) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + s.min + '分</span> <span class="tag amber">返事なし</span></span>';
+          h += (s.subject ? esc(lessonLabel(s)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + s.min + '分</span> <span class="tag amber">返事なし</span></span>';
           h += '<button class="btn-primary btn-sm" data-action="finishoffered" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '') + '>実施済みにする</button>';
           h += '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '" data-mode="noshow"' + (busy ? ' disabled' : '') + '>未実施</button></div>';
           return h;
@@ -1107,7 +1113,7 @@
         }
         function lessonRow(s, withDate) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
-          h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(s.subject) + "</span>" : "");
+          h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + "</span>" : "");
           if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : (s.done ? ' <span class="tag gray">実施済</span>' : ' <span class="tag blue">確定</span>');
           else if (s.status === "offered") h += ' <span class="tag amber">承認待ち</span>';
           else h += ' <span class="tag gray">空き枠</span>';
@@ -1261,6 +1267,10 @@
           html += '<div class="form"><label for="f-curpass">現在のパスワード</label><input type="password" id="f-curpass" autocomplete="current-password"><label for="f-newpass">新しいパスワード</label><input type="password" id="f-newpass" autocomplete="new-password" placeholder="8文字以上"></div>';
           html += '<div class="row" style="margin-top:10px"><button class="btn-quiet btn-sm" data-action="changepass"' + (busy ? " disabled" : "") + '>パスワードを変更</button></div>';
           html += '<div class="note">パスワードを忘れた場合は、スプレッドシート「ステップワイズ予約システム」のconfigシートで passHash / passSalt / teacherEmail の行を削除すると初期設定からやり直せます。</div></div>';
+          html += '<h2>授業の種類</h2><div class="card"><p class="small">月間計画と授業の案内で選ぶ種類です。標準の時間と料金は、今後の種類別の料金計算で使います。名前は変更できないので、使わなくなった種類は「有効」を外してください。</p>';
+          html += '<div class="tbwrap"><table class="tb"><tr><th>種類</th><th>標準時間(分)</th><th>標準料金(円)</th><th>有効</th><th></th></tr>';
+          ((A && A.lessonKinds) || []).forEach(function (k, i) { html += '<tr><td>' + esc(k.name) + '</td><td><input type="number" id="lk-min-' + i + '" min="30" max="480" step="5" value="' + (k.standardMin == null ? '' : esc(k.standardMin)) + '" style="width:80px"></td><td><input type="number" id="lk-fee-' + i + '" min="0" step="10" value="' + (k.standardFee == null ? '' : esc(k.standardFee)) + '" style="width:100px"></td><td><input type="checkbox" id="lk-active-' + i + '"' + (k.active !== false ? ' checked' : '') + (k.name === '通常' ? ' disabled' : '') + '></td><td><button class="btn-quiet btn-sm" data-action="kindsave" data-i="' + i + '" data-name="' + esc(k.name) + '"' + (busy ? ' disabled' : '') + '>保存</button></td></tr>'; });
+          html += '</table></div><div class="row" style="margin-top:10px"><input type="text" id="lk-new-name" placeholder="新しい種類(例: 演習)" maxlength="20"><input type="number" id="lk-new-min" placeholder="標準時間(分)" min="30" max="480" step="5" style="width:120px"><input type="number" id="lk-new-fee" placeholder="標準料金(円)" min="0" step="10" style="width:130px"><button class="btn-primary btn-sm" data-action="kindadd"' + (busy ? ' disabled' : '') + '>追加</button></div></div>';
           html += '<h2>データの置き場所</h2><div class="card small"><div>予定・生徒: スプレッドシート「ステップワイズ予約システム」(アプリ専用。手で編集しない)</div><div>カルテ・成績・入金・面談: スプレッドシート「塾管理台帳」(Google ドライブ「ステップワイズ塾」内)</div><div style="margin-top:6px">生徒用ページ: <a href="' + YOYAKU + '" target="_blank" rel="noopener">' + esc(new URL(YOYAKU, location.href).href) + '</a>(生徒は専用リンクからのみ利用)</div></div>';
           html += '<h2>最近の動き</h2>';
           html += (A.log || []).length ? '<div class="card loglist">' + A.log.slice(0, 30).map(function (l) { return '<div>' + esc(l.time) + ' ' + esc(l.message) + '</div>'; }).join("") + '</div>' : '<div class="empty">まだ動きはありません</div>';
@@ -1284,7 +1294,7 @@
           var sendingDraft = offerDraft, sendingRoute = route(); sendingDraft.error = ""; sendingDraft.conflicts = [];
           busy = true; syncMsg = "送信中…"; render();
           var body = { action: "admin", token: token(), op: "offer", from: "kanri", view: viewOf(), force: !!force };
-          ["studentId", "date", "start", "min", "repeat", "subject", "wishId", "deliveryMode"].forEach(function (k2) { if (sendingDraft[k2]) body[k2] = sendingDraft[k2]; });
+          ["studentId", "date", "start", "min", "repeat", "subject", "kind", "wishId", "deliveryMode"].forEach(function (k2) { if (sendingDraft[k2]) body[k2] = sendingDraft[k2]; });
           post(body).then(function (res) {
             if (offerDraft !== sendingDraft || keyOf(route()) !== keyOf(sendingRoute)) return;
             busy = false; syncMsg = "";
@@ -1621,7 +1631,7 @@
             h += '<strong>' + fmtDY(c.previous.date) + ' ' + esc(c.previous.subject) + '</strong>' + lessonText(c.previous.content) + (c.previous.progress ? '<div class="small muted" style="margin-top:8px">取り組みの様子</div>' + lessonText(c.previous.progress) : '') + '<div class="small muted" style="margin-top:8px">今回につなぐ焦点</div>' + lessonText(c.previous.nextFocus);
           } else h += '<div class="empty">同じ科目の記録はまだありません。</div>';
           if ((c.previousTasks || []).length) h += '<h3>前回の宿題</h3>' + c.previousTasks.map(function(t){return '<p>'+esc(t.title)+'：'+(t.done?'完了':'未完了')+'</p>';}).join('');
-          if ((c.otherPrevious || []).length) h += '<details class="add"><summary>他科目の記録を確認</summary>' + c.otherPrevious.map(function (x) { return '<p><a href="' + esc(lessonHref(e.studentId, x.slotId, x.id)) + '">' + fmtDY(x.date) + ' ' + esc(x.subject) + '</a></p>'; }).join("") + '</details>';
+          if ((c.otherPrevious || []).length) h += '<details class="add"><summary>他科目の記録を確認</summary>' + c.otherPrevious.map(function (x) { return '<p><a href="' + esc(lessonHref(e.studentId, x.slotId, x.id)) + '">' + fmtDY(x.date) + ' ' + esc(lessonLabel(x)) + '</a></p>'; }).join("") + '</details>';
           h += '</div><div class="card">';
           var openTasks = (c.openTasks || []).filter(function (x) { return !x.done && !x.withdrawnAt && !x.withdrawn; });
           h += openTasks.length ? openTasks.map(function (x) { return '<div class="line"><span class="w">' + esc(x.title) + '</span><span class="small ' + (x.due && x.due < today() ? "lc-overdue" : "muted") + '">' + (taskDueText(x) + (x.due && x.due < today() ? "・期限超過" : "")) + '</span></div>'; }).join("") : '<div class="empty">未完了の宿題はありません。</div>';
@@ -1791,7 +1801,7 @@
           months.filter(function (m) { return m.ym === selectedMonth; }).forEach(function (m) {
             var f = planInput(s, m), dis = busy || s.active === false, attrs = ' data-ym="' + esc(m.ym) + '"';
             h += '<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row between"><strong>' + esc(m.ym) + ' <span class="tag ' + (m.status === "approved" ? "green" : "amber") + '">' + ({ approved: "承認済み", proposed: "承認待ち", declined: "見送り", draft: "未提案", none: "計画なし" }[m.status] || "未提案") + '</span></strong><span class="small muted">' + (m.revision != null ? '第' + esc(m.revision) + '版' : "料金条件の確認が必要") + '</span></div>';
-            h += '<div>' + (m.rows || []).map(function (x) { return esc(x.subject) + ' ' + esc(x.count) + '回'; }).join("、") + ' <span class="small muted">合計 ' + esc(m.total || 0) + '回' + (m.fromDefault ? "・既定からの案" : "") + '</span></div>';
+            h += '<div>' + (m.rows || []).map(function (x) { return esc(lessonLabel(x)) + ' ' + esc(x.count) + '回'; }).join("、") + ' <span class="small muted">合計 ' + esc(m.total || 0) + '回' + (m.fromDefault ? "・既定からの案" : "") + '</span></div>';
             h += '<p class="small">' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin? m.lessonMin+'分・1回 '+yen(m.rate30*m.lessonMin/30):'授業時間を設定してください')) : 'この月の料金はまだ提案されていません。') + '</p>';
             if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。<button class="btn-quiet btn-sm" data-action="reload">最新の計画を確認</button></p>';
             if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '</p>';
@@ -1807,8 +1817,8 @@
             }
             h += '</div>';
           });
-          h += '<details class="add"><summary>月の授業回数を登録・変更</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"><label for="pl-scope">適用</label><select id="pl-scope"><option value="month">指定した月</option><option value="default">毎月の既定</option></select><label for="pl-target">対象月</label><input type="month" id="pl-target" value="' + esc(s.month) + '"></div><p><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>回数を保存</button></p><p class="note">過去月も指定できます。0回で科目を削除します。変更・削除するとその月全体の承認が失効し、再提案が必要です。請求済みの月は先に未入金請求を取り消してください。</p></details>';
-          if ((p.defaultRows || []).length) h += '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(x.subject) + ' ' + esc(x.count) + '回'; }).join("、") + '</p>';
+          h += '<details class="add"><summary>月の授業回数を登録・変更</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-kind">種類</label><select id="pl-kind">' + kindOptions("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"><label for="pl-scope">適用</label><select id="pl-scope"><option value="month">指定した月</option><option value="default">毎月の既定</option></select><label for="pl-target">対象月</label><input type="month" id="pl-target" value="' + esc(s.month) + '"></div><p><button class="btn-primary btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>回数を保存</button></p><p class="note">過去月も指定できます。0回で科目を削除します。変更・削除するとその月全体の承認が失効し、再提案が必要です。請求済みの月は先に未入金請求を取り消してください。</p></details>';
+          if ((p.defaultRows || []).length) h += '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(lessonLabel(x)) + ' ' + esc(x.count) + '回'; }).join("、") + '</p>';
           return h + '</div>';
         }
         function renderBilling(s) {
@@ -2152,7 +2162,7 @@
               var stid = val("f-student"), odate = val("f-date"), ostart = val("f-start");
               if (!stid) { toast("生徒をえらんでください"); return; }
               if (!odate || !ostart) { toast("日付と時間を入れてください"); return; }
-              offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject"), deliveryMode: val("f-delivery"), wishId: offerDraft && offerDraft.wishId };
+              offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject"), kind: val("f-kind") || "通常", deliveryMode: val("f-delivery"), wishId: offerDraft && offerDraft.wishId };
               offerDraft.outside=!!(document.getElementById('f-outside')||{}).checked;
               if(!offerDraft.outside&&(window.StepwiseBoard.minutes(ostart)<420||window.StepwiseBoard.minutes(ostart)+offerDraft.min>1320)){toast('授業は7:00〜22:00の範囲で指定してください。例外は「範囲外を指定する」を選んでください');return;}
               sendOffer(false); break;
@@ -2245,6 +2255,8 @@
               if (!wk.length) { toast("今後7日の授業はありません"); return; }
               copyText(["【今週の授業予定】"].concat(wk.map(function (x) { return fmtD(x.date) + " " + x.start + "〜" + endTime(x.start, x.min) + " " + x.studentName + "さん" + (x.subject ? "(" + x.subject + ")" : ""); })).join("\n"), "今後7日の予定をコピーしました");
               break;
+            case "kindsave": { var ki = btn.getAttribute("data-i"); actA("lessonKindSave", { name: btn.getAttribute("data-name"), standardMin: val("lk-min-" + ki), standardFee: val("lk-fee-" + ki), active: !!(document.getElementById("lk-active-" + ki) || { checked: true }).checked }, "種類を保存しました"); break; }
+            case "kindadd": { var kn = val("lk-new-name"); if (!kn) { toast("種類の名前を入れてください"); return; } actA("lessonKindSave", { name: kn, standardMin: val("lk-new-min"), standardFee: val("lk-new-fee"), active: true }, "種類を追加しました"); break; }
             case "changepass":
               var cpw = (document.getElementById("f-curpass") || {}).value || "", npw = (document.getElementById("f-newpass") || {}).value || "";
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
@@ -2277,7 +2289,7 @@
             case "plancopy":
               var pym = btn.getAttribute("data-ym"), pm2 = ((cur.plan || {}).months || []).filter(function (m) { return m.ym === pym; })[0];
               if (!pm2 || !pm2.rows.length) { toast("計画がありません"); return; }
-              var ptext = "【" + (+pym.slice(5)) + "月の授業回数のご確認】" + cur.name + "さん\n" + pm2.rows.map(function (x) { return "・" + x.subject + " " + x.count + "回"; }).join("\n") + "\n合計 " + pm2.total + "回の予定です。\n" + (pm2.termsKnown ? (pm2.monthly > 0 ? "月謝 " + yen(pm2.monthly) : (pm2.lessonMin ? pm2.lessonMin+"分・1回 "+yen(pm2.rate30*pm2.lessonMin/30) : "授業時間は設定待ちです")) : "料金条件は提案待ちです") + "\n\nよろしければ、保護者ページの「請求・料金承認」から承認をお願いします(LINEでのお返事でも結構です)。\n" + location.origin + "/hogosha/";
+              var ptext = "【" + (+pym.slice(5)) + "月の授業回数のご確認】" + cur.name + "さん\n" + pm2.rows.map(function (x) { return "・" + lessonLabel(x) + " " + x.count + "回"; }).join("\n") + "\n合計 " + pm2.total + "回の予定です。\n" + (pm2.termsKnown ? (pm2.monthly > 0 ? "月謝 " + yen(pm2.monthly) : (pm2.lessonMin ? pm2.lessonMin+"分・1回 "+yen(pm2.rate30*pm2.lessonMin/30) : "授業時間は設定待ちです")) : "料金条件は提案待ちです") + "\n\nよろしければ、保護者ページの「請求・料金承認」から承認をお願いします(LINEでのお返事でも結構です)。\n" + location.origin + "/hogosha/";
               copyText(ptext, "保護者への連絡文をコピーしました。LINEに貼り付けできます");
               break;
             case "taskadd":
@@ -2296,7 +2308,7 @@
             case "plansave":
               var saveRoute = route();
               if (saveRoute.page !== "student" || !cur || !sameId(saveRoute.id, cur.id) || !sameId(sid, cur.id)) { toast("画面を更新して生徒の計画を確認してください"); return; }
-              var savePlan = { studentId: cur.id, ym: val("pl-scope") === "default" ? "default" : val("pl-target"), subject: val("pl-subject"), count: +(val("pl-count") || 0) };
+              var savePlan = { studentId: cur.id, ym: val("pl-scope") === "default" ? "default" : val("pl-target"), subject: val("pl-subject"), kind: val("pl-kind") || "通常", count: +(val("pl-count") || 0) };
               if (savePlan.ym !== "default") {
                 var saveMonths = (cur.plan || {}).months;
                 if (!Array.isArray(saveMonths)) { toast("画面を更新して月の条件を確認してください"); return; }

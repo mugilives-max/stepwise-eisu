@@ -75,11 +75,13 @@ function billingPlanList_(studentId,ym,rows) {
   var map=Object.create(null), duplicate=false;
   (rows||planRows_()).forEach(function(r){
     if(String(r.studentId)!==String(studentId) || String(r.ym)!==ym)return;
-    if(Object.prototype.hasOwnProperty.call(map,r.subject))duplicate=true;
-    if(Number(r.count)>0)map[r.subject]=Number(r.count);
+    var key=String(r.subject)+'\u0000'+kindNorm_(r.kind);
+    if(Object.prototype.hasOwnProperty.call(map,key))duplicate=true;
+    if(Number(r.count)>0)map[key]=Number(r.count);
   });
-  if(duplicate)throw new Error('同じ科目の計画が重複しています');
-  return Object.keys(map).sort().map(function(k){return {subject:k,count:map[k]};});
+  if(duplicate)throw new Error('同じ科目・種類の計画が重複しています');
+  // 通常(空)は kind を持たせない(既存の承認 JSON と一致させる)
+  return Object.keys(map).sort().map(function(k){var p=k.split('\u0000'),e={subject:p[0],count:map[k]};if(p[1])e.kind=p[1];return e;});
 }
 function billingApprovedPlan_(a){return a&&a.approvedPlanJson?JSON.parse(a.approvedPlanJson):billingPlanJson_(a);}
 function billingAgreementCurrent_(a) {
@@ -123,11 +125,12 @@ function billingPlanSet_(req) {
   if(!systemStudent_(id))return billingError_('生徒が見つかりません','notFound');
   if(ym!=='default' && !billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
   if(!subject || subject.length>20 || /^[=+@-]/.test(subject))return billingError_('科目を20文字以内で選んでください');
+  var kind=kindNorm_(req.kind);if(!kindValid_(kind))return kindError_();
   var count=Number(req.count);if(!Number.isInteger(count)||count<0||count>31)return billingError_('回数は0〜31の整数です');
   var a=ym==='default'?null:billingAgreement_(id,ym), check=ym==='default'?null:(billingMonthUnlocked_(id,ym)||billingRevisionCheck_(req,a,false));
   if(check)return check;
   var rows=readRows_('plans'),found=-1;
-  for(var i=0;i<rows.length;i++)if(String(rows[i].studentId)===id && planYm_(rows[i].ym)===ym && String(rows[i].subject)===subject){if(found>=0)return billingError_('科目の計画が重複しています');found=i;}
+  for(var i=0;i<rows.length;i++)if(String(rows[i].studentId)===id && planYm_(rows[i].ym)===ym && String(rows[i].subject)===subject && kindNorm_(rows[i].kind)===kind){if(found>=0)return billingError_('科目・種類の計画が重複しています');found=i;}
   if(found>=0 && Number(rows[found].count)===count || found<0 && count===0){
     // Only an unproposed draft made by planSet can finish an interrupted write.
     // planPropose stamps proposedAt before its own intermediate draft is saved.
@@ -156,7 +159,7 @@ function billingPlanSet_(req) {
   }
   var sh=sheet_('plans');
   if(found>=0){if(count===0)sh.deleteRow(found+2);else sh.getRange(found+2,5).setValue(count);}
-  else sh.getRange(sh.getLastRow()+1,1,1,10).setNumberFormat('@').setValues([[uid_(),id,ym,subject,count,'draft','','','','']]);
+  else sh.getRange(sh.getLastRow()+1,1,1,11).setNumberFormat('@').setValues([[uid_(),id,ym,subject,count,'draft','','','','',kind]]);
   if(ym!=='default'){
     planSetStatus_(id,ym,'draft','','',false);
     a.planJson=JSON.stringify(billingPlanList_(id,ym));billingWriteAgreement_(a);
@@ -203,7 +206,7 @@ function billingApprove_(req,id,parent) {
   if(parent&&req.approvedCounts!==undefined){
     if(!Array.isArray(req.approvedCounts)||req.approvedCounts.length!==selected.length)return billingError_('科目ごとの回数を確認してください');
     var supplied=req.approvedCounts;
-    selected=selected.map(function(p){var matches=supplied.filter(function(r){return r.subject===p.subject;});return {subject:p.subject,count:matches.length===1?matches[0].count:-1};});
+    selected=selected.map(function(p){var matches=supplied.filter(function(r){return r.subject===p.subject&&kindNorm_(r.kind)===kindNorm_(p.kind);});var e={subject:p.subject,count:matches.length===1?matches[0].count:-1};if(kindNorm_(p.kind))e.kind=kindNorm_(p.kind);return e;});
     if(selected.some(function(p,i){return !Number.isInteger(p.count)||p.count<0||p.count>billingPlanJson_(a)[i].count;}))return billingError_('案内された回数以内で選択してください');
     approve=selected.some(function(p){return p.count>0;});
   }
@@ -220,7 +223,7 @@ function billingApprove_(req,id,parent) {
   var retrospective=ym<todayStr_().slice(0,7)||readRows_('slots').some(function(s){return String(s.studentId)===String(id)&&s.date.slice(0,7)===ym&&s.date<date&&(s.status==='booked'||s.status==='offered');});
   if(!parent && retrospective && !memo)return billingError_('授業後・過去月の承諾は、経緯をメモに残してください');
   var booked=readRows_('slots').filter(function(s){return String(s.studentId)===String(id)&&String(s.date).slice(0,7)===ym&&s.status==='booked';});
-  if(parent&&req.approvedCounts!==undefined&&selected.some(function(p){return booked.filter(function(s){return String(s.subject)===p.subject;}).length>p.count;}))return billingError_('確定済みの授業数より少なくする場合は、先に先生へ授業の取消・見直しをご相談ください');
+  if(parent&&req.approvedCounts!==undefined&&selected.some(function(p){return booked.filter(function(s){return String(s.subject)===p.subject&&kindNorm_(s.kind)===kindNorm_(p.kind);}).length>p.count;}))return billingError_('確定済みの授業数より少なくする場合は、先に先生へ授業の取消・見直しをご相談ください');
   a.approvedPlanJson=JSON.stringify(selected);a.lessonMin=Number(a.lessonMin)||90;
   a.status=approve?'approved':'declined';a.approvedAt=approve?billingStamp_():'';a.approvedVia=approve?via:'';a.consentDate=date;a.memo=memo;
   // 承諾日時と実際の記録日時を別に残す。監査保存失敗時は承認を有効にしない。
@@ -286,8 +289,8 @@ function billingPreview_(studentId,ym) {
   else if(!billingAgreementCurrent_(a))reason='この月の回数と料金の承認が必要です';
   else if(fee.legacyTerms)reason='旧固定月謝の承認が残っています。実施分の単価で再提案・承認してください';
   else {
-    var plan=billingApprovedPlan_(a),counts=Object.create(null);slots.forEach(function(s){counts[String(s.subject||'')]=(counts[String(s.subject||'')]||0)+1;});
-    Object.keys(counts).forEach(function(sub){var p=plan.filter(function(x){return x.subject===sub;})[0];if(!p||counts[sub]>p.count)reason='承認されていない科目・回数の授業があります';});
+    var plan=billingApprovedPlan_(a),counts=Object.create(null);slots.forEach(function(s){var lb=kindLabel_(s.subject,s.kind);counts[lb]=(counts[lb]||0)+1;});
+    Object.keys(counts).forEach(function(sub){var p=plan.filter(function(x){return kindLabel_(x.subject,x.kind)===sub;})[0];if(!p||counts[sub]>p.count)reason='承認されていない科目・回数の授業があります';});
     if(!reason && slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
     if(!reason && slots.some(function(s){return !(s.done===true||String(s.done)==='true');}))reason='未実施の確定授業が残っています。実施・取消の確認後に請求してください';
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';
@@ -296,7 +299,7 @@ function billingPreview_(studentId,ym) {
   var cumulativeMinutes=0,allocated=0;
   return {ym:ym,amount:fee.amount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:done.length,planStatus:info.status,revision:info.revision,canBill:!reason,reason:reason,provisional:!!fee.provisional,
     invoice:invoices.length?billingInvoiceView_(invoices[0]):null,
-    lessons:done.map(function(s){cumulativeMinutes+=Number(s.min)||0;var total=Math.round(cumulativeMinutes/30*fee.rate30),amount=total-allocated;allocated=total;return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),amount:amount};})};
+    lessons:done.map(function(s){cumulativeMinutes+=Number(s.min)||0;var total=Math.round(cumulativeMinutes/30*fee.rate30),amount=total-allocated;allocated=total;return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:amount};})};
 }
 function billingMonths_(id) {
   var seen={},current=todayStr_().slice(0,7);seen[current]=true;seen[nextYm_(current)]=true;
@@ -387,7 +390,7 @@ function billingMutationResult_(req,res) {
 function prepareStepwise20260908() {
   var lock=LockService.getScriptLock();lock.waitLock(10000);
   try {
-    CacheService.getScriptCache().remove('schemaOk19');memoClear_();ensureSchema_();
+    CacheService.getScriptCache().remove('schemaOk20');memoClear_();ensureSchema_();
     var summary={reservation:ss_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};}),ledger:ledger_().getSheets().map(function(s){return {name:s.getName(),rows:s.getLastRow(),columns:s.getLastColumn()};})};
     Logger.log(JSON.stringify(summary));return summary;
   } finally {lock.releaseLock();}

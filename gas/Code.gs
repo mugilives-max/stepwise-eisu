@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-months' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-lesson-kinds' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -126,7 +126,7 @@ function studentState_(code) {
       var st = s.status === 'offered' ? 'offer' : 'mine';
       return {
         id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
-        subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
+        subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
         meet: st === 'mine' ? String(s.meetUrl || '') : '',
         req: st === 'mine' ? parseReq_(s.req) : null,
         hours: Math.round(hoursUntil_(s.date, s.start) * 10) / 10
@@ -136,7 +136,7 @@ function studentState_(code) {
   var since = addDays_(today, -120);
   var history = all
     .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked'; })
-    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
+    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
       done: String(s.done) === 'true' || s.done === true }; });
   var blocked = blockedRows_()
     .filter(function (b) {
@@ -581,7 +581,7 @@ function planStamp_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 
 function planRows_() {
   if (!ss_().getSheetByName('plans')) return [];
   return readRows_('plans').map(function (x) {
-    return { id: x.id, studentId: String(x.studentId || ''), ym: planYm_(x.ym), subject: String(x.subject || ''), count: Number(x.count) || 0,
+    return { id: x.id, studentId: String(x.studentId || ''), ym: planYm_(x.ym), subject: String(x.subject || ''), kind: kindNorm_(x.kind), count: Number(x.count) || 0,
       status: String(x.status || '') || 'draft', proposedAt: planStamp_(x.proposedAt), approvedAt: planStamp_(x.approvedAt), approvedVia: String(x.approvedVia || ''), memo: String(x.memo || '') };
   }).filter(function (x) { return x.id && x.subject; });
 }
@@ -624,7 +624,7 @@ function planSetStatus_(studentId, ym, status, via, memo, copyDefault) {
     var defs = rows.filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === 'default' && Number(x.count) > 0; });
     if (!defs.length) return { error: '計画がありません。先に科目と回数を登録してください' };
     defs.forEach(function (x) {
-      sh.appendRow([uid_(), String(studentId), ym, String(x.subject), Number(x.count), status, status === 'proposed' ? now : '', status === 'approved' ? now : '', status === 'approved' ? billingText_(via || '') : '', billingText_(memo || '')]);
+      sh.appendRow([uid_(), String(studentId), ym, String(x.subject), Number(x.count), status, status === 'proposed' ? now : '', status === 'approved' ? now : '', status === 'approved' ? billingText_(via || '') : '', billingText_(memo || ''), kindNorm_(x.kind)]);
       sh.getRange(sh.getLastRow(), 2, 1, 2).setNumberFormat('@');
     });
     found = true;
@@ -647,9 +647,9 @@ function planFor_(studentId, ym, rows) {
   var mine = rows.filter(function (x) { return x.studentId === String(studentId); });
   var month = mine.filter(function (x) { return x.ym === ym; });
   var src = month.length ? month : mine.filter(function (x) { return x.ym === 'default'; });
-  var out = {};
-  src.forEach(function (x) { if (x.count > 0) out[x.subject] = x.count; });
-  return { plan: out, fromDefault: !month.length && src.length > 0 };
+  var out = {}, list = [];
+  src.forEach(function (x) { if (x.count > 0) { out[kindLabel_(x.subject, x.kind)] = x.count; list.push({ subject: x.subject, kind: kindNorm_(x.kind), count: x.count }); } });
+  return { plan: out, rows: list, fromDefault: !month.length && src.length > 0 };
 }
 
 function planSet_(req) { return billingPlanSet_(req); }
@@ -1249,6 +1249,8 @@ function admin_(req) {
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
+    case 'lessonKinds': return { ok: true, lessonKinds: lessonKindsPublic_() };
+    case 'lessonKindSave': { var lk = lessonKindSave_(req); return lk.error ? lk : { ok: true, lessonKinds: lk.lessonKinds, admin: adminState_() }; }
     case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);
     case 'taskDel':     return kanriWrap_(req, adminTaskDel_(req), req.studentId);
     case 'taskDone':    return kanriWrap_(req, adminTaskDone_(req), req.studentId);
@@ -1292,7 +1294,7 @@ function adminState_() {
       status: s.status, studentId: String(s.studentId || ''),
       studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
-      subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''),
+      subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
       meetUrl: String(s.meetUrl || ''),
       lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus,
       lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus,
@@ -1321,7 +1323,7 @@ function adminState_() {
     });
   return {
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [],
-    slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(todayStr_(), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
+    lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(todayStr_(), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
     billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
   };
@@ -1364,6 +1366,7 @@ function adminOffer_(req) {
     }
   }
   var subject = String(req.subject || '').slice(0, 20);
+  var kind = kindNorm_(req.kind); if (!kindValid_(kind)) return kindError_();
   var sh = sheet_('slots');
   var existing = readRows_('slots');
   var added = 0;
@@ -1372,7 +1375,7 @@ function adminOffer_(req) {
     var d = addDays_(req.date, w * 7);
     var dup = existing.some(function (s) { return s.date === d && s.start === req.start; });
     if (dup) continue;
-    sh.appendRow([uid_(), d, req.start, Number(req.min) || 60, 'offered', student.id, '', '', '', subject]);
+    sh.appendRow([uid_(), d, req.start, Number(req.min) || 60, 'offered', student.id, '', '', '', subject, '', '', kind]);
     dates.push(fmtDateJa_(d));
     added++;
   }
@@ -1721,7 +1724,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk19')) return;
+  if (cache.get('schemaOk20')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1746,7 +1749,8 @@ function ensureSchema_() {
   if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
-  cache.put('schemaOk19', '1', 21600);
+  if (typeof ensureLessonKindsSheet_ === 'function') { ensureLessonKindsSheet_(); ensureKindColumns_(); }
+  cache.put('schemaOk20', '1', 21600);
 }
 
 function readRows_(name) {
@@ -1777,8 +1781,8 @@ function findSlotRow_(slotId) {
 
 function writeSlotRow_(r) {
   var s = r.slot;
-  sheet_('slots').getRange(r.rowIndex, 1, 1, 12)
-    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '', s.subject || '', s.req || '', s.deliveryMode || '']]);
+  sheet_('slots').getRange(r.rowIndex, 1, 1, 13)
+    .setValues([[s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl || '', s.subject || '', s.req || '', s.deliveryMode || '', kindNorm_(s.kind)]]);
 }
 
 function findStudent_(sid) {
@@ -2303,7 +2307,7 @@ function mcpStudent_(req) {
     feeMode: d.monthly > 0 ? 'monthly' : 'time',
     upcoming: lessons.filter(function (l) { return l.date >= today && (l.status === 'booked' || l.status === 'offered'); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }).slice(0, 20),
     recentDone: lessons.filter(function (l) { return l.date < today && l.status === 'booked' && l.done; }).slice(0, 10),
-    thisMonth: d.thisMonth, plan: d.plan && d.plan.months, tasks: (d.tasks || []).filter(function (t) { return !t.doneAt; }),
+    lessonKinds: lessonKindsPublic_(), thisMonth: d.thisMonth, plan: d.plan && d.plan.months, tasks: (d.tasks || []).filter(function (t) { return !t.doneAt; }),
     wishes: d.wishes, blocked: d.blocked, events: d.events,
     latestExam: (d.exams || []).slice(-1)[0] ? (function (e) { return { date: e.date, name: e.name, round: e.round, total5: e.total5, total3: e.total3, subjects: e.subjects }; })((d.exams || []).slice(-1)[0]) : null,
     gradesCount: (d.grades || []).length, paymentsUnpaid: (d.payments || []).filter(function (p) { return p.status !== '入金済' && p.status !== '取消'; }).map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate }; }) };
@@ -2405,12 +2409,13 @@ function mcpOfferLessons_(req) {
   it.items.forEach(function (item, idx) {
     var mode = schedulingMode_(mcpPick_(item, req, 'deliveryMode') === undefined ? student.deliveryMode : mcpPick_(item, req, 'deliveryMode'));
     var s = { id: uid_(), date: String(item.date || ''), start: normTime_(mcpPick_(item, req, 'start') || ''), min: Number(mcpPick_(item, req, 'min')), status: 'offered',
-      studentId: String(student.id), done: '', eventId: '', meetUrl: '', subject: String(mcpPick_(item, req, 'subject') || '').trim(), req: '', deliveryMode: mode };
-    var r = { index: idx, date: s.date, start: s.start, min: s.min, subject: s.subject, deliveryMode: mode };
+      studentId: String(student.id), done: '', eventId: '', meetUrl: '', subject: String(mcpPick_(item, req, 'subject') || '').trim(), req: '', deliveryMode: mode, kind: kindNorm_(mcpPick_(item, req, 'kind')) };
+    var r = { index: idx, date: s.date, start: s.start, min: s.min, subject: s.subject, kind: s.kind || LESSON_KIND_DEFAULT_, deliveryMode: mode };
     var done = function (status, reason, code) { r.status = status; if (reason) r.reason = reason; if (code) r.code = code; results.push(r); };
     if (!mcpValidDate_(s.date) || !billingSlotValid_(s)) return done('invalid', '日付(YYYY-MM-DD)・開始時刻(HH:MM)・分数(1〜480)・科目(20文字まで)を確認してください', 'validation');
     if (s.date < today) return done('invalid', '過去の日付には案内できません', 'validation');
     if (!mode) return done('invalid', '授業形式(対面/オンライン)が生徒にも依頼にも設定されていません', 'deliveryModeRequired');
+    if (!kindValid_(s.kind)) return done('invalid', kindError_().error, 'kindInvalid');
     var key = s.date + ' ' + s.start;
     if (seen[key]) return done('duplicate', '同じ依頼の中に同じ日時があります', 'validation'); seen[key] = 1;
     var same = existing.filter(function (x) { return String(x.studentId) === String(student.id) && x.date === s.date && x.start === s.start && schedulingOccupied_(x); })[0];
@@ -2429,8 +2434,8 @@ function mcpOfferLessons_(req) {
   var out = { ok: true, dryRun: dryRun, student: { id: String(student.id), name: student.name }, added: dryRun ? 0 : candidates.length, summary: mcpSummary_(results), results: results, notificationStatus: 'none' };
   if (dryRun || !candidates.length) return out;
   var sh = sheet_('slots');
-  var values = candidates.map(function (s) { return [s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl, s.subject, s.req, s.deliveryMode].map(lessonSafeCell_); });
-  sh.getRange(sh.getLastRow() + 1, 1, values.length, 12).setValues(values);
+  var values = candidates.map(function (s) { return [s.id, s.date, s.start, s.min, s.status, s.studentId, s.done, s.eventId, s.meetUrl, s.subject, s.req, s.deliveryMode, s.kind || ''].map(lessonSafeCell_); });
+  sh.getRange(sh.getLastRow() + 1, 1, values.length, 13).setValues(values);
   addLog_('先生が(MCP経由で)' + student.name + 'さんに' + candidates.length + '件案内(' + candidates.map(function (s) { return fmtDateJa_(s.date) + ' ' + s.start; }).join('、') + '・' + mcpModeJa_(candidates[0].deliveryMode) + ')');
   try {
     var notice = typeof studentEmailNotifyOffered_ === 'function' ? studentEmailNotifyOffered_(student, 'offered:' + schedulingHash_(candidates.map(function (s) { return s.id; }).sort().join('|')), candidates) : { status: 'skipped' };

@@ -219,7 +219,8 @@ function schedulingEditLesson_(req,op) {
     if(String(r.slot.done)==='true')return schedulingError_('実施済みの授業は変更できません','conflict');
     if(op==='editOffered'?!schedulingExpectedMatches_(req.expectedSnapshot,r.slot):(req.expectedMode===undefined||String(req.expectedMode)!==String(r.slot.deliveryMode||'')))return schedulingError_('案内が変更されています。画面を更新して確認してください','conflict');
     var desired=Object.assign({},r.slot,{deliveryMode:mode});
-    if(op==='editOffered')Object.assign(desired,{date:req.date,start:req.start,min:Number(req.min),subject:String(req.subject==null?'':req.subject).trim()});
+    if(op==='editOffered')Object.assign(desired,{date:req.date,start:req.start,min:Number(req.min),subject:String(req.subject==null?'':req.subject).trim(),kind:req.kind===undefined?kindNorm_(r.slot.kind):kindNorm_(req.kind)});
+    if(op==='editOffered'&&!kindValid_(desired.kind))return kindError_();
     if(!billingSlotValid_(desired))return schedulingError_('授業の日付・時刻・分数・科目を確認してください');
     if(op==='editOffered'&&(r.slot.eventId||r.slot.meetUrl))return schedulingError_('案内に確定済みのカレンダー情報が残っています。先生が確認してください','conflict');
     var gate=schedulingEditGate_(r.slot,desired,!!req.force,'',op);if(gate)return gate;
@@ -253,9 +254,10 @@ function schedulingAdminOffer_(req) {
   var mode=schedulingMode_(req.deliveryMode===undefined?student.deliveryMode:req.deliveryMode),repeat=req.repeat==null?1:Number(req.repeat);
   if(!mode)return schedulingError_('生徒の授業形式を設定するか、この案内の形式を選んでください','deliveryModeRequired');
   if(!Number.isInteger(repeat)||repeat<1||repeat>12||!billingSlotValid_(req))return schedulingError_('正しい日付・時刻・授業分数・科目を入力してください');
+  var kind=kindNorm_(req.kind);if(!kindValid_(kind))return kindError_();
   var existing=readRows_('slots'),candidates=[],conflicts=[],blocks=blockedRows_(),offs=teacherOff_(req.date,true),warnings=[];
   for(var w=0;w<repeat;w++){
-    var s={id:uid_(),date:addDays_(req.date,w*7),start:req.start,min:Number(req.min),status:'offered',studentId:student.id,done:'',eventId:'',meetUrl:'',subject:String(req.subject).trim(),req:'',deliveryMode:mode};
+    var s={id:uid_(),date:addDays_(req.date,w*7),start:req.start,min:Number(req.min),status:'offered',studentId:student.id,done:'',eventId:'',meetUrl:'',subject:String(req.subject).trim(),req:'',deliveryMode:mode,kind:kind};
     var gate=billingMonthUnlocked_(student.id,s.date.slice(0,7))||schedulingCapacityError_(s,existing.concat(candidates));
     if(gate)conflicts.push({date:s.date,start:s.start,error:gate.error,errorCode:gate.errorCode});
     if(!req.force){
@@ -266,9 +268,9 @@ function schedulingAdminOffer_(req) {
   }
   if(conflicts.length)return {error:'重なる授業・月間計画を確認してください。案内は追加していません',errorCode:conflicts[0].errorCode,conflicts:conflicts};
   if(warnings.length)return {error:warnings.join('。'),needForce:true};
-  var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode];});
+  var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode,s.kind||''];});
   // 12回分も1回の Sheets 書き込み。途中までの追加・行ごとの再読み込みを避ける。
-  sh.getRange(sh.getLastRow()+1,1,values.length,12).setValues(values);
+  sh.getRange(sh.getLastRow()+1,1,values.length,13).setValues(values);
   addLog_('先生が'+student.name+'さんに'+candidates.length+'件案内('+fmtDateJa_(req.date)+' '+req.start+'・'+(mode==='online'?'オンライン':'対面')+')');
   var result={ok:true,added:candidates.length};
   try {
