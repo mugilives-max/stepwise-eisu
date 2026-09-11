@@ -48,6 +48,7 @@
       .calday.ngday:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px); }
       .calday.ngday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px, var(--taken) 7px 10px, transparent 10px 14px); }
       .ngswatch { padding: 0 4px; background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px); }
+      .toffswatch { padding: 0 4px; background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
       .callbl.to { color: var(--muted); font-weight: 600; }
       .chip.toff { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .calday.today { border-color: var(--muted); }

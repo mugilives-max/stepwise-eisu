@@ -359,8 +359,9 @@
           h += '<span><span class="callbl" style="display:inline">授業</span></span>';
           h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
           h += '<span><span class="callbl ev" style="display:inline">予定</span> 重要な予定（テスト・行事など）</span>';
+          h += '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
           h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';
-          if (showToff) h += '<span class="callbl to" style="display:inline">登録不可</span>';
+          if (showToff) h += '<span><span class="callbl to toffswatch" style="display:inline">登録不可</span> 先生の休み（登録できません）</span>';
           h += "</div></div>";
           return h;
         }
