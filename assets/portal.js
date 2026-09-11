@@ -96,6 +96,7 @@
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
         var NL = { text: '', busy: false, proposal: null, error: '' }; // 文章で予定を伝える
+        var offersOpen = false; // ホームの「授業登録」は折り畳み。開閉は再描画をまたいで保持
         function studentEmailReadChallenge() {
           if (location.hash.indexOf('#student-email?') !== 0) return;
           SE.challenge = new URLSearchParams(location.hash.slice(15)).get('verify') || ''; SE.message = ''; SE.error = ''; SE.busy = false; ++SE.seq;
@@ -479,13 +480,14 @@
         function renderOffers(D) {
           var offers = D.offers, b = acceptBatch(), html = renderBatch(b);
           if (!offers.length) return html;
-          html += '<h2>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2><div class="card" style="border-color:#d99a2b">';
-          html += '<div class="row"><button class="btn-quiet btn-sm" data-action="batchall"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>全件選択（31件まで）</button><button class="btn-quiet btn-sm" data-action="batchclear"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選択を解除</button></div>';
+          var selectable = offers.slice(0, 31), allSelected = selectable.every(function (s) { return b.selected[s.id]; });
+          html += '<details class="offers" data-offers' + (offersOpen ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2></summary><div class="card" style="border-color:#d99a2b">';
+          html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
             html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + deliveryTag(s) + "</span>";
             html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
           });
-          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから確定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>';
+          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから確定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div></details>';
           return html;
         }
 
@@ -1384,11 +1386,12 @@
           }
         });
 
+        app.addEventListener("toggle", function (ev) { var d = ev.target; if (d && d.hasAttribute && d.hasAttribute("data-offers")) offersOpen = !!d.open; }, true);
         app.addEventListener("change", function (ev) {
           var el = ev.target;
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
           if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
-          if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; } return; }
+          if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; render(); } return; }
           if (el && el.getAttribute("data-action") === "nl-item") { var nlIt = NL.proposal && NL.proposal.items[+el.getAttribute('data-i')]; if (nlIt && !nlIt.done) nlIt.sel = !!el.checked; return; }
           if (el && el.getAttribute("data-action") === "se-pref") { studentEmailPrefSend(el.getAttribute("data-kind"), !!el.checked); return; }
           if (!el || el.getAttribute("data-action") !== "taskdone") return;

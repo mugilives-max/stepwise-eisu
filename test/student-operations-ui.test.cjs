@@ -212,3 +212,12 @@ test('students turn a sentence into checked proposals and register them through 
 test('the sentence card is hidden while the API key is not configured', async () => {
   const ui = await studentReady(state()); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を伝える/);
 });
+
+test('the offers section is a collapsed details block with one select-all / clear toggle', async () => {
+  const ui = await studentReady();
+  assert.match(ui.html(), /<details class="offers" data-offers><summary><h2>[^]*?授業登録 <span class="cnt">2件・返事をお願いします/);
+  assert.doesNotMatch(ui.html(), /全件選択|選択を解除|data-action="batchclear"/); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</);
+  ui.click('batchall'); assert.doesNotMatch(ui.html(), /data-action="batchall"/); assert.match(ui.html(), /data-action="batchclear"[^>]*>選択解除</);
+  ui.check('data-accept-id', 'slot-b', false); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</);
+  ui.click('batchall'); ui.click('batchclear'); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</); assert.equal((ui.html().match(/data-accept-id="[^"]+" checked/g) || []).length, 0);
+});
