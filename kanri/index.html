@@ -101,6 +101,11 @@
       @media (max-width: 480px) { .plan-gc { padding: 6px 6px; font-size: 14px; } .plan-gh { padding: 4px 6px; font-size: 12px; } }
       .plan-gs { grid-column: 1 / -1; background: #fff; padding: 4px 8px 8px; }
       .plan-gs:empty { display: none; }
+      .usage-row { padding: 8px 0; border-top: 1px solid var(--line); }
+      .usage-row:first-child { border-top: 0; padding-top: 0; }
+      .usage-bar { display: flex; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 6px 0 4px; }
+      .usage-bar .done { background: var(--primary); }
+      .usage-bar .planned { background: var(--primary); opacity: .35; }
       table.extb td b { font-weight: 700; }
       table.extb tr.exsub td { padding-top: 0; border-bottom: 1px solid var(--line); }
       table.extb tr.exsub td .tag { display: inline-block; margin: 2px 4px 2px 0; }
@@ -1878,6 +1883,23 @@
           h += '</div>';
           return h;
         }
+        // 承認済みの計画の消化状況: 実施・予定(確定済み)・残り／計画回数。追加案内は親にまとめる。集計はサーバー(plan.usage)で請求と同じ割り当て
+        function renderPlanUsage(s) {
+          var lines = planLines(s), usage = (s.plan && s.plan.usage) || {}, from = (s.month || thisYm()) + '-01', td = today();
+          var approved = lines.filter(function (l) { return l.status === 'approved'; }), ids = {}; approved.forEach(function (l) { ids[l.id] = true; });
+          var tops = approved.filter(function (l) { return !(l.parentId && ids[l.parentId]) && l.endDate >= from; }).sort(function (a, b) { return a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0; });
+          var h = '<h2>授業計画の消化状況' + helpButton('usage') + '</h2>' + helpBox('usage', '承認済みの案内ごとに、確定した授業のうち実施済み（濃い色）と未実施（薄い色）の回数と、まだ日程の決まっていない残り回数を示します。追加案内は元の案内に合算します。集計は請求と同じ割り当て（日付順に元の案内 → 追加案内）です。') + '<div class="card">';
+          if (!tops.length) h += '<div class="empty">承認済みの計画はありません</div>';
+          tops.forEach(function (l) {
+            var addons = approved.filter(function (a) { return a.parentId === l.id; }), limit = planLimit(l), extra = 0, done = (usage[l.id] || {}).done || 0, planned = (usage[l.id] || {}).planned || 0;
+            addons.forEach(function (a) { extra += planLimit(a); done += (usage[a.id] || {}).done || 0; planned += (usage[a.id] || {}).planned || 0; });
+            var total = limit + extra, remain = Math.max(0, total - done - planned), pd = total ? Math.min(100, Math.round(done / total * 100)) : 0, pp = total ? Math.min(100 - pd, Math.round(planned / total * 100)) : 0;
+            h += '<div class="usage-row" data-usage="' + esc(l.id) + '"><div class="row between"><strong>' + esc(planLabel(l)) + '</strong><span class="small muted">' + esc(planPeriodShort(l)) + (l.endDate < td ? '・期間終了' : '') + '</span></div>';
+            h += '<div class="usage-bar" role="img" aria-label="実施 ' + done + '回、予定 ' + planned + '回、計画 ' + total + '回"><span class="done" style="width:' + pd + '%"></span><span class="planned" style="width:' + pp + '%"></span></div>';
+            h += '<div class="small">実施 <strong>' + done + '</strong>・予定 ' + planned + '・残り ' + (remain ? '<strong style="color:var(--primary)">' + remain + '</strong>' : '0') + '<span class="muted">／計画 ' + limit + '回' + (extra ? '＋追加 ' + extra + '回' : '') + '</span>' + (done + planned > total ? ' <span class="tag red">超過</span>' : remain ? '' : ' <span class="tag green">日程確定</span>') + '</div></div>';
+          });
+          return h + '</div>';
+        }
         function renderPlanCard(s) {
           var p = s.plan || {}, lines = planLines(s), dis = busy || s.active === false, f = planEdits[s.id];
           var by = function (st) { return lines.filter(function (l) { return l.status === st; }); };
@@ -1894,7 +1916,7 @@
           var sent = by('proposed'), okd = by('approved'), ng = by('declined');
           if (!sent.length && !okd.length && !ng.length) h += '<div class="empty">送信済み・承認済みの案内はまだありません</div>';
           h += renderPlanGroup(s, '送信済み（保護者の承認待ち）', sent, f, dis) + renderPlanGroup(s, '承認済み', okd, f, dis) + renderPlanGroup(s, '見送り', ng, f, dis);
-          return h + '</div>';
+          return h + '</div>' + renderPlanUsage(s);
         }
         function renderBilling(s) {
           var e = billingEditor(s), b = e.preview, disabled = busy || e.busy || !!e.pending;

@@ -177,6 +177,8 @@ test('addon lines top up an approved line: same subject and kind, period inside 
   assert.equal(p.amount, 13000);
   // the parent's count cannot drop below what its lessons need once the addons are full
   rejected(save(h, { lineId: parent.line.id, subject: '数学', count: 1, expectedRevision: h.context().planLine_('test-a', parent.line.id).revision }), 'bookedOver');
-  // the month summary counts parent and addons
+  // the month summary counts parent and addons, and the kanri card gets per-line usage from the same assignment
   assert.equal(h.context().billingMonthInfo_('test-a', '2026-09').total, 5);
+  const usage = h.admin('kanriStudent', { studentId: 'test-a', section: 'billing' }).data.plan.usage;
+  assert.deepEqual(json(usage), { [parent.line.id]: { done: 2, planned: 0 }, [a1.line.id]: { done: 1, planned: 0 }, [a2.line.id]: { done: 1, planned: 0 } });
 });

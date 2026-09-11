@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-plan-addon' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-plan-usage' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -2005,7 +2005,7 @@ function kanriStudent_(studentId,section) {
   var fee = studentFee_(id, minutes, month), billingMonths = billingMonths_(id);
   var plan=(function () { var rows = planRows_(); return { month: month, current: planFor_(id, month).plan, fromDefault: false, monthRows: [],
       defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
-      lines: planLinesFor_(id).sort(planLineSort_).map(planLineView_) }; })();
+      lines: planLinesFor_(id).sort(planLineSort_).map(planLineView_), usage: planUsage_(id) }; })();
   var thisMonth={count:doneMonth.length,minutes:minutes,fee:fee.amount,mode:fee.mode,billed:payments.some(function(p){return p.ym===month && p.status!=='取消';})};
   if (section==='billing') return Object.assign(base,{rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),payments:payments,billing:billingPreview_(id,month),billingMonths:billingMonths,plan:plan,thisMonth:thisMonth});
   var progressData=kanriStudentProgress_(id);

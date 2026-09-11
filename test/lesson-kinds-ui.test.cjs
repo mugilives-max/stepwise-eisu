@@ -84,3 +84,13 @@ test('the plan and billing headings carry a ? help toggle instead of an always-v
   ui.click('help-toggle', { 'data-help': 'billing' }); assert.match(ui.html(), /<h2>請求・入金管理<button[^>]*aria-expanded="true"[^>]*>\?<\/button><\/h2><div class="card note"[^>]*>対象月の承認済み料金と実施実績から/);
   ui.click('help-toggle', { 'data-help': 'plan' }); assert.doesNotMatch(ui.html(), /1つの「案内」として作り/);
 });
+
+test('the 消化状況 card shows done, planned and remaining per approved line with addons folded in', async () => {
+  const { adminReady, card, line } = require('./helpers/operations-ui-harness.cjs');
+  const lines = [line({ id: 'p', status: 'approved', approvedCount: 4 }), line({ id: 'x', parentId: 'p', addon: true, status: 'approved', count: 2, approvedCount: 2, startDate: '2026-09-20', endDate: '2026-09-30', period: '2026/9/20〜9/30', month: '' }), line({ id: 'q', subject: '数学', status: 'approved', approvedCount: 3, count: 3 }), line({ id: 'old', subject: '国語', status: 'approved', approvedCount: 2, count: 2, startDate: '2026-08-01', endDate: '2026-08-31', period: '2026年8月', month: '2026-08' }), line({ id: 'd', subject: '理科', status: 'proposed' })];
+  const ui = await adminReady(card({ plan: { lines, defaultRows: [], usage: { p: { done: 2, planned: 1 }, x: { done: 1, planned: 0 }, q: { done: 3, planned: 0 }, old: { done: 2, planned: 0 } } } }), 'billing');
+  assert.match(ui.html(), /<h2>授業計画の消化状況<button[^>]*data-help="usage"/);
+  assert.match(ui.html(), /<div class="usage-row" data-usage="p"><div class="row between"><strong>英語（通常）<\/strong><span class="small muted">9月<\/span><\/div><div class="usage-bar"[^>]*><span class="done" style="width:50%"><\/span><span class="planned" style="width:17%"><\/span><\/div><div class="small">実施 <strong>3<\/strong>・予定 1・残り <strong[^>]*>2<\/strong><span class="muted">／計画 4回＋追加 2回<\/span><\/div>/);
+  assert.match(ui.html(), /data-usage="q"[^]*?実施 <strong>3<\/strong>・予定 0・残り 0<span class="muted">／計画 3回<\/span> <span class="tag green">日程確定<\/span>/);
+  assert.doesNotMatch(ui.html(), /data-usage="old"|data-usage="x"|data-usage="d"/);
+});

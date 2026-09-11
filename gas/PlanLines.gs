@@ -78,10 +78,18 @@ function planAssign_(lines, slots) {
     var cands = approved.filter(function (l) { return String(s.studentId) === l.studentId && l.subject === String(s.subject || '') && l.kind === kindNorm_(s.kind) && planLineCovers_(l, String(s.date || '')); })
       .sort(function (a, b) { return ((a.parentId ? 1 : 0) - (b.parentId ? 1 : 0)) || (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0); });
     var hit = cands.filter(function (l) { return cap[l.id] > 0; })[0];
-    map[String(s.id)] = { line: hit || null, candidates: cands.length };
+    map[String(s.id)] = { line: hit || null, candidates: cands.length, slot: s };
     if (hit) cap[hit.id]--;
   });
   return map;
+}
+// 承認済みの行ごとの消化状況: 割り当てられた確定授業のうち実施済み(done)と未実施(planned)の数
+function planUsage_(studentId, lines) {
+  lines = lines || planLinesFor_(studentId);
+  var assign = planAssign_(lines, planStudentSlots_(studentId)), out = {};
+  lines.forEach(function (l) { if (l.status === 'approved') out[l.id] = { done: 0, planned: 0 }; });
+  Object.keys(assign).forEach(function (k) { var e = assign[k]; if (!e.line || !out[e.line.id]) return; out[e.line.id][e.slot.done === true || String(e.slot.done) === 'true' ? 'done' : 'planned']++; });
+  return out;
 }
 function planUnassigned_(map) { var n = 0; Object.keys(map).forEach(function (k) { if (!map[k].line) n++; }); return n; }
 function planStudentSlots_(studentId, slots) { return (slots || readRows_('slots')).filter(function (s) { return String(s.studentId) === String(studentId); }); }
