@@ -351,20 +351,22 @@
             if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
-              lb.slice(0, 2).forEach(function (l) {
-                if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + "</span>"; return; }
-                var lc = l.st === "offer" ? " of" : l.st === "past" ? " dn" : "";
-                marks += '<span class="callbl tm' + lc + '" style="white-space:normal;overflow-wrap:anywhere">' + esc(l.start) + (l.end ? '-' + esc(l.end) : '') + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
+              // 授業1つ＝1つの箱(Googleカレンダー風)。案内は黄、実施済みは灰、重要な予定は赤系
+              lb.slice(0, 3).forEach(function (l) {
+                if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
+                var lc = l.st === "offer" ? " of" : l.st === "past" || l.st === "done" ? " dn" : "";
+                marks += '<span class="calbox' + lc + '">' + esc(l.start) + (l.end ? '-' + esc(l.end) : '') + ' ' + esc(l.text) + "</span>";
               });
-              if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
+              if (lb.length > 3) marks += '<span class="callbl more">+' + (lb.length - 3) + "</span>";
             }
             var clickable = !past || hasItems; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)
             if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";
             else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
           }
           h += '</div><div class="callegend">';
-          h += '<span><span class="callbl" style="display:inline">授業</span></span>';
-          h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
+          h += '<span><span class="calbox" style="display:inline">授業</span> 確定した授業</span>';
+          h += '<span><span class="calbox of" style="display:inline">授業</span> 案内（未確定・返事をお願いします）</span>';
+          h += '<span><span class="calbox dn" style="display:inline">授業</span> 実施済み</span>';
           h += '<span><span class="callbl ev" style="display:inline">予定</span> 重要な予定（テスト・行事など）</span>';
           h += '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
           h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';

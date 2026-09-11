@@ -260,5 +260,5 @@ test('the lesson history shows subject-and-kind folder cards that open into thei
 
 test('calendar lesson labels show start and end time', async () => {
   const ui = await studentReady(state([slot('slot-a', { date:'2026-09-15', start:'17:00', min:90, subject:'英語', st:'mine' })]));
-  assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="callbl tm"[^>]*>17:00-18:30<\/span><span class="callbl">英語<\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox">17:00-18:30 英語<\/span>/);
 });
