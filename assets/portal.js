@@ -24,9 +24,9 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['mypage','home','schedule','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';}
-        // 保護者ページ: 「マイページ」は子どもの生徒ページをそのまま表示(2026-09-11 に追加。旧ページは順次削る)
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return (family?[['mypage','マイページ']]:[]).concat([['home','ホーム'],['schedule','予定'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']]).map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['home','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home 扱い
+        // 保護者ページ: ホームは子どもの生徒ページ(マイページ)そのもの＋最下部に「今月の授業」。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
         function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
@@ -929,6 +929,13 @@
           return svg;
         }
 
+        // 今月の授業(実施回数・料金の見込み)。保護者ホーム(マイページ)の最下部と旧保護者画面で共用
+        function renderParentThisMonth(d) {
+          var tm = d.thisMonth || {}, bill = d.billing, html = '<div class="row" style="align-items:stretch">';
+          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
+          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (bill && bill.mode === "recorded" ? "請求記録額" : tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + (bill && bill.provisional && !bill.invoice ? "料金の承認待ち" : yen(bill ? (bill.invoice ? bill.invoice.amount : bill.amount) : tm.fee)) + '</div><div class="small muted">' + (bill && bill.provisional && !bill.invoice ? "この月の条件を先生にご確認ください" : bill && bill.mode === "recorded" ? "過去の請求記録（当時の料金条件は未記録）" : tm.mode === "monthly" ? "月額固定" : "30分 " + yen(bill ? bill.rate30 : d.rate30) + " × 実施時間") + '</div></div></div>';
+          return html;
+        }
         function renderParent(data, family, childId) {
           var d = data || P, activeBusy = family ? F.busy : busy, memoKey = family ? childId : myKey(), memos = family ? F.memos : parentPlanMemos;
           var html = family ? '' : '<div style="display:flex;justify-content:flex-end"><button class="btn-quiet btn-sm" data-action="parentclose"' + (activeBusy ? ' disabled' : '') + '>ログアウト</button></div>';
@@ -936,10 +943,8 @@
           if (!family && parentPlanNotice) html += '<p class="parent-error" role="alert">' + esc(parentPlanNotice) + '</p>';
           html += '<p><button class="btn-sm" data-action="' + (family ? 'fa-refresh' : 'parentrefresh') + '"' + (activeBusy ? " disabled" : "") + '>最新の情報を確認</button></p>';
           if(section==='home'){
-          html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2><div class="row" style="align-items:stretch">';
-          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
-          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (bill && bill.mode === "recorded" ? "請求記録額" : tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + (bill && bill.provisional && !bill.invoice ? "料金の承認待ち" : yen(bill ? (bill.invoice ? bill.invoice.amount : bill.amount) : tm.fee)) + '</div><div class="small muted">' + (bill && bill.provisional && !bill.invoice ? "この月の条件を先生にご確認ください" : bill && bill.mode === "recorded" ? "過去の請求記録（当時の料金条件は未記録）" : tm.mode === "monthly" ? "月額固定" : "30分 " + yen(bill ? bill.rate30 : d.rate30) + " × 実施時間") + '</div></div></div>';
-          html += '<p>予定・授業報告・請求・連絡は上のメニューから確認できます。</p>';
+          html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2>' + renderParentThisMonth(d);
+          html += '<p>授業報告・請求・連絡は上のメニューから確認できます。</p>';
           }
           if(!family&&(section==='home'||section==='schedule')){
           html += '<h2>今後の授業</h2><div class="card">' + ((d.upcoming || []).length ? d.upcoming.map(function (s) { return '<p>' + fmtDateW(s.date) + ' ' + esc(s.start) + '〜' + endTime(s.start, s.min) + ' ' + esc(s.subject || '') + deliveryTag(s) + ' <span class="tag ' + (s.status === 'booked' ? 'blue' : 'amber') + '">' + (s.status === 'booked' ? '確定' : '生徒の返事待ち') + '</span>' + (s.meetUrl ? ' <a href="' + esc(s.meetUrl) + '" target="_blank" rel="noopener">Meet</a>' : '') + '</p>'; }).join('') : '<p class="muted">今後の授業はまだありません。</p>') + '</div>';
@@ -1004,9 +1009,10 @@
           var st = F.childState[c.studentId];
           if (!st || !st.me) { if (!F.busy) familyLoadChildState(c.studentId); return h + '<p>' + esc(c.name) + 'さんのページを読み込んでいます…</p>'; }
           S = st;
-          h += '<nav class="tabs" style="margin:0 0 12px;padding:0;position:static">' + [['home', 'ホーム'], ['grades', '成績'], ['history', '授業の記録']].map(function (t) { return '<a href="#family/mypage" data-action="fa-mytab" data-tab="' + t[0] + '" class="' + (F.mypageTab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>';
+          h += '<nav class="tabs" style="margin:0 0 12px;padding:0;position:static">' + [['home', 'ホーム'], ['grades', '成績'], ['history', '授業の記録']].map(function (t) { return '<a href="#family/home" data-action="fa-mytab" data-tab="' + t[0] + '" class="' + (F.mypageTab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>';
           h += '<p class="sub">' + esc(c.name) + 'さんのマイページ（保護者が代わりに操作できます）</p>';
-          if (F.mypageTab === 'grades') h += renderGradesPage(); else if (F.mypageTab === 'history') h += renderHistoryPage(); else h += renderHomePage();
+          if (F.mypageTab === 'grades') h += renderGradesPage(); else if (F.mypageTab === 'history') h += renderHistoryPage();
+          else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
           return h;
         }
         function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
@@ -1020,33 +1026,6 @@
             if (res.error) { if (res.verificationUnavailable) F.verificationInvalid = true; if (res.familyAuthRequired) familyClear(); F.error = res.error; familyRender(); return; }
             success(res); familyRender();
           }).catch(function () { if (seq !== F.seq || auth && auth !== familyToken()) return; F.busy = false; F.error = "通信に失敗しました。通信状態を確認して再試行してください。"; familyRender(); });
-        }
-        var familyCalendarMonth = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));
-        familyCalendarMonth.setDate(1);
-        var familyCalendarDay = '';
-        function renderFamilyCalendar() {
-          var y=familyCalendarMonth.getFullYear(), m=familyCalendarMonth.getMonth(), month=y+'-'+pad(m+1), items=[];
-          var children=familyVisibleChildren(), loading=children.some(function(c){return !F.childrenData[c.studentId];});
-          children.forEach(function(c){(F.childrenData[c.studentId] && F.childrenData[c.studentId].upcoming || []).forEach(function(slot){
-            if(slot.status==='booked'||slot.status==='offered') items.push({slot:slot,name:c.name});
-          });});
-          items.sort(function(a,b){return (a.slot.date+a.slot.start+a.name).localeCompare(b.slot.date+b.slot.start+b.name);});
-          var h='<section aria-label="子どもの予定カレンダー"><h2>予定カレンダー</h2><div class="card cal"><div class="calhead"><button class="btn-quiet btn-sm" data-action="fa-calprev" aria-label="前の月">◀</button><strong>'+y+'年'+(m+1)+'月</strong><button class="btn-quiet btn-sm" data-action="fa-calnext" aria-label="次の月">▶</button></div><div class="calgrid">';
-          WD.forEach(function(w){h+='<span class="calwd">'+w+'</span>';});
-          for(var blank=0;blank<new Date(y,m,1).getDay();blank++)h+='<span></span>';
-          for(var day=1;day<=new Date(y,m+1,0).getDate();day++){
-            var date=month+'-'+pad(day), rows=items.filter(function(x){return x.slot.date===date;});
-            h+='<button class="calday'+(familyCalendarDay===date?' sel':'')+'" data-action="fa-calday" data-date="'+date+'" aria-label="'+date+' '+rows.length+'件" aria-pressed="'+(familyCalendarDay===date)+'"><span>'+day+'</span>';
-            rows.forEach(function(x){h+='<span style="background:'+(x.slot.status==='booked'?'#dce8ff':'#fff0d6')+';color:#19212a;border-radius:3px;width:100%" class="callbl" title="'+esc(x.name+' '+x.slot.start+' '+x.slot.subject)+'">'+esc(cT(x.slot.start)+' '+x.name+' '+(x.slot.subject||''))+'</span>';});h+='</button>';
-          }
-          h+='</div><p class="note">日付を押すと、その日の授業を確認できます。</p></div>';
-          if(loading)h+='<p role="status">予定を読み込んでいます…</p>';
-          var selected=familyCalendarDay && familyCalendarDay.slice(0,7)===month;
-          var rows=items.filter(function(x){return selected?x.slot.date===familyCalendarDay:x.slot.date.slice(0,7)===month;});
-          h+='<h2>'+(selected?fmtDateW(familyCalendarDay):'この月')+'の授業</h2><div class="card">';
-          rows.forEach(function(x){var slot=x.slot;h+='<p><strong>'+esc(x.name)+'</strong> '+fmtDateW(slot.date)+' '+esc(slot.start)+'〜'+endTime(slot.start,slot.min)+' '+esc(slot.subject)+deliveryTag(slot)+' <span class="tag '+(slot.status==='booked'?'blue':'amber')+'">'+(slot.status==='booked'?'確定':'生徒の返事待ち')+'</span></p>';});
-          h+=!rows.length&&!loading?'<p>今後の授業予定はありません。</p>':'';
-          return h+'</div></section>';
         }
         function familyVisibleChildren() {
           return (F.home && F.home.children || []).filter(function(c){return !F.studentId || sameId(c.studentId,F.studentId);});
@@ -1137,11 +1116,10 @@
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
-            if(parentSection()==='mypage'){ app.innerHTML = h + renderFamilyMypage(); return; }
+            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(); return; }
             if(parentSection()==='settings') h += '<p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
             if(parentSection()==='settings') h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             else if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
-            if(parentSection()==='home'||parentSection()==='schedule')h += renderFamilyCalendar();
             if(parentSection()==='billing')h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
             if(F.confirm&&parentSection()==='billing'){
@@ -1184,8 +1162,6 @@
         function familyClick(action, btn) {
           if (route() !== "family") return;
           if(["fa-notices","fa-notice-refresh","fa-notice-open"].indexOf(action)>=0){familyNoticeClick(action,btn);return;}
-          if(action==='fa-calprev'||action==='fa-calnext'){familyCalendarMonth.setMonth(familyCalendarMonth.getMonth()+(action==='fa-calnext'?1:-1));familyCalendarDay='';familyRender();return;}
-          if(action==='fa-calday'){familyCalendarDay=btn.getAttribute('data-date');familyRender();return;}
           if(action==='fa-mytab'){F.mypageTab=btn.getAttribute('data-tab')||'home';histFolder=null;familyRender();return;}
           if (F.busy) return;
           if (action === "fa-home") familyLoadHome();
@@ -1222,7 +1198,7 @@
             var panel=familyPanels[key] || (familyPanels[key]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
             var token=familyToken(); var call=function(op,payload){return apiPost(Object.assign({},payload,{ftoken:token,studentId:c.studentId,action:'learningService',op:op}));};
             if(section==='records')panel.reads.mount(host,call,key);else panel.reads.clear();
-            if(['contacts','grades','schedule'].indexOf(section)>=0)panel.services.mount(host,{key:key,teacher:false,panel:section==='grades'?'exams':section==='schedule'?'cancel':'messages',call:call});
+            if(['contacts','grades'].indexOf(section)>=0)panel.services.mount(host,{key:key,teacher:false,panel:section==='grades'?'exams':'messages',call:call});
           });
           Object.keys(familyPanels).forEach(function(key){if(!active[key]){familyPanels[key].services.clear();familyPanels[key].reads.clear();}});
         }

@@ -564,3 +564,9 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - 操作の代行: 画面は生徒本人用の送信（`k` 付き）を、マイページでは `k` を外して `ftoken` + `studentId` に置き換えて送る。GAS の `doPost` は、対象の操作（wish / unwish / wishMany / eventAddMany / eventAdd / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / accept / acceptMany / decline / cancelReq / grades / scheduleParse）に限り、`familyChildRequire_` で保護者セッションと子どもの紐付きを確認できたときだけ、その子の専用コードを `k` として扱う（コードは応答に含めず、応答の `state.emailStatus` も除く）。メール設定・保護者認証・連絡欄は対象外。
 - 旧ページ（ホーム・予定・授業報告・宿題・成績・請求・料金承認・連絡・設定）は当面そのまま。削る順番は FUTURE_WORK を参照。
 - テスト: `test/family-portal.test.cjs`（代行の許可・拒否）、`test/family-ui.test.cjs`（マイページの描画と代行送信）。
+
+### 保護者ページ: 旧「予定」を削除し、ホームを子どものマイページに置き換え（2026-09-11）
+
+- 旧「予定」セクション（子ども別の予定カレンダー・取消申請パネル）を削除。取消はマイページの各授業から代行できる。
+- 「ホーム」は子どものマイページ（生徒ページと同じホーム／成績／授業の記録）そのものにし、ホームの最下部に旧保護者ホームの「今月の授業」（実施回数・料金の見込み）を残した。`#family/mypage` `#family/schedule` はホームとして扱う。
+- ナビは「ホーム／授業報告・宿題／成績／請求・料金承認／連絡／設定」。次は授業報告・宿題と成績をマイページ側へ寄せる（FUTURE_WORK）。GAS 変更なし。
