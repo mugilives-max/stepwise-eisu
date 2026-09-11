@@ -1198,7 +1198,7 @@
           var page=route(),auth=null;
           if(!previewK){
             if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
-            else if(['home','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
+            else if(['grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()}; // 成績票・振り返り・先生への連絡はホームには出さない(2026-09-11)
           }
           if(window.StepwiseLessonRead){
             if(auth&&(auth.ftoken||auth.ptoken))window.StepwiseLessonRead.mount(app,function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));},JSON.stringify(auth));
