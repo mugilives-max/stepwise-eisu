@@ -590,8 +590,7 @@
           html += renderCal(D.info, today, false);
           html += renderDayDetail(D, false, false);
 
-          // 見出し + 今月の授業
-          html += '<h1>' + esc(S.me.name) + 'さんのマイページ</h1><p class="sub">今月の授業・やること・次の授業</p>';
+          // 今月の授業
           (function () {
             var ym = today.slice(0, 7);
             var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
