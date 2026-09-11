@@ -24,8 +24,9 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['home','schedule','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';}
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['schedule','予定'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['mypage','home','schedule','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';}
+        // 保護者ページ: 「マイページ」は子どもの生徒ページをそのまま表示(2026-09-11 に追加。旧ページは順次削る)
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return (family?[['mypage','マイページ']]:[]).concat([['home','ホーム'],['schedule','予定'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']]).map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
         function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
@@ -202,7 +203,12 @@
           var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
           return fetch(API + "?" + q).then(function (r) { return r.json(); });
         }
-        function apiPost(body) { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
+        // 保護者ページの「マイページ」では、生徒本人用の送信(k 付き)を保護者のログイン(ftoken)＋子どもの ID に置き換えて送る。GAS 側で家族の紐付きを確認して子ども本人と同じ扱いにする
+        function apiPost(body) {
+          var proxied = null;
+          if (route() === 'family' && F.home && body && body.k !== undefined && !body.ftoken) { var pc = familyMypageChild(); body = Object.assign({}, body); delete body.k; body.ftoken = familyToken(); body.studentId = pc ? pc.studentId : ''; proxied = pc ? pc.studentId : ''; }
+          return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (res) { if (proxied && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
+        }
         function myKey() { return previewK || lsGet("sw_k") || ""; }
         function parentSessionKey(k) { return "sw_pt_v2:" + (k === undefined ? myKey() : k); }
         function clearParentSession(k) {
@@ -210,6 +216,7 @@
           if (k === undefined || k === myKey()) { P = null; parentStep = "pass"; }
         }
         function loadState() {
+          if (route() === 'family') { var fc = familyMypageChild(); if (fc) familyLoadChildState(fc.studentId); return Promise.resolve(); }
           var k = myKey(), seq = ++stateSeq;
           return apiGet({ action: "state", k: k }).then(function (res) {
             if (k !== myKey() || seq !== stateSeq) return;
@@ -471,7 +478,7 @@
               if (S.nlEnabled && !previewK) html += renderNaturalEntry();
             }
           }
-          if (route() === 'home' && selMode) html += renderSelBar(D, true);
+          if ((route() === 'home' || route() === 'family') && selMode) html += renderSelBar(D, true);
           return html + '</div>';
         }
 
@@ -982,9 +989,27 @@
 
         /* ---------- 家族の保護者認証: 専用リンク方式とは別のセッション ---------- */
         var notices={items:[],open:false,busy:false,error:"",seq:0};
-        var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
+        var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), childState: Object.create(null), mypageTab: 'home', studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
         function familyToken() { return ssGet("sw_ft_v1") || ""; }
-        function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyMypageChild() { var list = F.home && F.home.children || []; if (!list.length) return null; return list.filter(function (x) { return sameId(x.studentId, F.studentId); })[0] || list[0]; }
+        function familyLoadChildState(id) {
+          if (!F.home || !id) return;
+          familyRequest('familyStudentState', { ftoken: familyToken(), studentId: id }, function (res) { F.childState[id] = res; var c = familyMypageChild(); if (c && sameId(c.studentId, id)) S = res; });
+        }
+        function familySelectChild(id) { F.studentId = id; F.confirm = null; G = null; GX = []; gLoading = false; selDate = null; selManual = false; selMode = ''; selDays = {}; dayAddOpen = false; pending = null; histFolder = null; NL = { text: '', busy: false, proposal: null, error: '' }; var c = familyMypageChild(); S = c && F.childState[c.studentId] || null; }
+        function renderFamilyMypage() {
+          var c = familyMypageChild(), h = '';
+          if (!c) return '<p>子どもの紐付けを先生にご依頼ください。</p>';
+          if ((F.home.children || []).length > 1) h += '<p><label class="small">表示する子ども <select id="fa-mychild">' + F.home.children.map(function (x) { return '<option value="' + esc(x.studentId) + '"' + (sameId(x.studentId, c.studentId) ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label></p>';
+          var st = F.childState[c.studentId];
+          if (!st || !st.me) { if (!F.busy) familyLoadChildState(c.studentId); return h + '<p>' + esc(c.name) + 'さんのページを読み込んでいます…</p>'; }
+          S = st;
+          h += '<nav class="tabs" style="margin:0 0 12px;padding:0;position:static">' + [['home', 'ホーム'], ['grades', '成績'], ['history', '授業の記録']].map(function (t) { return '<a href="#family/mypage" data-action="fa-mytab" data-tab="' + t[0] + '" class="' + (F.mypageTab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>';
+          h += '<p class="sub">' + esc(c.name) + 'さんのマイページ（保護者が代わりに操作できます）</p>';
+          if (F.mypageTab === 'grades') h += renderGradesPage(); else if (F.mypageTab === 'history') h += renderHistoryPage(); else h += renderHomePage();
+          return h;
+        }
+        function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1046,7 +1071,7 @@
         function familyLoadHome() {
           if (F.busy || !familyToken()) return;
           if (ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
-          F.childrenData = Object.create(null); F.confirm = null; notices.items=[];
+          F.childrenData = Object.create(null); F.childState = Object.create(null); F.confirm = null; notices.items=[];
           familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; familyLoadChild(); });
         }
         function familyLogout() {
@@ -1112,6 +1137,7 @@
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
+            if(parentSection()==='mypage'){ app.innerHTML = h + renderFamilyMypage(); return; }
             if(parentSection()==='settings') h += '<p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
             if(parentSection()==='settings') h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             else if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
@@ -1160,6 +1186,7 @@
           if(["fa-notices","fa-notice-refresh","fa-notice-open"].indexOf(action)>=0){familyNoticeClick(action,btn);return;}
           if(action==='fa-calprev'||action==='fa-calnext'){familyCalendarMonth.setMonth(familyCalendarMonth.getMonth()+(action==='fa-calnext'?1:-1));familyCalendarDay='';familyRender();return;}
           if(action==='fa-calday'){familyCalendarDay=btn.getAttribute('data-date');familyRender();return;}
+          if(action==='fa-mytab'){F.mypageTab=btn.getAttribute('data-tab')||'home';histFolder=null;familyRender();return;}
           if (F.busy) return;
           if (action === "fa-home") familyLoadHome();
           else if (action === "fa-refresh") familyLoadChild(btn.getAttribute("data-child") || F.studentId);
@@ -1351,7 +1378,7 @@
               selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
             case "dayact":
               selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; render();
-              var calEl2 = document.querySelector(route() === "home" ? ".selbar" : ".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
+              var calEl2 = document.querySelector(route() === "home" || route() === "family" ? ".selbar" : ".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "selstart":
               selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();
@@ -1447,6 +1474,7 @@
         app.addEventListener("change", function (ev) {
           var el = ev.target;
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
+          if (el && el.id === "fa-mychild") { if(F.busy)return; familySelectChild(el.value); familyRender(); return; }
           if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
           if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; render(); } return; }
           if (el && el.getAttribute("data-action") === "nl-item") { var nlIt = NL.proposal && NL.proposal.items[+el.getAttribute('data-i')]; if (nlIt && !nlIt.done) nlIt.sel = !!el.checked; return; }

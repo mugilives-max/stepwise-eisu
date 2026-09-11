@@ -232,3 +232,21 @@ test('notification bell opens all-child priorities; reading retains required sta
  assert.equal(ui.requests.at(-1).body.action,'familyNotices');ui.requests.at(-1).reply({ok:true,notices:[notice]});await flush();assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);assert.ok(!ui.el('parent-header-actions').innerHTML.includes('fa-logout'));
  ui.click('fa-notices');assert.match(ui.html(),/要対応/);ui.click('fa-notice-open',{'data-notice':notice.id});assert.equal(ui.requests.at(-1).body.action,'familyNoticeRead');assert.equal(ui.requests.at(-1).body.noticeId,notice.id);ui.requests.at(-1).reply({ok:true,notices:[{...notice,read:true}]});await flush();assert.equal(ui.location.hash,'#family/billing');assert.equal(ui.el('fa-child').value,'child-b');assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);ui.navigate('#family/settings');assert.match(ui.html(),/data-action="fa-logout"/);
 });
+
+test('the family マイページ tab shows the child student home and proxies student actions with the family session', async () => {
+  const ui = createUI('student', { hash: '#family/mypage', session: new Map([['sw_ft_v1', 'test-family-token']]) });
+  ui.requests[0].reply(home([{ studentId: 'child-a', name: '【テスト】子A' }])); await flush();
+  ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush();
+  const st = ui.requests.find(r => r.body.action === 'familyStudentState'); assert.ok(st, JSON.stringify(ui.requests.map(r => r.body.action)));
+  assert.deepEqual({ ftoken: st.body.ftoken, studentId: st.body.studentId, k: st.body.k }, { ftoken: 'test-family-token', studentId: 'child-a', k: undefined });
+  st.reply({ ...state(), viewer: 'family' }); await flush();
+  const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
+  assert.match(ui.el('tabs').innerHTML, /href="#family\/mypage" class="on"[^>]*>マイページ/);
+  assert.match(ui.html(), /【テスト】子Aさんのマイページ（保護者が代わりに操作できます）/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2>予定の編集<\/h2>/);
+  ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
+  const sent = ui.requests.at(-1).body;
+  assert.equal(sent.action, 'blockSet'); assert.equal(sent.ftoken, 'test-family-token'); assert.equal(sent.studentId, 'child-a'); assert.equal(sent.k, undefined); assert.deepEqual(sent.add, ['2026-09-15']);
+  ui.requests.at(-1).reply({ ok: true, state: { ...state(), blocked: [{ id: 'b1', date: '2026-09-15' }] } }); await flush();
+  assert.match(ui.html(), /授業不可<\/span><span class="time">終日/);
+  ui.click('fa-mytab', { 'data-tab': 'history' }); assert.match(ui.html(), /実施済みの授業はまだありません/);
+});

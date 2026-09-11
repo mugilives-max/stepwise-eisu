@@ -410,3 +410,19 @@ test('single-hash legacy session survives adding another device and is revoked i
  const h=createFamilyHarness(),v=verified(h),c=h.context(),a=c.familyAccount_(v.family.id);const sessions=JSON.parse(a.tokenHash);a.tokenHash=sessions[0].hash;c.familySave_(a);
  ok(h.family('familyHome',{ftoken:v.ftoken}));const b=ok(h.family('familyLogin',{email:EMAIL,pass:PASS}));ok(h.family('familyHome',{ftoken:v.ftoken}));ok(h.family('familyLogout',{ftoken:v.ftoken}));ok(h.family('familyHome',{ftoken:b.ftoken}));
 });
+
+test('a family session reads a linked child state and acts for the child through the student actions',()=>{
+  const h=createFamilyHarness(),v=verified(h,create(h,['test-a']));
+  const st=h.family('familyStudentState',{ftoken:v.ftoken,studentId:'test-a'});assert.equal(st.error,undefined,JSON.stringify(st));
+  assert.ok(st.me&&st.me.name);assert.equal(st.viewer,'family');assert.equal(st.emailStatus,undefined);assert.ok(Array.isArray(st.slots));
+  rejected(h.family('familyStudentState',{ftoken:v.ftoken,studentId:'test-b'}));rejected(h.family('familyStudentState',{studentId:'test-a'}));
+  const w=h.family('wishMany',{ftoken:v.ftoken,studentId:'test-a',kind:'ok',dates:['2026-09-15'],start:'16:00',end:'18:00',note:'保護者から',deliveryMode:'in_person'});
+  assert.equal(w.ok,true,JSON.stringify(w));assert.equal(w.state.emailStatus,undefined);assert.equal(JSON.stringify(w).includes('synthetic-link'),false);
+  assert.deepEqual(h.rows('wishes').map(x=>[x.studentId,x.date,x.note]),[['test-a','2026-09-15','保護者から']]);
+  const b=h.family('blockSet',{ftoken:v.ftoken,studentId:'test-a',add:['2026-09-16'],removeIds:[],note:'',start:'',end:''});assert.equal(b.ok,true,JSON.stringify(b));
+  assert.equal(h.rows('blocked').filter(x=>x.studentId==='test-a').length,1);
+  rejected(h.family('wishMany',{ftoken:v.ftoken,studentId:'test-b',kind:'ok',dates:['2026-09-15'],start:'16:00',end:'18:00',deliveryMode:'in_person'}));
+  rejected(h.family('wishMany',{studentId:'test-a',kind:'ok',dates:['2026-09-15'],start:'16:00',end:'18:00'}));
+  rejected(h.family('studentEmailPrefs',{ftoken:v.ftoken,studentId:'test-a',prefs:{offered:false}}));
+  assert.equal(h.rows('wishes').length,1);
+});

@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-lesson-kinds' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-family-mypage' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -65,7 +65,16 @@ function doPost(e) {
     var req = JSON.parse(e.postData.contents);
     Object.defineProperty(req, '_receivedAt', {value:t0, enumerable:false}); // Server entry time, before lock/schema waits; never trust a client timestamp.
     var res;
-    if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
+    // 保護者ページから子どもの操作を代行: ログイン済みの保護者(ftoken)と、その家族に紐付く子ども(studentId)を確認できたときだけ、
+    // その子の専用コードを k として扱う(コードは応答に含めない)。対象は生徒本人が使う操作に限る(メール設定・保護者認証は対象外)。
+    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
+    var proxyErr = null;
+    if (!req.k && req.ftoken && req.studentId && FAMILY_PROXY_.indexOf(String(req.action || '')) >= 0 && typeof familyChildRequire_ === 'function') {
+      var fp = familyChildRequire_(req);
+      if (fp.error) proxyErr = fp; else { req.k = String(fp.student && fp.student.code || ''); req.familyProxy = true; }
+    }
+    if (proxyErr) res = proxyErr;
+    else if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
     else if (String(req.action || '').indexOf('studentEmail') === 0) res = studentEmailDispatch_(req);
     else switch (req.action) {
       case 'learningService': res = servicePublic_(req); break;
@@ -97,6 +106,7 @@ function doPost(e) {
       case 'admin':  res = admin_(req); break;
       default:       res = { error: 'unknown action' };
     }
+    if (req.familyProxy && res && typeof res === 'object' && res.state && typeof res.state === 'object') delete res.state.emailStatus;
     if (res && typeof res === 'object') res.ms = Date.now() - t0; // 処理時間(ミリ秒)。フロントのconsoleに出る
     if (res && typeof res === 'object') res.timings = {lockMs:afterLock-t0,schemaMs:afterSchema-afterLock,operationMs:Date.now()-afterSchema};
     return json_(res);

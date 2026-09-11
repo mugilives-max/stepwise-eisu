@@ -243,6 +243,7 @@ function familyDispatch_(req) {
     case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false)};}
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
+    case 'familyStudentState':{var fs=familyChildRequire_(req);if(fs.error)return fs;var st=studentState_(String(fs.student&&fs.student.code||''));if(st&&typeof st==='object'){delete st.emailStatus;st.viewer='family';}return st;}
     case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:billingParentDecideForStudent_(b.student,req);}
     default:return familyError_('操作が見つかりません');
   }}catch(e){return familyError_('処理を完了できませんでした。入力を保持して再試行してください。登録済みの場合は確認メールを再発行できます');}

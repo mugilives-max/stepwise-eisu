@@ -554,3 +554,13 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 ### 予定表の授業を1コマ1箱で表示（2026-09-11）
 
 生徒の予定表で授業・案内・重要な予定をそれぞれ1つの箱（左に色の帯。確定・実施済み＝青、案内＝黄、重要な予定＝赤系）で表示し、1行目に時刻「17:00-18:30」、2行目に科目。1日の授業はすべて箱で表示（「+N」の省略はしない）。凡例は従来のまま（実施済みを灰色にする案は見づらいため取りやめ）。管理画面ホームの箱表示と同じ考え方。GAS 変更なし。
+
+### 保護者ページに「マイページ」（子どもの生徒ページ）を追加（2026-09-11、GAS `2026-09-11-family-mypage`）
+
+方針: 生徒ページを保護者ページへ丸ごと追加し、重複する旧ページ（ホーム・予定・授業報告・宿題・成績）は少しずつ削って最終的になくす。今回は第1段階。
+
+- 保護者ページのナビ先頭に「マイページ」を追加（`#family/mypage`）。子どもが複数なら選択欄で切り替え。中は生徒ページと同じ「ホーム／成績／授業の記録」の切り替えで、生徒ページの描画関数をそのまま使う。
+- 子どもの状態は `familyStudentState`（`ftoken` + `studentId`）で取得。生徒本人の `state` と同じ内容から `emailStatus` を除き `viewer:'family'` を付ける。
+- 操作の代行: 画面は生徒本人用の送信（`k` 付き）を、マイページでは `k` を外して `ftoken` + `studentId` に置き換えて送る。GAS の `doPost` は、対象の操作（wish / unwish / wishMany / eventAddMany / eventAdd / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / accept / acceptMany / decline / cancelReq / grades / scheduleParse）に限り、`familyChildRequire_` で保護者セッションと子どもの紐付きを確認できたときだけ、その子の専用コードを `k` として扱う（コードは応答に含めず、応答の `state.emailStatus` も除く）。メール設定・保護者認証・連絡欄は対象外。
+- 旧ページ（ホーム・予定・授業報告・宿題・成績・請求・料金承認・連絡・設定）は当面そのまま。削る順番は FUTURE_WORK を参照。
+- テスト: `test/family-portal.test.cjs`（代行の許可・拒否）、`test/family-ui.test.cjs`（マイページの描画と代行送信）。
