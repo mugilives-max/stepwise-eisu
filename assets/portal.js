@@ -187,36 +187,8 @@
             stateKey = k; S = res; render();
           });
         }
-        var wishReview=null;
         function wishModeField(prefix){return '<input type="hidden" id="'+prefix+'-wmode" value="'+esc((S.me||{}).deliveryMode || '')+'">';}
         function wishStatusLabel(status){return status==='available'?'空きあり（確定前）':status==='full'?'現在は満員・要調整':status==='unavailable'?'休み・授業不可の時間帯：要調整':status==='unknown'?'先生による確認が必要':'';}
-        function wishRestore(body){var prefix=body.action==='wishMany'?'b':'f';['date','start','end','min','note','mode'].forEach(function(k){var el=document.getElementById(prefix+'-w'+k);if(el)el.value=k==='mode'?body.deliveryMode:body[k] || '';});}
-        function wishReviewHTML(){var w=wishReview,b=w.body;
-          var h='<section class="card" aria-label="授業可能日時の確認"><h2>授業可能日時の確認</h2><p>'+esc((b.dates || [b.date]).map(fmtDateW).join('、'))+' '+esc(b.start)+(b.end?'〜'+esc(b.end):'')+' / 授業の長さ '+esc(b.min)+'分'+'</p>';
-          if(b.note)h+='<p>'+esc(b.note)+'</p>';
-          if(w.error)h+='<p role="alert">'+esc(w.error)+'</p>';
-          if(w.busy)h+='<p role="status">'+(w.sending?'送信結果を確認しています…':'空き状況を確認しています…')+'</p>';
-          if(w.result)h+=w.result.days.map(function(d){return '<p><strong>'+esc(fmtDateW(d.date))+'：'+wishStatusLabel(d.status)+'</strong>'+(d.firstStart && b.kind==='ok'?'（例：'+esc(d.firstStart)+'開始）':'')+'</p>';}).join('');
-          h+='<p>授業が可能な時間帯として先生に伝えます。この時間帯すべてが授業になるわけではありません。登録だけでは授業は確定しません。満員の場合は先生との調整が必要です。</p>';
-          if(w.result)h+='<button class="btn-primary" data-action="wish-confirm"'+(w.busy?' disabled':'')+'>'+(w.result.days.some(function(d){return d.status!=="available";})?'調整が必要なことを確認して登録する':'この内容で登録する')+'</button> ';
-          return h+'<button class="btn-quiet" data-action="wish-recheck"'+(w.busy?' disabled':'')+'>空き状況を再確認</button> <button class="btn-quiet" data-action="wish-back"'+(w.busy?' disabled':'')+'>入力に戻る</button></section>';
-        }
-        function wishCheck(body){
-          if(busy || (wishReview && wishReview.busy))return;
-          var w={key:myKey(),body:JSON.parse(JSON.stringify(body)),busy:true,result:null,error:''};wishReview=w;render();
-          apiPost(Object.assign({},body,{action:'wishAvailability'})).then(function(res){if(wishReview!==w || w.key!==myKey())return;if(res.error)throw Error(res.error);w.result=res;}).catch(function(er){w.error=er.message || '確認できませんでした。入力は保持しています。';}).then(function(){w.busy=false;if(wishReview===w && w.key===myKey())render();});
-        }
-        function wishSend(){
-          var w=wishReview;if(!w||w.busy||!w.result||w.key!==myKey()||busy||acceptBatch().pending)return;
-          var body=Object.assign({},w.body,{availabilitySeen:w.result.days.map(function(d){return {date:d.date,status:d.status};})});
-          w.busy=true;w.sending=true;w.error='';render();
-          apiPost(body).then(function(res){
-            if(wishReview!==w || w.key!==myKey())return;
-            if(res.error){if(res.availability)w.result=res.availability;throw Error(res.error);}
-            if(!res.ok || !res.state)throw Error('送信結果を確認できませんでした。同じ内容で再試行してください。');
-            stateKey=w.key;S=res.state;wishReview=null;selMode='';selDays={};toast('授業可能日時を先生に送りました');
-          }).catch(function(er){w.error=er.message || '送信結果が不明です。同じ内容で再試行してください。';}).then(function(){w.busy=false;w.sending=false;if(w.key===myKey())render();});
-        }
         function studentAction(body, okMsg, onSuccess) {
           if (busy) return;
           if (acceptBatch().pending) { toast("先に一括確定の結果を確認してください"); return; }
@@ -560,7 +532,7 @@
           } else if (selMode === "wish") {
             html += wishModeField('b');
             html += '<div class="msg">授業可能日時: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
-            html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><label>授業の長さ<select id="b-wmin"><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select></label><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "空き状況を確認") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
+            html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録する") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
           } else if (selMode === "event") {
             var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
             html += '<div class="msg">予定を共有: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
@@ -698,7 +670,7 @@
           h += '<div class="row" style="margin-bottom:8px"><button class="btn-primary btn-sm" data-action="selstart" data-m="wish">予定表で日を選ぶ</button><span class="small muted">授業が可能な日をタップ。時間は画面下で入力します。</span></div>';
           h += '<details><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">日付を入力して送る</summary><div style="margin-top:8px">';
           h += wishModeField('f');
-            h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="f-wend" value="18:00" step="900"><label>授業の長さ<select id="f-wmin"><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select></label><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>空き状況を確認</button></div>';
+            h += '<div class="row"><input type="date" id="f-wdate" min="' + today + '"><input type="time" id="f-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="f-wend" value="18:00" step="900"><input type="text" id="f-wnote" placeholder="メモ(任意。例: 英語を希望)" maxlength="100" style="flex:1;min-width:140px"><button class="btn-primary btn-sm" data-action="addwish"' + (busy ? " disabled" : "") + '>登録する</button></div>';
             h += '<div class="note">「この時間帯なら授業ができる」という空き時間です。先生がこの中から授業の時間を決めて案内します(時間帯すべてが授業になるわけではありません)。</div>';
           h += '</div></details>';
           if (wishes.length) {
@@ -1193,12 +1165,12 @@
         function render() {
           if(parentHeaderActions){var count=notices.items.filter(function(n){return n.required||!n.read;}).length;parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" data-action="fa-notices" aria-label="お知らせ '+count+'件" aria-expanded="'+notices.open+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(count?' <span class="tag red">'+count+'</span>':'')+(notices.error?' !':'')+'</button>':'';}
           if(parentHeaderActions&&route()!=='family'&&S&&S.me){var required=studentNoticeItems().filter(function(x){return x.required;}).length;parentHeaderActions.innerHTML='<button class="btn-quiet btn-sm" data-action="student-notices" aria-label="お知らせ 要確認'+required+'件" aria-expanded="'+studentNoticesOpen+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(required?' <span class="tag red">'+required+'</span>':'')+'</button>';}
-          renderStudent(); if(studentNoticesOpen&&route()!=='family'&&S&&S.me)app.innerHTML=studentNoticesHTML()+app.innerHTML; if(wishReview && wishReview.key===myKey()) app.innerHTML=wishReviewHTML();
+          renderStudent(); if(studentNoticesOpen&&route()!=='family'&&S&&S.me)app.innerHTML=studentNoticesHTML()+app.innerHTML;
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].services.clear();familyPanels[key].reads.clear();});
           var page=route(),auth=null;
-          if(!wishReview&&!previewK){
+          if(!previewK){
             if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
             else if(['home','schedule','grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()};
           }
@@ -1330,7 +1302,7 @@
                 if (!bws) { toast("開始時刻を入れてください"); return; }
                 var body = { action: "wishMany", k: myKey(), kind: wishKind, dates: chosen, start: bws, note: bwn };
                 { var bwe = val("b-wend"); if (!bwe || bws >= bwe) { toast("時間帯は「開始 < 終了」で入れてください"); return; } body.end = bwe; }
-                body.deliveryMode=val('b-wmode');body.min=+(val('b-wmin') || 90);wishCheck(body);
+                body.deliveryMode=val('b-wmode');studentAction(body, '授業可能日時を登録しました', function(){selMode='';selDays={};});
               } else if (selMode === "event") {
                 var bet = val("b-etitle"), beb = !!(document.getElementById("b-eblock") || {}).checked;
                 if (!bet) { toast("予定の内容を入れてください"); return; }
@@ -1356,15 +1328,11 @@
               studentAction({ action: "cancelReq", slotId: pending.slotId, requestId:pending.requestId, k: myKey(), reason: reason }, "キャンセル申請を受け付けました"); break;
             case "askwithdraw": pending = { kind: "withdraw", slotId: id }; render(); break;
             case "dowithdraw": studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました"); break;
-            case 'wish-confirm': wishSend(); break;
-            case 'wish-recheck': if(wishReview && !wishReview.busy)wishCheck(wishReview.body); break;
-            case 'wish-back':
-              if(wishReview && !wishReview.busy){var draft=wishReview.body;wishReview=null;render();wishRestore(draft);} break;
             case "addwish":
               var wd = val("f-wdate"), ws = val("f-wstart"), wn = val("f-wnote");
               if (!wd) { toast("日付をえらんでください"); return; }
               if (!ws) { toast("開始時刻を入れてください"); return; }
-              { var we = val("f-wend"); if (!we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; } wishCheck({ action: "wish", kind: "ok", k: myKey(), date: wd, start: ws, end: we, min:+(val('f-wmin') || 90), deliveryMode:val('f-wmode'), note: wn }); }
+              { var we = val("f-wend"); if (!we || ws >= we) { toast("時間帯は「開始 < 終了」で入れてください"); return; } studentAction({ action: "wish", kind: "ok", k: myKey(), date: wd, start: ws, end: we, deliveryMode:val('f-wmode'), note: wn }, '授業可能日時を登録しました'); }
               break;
             case "delwish": studentAction({ action: "unwish", k: myKey(), wishId: id }, "授業可能日時を取り消しました"); break;
             case "addevent":
