@@ -163,7 +163,7 @@
       .lesson-pair-pane .head { position:sticky; top:64px; background:var(--bg,#f6f8fb); z-index:2; padding:8px; }
       @media(max-width:900px) { .lesson-pair-grid { grid-template-columns:1fr; } .lesson-pair-pane .head { position:static; } }
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js?v=20260911-simple-record"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
 </head>
   <body>
@@ -1595,10 +1595,14 @@
           return '<button type="button" class="' + (style || "btn-quiet") + ' btn-sm" data-action="lc-' + name + '"' + (disabled ? " disabled" : "") + (attrs || "") + '>' + label + '</button>';
         }
         function lessonFields(form, disabled) {
-          var h = '<p class="note">やった内容を簡単に記入してください。3行程度で十分です。</p>', labels = { content: "やった内容（必須）", progress: "取り組みの様子・理解できたこと（任意・1,000文字まで）", nextFocus: "次回の焦点（任意・1,000文字まで）", teacherNote: "先生だけのメモ（任意・2,000文字まで）" };
-          Object.keys(labels).forEach(function (k) { if(k === 'progress') h += '<details><summary>補足・先生用メモ（任意）</summary>' + window.StepwiseReport.fields(form.report || {},disabled); h += '<label class="lc-label" for="lc-' + k + '">' + labels[k] + '</label><textarea id="lc-' + k + '" data-lc-field="' + k + '" rows="' + (k === "content" ? 3 : 2) + '" maxlength="' + (k === "content" || k === "teacherNote" ? 2000 : 1000) + '"' + (disabled ? " disabled" : "") + '>' + esc(form[k]) + '</textarea>'; });
-          h += '</details>';
-          return h;
+          var rep = form.report || {};
+          var h = '<p class="note">単元とコメントだけで十分です。補足が必要なときは下の折り畳みに入れてください。</p>';
+          h += '<label class="lc-label" for="lc-report-actualUnit">単元</label><input id="lc-report-actualUnit" data-lc-report="actualUnit" type="text" maxlength="200" placeholder="例: 受動態、二次関数" value="' + esc(rep.actualUnit || "") + '"' + (disabled ? " disabled" : "") + '>';
+          h += '<label class="lc-label" for="lc-content">コメント（必須）</label><textarea id="lc-content" data-lc-field="content" rows="3" maxlength="2000"' + (disabled ? " disabled" : "") + '>' + esc(form.content) + '</textarea>';
+          var labels = { progress: "取り組みの様子・理解できたこと（任意・1,000文字まで）", nextFocus: "次回の焦点（任意・1,000文字まで）", teacherNote: "先生だけのメモ（任意・2,000文字まで）" };
+          h += '<details><summary>補足・先生用メモ（任意）</summary>' + window.StepwiseReport.fields(rep, disabled, ["actualUnit"]);
+          Object.keys(labels).forEach(function (k) { h += '<label class="lc-label" for="lc-' + k + '">' + labels[k] + '</label><textarea id="lc-' + k + '" data-lc-field="' + k + '" rows="2" maxlength="' + (k === "teacherNote" ? 2000 : 1000) + '"' + (disabled ? " disabled" : "") + '>' + esc(form[k]) + '</textarea>'; });
+          return h + '</details>';
         }
         function lessonPublicDraft(record) {
           return ["【授業のご報告（下書き）】", record.content || "", record.progress ? "取り組みの様子\n" + record.progress : "", (record.homework || []).length ? "宿題\n" + record.homework.map(function (x) { return "・" + x.title + (x.due ? "（期限 " + x.due + "）" : ""); }).join("\n") : "", record.nextFocus ? "次回の焦点\n" + record.nextFocus : ""].filter(Boolean).join("\n\n");

@@ -94,7 +94,13 @@
           if (!list.length) return h + '<p class="empty">公開された授業記録はまだありません。</p>';
           return h + list.map(function (r) { return publishedRecordItem(r, editable); }).join('');
         }
-        function publishedRecordItem(r, editable) { return '<details class="card"' + (!editable ? ' data-parent-record="'+esc(r.recordId)+'" data-record-revision="'+esc(r.revision)+'"' : '') + '><summary>' + (!editable ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + '</summary>' + window.StepwiseReport.context(r.workspace) + window.StepwiseReport.view(r.report) + '<h3>授業報告</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="'+esc(x.title)+'の完了" data-action="taskdone" data-id="'+esc(x.taskId)+'"'+(x.done?' checked':'')+'>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }
+        function publishedRecordItem(r, editable) {
+          var rep = r.report || {};
+          var h = '<details class="card"' + (!editable ? ' data-parent-record="' + esc(r.recordId) + '" data-record-revision="' + esc(r.revision) + '"' : '') + '><summary>' + (!editable ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + (rep.actualUnit ? ' <span class="small muted">' + esc(rep.actualUnit) + '</span>' : '') + '</summary>';
+          h += '<dl class="sw-report-grid">' + (rep.actualUnit ? '<div><dt>単元</dt><dd style="margin:0;white-space:pre-wrap">' + esc(rep.actualUnit) + '</dd></div>' : '') + '<div><dt>コメント</dt><dd style="margin:0;white-space:pre-wrap">' + esc(r.content) + '</dd></div>' + (!editable && rep.parentMessage ? '<div><dt>保護者への連絡</dt><dd style="margin:0;white-space:pre-wrap">' + esc(rep.parentMessage) + '</dd></div>' : '') + '</dl>';
+          if ((r.homework || []).length) h += '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="' + esc(x.title) + 'の完了" data-action="taskdone" data-id="' + esc(x.taskId) + '"' + (x.done ? ' checked' : '') + '>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({ dueSubject: r.subject }, x))) + '</span></li>'; }).join('') + '</ul>';
+          return h + '</details>';
+        }
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
         var NL = { text: '', busy: false, proposal: null, error: '' }; // 文章で予定を伝える
@@ -444,7 +450,7 @@
                 html += '<details class="slotline" style="display:block"><summary style="cursor:pointer;font-weight:600">実施済 ' + time + (s.subject ? ' ' + esc(lessonLabel(s)) : '') + '</summary><div style="padding:12px 4px">';
                 if (record) {
                   html += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
-                  html += '<h3 style="font-size:15px;margin:10px 0 6px">授業の内容</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
+                  html += '<h3 style="font-size:15px;margin:10px 0 6px">コメント</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
                 } else html += '<p class="muted" style="margin:0">授業の内容はまだ公開されていません。</p>';
                 html += '</div></details>';
               }
