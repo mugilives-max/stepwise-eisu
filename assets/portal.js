@@ -26,7 +26,7 @@
         var tabs = document.getElementById("tabs");
         function parentSection(){var part=(location.hash||'').split('/')[1]||'home';return ['home','records','grades','billing','contacts','settings'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home 扱い
         // 保護者ページ: ホームは子どもの生徒ページ(マイページ)そのもの＋最下部に「今月の授業」。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['records','授業報告・宿題'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['records','授業の記録'],['grades','成績'],['billing','請求・料金承認'],['contacts','連絡'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
         function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
@@ -827,7 +827,7 @@
             h += '<h2>📁 ' + esc(f.label) + ' <span class="cnt">' + f.lessons + '回・' + f.mins + '分' + (f.records ? '・記録 ' + f.records + '件' : '') + '</span></h2><div class="card">';
             if (f.records) h += '<h3 style="margin:0 0 6px;font-size:14px">先生からの授業記録</h3>';
             f.items.forEach(function (it) {
-              if (it.record) h += publishedRecordItem(it.record, true);
+              if (it.record) h += publishedRecordItem(it.record, route() !== 'family'); // 保護者ページでは既読ラベル付き(操作なし)
               else h += '<div class="slotline"><span class="time">' + fmtDateW(it.date) + ' ' + esc(it.start) + '</span><span class="who"><span class="small muted">' + (it.min ? it.min + '分・' : '') + '記録はまだ公開されていません</span></span></div>';
             });
             return h + '</div>';
@@ -1002,7 +1002,7 @@
           familyRequest('familyStudentState', { ftoken: familyToken(), studentId: id }, function (res) { F.childState[id] = res; var c = familyMypageChild(); if (c && sameId(c.studentId, id)) S = res; });
         }
         function familySelectChild(id) { F.studentId = id; F.confirm = null; G = null; GX = []; gLoading = false; selDate = null; selManual = false; selMode = ''; selDays = {}; dayAddOpen = false; pending = null; histFolder = null; NL = { text: '', busy: false, proposal: null, error: '' }; var c = familyMypageChild(); S = c && F.childState[c.studentId] || null; }
-        // fixedTab: 'grades' なら成績ページだけ(上のナビの「成績」)。空ならホーム内の切り替え(ホーム／授業の記録)
+        // fixedTab: 'grades'=成績、'history'=授業の記録(既読機能付き)。空ならホーム。いずれも上のナビから
         function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = '';
           if (!c) return '<p>子どもの紐付けを先生にご依頼ください。</p>';
@@ -1010,10 +1010,10 @@
           var st = F.childState[c.studentId];
           if (!st || !st.me) { if (!F.busy) familyLoadChildState(c.studentId); return h + '<p>' + esc(c.name) + 'さんのページを読み込んでいます…</p>'; }
           S = st;
-          var tab = fixedTab || (F.mypageTab === 'history' ? 'history' : 'home');
-          if (!fixedTab) h += '<nav class="tabs" style="margin:0 0 12px;padding:0;position:static">' + [['home', 'ホーム'], ['history', '授業の記録']].map(function (t) { return '<a href="#family/home" data-action="fa-mytab" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>';
-          h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : 'マイページ') + '（保護者が代わりに操作できます）</p>';
-          if (tab === 'grades') h += renderGradesPage() + '<section id="family-grades-panel" data-family-child="' + esc(c.studentId) + '" style="margin-top:18px"></section>'; else if (tab === 'history') h += renderHistoryPage();
+          var tab = fixedTab || 'home';
+          h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : tab === 'history' ? '授業の記録（開くと既読になります）' : 'マイページ') + '（保護者が代わりに操作できます）</p>';
+          if (tab === 'grades') h += renderGradesPage() + '<section id="family-grades-panel" data-family-child="' + esc(c.studentId) + '" style="margin-top:18px"></section>';
+          else if (tab === 'history') h += '<section id="family-records-host" data-family-child="' + esc(c.studentId) + '">' + renderHistoryPage() + '</section>';
           else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
           return h;
         }
@@ -1120,6 +1120,7 @@
             if(notices.open)h+=renderFamilyNotices();
             if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
+            if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
             if(parentSection()==='settings') h += '<p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
             if(parentSection()==='settings') h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             else if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
@@ -1165,7 +1166,6 @@
         function familyClick(action, btn) {
           if (route() !== "family") return;
           if(["fa-notices","fa-notice-refresh","fa-notice-open"].indexOf(action)>=0){familyNoticeClick(action,btn);return;}
-          if(action==='fa-mytab'){F.mypageTab=btn.getAttribute('data-tab')||'home';histFolder=null;familyRender();return;}
           if (F.busy) return;
           if (action === "fa-home") familyLoadHome();
           else if (action === "fa-refresh") familyLoadChild(btn.getAttribute("data-child") || F.studentId);
@@ -1194,7 +1194,12 @@
           var active=Object.create(null), section=parentSection();
           (F.home.children||[]).forEach(function(c){active[JSON.stringify([familyToken(),c.studentId])]=true;});
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].reads.clear();});
-          var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild();
+          var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild(), recHost=document.getElementById('family-records-host');
+          if(section==='records'&&recHost&&gc){
+            var rkey=JSON.stringify([familyToken(),gc.studentId]);active[rkey]=true;
+            var rpanel=familyPanels[rkey] || (familyPanels[rkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
+            var rtoken=familyToken();rpanel.reads.mount(recHost,function(op,payload){return apiPost(Object.assign({},payload,{ftoken:rtoken,studentId:gc.studentId,action:'learningService',op:op}));},rkey);
+          }
           if(section==='grades'&&gradesHost&&gc&&F.childrenData[gc.studentId]){
             var gkey=JSON.stringify([familyToken(),gc.studentId]);active[gkey]=true;
             var gpanel=familyPanels[gkey] || (familyPanels[gkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});

@@ -59,7 +59,8 @@ test('saved public lesson records show escaped content and deadline only in stud
   const family = createUI('student', { hash:'#family/records', session:new Map([['sw_ft_v1','test-family-token']]) });
   family.requests[0].reply({ ok:true, family:{ label:'【テスト】家族', email:'parent@example.invalid' }, children:[{ studentId:'test-child', name:'【テスト】子' }] }); await flush();
   family.requests.at(-1).reply({ ok:true, data:{ name:'【テスト】子', month:'2026-09', thisMonth:{}, payments:[], planMonths:[], upcoming:[], lessonRecords:[published()] } }); await flush();
-  assert.match(family.html(), /関係代名詞 &lt;復習&gt;/); assert.doesNotMatch(family.html(), /自分で説明できた|長文に進む/); assert.doesNotMatch(ui.html(), /自分で説明できた|長文に進む/); assert.equal(family.html().includes('PRIVATE_'), false);
+  { const st = family.requests.find(r => r.body.action === 'familyStudentState'); assert.ok(st, JSON.stringify(family.requests.map(r => r.body.action))); st.reply({ ...state(), viewer:'family', lessonRecords:[{ ...published(), recordId:'r1', revision:1 }] }); await flush(); }
+  family.click('histopen', { 'data-folder':'英語' }); assert.match(family.html(), /data-parent-record="r1"/); assert.match(family.html(), /関係代名詞 &lt;復習&gt;/); assert.doesNotMatch(family.html(), /自分で説明できた|長文に進む/); assert.doesNotMatch(ui.html(), /自分で説明できた|長文に進む/); assert.equal(family.html().includes('PRIVATE_'), false);
 });
 
 async function staleBatch(ui) {

@@ -13,8 +13,10 @@ async function readyFamily() { const ui = loggedUI(); ui.requests[0].reply(home(
 test('parent sections separate billing, reports and account settings without reloading the child',async()=>{
   const ui=await readyFamily(),count=ui.requests.length;
   assert.match(ui.html(),/承認する/);assert.ok(!ui.html().includes('先生からの授業記録'));
-  ui.navigate('#family/records');assert.match(ui.html(),/先生からの授業記録/);assert.ok(!ui.html().includes('承認する'));assert.ok(!ui.html().includes('メールアドレスを変更'));
-  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count);assert.equal(ui.el('fa-child'),undefined);
+  ui.navigate('#family/records');{const st=ui.requests.find(r=>r.body.action==='familyStudentState');st.reply({...state(),viewer:'family',history:[{id:'h1',date:'2026-09-02',start:'17:00',min:90,subject:'英語',done:true}],lessonRecords:[{recordId:'r1',revision:2,date:'2026-09-02',start:'17:00',min:90,subject:'英語',content:'本文',homework:[]}]});await flush();}
+  assert.match(ui.html(),/data-folder="英語"/);ui.click('histopen',{'data-folder':'英語'});assert.match(ui.html(),/先生からの授業記録/);assert.match(ui.html(),/<details class="card" data-parent-record="r1" data-record-revision="2"><summary><span data-read-label class="tag">確認中<\/span>/);assert.ok(!ui.html().includes('承認する'));assert.ok(!ui.html().includes('メールアドレスを変更'));
+  const count2=ui.requests.length; // 既読の取得(recordReadStatus)は StepwiseLessonRead を読み込む実ブラウザでのみ動く
+  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2);assert.equal(ui.el('fa-child'),undefined);
 });
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
 async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#students' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); ui.requests[1].reply({ok:true,data:{students:[],inactive:[]}}); await flush(); return ui; }
@@ -52,7 +54,7 @@ test('login uses a separate session token and clears each child before loading t
   assert.equal(ui.requests.at(-1).body.studentId, 'child-b');
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush();
   { const st = ui.requests.find(r => r.body.action === 'familyStudentState'); if (st) { st.reply({ ...state(), viewer: 'family' }); await flush(); } const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); } }
-  ui.navigate('#family/records'); assert.match(ui.html(), /<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/); const count=ui.requests.length; ui.change('fa-child','child-b'); assert.equal(ui.html().includes('<h2>【テスト】子A</h2>'),false); assert.match(ui.html(), /<h2>【テスト】子B<\/h2>/); assert.equal(ui.requests.length,count); ui.change('fa-child',''); assert.match(ui.html(),/<h2>【テスト】子A<\/h2>/);
+  ui.navigate('#family/billing'); assert.match(ui.html(), /<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/); const count=ui.requests.length; ui.change('fa-child','child-b'); assert.equal(ui.html().includes('<h2>【テスト】子A</h2>'),false); assert.match(ui.html(), /<h2>【テスト】子B<\/h2>/); assert.equal(ui.requests.length,count); ui.change('fa-child',''); assert.match(ui.html(),/<h2>【テスト】子A<\/h2>/);
   assert.equal(JSON.stringify(ui.writes).includes('parent@example.invalid'), false);
 });
 
@@ -213,11 +215,11 @@ test('student add card opens on demand and retains draft after a failed save',as
 });
 
 test('all-child approval targets child B and keeps child A visible after saving',async()=>{
- const ui=await readyFamily();ui.click('fa-planng',{'data-child':'child-b'});ui.input('fa-plan-message','Bへの相談');ui.change('fa-reduce-0','2');ui.click('fa-plan-review');assert.match(ui.html(),/子B/);ui.click('fa-decide');const request=ui.requests.at(-1);assert.equal(request.body.studentId,'child-b');assert.equal(request.body.memo,'Bへの相談');request.reply({ok:true,data:data('更新後B')});await flush();ui.navigate('#family/records');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/);assert.doesNotMatch(ui.html(),/子どもの情報を再読み込み/);
+ const ui=await readyFamily();ui.click('fa-planng',{'data-child':'child-b'});ui.input('fa-plan-message','Bへの相談');ui.change('fa-reduce-0','2');ui.click('fa-plan-review');assert.match(ui.html(),/子B/);ui.click('fa-decide');const request=ui.requests.at(-1);assert.equal(request.body.studentId,'child-b');assert.equal(request.body.memo,'Bへの相談');request.reply({ok:true,data:data('更新後B')});await flush();ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/);assert.doesNotMatch(ui.html(),/子どもの情報を再読み込み/);
 });
 test('one child has no selector and failed second-child loading retains the first with retry',async()=>{
  const one=loggedUI();one.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();one.requests.at(-1).reply({ok:true,data:data('一人')});await flush();assert.equal(one.el('fa-child'),undefined);
- const ui=loggedUI();ui.requests[0].reply(home());await flush();ui.requests.at(-1).reply({ok:true,data:data('子Aを保持')});await flush();ui.requests.at(-1).fail();await flush();ui.navigate('#family/records');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>(?![^]*子どもの情報を再読み込み[^]*<h2>【テスト】子B)/);assert.match(ui.html(),/<h2>【テスト】子B<\/h2>[^]*data-action="fa-refresh" data-child="child-b"/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
+ const ui=loggedUI();ui.requests[0].reply(home());await flush();ui.requests.at(-1).reply({ok:true,data:data('子Aを保持')});await flush();ui.requests.at(-1).fail();await flush();ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>(?![^]*子どもの情報を再読み込み[^]*<h2>【テスト】子B)/);assert.match(ui.html(),/<h2>【テスト】子B<\/h2>[^]*data-action="fa-refresh" data-child="child-b"/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
 });
 
 
@@ -252,7 +254,7 @@ test('the family マイページ tab shows the child student home and proxies st
   assert.equal(sent.action, 'blockSet'); assert.equal(sent.ftoken, 'test-family-token'); assert.equal(sent.studentId, 'child-a'); assert.equal(sent.k, undefined); assert.deepEqual(sent.add, ['2026-09-15']);
   ui.requests.at(-1).reply({ ok: true, state: { ...state(), blocked: [{ id: 'b1', date: '2026-09-15' }] } }); await flush();
   assert.match(ui.html(), /授業不可<\/span><span class="time">終日/);
-  ui.click('fa-mytab', { 'data-tab': 'history' }); assert.match(ui.html(), /実施済みの授業はまだありません/);
+  ui.navigate('#family/records'); assert.match(ui.html(), /実施済みの授業はまだありません/); assert.match(ui.html(), /授業の記録（開くと既読になります）/);
 });
 
 test('the family 成績 tab is the child grades page with the exam-report panel host', async () => {
@@ -263,5 +265,5 @@ test('the family 成績 tab is the child grades page with the exam-report panel 
   const g = ui.requests.find(r => r.body.action === 'grades'); assert.ok(g, JSON.stringify(ui.requests.map(r => r.body.action))); assert.equal(g.body.studentId, 'child-a'); assert.equal(g.body.ftoken, 'test-family-token'); assert.equal(g.body.k, undefined);
   g.reply({ ok: true, grades: [{ date: '2026-09-01', test: '中間', subject: '英語', score: 80, max: 100, dev: null, rank: '' }], exams: [] }); await flush();
   assert.match(ui.html(), /成績推移 <span class="cnt">1件/); assert.match(ui.html(), /中間/);
-  ui.navigate('#family/home'); assert.doesNotMatch(ui.html(), /data-tab="grades"/); assert.match(ui.html(), /data-tab="history"/);
+  ui.navigate('#family/home'); assert.doesNotMatch(ui.html(), /data-action="fa-mytab"/); assert.match(ui.html(), /<h2>予定表<\/h2>/);
 });
