@@ -427,7 +427,6 @@
           var ds2 = (D.byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
           var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
-          var dayToff = dayOffs.some(function (o) { return !o.start; });
           var dayLabel = Number(selDate.slice(5, 7)) + '月' + Number(selDate.slice(8, 10)) + '日（' + WD[wdOf(selDate)] + '）の予定';
           var html = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>'+(selDate>=today?'<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">＋</button>':'')+'</div>';
           if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
@@ -447,10 +446,9 @@
           }
           if (selDate >= today) {
             if (dayAddOpen) {
-              html += '<div class="row" style="margin-top:10px;gap:6px"><span class="small muted">この日に:</span>' +
-                (dayToff ? "" : '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業を希望</button>') +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button>' +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">' + (dayNg.length ? "授業できない日を解除" : "授業できない日にする") + '</button></div>';
+              html += '<div class="row" style="margin-top:10px;gap:6px">' +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業可能</button>' +
+                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">授業不可</button></div>';
             }
           }
           return html + '</div>';
