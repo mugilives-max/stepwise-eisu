@@ -92,8 +92,9 @@
         function renderPublishedRecords(records,editable) {
           var list = records || [], h = '<h2>先生からの授業記録</h2>';
           if (!list.length) return h + '<p class="empty">公開された授業記録はまだありません。</p>';
-          return h + list.map(function (r) { return '<details class="card"' + (!editable ? ' data-parent-record="'+esc(r.recordId)+'" data-record-revision="'+esc(r.revision)+'"' : '') + '><summary>' + (!editable ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + '</summary>' + window.StepwiseReport.context(r.workspace) + window.StepwiseReport.view(r.report) + '<h3>授業報告</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="'+esc(x.title)+'の完了" data-action="taskdone" data-id="'+esc(x.taskId)+'"'+(x.done?' checked':'')+'>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }).join('');
+          return h + list.map(function (r) { return publishedRecordItem(r, editable); }).join('');
         }
+        function publishedRecordItem(r, editable) { return '<details class="card"' + (!editable ? ' data-parent-record="'+esc(r.recordId)+'" data-record-revision="'+esc(r.revision)+'"' : '') + '><summary>' + (!editable ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + '</summary>' + window.StepwiseReport.context(r.workspace) + window.StepwiseReport.view(r.report) + '<h3>授業報告</h3><p style="white-space:pre-wrap">' + esc(r.content) + '</p>' + (r.progress ? '<h3>取り組みの様子</h3><p style="white-space:pre-wrap">' + esc(r.progress) + '</p>' : '') + (r.nextFocus ? '<h3>次回の焦点</h3><p style="white-space:pre-wrap">' + esc(r.nextFocus) + '</p>' : '') + ((r.homework || []).length ? '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="'+esc(x.title)+'の完了" data-action="taskdone" data-id="'+esc(x.taskId)+'"'+(x.done?' checked':'')+'>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({dueSubject:r.subject},x))) + '</span></li>'; }).join('') + '</ul>' : '') + '</details>'; }
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
         var NL = { text: '', busy: false, proposal: null, error: '' }; // 文章で予定を伝える
@@ -782,25 +783,35 @@
           return h;
         }
 
+        // 授業の記録: 科目＋種類ごとのフォルダ(折り畳み)。中は日付の新しい順に、公開された授業記録(開ける)と実施済みの授業(行)を並べる
         function renderHistoryPage() {
-          var h = '<p class="sub">実施済みの授業(直近120日)</p>';
-          h += renderPublishedRecords(S.lessonRecords,true);
-          var done = (S.history || []).filter(function (x) { return x.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-          var bySub = {}, order = [];
-          done.forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = 0; order.push(k); } bySub[k]++; });
-          if (done.length) h += '<div class="card" style="margin-top:12px;padding:10px 14px"><div class="row" style="gap:8px 18px"><span><strong>合計</strong> ' + done.length + '回</span>' + order.map(function (k) { return '<span>' + esc(k) + ' ' + bySub[k] + '回</span>'; }).join("") + '</div></div>';
-          h += '<h2>月ごと</h2>';
-          if (!done.length) return h + '<div class="empty">実施済みの授業はまだありません</div>';
-          var months = {}, mk = [];
-          done.forEach(function (x) { var m = x.date.slice(0, 7); if (!months[m]) { months[m] = []; mk.push(m); } months[m].push(x); });
-          h += '<div class="card">';
-          mk.forEach(function (m, i) {
-            var list = months[m], mins = 0; list.forEach(function (x) { mins += Number(x.min) || 0; });
-            h += '<details class="month"' + (i === 0 ? " open" : "") + '><summary>' + (+m.slice(0, 4)) + "年" + (+m.slice(5, 7)) + "月 <span class=\"small muted\">" + list.length + "回・" + mins + "分</span></summary>";
-            list.forEach(function (x) { h += '<div class="slotline"><span class="time">' + fmtDateW(x.date) + " " + x.start + '</span><span class="who">' + (x.subject ? esc(lessonLabel(x)) : '<span class="muted">科目なし</span>') + ' <span class="small muted">' + x.min + '分</span></span></div>'; });
-            h += '</details>';
+          var h = '<p class="sub">実施済みの授業(直近120日)と先生からの授業記録。科目と種類ごとのフォルダに分けています</p>';
+          var done = (S.history || []).filter(function (x) { return x.done; }), records = (S.lessonRecords || []).slice(), used = {};
+          function recordFor(x) { return records.filter(function (r) { return r.date === x.date && r.start === x.start && r.subject === (x.subject || '') && Number(r.min) === Number(x.min); })[0] || null; }
+          var folders = {}, order = [];
+          function folder(label) { if (!folders[label]) { folders[label] = { items: [], lessons: 0, records: 0, mins: 0 }; order.push(label); } return folders[label]; }
+          done.forEach(function (x) { var f = folder(x.subject ? lessonLabel(x) : 'その他'), r = recordFor(x); if (r) used[r.recordId || (r.date + ' ' + r.start)] = true; f.items.push({ date: x.date, start: x.start, min: x.min, record: r }); f.lessons++; f.mins += Number(x.min) || 0; if (r) f.records++; });
+          records.forEach(function (r) {
+            if (used[r.recordId || (r.date + ' ' + r.start)]) return;
+            var match = (S.history || []).filter(function (x) { return x.date === r.date && x.start === r.start && (x.subject || '') === r.subject; })[0];
+            var f = folder(r.subject ? lessonLabel({ subject: r.subject, kind: match ? match.kind : '' }) : 'その他'); f.items.push({ date: r.date, start: r.start, min: r.min, record: r }); f.records++;
           });
-          return h + '</div>';
+          order.sort(function (x, y) { return folders[y].lessons - folders[x].lessons || (x < y ? -1 : x > y ? 1 : 0); });
+          if (!order.length) return h + '<div class="empty">実施済みの授業はまだありません</div>';
+          h += '<div class="card" style="padding:10px 14px"><div class="row" style="gap:8px 18px"><span><strong>合計</strong> ' + done.length + '回</span>' + order.map(function (k) { return '<span>' + esc(k) + ' ' + folders[k].lessons + '回</span>'; }).join('') + '</div></div>';
+          order.forEach(function (k) {
+            var f = folders[k], key = 'hist:' + k; if (folds[key] === undefined) folds[key] = order.length === 1;
+            f.items.sort(function (x, y) { return x.date + ' ' + x.start < y.date + ' ' + y.start ? 1 : -1; });
+            h += foldHead(key, '📁 ' + esc(k), f.lessons + '回・' + f.mins + '分' + (f.records ? '・記録 ' + f.records + '件' : ''));
+            h += '<div class="card">';
+            if (f.records) h += '<h3 style="margin:0 0 6px;font-size:14px">先生からの授業記録</h3>';
+            f.items.forEach(function (it) {
+              if (it.record) h += publishedRecordItem(it.record, true);
+              else h += '<div class="slotline"><span class="time">' + fmtDateW(it.date) + ' ' + esc(it.start) + '</span><span class="who"><span class="small muted">' + (it.min ? it.min + '分・' : '') + '記録はまだ公開されていません</span></span></div>';
+            });
+            h += '</div></details>';
+          });
+          return h;
         }
 
         /* ---------- 画面: 保護者ページ ---------- */
@@ -1407,7 +1418,7 @@
           }
         });
 
-        app.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && Object.prototype.hasOwnProperty.call(folds, key)) folds[key] = !!d.open; }, true);
+        app.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && (Object.prototype.hasOwnProperty.call(folds, key) || key.indexOf('hist:') === 0)) folds[key] = !!d.open; }, true);
         app.addEventListener("change", function (ev) {
           var el = ev.target;
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
