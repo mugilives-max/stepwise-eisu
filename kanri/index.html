@@ -90,11 +90,13 @@
       table.tb th, table.tb td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
-      .plan-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1.4fr) auto; column-gap: 10px; align-items: baseline; }
-      .plan-gh { color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      /* 案内の一覧: 表計算ソフトのような罫線つきの表(gap を罫線色で埋める) */
+      .plan-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1.4fr) auto; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; }
+      .plan-gh { background: var(--bg-soft, #f3f5f8); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 8px; white-space: nowrap; }
       .plan-gr { display: contents; }
-      .plan-gc { padding: 8px 0 2px; white-space: nowrap; }
-      .plan-gs { grid-column: 1 / -1; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
+      .plan-gc { background: #fff; padding: 7px 8px; white-space: nowrap; }
+      .plan-gs { grid-column: 1 / -1; background: #fff; padding: 4px 8px 8px; }
+      .plan-gs:empty { display: none; }
       table.extb td b { font-weight: 700; }
       table.extb tr.exsub td { padding-top: 0; border-bottom: 1px solid var(--line); }
       table.extb tr.exsub td .tag { display: inline-block; margin: 2px 4px 2px 0; }
