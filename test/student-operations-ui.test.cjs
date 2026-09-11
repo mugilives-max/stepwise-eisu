@@ -223,12 +223,17 @@ test('the offers section is a collapsed details block with one select-all / clea
   ui.click('batchall'); ui.click('batchclear'); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</); assert.equal((ui.html().match(/data-accept-id="[^"]+" checked/g) || []).length, 0);
 });
 
-test('the lesson plan notice explains what to do and sits above the 授業登録 fold', async () => {
-  const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }], plan:{ '英語':4 }, planStatus:'proposed' };
+test('the 授業計画 fold separates proposed notices from the approved plan with counts', async () => {
+  const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }], plan:{ '英語':4 }, planStatus:'approved',
+    planMonths:[{ ym:'2026-09', status:'approved', plan:{ '英語':4 } }, { ym:'2026-10', status:'proposed', plan:{ '英語':3, '数学':2 } }] };
   const ui = await studentReady(s);
-  assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画の案内 <span class="cnt">保護者の承認待ち<\/span><\/h2><\/summary><div class="card"><p[^>]*>9月は 英語4回 の授業計画が届いています。<\/p><p[^>]*>保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち<\/span>/);
-  assert.match(ui.html(), /<strong>英語<\/strong> 実施 1・予定 0<span class="muted">／計画 4回<\/span>/); assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
-  assert.doesNotMatch(ui.html(), /<details class="fold offers"|選んだ日時を確認する/);
-  const approved = await studentReady({ ...s, planStatus:'approved' }); assert.match(approved.html(), /9月の授業計画は 英語4回 です。 <span class="tag green">保護者承認済み<\/span>/);
-  const offers = await studentReady({ ...state(), plan:{ '英語':4 }, planStatus:'proposed' }); assert.match(offers.html(), /<details class="fold offers"[^]*2件・返事をお願いします[^]*<details class="fold plan"[^]*授業計画の案内/);
+  assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画 <span class="cnt">2件の案内<\/span>/);
+  assert.match(ui.html(), /案内 <span[^>]*>保護者の承認待ち<\/span><\/h3><div class="slotline"><span class="tag amber">案内<\/span><span class="time">10月<\/span><span class="who"><strong>英語<\/strong> 3回<\/span><span class="tag amber">保護者の承認待ち<\/span><\/div><div class="slotline"><span class="tag amber">案内<\/span><span class="time">10月<\/span><span class="who"><strong>数学<\/strong> 2回/);
+  assert.match(ui.html(), /保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう/);
+  assert.match(ui.html(), /実施計画 <span[^>]*>承認済み<\/span><\/h3><div class="slotline"><span class="tag green">承認済み<\/span><span class="time">9月<\/span><span class="who"><strong>英語<\/strong> 実施 1・予定 0<span class="muted">／計画 4回<\/span><\/span><span class="small"[^>]*>あと 3 回<\/span>/);
+  assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
+  const none = await studentReady({ ...state([]), planMonths:[] }); assert.doesNotMatch(none.html(), /授業計画/);
+  const onlyProposed = await studentReady({ ...state([]), planMonths:[{ ym:'2026-09', status:'proposed', plan:{ '英語':4 } }] });
+  assert.match(onlyProposed.html(), /授業計画 <span class="cnt">1件の案内<\/span>/); assert.match(onlyProposed.html(), /承認済みの計画はありません/);
+  const legacy = await studentReady({ ...state([]), plan:{ '英語':4 }, planStatus:'proposed' }); assert.match(legacy.html(), /1件の案内/);
 });

@@ -482,28 +482,40 @@
           return html;
         }
 
-        // 授業計画の案内(今月の科目別回数と保護者承認の状態)。授業登録とは別の見出しで、生徒に何をしてほしいかを文章で示す
+        // 授業計画(折り畳み)。案内=保護者の承認待ちの月の計画、実施計画=承認済みの月の計画と実施・予定の回数。GAS の planMonths(今月・来月)を使う
         function renderMonthSummary(D) {
-          var today = D.today, mine = D.mine, ym = today.slice(0, 7), month = +ym.slice(5);
-          var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
-          var doneM = histM.filter(function (h) { return h.done; });
-          var planM = mine.filter(function (s) { return s.date.slice(0, 7) === ym; }).concat(histM.filter(function (h) { return !h.done; }));
-          var target = S.plan || {}, bySub = {}, order = [];
-          Object.keys(target).forEach(function (k) { if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
-          doneM.concat(planM).forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
-          doneM.forEach(function (x) { bySub[x.subject || "その他"].done++; });
-          planM.forEach(function (x) { bySub[x.subject || "その他"].plan++; });
-          if (!order.length) return '';
-          var planned = order.filter(function (k) { return target[k]; }), planText = planned.map(function (k) { return esc(k) + target[k] + '回'; }).join('・');
-          var remainTotal = 0; planned.forEach(function (k) { remainTotal += Math.max(0, target[k] - bySub[k].done - bySub[k].plan); });
-          var h = foldHead('plan', '授業計画の案内', planned.length && S.planStatus === 'proposed' ? '保護者の承認待ち' : planned.length && S.planStatus === 'approved' ? '保護者承認済み' : month + '月') + '<div class="card">';
-          if (planned.length && S.planStatus === 'proposed') h += '<p style="margin:0 0 4px;font-weight:700;font-size:15.5px">' + month + '月は ' + planText + ' の授業計画が届いています。</p><p style="margin:0 0 10px">保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち</span></p>';
-          else if (planned.length && S.planStatus === 'approved') h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業計画は ' + planText + ' です。 <span class="tag green">保護者承認済み</span></p>';
-          else if (planned.length) h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業計画は ' + planText + ' です。</p>';
-          else h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業</p>';
-          h += '<div class="row" style="gap:8px 18px">' + order.map(function (k) { var c = bySub[k]; return '<span><strong>' + esc(k) + '</strong> 実施 ' + c.done + '・予定 ' + c.plan + (target[k] ? '<span class="muted">／計画 ' + target[k] + '回</span>' : '') + '</span>'; }).join('') + '</div>';
-          if (remainTotal) h += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
-          return h + '</div></details>';
+          var today = D.today, mine = D.mine, months = S.planMonths;
+          if (!Array.isArray(months)) months = (S.plan && Object.keys(S.plan).length && (S.planStatus === 'proposed' || S.planStatus === 'approved')) ? [{ ym: today.slice(0, 7), status: S.planStatus, plan: S.plan }] : [];
+          var proposed = months.filter(function (m) { return m.status === 'proposed'; }), approved = months.filter(function (m) { return m.status === 'approved'; });
+          function counts(ym) {
+            var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; }), out = {};
+            function add(k, key) { var c = out[k] || (out[k] = { done: 0, plan: 0 }); c[key]++; }
+            histM.forEach(function (h) { add(h.subject || 'その他', h.done ? 'done' : 'plan'); });
+            mine.filter(function (s2) { return s2.date.slice(0, 7) === ym; }).forEach(function (s2) { add(s2.subject || 'その他', 'plan'); });
+            return out;
+          }
+          var proposedRows = 0; proposed.forEach(function (m) { proposedRows += Object.keys(m.plan).length; });
+          var ymNow = today.slice(0, 7), nowCounts = counts(ymNow), nowHasLessons = Object.keys(nowCounts).length > 0;
+          if (!months.length && !nowHasLessons) return '';
+          var html = foldHead('plan', '授業計画', proposedRows ? proposedRows + '件の案内' : approved.length ? '承認済み' : (+ymNow.slice(5)) + '月') + '<div class="card">';
+          html += '<h3 style="margin:0 0 6px;font-size:15px">案内 <span class="small muted" style="font-weight:400">保護者の承認待ち</span></h3>';
+          if (!proposedRows) html += '<div class="empty">新しい案内はありません</div>';
+          proposed.forEach(function (m) { Object.keys(m.plan).forEach(function (k) { html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(k) + '</strong> ' + m.plan[k] + '回</span><span class="tag amber">保護者の承認待ち</span></div>'; }); });
+          if (proposedRows) html += '<div class="note">保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると下の実施計画に移ります。</div>';
+          html += '<h3 style="margin:14px 0 6px;font-size:15px">実施計画 <span class="small muted" style="font-weight:400">承認済み</span></h3>';
+          var remainTotal = 0, shown = 0;
+          approved.forEach(function (m) {
+            var c = counts(m.ym), keys = Object.keys(m.plan);
+            Object.keys(c).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
+            keys.forEach(function (k) {
+              var n = c[k] || { done: 0, plan: 0 }, goal = m.plan[k] || 0, remain = goal ? Math.max(0, goal - n.done - n.plan) : 0; remainTotal += remain; shown++;
+              html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + (+m.ym.slice(5)) + '月</span><span class="who"><strong>' + esc(k) + '</strong> 実施 ' + n.done + '・予定 ' + n.plan + (goal ? '<span class="muted">／計画 ' + goal + '回</span>' : '<span class="muted">（計画外）</span>') + '</span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : goal ? '<span class="tag green">日程確定</span>' : '') + '</div>';
+            });
+          });
+          if (!approved.length && nowHasLessons) Object.keys(nowCounts).forEach(function (k) { var n = nowCounts[k]; shown++; html += '<div class="slotline"><span class="tag gray">' + (+ymNow.slice(5)) + '月</span><span class="time"></span><span class="who"><strong>' + esc(k) + '</strong> 実施 ' + n.done + '・予定 ' + n.plan + '</span></div>'; });
+          if (!shown) html += '<div class="empty">承認済みの計画はありません</div>';
+          if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
+          return html + '</div></details>';
         }
 
         function renderOffers(D) {

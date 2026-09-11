@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-nl-selftest' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-11-plan-months' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -150,8 +150,14 @@ function studentState_(code) {
     .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title, kind: x.kind }; });
   var planInfo = planFor_(me.id, today.slice(0, 7));
   var planMi = planMonthInfo_(me.id, today.slice(0, 7));
+  // 授業計画(今月と来月)。提案中(proposed)と承認済み(approved)だけを返し、下書き・未設定は出さない
+  var planRowsNow = planRows_(), ymNow = today.slice(0, 7);
+  var planMonths = [ymNow, nextYm_(ymNow)].map(function (ym) {
+    var info = planMonthInfo_(me.id, ym, planRowsNow), pf = planFor_(me.id, ym, planRowsNow);
+    return { ym: ym, status: String(info.status || 'none'), plan: pf.plan };
+  }).filter(function (m) { return (m.status === 'proposed' || m.status === 'approved') && Object.keys(m.plan).length > 0; });
   var tasks = tasksFor_(me.id, 45);
-  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planMonths: planMonths, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
