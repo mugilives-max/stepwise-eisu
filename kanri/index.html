@@ -1805,7 +1805,9 @@
           months.filter(function (m) { return m.ym === selectedMonth; }).forEach(function (m) {
             var f = planInput(s, m), dis = busy || s.active === false, attrs = ' data-ym="' + esc(m.ym) + '"', ymAttr = ' data-plan-ym="' + esc(m.ym) + '"';
             h += '<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row between"><strong>' + esc(m.ym) + ' <span class="tag ' + (m.status === "approved" ? "green" : "amber") + '">' + ({ approved: "承認済み", proposed: "承認待ち", declined: "見送り", draft: "未提案", none: "計画なし" }[m.status] || "未提案") + '</span></strong></div>';
-            h += '<p class="small">' + (m.status === "draft" && m.termsKnown ? '下書き: ' : '現在: ') + ((m.rows || []).length ? (m.rows || []).map(function (x) { return esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回'; }).join("、") + '・' + (m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin ? m.lessonMin + '分・1回 ' + yen(m.rate30 * m.lessonMin / 30) : '授業時間が未設定')) : '料金は未提案') : '計画はまだありません') + '</p>';
+            var termsText = m.termsKnown ? (m.monthly > 0 ? '月謝 ' + yen(m.monthly) + '（旧条件・再提案が必要）' : (m.lessonMin ? m.lessonMin + '分・1回 ' + yen(m.rate30 * m.lessonMin / 30) : '授業時間が未設定')) : '料金は未提案';
+            if ((m.rows || []).length) h += '<div class="small" style="margin:4px 0 8px"><div class="muted">' + (m.status === "approved" ? '承認済みの案内' : m.status === "proposed" ? '送信済みの案内' : '下書き') + '</div>' + (m.rows || []).map(function (x) { return '<div>' + esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回・' + termsText + '</div>'; }).join('') + '</div>';
+            else h += '<p class="small">計画はまだありません</p>';
             if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。<button class="btn-quiet btn-sm" data-action="reload">最新の計画を確認</button></p>';
             if (m.status === "approved") h += '<p class="note">承諾日: ' + esc(m.consentDate || m.approvedAt || "—") + '・' + esc(m.approvedVia || "") + (m.memo ? '・' + esc(m.memo) : "") + '。内容を変えて保存すると現在の承認は失効し、再度の承認が必要です。請求済みなら、先に未入金請求を取り消してください。</p>';
             if (!dis) {
