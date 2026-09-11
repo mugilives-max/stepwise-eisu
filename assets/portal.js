@@ -350,7 +350,6 @@
             var marks = '<span class="calmarks">';
             if (it && !past) {
               if (it.mine) cls += " mine";
-              if (it.offer && !it.mine) marks += '<span class="caldot of"></span>';
             }
             if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
             marks += "</span>";
@@ -365,7 +364,7 @@
               lb.forEach(function (l) {
                 if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
                 var lc = l.st === "offer" ? " of" : "";
-                marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
+                marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
               });
             }
             var clickable = !past || hasItems; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)
