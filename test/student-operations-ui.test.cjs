@@ -185,3 +185,30 @@ test('the student page has no 予定 tab and registers or removes schedule items
   ui.click('calday', { 'data-date':'2026-09-17' }); assert.match(ui.html(), /大会/); ui.click('delevent', { 'data-id':'e1' }); assert.deepEqual(ui.requests.at(-1).body, { action:'eventDel', k:'test-link-a', eventId:'e1' });
   ui.navigate('#schedule'); assert.equal(ui.el('tabs').innerHTML.includes('class="on">ホーム'), true);
 });
+
+test('students turn a sentence into checked proposals and register them through the existing actions', async () => {
+  const s = { ...state(), nlEnabled:true, blocked:[{ id:'b0', date:'2026-09-16' }] };
+  const ui = await studentReady(s);
+  assert.ok(ui.el('nl-text')); const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
+  ui.input('nl-text', text); ui.click('nl-parse');
+  assert.deepEqual(ui.requests.at(-1).body, { action:'scheduleParse', k:'test-link-a', text });
+  ui.requests.at(-1).reply({ ok:true, summary:'3件を読み取りました。', today:'2026-09-08', questions:['模試の時間は登録していません。'], items:[
+    { kind:'wish', dates:['2026-09-14','2026-09-16'], start:'16:00', end:'19:00', note:'', confidence:'high', needsTime:false },
+    { kind:'block', dates:['2026-09-16','2026-09-17'], start:'', end:'', note:'部活', confidence:'high' },
+    { kind:'event', dates:['2026-09-20'], start:'', end:'', note:'', title:'模試', test:true, alsoBlock:false, confidence:'low' } ] }); await flush();
+  assert.match(ui.html(), /授業できる時間帯/); assert.match(ui.html(), /予定の共有：模試（テスト・模試）/); assert.match(ui.html(), /読み取りに自信がありません/); assert.match(ui.html(), /模試の時間は登録していません/);
+  ui.click('nl-register');
+  assert.deepEqual(ui.requests.at(-1).body, { action:'wishMany', k:'test-link-a', kind:'ok', dates:['2026-09-14','2026-09-16'], start:'16:00', end:'19:00', note:'', deliveryMode:'' });
+  ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
+  assert.deepEqual(ui.requests.at(-1).body, { action:'blockSet', k:'test-link-a', add:['2026-09-17'], removeIds:[], note:'部活', start:'', end:'' });
+  ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
+  const ev = ui.requests.at(-1).body; assert.equal(ev.action, 'eventAddMany'); assert.equal(ev.title, '模試'); assert.equal(ev.kind, 'test'); assert.equal(ev.alsoBlock, false); assert.equal(ev.ranges[0].date, '2026-09-20'); assert.equal(ev.ranges[0].dateTo, '2026-09-20');
+  ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
+  assert.equal(ui.requests.length, 5); assert.equal(ui.html().includes(text), false); assert.doesNotMatch(ui.html(), /チェックした内容で登録する/);
+  ui.input('nl-text', 'x'); ui.click('nl-parse'); ui.requests.at(-1).reply({ error:'文章からの登録はまだ準備中です。予定表の＋から登録してください', errorCode:'notConfigured' }); await flush();
+  assert.match(ui.html(), /まだ準備中/); assert.equal(ui.requests.length, 6);
+});
+
+test('the sentence card is hidden while the API key is not configured', async () => {
+  const ui = await studentReady(state()); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を伝える/);
+});

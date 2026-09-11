@@ -95,6 +95,7 @@
         }
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
+        var NL = { text: '', busy: false, proposal: null, error: '' }; // 文章で予定を伝える
         function studentEmailReadChallenge() {
           if (location.hash.indexOf('#student-email?') !== 0) return;
           SE.challenge = new URLSearchParams(location.hash.slice(15)).get('verify') || ''; SE.message = ''; SE.error = ''; SE.busy = false; ++SE.seq;
@@ -564,6 +565,77 @@
           return html + '</div></div>';
         }
 
+        /* ---------- 文章で予定を伝える(GAS が AI で候補に変換 → ここで確認 → 既存の登録処理へ) ---------- */
+        var NL_LABEL = { wish: '授業できる時間帯', block: '授業できない日', event: '予定の共有' };
+        function nlDates(dates) { return groupDays(dates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + '〜' + fmtDateW(g.dateTo); }).join('、'); }
+        function renderNaturalEntry() {
+          var dis = NL.busy || busy ? ' disabled' : '';
+          var h = '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 6px;font-size:16px">文章で予定を伝える</h3>';
+          h += '<p class="note" style="margin-top:0">例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。読み取った内容を確認してから登録します。</p>';
+          h += '<textarea id="nl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px"' + dis + '>' + esc(NL.text) + '</textarea>';
+          h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="nl-parse"' + dis + '>' + (NL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (NL.proposal || NL.text ? '<button class="btn-quiet btn-sm" data-action="nl-clear"' + dis + '>消す</button>' : '') + '</div>';
+          if (NL.error) h += '<p role="alert" style="color:var(--danger);margin:8px 0 0">' + esc(NL.error) + '</p>';
+          if (NL.proposal) h += renderNaturalProposal(NL.proposal, dis);
+          return h + '</div>';
+        }
+        function renderNaturalProposal(p, dis) {
+          var h = '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">';
+          if (p.summary) h += '<p style="margin:0 0 6px">' + esc(p.summary) + '</p>';
+          if (!p.items.length) h += '<div class="empty">登録できる予定を読み取れませんでした。日付と時間を入れて書き直してください。</div>';
+          p.items.forEach(function (it, i) {
+            var head = NL_LABEL[it.kind] + (it.kind === 'event' ? '：' + esc(it.title) + (it.test ? '（テスト・模試）' : '') + (it.alsoBlock ? '（授業できない日としても登録）' : '') : '');
+            h += '<label class="task" style="align-items:flex-start"><input type="checkbox" data-action="nl-item" data-i="' + i + '"' + (it.sel ? ' checked' : '') + (it.done ? ' disabled' : dis) + '><span class="tt"><strong>' + head + '</strong>' + (it.done ? ' <span class="tag green">登録済み</span>' : '') + '<br>' + esc(nlDates(it.dates));
+            if (it.kind === 'wish') {
+              if (it.needsTime) h += '<br><span class="small" style="color:var(--danger)">時間帯を入れてください</span>';
+              h += '<br><input type="time" id="nl-start-' + i + '" value="' + esc(it.start || '') + '" step="900"' + dis + '><span class="muted">〜</span><input type="time" id="nl-end-' + i + '" value="' + esc(it.end || '') + '" step="900"' + dis + '>';
+            } else if (it.start && it.end) h += ' ' + esc(it.start) + '〜' + esc(it.end);
+            else if (it.kind === 'block') h += ' 終日';
+            if (it.note) h += '<br><span class="small muted">' + esc(it.note) + '</span>';
+            if (it.confidence === 'low') h += '<br><span class="small" style="color:var(--amber)">読み取りに自信がありません。内容を確認してください</span>';
+            h += '</span></label>';
+          });
+          if (p.questions && p.questions.length) h += '<ul class="small" style="margin:8px 0 0 18px;padding:0">' + p.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>';
+          if (p.items.some(function (it) { return !it.done; })) h += '<div class="row" style="margin-top:10px"><button class="btn-primary" data-action="nl-register"' + dis + '>チェックした内容で登録する</button></div><p class="note">授業できる時間帯は先生への希望です。登録だけでは授業は確定しません。</p>';
+          return h + '</div>';
+        }
+        function nlParse() {
+          if (NL.busy || busy) return;
+          var text = String(NL.text || '').trim(); if (!text) { toast('予定の文章を入れてください'); return; }
+          var k = myKey(); NL.busy = true; NL.error = ''; NL.proposal = null; render();
+          apiPost({ action: 'scheduleParse', k: k, text: text }).then(function (res) {
+            if (k !== myKey()) return; NL.busy = false;
+            if (res.error) NL.error = res.error;
+            else { (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'wish' && it.needsTime) { it.start = it.start || '13:00'; it.end = it.end || '18:00'; } }); NL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; }
+            render();
+          }).catch(function () { if (k !== myKey()) return; NL.busy = false; NL.error = '通信に失敗しました。電波の良いところでもう一度お試しください'; render(); });
+        }
+        function nlRegister() {
+          var p = NL.proposal; if (!p || busy || NL.busy) return;
+          var queue = [], k = myKey(), blockedDates = {};
+          (S.blocked || []).forEach(function (b) { blockedDates[b.date] = true; });
+          for (var i = 0; i < p.items.length; i++) {
+            var it = p.items[i]; if (!it.sel || it.done) continue;
+            if (it.kind === 'wish') {
+              var st = val('nl-start-' + i) || it.start, en = val('nl-end-' + i) || it.end;
+              if (!st || !en || st >= en) { toast(nlDates(it.dates) + ' の時間帯は「開始 < 終了」で入れてください'); return; }
+              queue.push({ i: i, body: { action: 'wishMany', k: k, kind: 'ok', dates: it.dates, start: st, end: en, note: it.note || '', deliveryMode: (S.me || {}).deliveryMode || '' } });
+            } else if (it.kind === 'block') {
+              var add = it.dates.filter(function (d) { return !blockedDates[d]; });
+              if (add.length) queue.push({ i: i, body: { action: 'blockSet', k: k, add: add, removeIds: [], note: it.note || '', start: it.start || '', end: it.end || '' } });
+              else { it.done = true; it.sel = false; }
+            } else if (it.kind === 'event') {
+              queue.push({ i: i, body: { action: 'eventAddMany', k: k, ranges: groupDays(it.dates), title: it.title, alsoBlock: !!it.alsoBlock, kind: it.test ? 'test' : 'event' } });
+            }
+          }
+          if (!queue.length) { toast('登録する項目にチェックを入れてください'); return; }
+          var total = queue.length;
+          (function next() {
+            var job = queue.shift();
+            if (!job) { NL.text = ''; NL.proposal = null; NL.error = ''; toast(total + '件を登録しました'); render(); return; }
+            studentAction(job.body, '', function () { p.items[job.i].done = true; p.items[job.i].sel = false; next(); });
+          })();
+        }
+
         function renderStudent() {
           if (route() === 'student-email') { renderTabs(); renderStudentEmail(); return; }
           renderTabs();
@@ -592,6 +664,7 @@
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
           html += renderCal(D.info, today, true);
           html += renderDayDetail(D, true, true);
+          if (S.nlEnabled && !previewK) html += renderNaturalEntry();
 
           // 今月の授業
           (function () {
@@ -1200,6 +1273,8 @@
           if(act==='student-notice-link'){studentNoticesOpen=false;render();return;}
           if(act==='approval-help'){var help=document.getElementById(btn.getAttribute('aria-controls'));if(help){help.hidden=!help.hidden;btn.setAttribute('aria-expanded',String(!help.hidden));}return;}
           if (act.indexOf("fa-") === 0) { ev.preventDefault(); familyClick(act, btn); return; }
+          if (act === 'nl-item') return;
+          if (act.indexOf('nl-') === 0) { ev.preventDefault(); if (act === 'nl-parse') nlParse(); else if (act === 'nl-clear') { NL.text = ''; NL.proposal = null; NL.error = ''; render(); } else if (act === 'nl-register') nlRegister(); return; }
           if (act.indexOf('se-') === 0) { ev.preventDefault(); if (act === 'se-askremove') { SE.removeConfirm = true; render(); } else if (act === 'se-cancel') { SE.removeConfirm = false; render(); } else if (act === 'se-back') { ++SE.seq; SE.challenge = ''; SE.error = ''; SE.message = ''; render(); if (myKey() && !S) loadState().catch(function () { toast('元の生徒専用ページを開き直してください'); }); } else studentEmailSend({'se-verify':'studentEmailVerify','se-resend':'studentEmailResend','se-remove':'studentEmailRemove'}[act]); return; }
           switch (act) {
             case "batchall": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); acceptBatch().review = null; schedData().offers.slice(0, 31).forEach(function (s) { acceptBatch().selected[s.id] = true; }); render(); } break;
@@ -1314,12 +1389,13 @@
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
           if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
           if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; } return; }
+          if (el && el.getAttribute("data-action") === "nl-item") { var nlIt = NL.proposal && NL.proposal.items[+el.getAttribute('data-i')]; if (nlIt && !nlIt.done) nlIt.sel = !!el.checked; return; }
           if (el && el.getAttribute("data-action") === "se-pref") { studentEmailPrefSend(el.getAttribute("data-kind"), !!el.checked); return; }
           if (!el || el.getAttribute("data-action") !== "taskdone") return;
           studentAction({ action: "taskDone", k: myKey(), taskId: el.getAttribute("data-id"), done: el.checked }, el.checked ? "できた! ✓" : "未完了に戻しました");
         });
 
-        app.addEventListener("input", function (ev) { if (taskDraftInput(ev.target)) return; var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) { if (route() === 'family') { F.memos[ev.target.getAttribute('data-child') + ':' + ym] = ev.target.value; F.confirm = null; } else parentPlanMemos[myKey() + ":" + ym] = ev.target.value; } if (ev.target && ev.target.id === 'fa-email') F.email = ev.target.value; if (ev.target && ev.target.id === 'se-email') SE.email = ev.target.value; });
+        app.addEventListener("input", function (ev) { if (taskDraftInput(ev.target)) return; var ym = ev.target && ev.target.getAttribute("data-parent-plan-memo"); if (ym) { if (route() === 'family') { F.memos[ev.target.getAttribute('data-child') + ':' + ym] = ev.target.value; F.confirm = null; } else parentPlanMemos[myKey() + ":" + ym] = ev.target.value; } if (ev.target && ev.target.id === 'fa-email') F.email = ev.target.value; if (ev.target && ev.target.id === 'se-email') SE.email = ev.target.value; if (ev.target && ev.target.id === 'nl-text') NL.text = ev.target.value; });
 
         /* ---------- 起動 ---------- */
         window.addEventListener("beforeunload", function (ev) { if (Object.keys(acceptBatches).some(function (k) { return !!acceptBatches[k].pending; })) { ev.preventDefault(); ev.returnValue = ""; } });

@@ -57,13 +57,6 @@
 
 ## B: あると楽になる
 
-### 自然言語で予定を登録する（Claude API）
-- **背景**: 2026-09-11 にホームの「予定管理」ボタン群を外し、登録は予定表の日付の＋に寄せた。先生の希望は、生徒が「来週の月・水は16時から19時なら空いてます」「10/3〜5は修学旅行」のように文章で入力すると、AI が授業可能日時・授業できない日・予定の共有に変換し、「これで登録していいですか？」の確認を経て既存の登録処理に流す形。既存の Anthropic API クレジットを使う。
-- **案**: 変換は GAS から Anthropic Messages API を `UrlFetchApp` で呼ぶ（鍵は Script Properties `ANTHROPIC_API_KEY`。先生が Console で発行して自分で設定し、リポジトリ・チャット・ログに残さない）。モデルは `claude-haiku-4-5-20251001`（安価で十分）、精度が足りなければ `claude-sonnet-5`。入力は生徒の文章と今日の日付・曜日・生徒の授業形式だけで、氏名などは送らない。出力は JSON（項目種別 wish/block/event、日付列、開始・終了、メモ、テスト・模試か、不明点）。画面は解釈結果を日付ごとに並べ、修正して「登録する」で既存の `wishMany` / `block` / `eventAdd` を呼ぶ。AI の出力は提案に留め、保存は従来の検証（日付・時間・件数上限・空き判定・先生の休み）を通す。
-- **条件**: 1人あたり回数制限（例: 1日20回）、API 障害時は＋からの登録に戻れること、費用は1回あたり1円未満の見込み。先生側の MCP 登録ツール（`add_student_wishes` など）と項目の定義を揃える。取消（確定授業のキャンセル）は対象外で、取消申請フォームへ案内する。
-- **関連**: `assets/portal.js` renderDayDetail / renderSelBar、`gas/Scheduling.gs` schedulingWishSave_、[MCP_DESIGN.md](MCP_DESIGN.md)
-- **追加日**: 2026-09-11
-
 ### 授業情報を授業報告書のような画面に集約する
 
 - **第一段階を公開済み（2026-09-09、v56）**: 既存記録に担当・単元・理解度・進度・宿題評価・テスト日・保護者への連絡を集約。月間計画/確定回数・次回授業・前回宿題の状況を同画面に表示し、生徒側は記録内から反映済み宿題の完了操作ができる。保存の再送・版管理・先生メモの非公開性を継承。仕様と確認結果は [SYSTEM.md](SYSTEM.md#local-lesson-workspace)。
@@ -150,6 +143,11 @@
 
 ## C: いつか・小さな改善
 
+### 文章からの予定登録の精度・費用の確認
+- **背景**: 2026-09-11 に「文章で予定を伝える」（GAS `scheduleParse` → Anthropic API → 確認 → 既存登録）を実装。先生が `ANTHROPIC_API_KEY` を設定すると有効になる。実際の生徒の書き方での読み取り精度と費用はまだ見ていない。
+- **やること**: 鍵設定後に先生の生徒ページで数パターン試す。読み違いが多ければ `NaturalSchedule.gs` の指示文か例を調整、必要なら `claude-sonnet-5` に切り替える。platform.claude.com の使用額を月1回見る。`log` の `scheduleParse` 行で回数とトークン数を確認できる。
+- **追加日**: 2026-09-11
+
 ### 共通コードの重複
 - **背景**: `examPoints` / `examTable` / `judgeCls`(模試)、`cT`、カレンダー描画の一部が `kanri/index.html` と `yoyaku/index.html` に同じコードで存在する。片方だけ直すとずれる。
 - **やること**: 1ファイル完結の方針を保ちつつ、共通部分を `assets/shared.js` に出すか、重複箇所にコメントで対応関係を明記する。
@@ -179,6 +177,7 @@
 
 ## 済み(記録用)
 
+- 2026-09-11 文章からの予定登録（Claude API）を実装（GAS `2026-09-11-nl-schedule`、`gas/NaturalSchedule.gs`）。有効化は先生の `ANTHROPIC_API_KEY` 設定待ち。仕様は [SYSTEM.md 変更履歴](SYSTEM.md#9-変更履歴要点)。
 - 2026-09-11 生徒ページの「登録不可」表示は先生の判断でホーム・予定の両方に表示することで確定（`assets/portal.js` renderCal / renderDayDetail の第3引数）。2026-09-07 の「ホームでは出さない」は取り消し。
 - 2026-09-09 連絡欄の MCP 処理(list_inbox / claim_message / resolve_message、登録ツールの message_id / process_id、`contactProcessing` ジャーナル)を GAS v54 `2026-09-09-mcp-inbox` と stepwise-mcp 0.3.0 へ公開。ローカル検証 6件追加(全体 416件通過)
 - 2026-09-08 MCP 登録ツール4本(offer_lessons / add_teacher_off / add_student_unavailable / add_student_wishes)を実装・公開(GAS v52 `2026-09-08-mcp-writes`、Worker Version ec4f2bf5、stepwise-mcp 0.2.0)。日付展開(毎週/隔週/毎月/曜日/期間/除外)、項目別検証と結果、再送安全、`MCP_WRITE_SCOPE`(mcpEnableWrites / mcpRestrictWritesToTest)。ローカル検証 11件+日付展開 5件通過。詳細は MCP_DESIGN.md 合意節と MCP_OPERATIONS.md 2-2節
