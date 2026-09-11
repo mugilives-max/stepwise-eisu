@@ -1014,14 +1014,21 @@
 
         /* ---------- 家族の保護者認証: 専用リンク方式とは別のセッション ---------- */
         var notices={items:[],open:false,busy:false,error:"",seq:0};
-        var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), childState: Object.create(null), mypageTab: 'home', studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
+        var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), childState: Object.create(null), stateBusy: '', stateSeq: 0, mypageTab: 'home', studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
         function familyToken() { return ssGet("sw_ft_v1") || ""; }
         function familyMypageChild() { var list = F.home && F.home.children || []; if (!list.length) return null; return list.filter(function (x) { return sameId(x.studentId, F.studentId); })[0] || list[0]; }
+        // 子どものマイページ状態は他の読み込み(旧データ・お知らせ)と並行して取る(F.busy とは別枠)。ホームはこれが届いた時点で表示できる
         function familyLoadChildState(id) {
-          if (!F.home || !id) return;
-          familyRequest('familyStudentState', { ftoken: familyToken(), studentId: id }, function (res) { F.childState[id] = res; var c = familyMypageChild(); if (c && sameId(c.studentId, id)) S = res; });
+          if (!F.home || !id || F.stateBusy === id) return;
+          var token = familyToken(), seq = ++F.stateSeq; F.stateBusy = id;
+          apiPost({ action: 'familyStudentState', ftoken: token, studentId: id }).then(function (res) {
+            if (seq !== F.stateSeq || token !== familyToken()) return;
+            F.stateBusy = '';
+            if (res.error) { if (res.familyAuthRequired) familyClear(); F.error = res.error; familyRender(); return; }
+            F.childState[id] = res; var c = familyMypageChild(); if (c && sameId(c.studentId, id)) S = res; familyRender();
+          }).catch(function () { if (seq !== F.stateSeq || token !== familyToken()) return; F.stateBusy = ''; F.error = '通信に失敗しました。通信状態を確認して再試行してください。'; familyRender(); });
         }
-        function familySelectChild(id) { F.studentId = id; F.confirm = null; G = null; GX = []; gLoading = false; selDate = null; selManual = false; selMode = ''; selDays = {}; dayAddOpen = false; pending = null; histFolder = null; NL = { text: '', busy: false, proposal: null, error: '' }; var c = familyMypageChild(); S = c && F.childState[c.studentId] || null; }
+        function familySelectChild(id) { F.studentId = id; F.confirm = null; G = null; GX = []; gLoading = false; selDate = null; selManual = false; selMode = ''; selDays = {}; dayAddOpen = false; pending = null; histFolder = null; NL = { text: '', busy: false, proposal: null, error: '' }; var c = familyMypageChild(); S = c && F.childState[c.studentId] || null; if (c && !S) familyLoadChildState(c.studentId); }
         // fixedTab: 'grades'=成績、'history'=授業の記録(既読機能付き)。空ならホーム。いずれも上のナビから
         // メール通知の種類別オン・オフ(保護者)。変更はすぐ保存
         function renderFamilyMailPrefs(dis) {
@@ -1054,7 +1061,7 @@
           if (!c) return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if ((F.home.children || []).length > 1) h += '<p><label class="small">表示する子ども <select id="fa-mychild">' + F.home.children.map(function (x) { return '<option value="' + esc(x.studentId) + '"' + (sameId(x.studentId, c.studentId) ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label></p>';
           var st = F.childState[c.studentId];
-          if (!st || !st.me) { if (!F.busy) familyLoadChildState(c.studentId); return h + '<p>' + esc(c.name) + 'さんのページを読み込んでいます…</p>'; }
+          if (!st || !st.me) { familyLoadChildState(c.studentId); return h + '<div class="loading"><div class="spinner"></div>' + esc(c.name) + 'さんのページを読み込んでいます…</div>'; }
           S = st;
           var tab = fixedTab || 'home';
           h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : tab === 'history' ? '授業の記録（開くと既読になります）' : 'マイページ') + '（保護者が代わりに操作できます）</p>';
@@ -1063,7 +1070,7 @@
           else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
           return h;
         }
-        function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1098,8 +1105,8 @@
         function familyLoadHome() {
           if (F.busy || !familyToken()) return;
           if (ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
-          F.childrenData = Object.create(null); F.childState = Object.create(null); F.confirm = null; notices.items=[];
-          familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; familyLoadChild(); });
+          F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.confirm = null; notices.items=[];
+          familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; var first = familyMypageChild(); if (first) familyLoadChildState(first.studentId); familyLoadChild(); });
         }
         function familyLogout() {
           notices.items=[];notices.open=false;++notices.seq;notices.busy=false;
