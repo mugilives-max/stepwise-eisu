@@ -124,3 +124,16 @@ function scheduleParse_(req) {
   addLog_('scheduleParse ' + student.id + ' chars=' + text.length + ' status=200 items=' + norm.items.length + ' in=' + (out.usage.input_tokens || 0) + ' out=' + (out.usage.output_tokens || 0));
   return { ok: true, items: norm.items, questions: norm.questions, summary: norm.summary, today: today };
 }
+
+// 先生がエディタから実行して疎通を確認する(初回は UrlFetch の承認画面が出るので許可する)。鍵の値は出力しない。
+function nlSelfTest() {
+  var key = nlKey_();
+  if (!key) { Logger.log('nlSelfTest: ANTHROPIC_API_KEY が未設定です'); return 'notConfigured'; }
+  var today = todayStr_(), out;
+  try { out = nlCall_(key, '来週の月曜は16時から18時まで授業できます', today); }
+  catch (e) { Logger.log('nlSelfTest: 通信できません(承認が未了か、ネットワーク)。' + String(e && e.message || e).slice(0, 200)); return 'exception'; }
+  var result = out.code === 200 ? 'ok items=' + nlNormalize_(out.input, today).items.length : 'http ' + out.code + (out.type ? ' ' + out.type : '');
+  Logger.log('nlSelfTest: ' + result + ' / 鍵の長さ ' + key.length + '、先頭 ' + key.slice(0, 7) + '…');
+  return result;
+}
+
