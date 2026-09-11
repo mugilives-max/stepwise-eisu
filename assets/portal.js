@@ -40,7 +40,7 @@
           if (route() === "family" || route() === 'parent') { tabs.innerHTML=parentNavigation(route()==='family');return; }
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
           var p = route();
-          tabs.innerHTML = [["#home", "home", "ホーム"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "メール通知"]]
+          tabs.innerHTML = [["#home", "home", "ホーム"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "設定"]]
             .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '">' + t[2] + "</a>"; }).join("");
         }
 
@@ -108,12 +108,12 @@
           return status === 'suppressed' ? 'テストのためメール送信を省略しました。' : status === 'failed' ? '登録内容は保存しましたが、確認メールを送れませんでした。時間を置いて「確認メールを再送」を押してください。' : status === 'uncertain' ? '確認メールの送信結果を確認できませんでした。まず受信箱を確認してください。届かない場合は、時間を置いて新しい確認メールを申し込めます。' : '確認メールのリンクを開いてください。';
         }
         function renderStudentEmail() {
-          var h = '<h1>生徒のメール通知</h1><p class="sub">授業の案内・変更・取消をメールで受け取れます。</p>', dis = SE.busy || previewK ? ' disabled' : '', s = S && S.emailStatus || {};
+          var h = '<h1>設定</h1><h2>メール通知</h2><p class="sub">授業の案内・変更・取消をメールで受け取れます。</p>', dis = SE.busy || previewK ? ' disabled' : '', s = S && S.emailStatus || {};
           if (previewK) h += '<p class="note">先生のプレビューでは確認のみできます。メールアドレスの登録・変更は生徒専用ページから行ってください。</p>';
           if (SE.error) h += '<p class="parent-error" role="alert">' + esc(SE.error) + '</p>';
           if (SE.message) h += '<p class="card" role="status">' + esc(SE.message) + '</p>';
           if (SE.challenge) { app.innerHTML = h + '<p>このメールアドレスで受信できることを確認します。</p><button class="btn-primary" data-action="se-verify"' + dis + '>メールアドレスを確認する</button> <button class="btn-quiet" data-action="se-back"' + dis + '>登録画面に戻る</button><p class="note">リンクは30分間有効です。期限が切れた場合は、元の生徒専用ページから確認メールを送り直してください。</p>'; return; }
-          if (!S || !S.me) { app.innerHTML = h + '<p>登録・変更は、先生から届いた生徒専用リンクを開いて「メール通知」から行ってください。</p>'; return; }
+          if (!S || !S.me) { app.innerHTML = h + '<p>登録・変更は、先生から届いた生徒専用リンクを開いて「設定」から行ってください。</p>'; return; }
           h += '<div class="card"><p>' + (s.verified ? '通知先：' + esc(s.email) + '（確認済み）' : '確認済みの通知先はありません。') + '</p>';
           if (s.pendingEmail) h += '<p>確認待ち：' + esc(s.pendingEmail) + '</p>' + (!SE.message && ['failed','uncertain','suppressed'].indexOf(s.mailStatus) >= 0 ? '<p role="status">' + studentEmailMailMessage(s.mailStatus) + '</p>' : '') + '<button class="btn-quiet" data-action="se-resend"' + dis + '>確認メールを再送</button>';
           h += '<form id="student-email-form"><label for="se-email">自分のメールアドレス</label><input type="email" id="se-email" autocomplete="email" maxlength="254" required value="' + esc(SE.email || s.pendingEmail || s.email || '') + '"' + dis + '><p class="note">確認メールのリンクを開くと通知先になります。変更の確認が終わるまでは、現在の確認済みアドレスを使います。</p><button class="btn-primary" type="submit"' + dis + '>確認メールを送る</button></form>';
@@ -757,7 +757,7 @@
 
         /* ---------- 画面: 成績 / 授業の記録 ---------- */
         function renderGradesPage() {
-          var h = '<h1>' + esc(S.me.name) + 'さんの成績</h1><p class="sub">先生が記録したテストの結果</p>';
+          var h = '<p class="sub">先生が記録したテストの結果</p>';
           if (G === null) {
             if (!gLoading) {
               gLoading = true;
@@ -783,7 +783,7 @@
         }
 
         function renderHistoryPage() {
-          var h = '<h1>' + esc(S.me.name) + 'さんの授業の記録</h1><p class="sub">実施済みの授業(直近120日)</p>';
+          var h = '<p class="sub">実施済みの授業(直近120日)</p>';
           h += renderPublishedRecords(S.lessonRecords,true);
           var done = (S.history || []).filter(function (x) { return x.done; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
           var bySub = {}, order = [];
@@ -1214,7 +1214,7 @@
           var page=route(),auth=null;
           if(!previewK){
             if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
-            else if(['grades','history'].indexOf(page)>=0&&S&&S.me)auth={k:myKey()}; // 成績票・振り返り・先生への連絡はホームには出さない(2026-09-11)
+            else if(page==='student-email'&&S&&S.me)auth={k:myKey()}; // 成績票・振り返り・先生への連絡は「設定」タブにだけ出す(2026-09-11)
           }
           if(window.StepwiseLessonRead){
             if(auth&&(auth.ftoken||auth.ptoken))window.StepwiseLessonRead.mount(app,function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));},JSON.stringify(auth));
