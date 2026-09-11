@@ -91,10 +91,12 @@
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
       /* 案内の一覧: 表計算ソフトのような罫線つきの表(gap を罫線色で埋める) */
-      .plan-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1.4fr) auto; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; }
-      .plan-gh { background: var(--bg-soft, #f3f5f8); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 8px; white-space: nowrap; }
+      .plan-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.2fr) auto; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; max-width: 100%; }
+      .plan-gh { background: var(--bg-soft, #f3f5f8); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 8px; min-width: 0; overflow-wrap: anywhere; }
       .plan-gr { display: contents; }
-      .plan-gc { background: #fff; padding: 7px 8px; white-space: nowrap; }
+      .plan-gc { background: #fff; padding: 7px 8px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+      .plan-gc .sub { display: block; font-size: 12px; color: var(--muted); }
+      @media (max-width: 480px) { .plan-gc { padding: 6px 6px; font-size: 14px; } .plan-gh { padding: 4px 6px; font-size: 12px; } }
       .plan-gs { grid-column: 1 / -1; background: #fff; padding: 4px 8px 8px; }
       .plan-gs:empty { display: none; }
       table.extb td b { font-weight: 700; }
@@ -1851,10 +1853,10 @@
           groups.forEach(function (g) {
             var gl = lines.filter(function (l) { return l.status === g[0]; }); if (!gl.length) return;
             h += '<h3 class="plan-group" style="margin:14px 0 4px;font-size:14px">' + g[1] + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
-            h += '<div class="plan-grid"><div class="plan-gh">科目（種類）</div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間・料金</div>';
+            h += '<div class="plan-grid"><div class="plan-gh">科目<span class="sub" style="display:block;font-size:11px">種類</span></div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間<span class="sub" style="display:block;font-size:11px">1回の料金</span></div>';
             gl.forEach(function (l) {
               var attrs = ' data-line="' + esc(l.id) + '"', fee = l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * l.lessonMin / 30);
-              h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(planLabel(l)) + '</div><div class="plan-gc">' + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)) + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分・' + yen(fee) + '</div></div>';
+              h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + '<span class="sub">' + esc(l.kind || '通常') + '</span></div><div class="plan-gc">' + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分<span class="sub">' + yen(fee) + '</span></div></div>';
               var sub = '';
               if (l.comment) sub += '<div class="small" style="white-space:pre-wrap;margin:2px 0">' + esc(l.comment) + '</div>';
               if (l.status === "approved") sub += '<div class="small muted" style="margin:2px 0">承諾: ' + esc(l.consentDate || l.approvedAt || "—") + '・' + esc(l.approvedVia || "") + (l.memo ? '・' + esc(l.memo) : "") + '</div>';
