@@ -223,10 +223,12 @@ test('the offers section is a collapsed details block with one select-all / clea
   ui.click('batchall'); ui.click('batchclear'); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</); assert.equal((ui.html().match(/data-accept-id="[^"]+" checked/g) || []).length, 0);
 });
 
-test('the monthly lesson counts live inside the 授業登録 details even without offers', async () => {
+test('the lesson plan notice explains what to do and sits above the 授業登録 fold', async () => {
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }], plan:{ '英語':4 }, planStatus:'proposed' };
   const ui = await studentReady(s);
-  assert.match(ui.html(), /<details class="offers" data-offers><summary><h2>[^]*?授業登録 <span class="cnt">返事待ちの案内はありません<\/span>/);
-  assert.match(ui.html(), /<details class="offers"[^]*9月の授業[^]*英語[^]*1<span class="muted">\/4<\/span>回[^]*保護者の承認待ち[^]*<\/details>/);
-  assert.doesNotMatch(ui.html(), /選んだ日時を確認する/);
+  assert.match(ui.html(), /<h2>授業計画の案内<\/h2><div class="card"><p[^>]*>9月は 英語4回 の授業計画が届いています。<\/p><p[^>]*>保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち<\/span>/);
+  assert.match(ui.html(), /<strong>英語<\/strong> 実施 1・予定 0<span class="muted">／計画 4回<\/span>/); assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
+  assert.doesNotMatch(ui.html(), /<details class="offers"|選んだ日時を確認する/);
+  const approved = await studentReady({ ...s, planStatus:'approved' }); assert.match(approved.html(), /9月の授業計画は 英語4回 です。 <span class="tag green">保護者承認済み<\/span>/);
+  const offers = await studentReady({ ...state(), plan:{ '英語':4 }, planStatus:'proposed' }); assert.match(offers.html(), /<h2>授業計画の案内<\/h2>[^]*<details class="offers"[^]*2件・返事をお願いします/);
 });

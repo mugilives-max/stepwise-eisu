@@ -481,39 +481,36 @@
           return html;
         }
 
-        // 今月の授業(科目別の回数・保護者承認の状態)。授業登録の折り畳みの中に出す
+        // 授業計画の案内(今月の科目別回数と保護者承認の状態)。授業登録とは別の見出しで、生徒に何をしてほしいかを文章で示す
         function renderMonthSummary(D) {
-          var today = D.today, mine = D.mine, h = '';
-            var ym = today.slice(0, 7);
-            var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
-            var doneM = histM.filter(function (h) { return h.done; });
-            var planM = mine.filter(function (s) { return s.date.slice(0, 7) === ym; }).concat(histM.filter(function (h) { return !h.done; }));
-            var target = S.plan || {};
-            var bySub = {}, order = [];
-            Object.keys(target).forEach(function (k) { if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
-            doneM.concat(planM).forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
-            doneM.forEach(function (x) { bySub[x.subject || "その他"].done++; });
-            planM.forEach(function (x) { bySub[x.subject || "その他"].plan++; });
-            if (!order.length) return '';
-            var remainTotal = 0;
-            h += '<div class="card" style="margin-top:12px;padding:10px 14px"><div class="small muted" style="margin-bottom:2px">' + (+ym.slice(5)) + '月の授業</div><div class="row" style="gap:8px 18px">';
-            order.forEach(function (k) {
-              var b = bySub[k], goal = target[k] || 0, have = b.done + b.plan;
-              if (goal) remainTotal += Math.max(0, goal - have);
-              h += '<span><strong>' + esc(k) + '</strong> <span style="font-variant-numeric:tabular-nums">' + have + (goal ? '<span class="muted">/' + goal + '</span>' : "") + '回</span><span class="small muted">(実施 ' + b.done + '・予定 ' + b.plan + ')</span></span>';
-            });
-            var stTag = S.planStatus === "approved" ? '<span class="tag green">保護者承認済み</span>' : S.planStatus === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : "";
-            h += '</div>' + (stTag ? '<div class="small" style="margin-top:4px">今月の回数: ' + stTag + (S.planStatus === "proposed" ? ' <span class="muted">保護者の方は「保護者」タブからご確認ください</span>' : '') + '</div>' : '') + (remainTotal ? '<div class="small" style="color:var(--primary);margin-top:4px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>' : "") + '</div>';
-          return h;
+          var today = D.today, mine = D.mine, ym = today.slice(0, 7), month = +ym.slice(5);
+          var histM = (S.history || []).filter(function (h) { return h.date.slice(0, 7) === ym; });
+          var doneM = histM.filter(function (h) { return h.done; });
+          var planM = mine.filter(function (s) { return s.date.slice(0, 7) === ym; }).concat(histM.filter(function (h) { return !h.done; }));
+          var target = S.plan || {}, bySub = {}, order = [];
+          Object.keys(target).forEach(function (k) { if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
+          doneM.concat(planM).forEach(function (x) { var k = x.subject || "その他"; if (!bySub[k]) { bySub[k] = { done: 0, plan: 0 }; order.push(k); } });
+          doneM.forEach(function (x) { bySub[x.subject || "その他"].done++; });
+          planM.forEach(function (x) { bySub[x.subject || "その他"].plan++; });
+          if (!order.length) return '';
+          var planned = order.filter(function (k) { return target[k]; }), planText = planned.map(function (k) { return esc(k) + target[k] + '回'; }).join('・');
+          var remainTotal = 0; planned.forEach(function (k) { remainTotal += Math.max(0, target[k] - bySub[k].done - bySub[k].plan); });
+          var h = '<h2>授業計画の案内</h2><div class="card">';
+          if (planned.length && S.planStatus === 'proposed') h += '<p style="margin:0 0 4px;font-weight:700;font-size:15.5px">' + month + '月は ' + planText + ' の授業計画が届いています。</p><p style="margin:0 0 10px">保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。 <span class="tag amber">保護者の承認待ち</span></p>';
+          else if (planned.length && S.planStatus === 'approved') h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業計画は ' + planText + ' です。 <span class="tag green">保護者承認済み</span></p>';
+          else if (planned.length) h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業計画は ' + planText + ' です。</p>';
+          else h += '<p style="margin:0 0 10px;font-weight:700;font-size:15.5px">' + month + '月の授業</p>';
+          h += '<div class="row" style="gap:8px 18px">' + order.map(function (k) { var c = bySub[k]; return '<span><strong>' + esc(k) + '</strong> 実施 ' + c.done + '・予定 ' + c.plan + (target[k] ? '<span class="muted">／計画 ' + target[k] + '回</span>' : '') + '</span>'; }).join('') + '</div>';
+          if (remainTotal) h += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
+          return h + '</div>';
         }
 
         function renderOffers(D) {
           var offers = D.offers, b = acceptBatch(), html = renderBatch(b);
           var selectable = offers.slice(0, 31), allSelected = selectable.every(function (s) { return b.selected[s.id]; });
-          html += '<details class="offers" data-offers' + (offersOpen ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>授業登録 <span class="cnt">' + (offers.length ? offers.length + '件・返事をお願いします' : '返事待ちの案内はありません') + '</span></h2></summary>';
-          html += renderMonthSummary(D);
-          if (!offers.length) return html + '</details>';
-          html += '<div class="card" style="border-color:#d99a2b;margin-top:12px">';
+          if (!offers.length) return html;
+          html += '<details class="offers" data-offers' + (offersOpen ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>授業登録 <span class="cnt">' + offers.length + '件・返事をお願いします</span></h2></summary>';
+          html += '<div class="card" style="border-color:#d99a2b">';
           html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
             html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(s.subject) : "") + deliveryTag(s) + "</span>";
@@ -688,7 +685,7 @@
           app.innerHTML = renderHomePage();
         }
 
-        /* ---------- ホーム: 予定表・予定の編集(選んだ日の内訳。登録・取消はここから)・やることリスト・授業登録(今月の授業の回数を含む折り畳み) ---------- */
+        /* ---------- ホーム: 予定表・予定の編集(選んだ日の内訳。登録・取消はここから)・やることリスト・授業計画の案内・授業登録(折り畳み) ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
@@ -728,6 +725,7 @@
             html += '</div>';
           })();
 
+          html += renderMonthSummary(D);
           html += renderOffers(D);
 
           html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者ページ」にあります。</div>';
