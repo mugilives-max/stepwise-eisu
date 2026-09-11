@@ -32,6 +32,8 @@
       h2 { font-size: 14.5px; font-weight: 700; margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; }
       h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
       h2 .cnt { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+      .help-btn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 13px; font-weight: 700; line-height: 20px; padding: 0; cursor: pointer; }
+      .help-btn[aria-expanded="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
       .sub { color: var(--muted); font-size: 13px; margin: 0; }
       .card { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
       .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
@@ -1802,6 +1804,10 @@
           return '<button type="button" class="' + (style || "btn-ghost") + ' btn-sm" data-action="billing-' + action + '"' + (disabled ? " disabled" : "") + (attrs || "") + '>' + label + '</button>';
         }
         /* 授業計画の案内(行): 科目・種類・回数・期間・1回の授業時間・料金・コメント。案内ごとに 下書き→送信→承認 */
+        // 見出し横の「?」ヘルプ。開閉状態は helpOpen に持つ(再描画しても保つ)
+        var helpOpen = Object.create(null);
+        function helpButton(key) { return '<button type="button" class="help-btn" data-action="help-toggle" data-help="' + key + '" aria-label="説明" aria-expanded="' + (helpOpen[key] ? 'true' : 'false') + '">?</button>'; }
+        function helpBox(key, text) { return helpOpen[key] ? '<div class="card note" style="margin-bottom:8px">' + text + '</div>' : ''; }
         function planLines(s) { return (s && s.plan && Array.isArray(s.plan.lines)) ? s.plan.lines : []; }
         function planLineById(s, id) { return planLines(s).filter(function (l) { return l.id === id; })[0] || null; }
         function planKindStd(kind) { var k = ((A && A.lessonKinds) || []).filter(function (x) { return x.name === (kind || "通常"); })[0]; return k || null; }
@@ -1875,7 +1881,7 @@
         function renderPlanCard(s) {
           var p = s.plan || {}, lines = planLines(s), dis = busy || s.active === false, f = planEdits[s.id];
           var by = function (st) { return lines.filter(function (l) { return l.status === st; }); };
-          var h = '<h2>授業計画の作成' + (dis ? '' : '<button class="btn-primary btn-sm" data-action="pe-new">新規作成</button>') + '</h2><div class="card"><p class="small">科目・種類・回数・期間・1回の授業時間と授業料・コメントを1つの「案内」として作り、保護者へ送ります。月をまたぐ期間（定期テスト対策・夏期講習など）も1つの案内にできます。同じ科目・種類で期間が重なる案内は作れません。</p>';
+          var h = '<h2>授業計画の作成' + helpButton('plan') + (dis ? '' : '<button class="btn-primary btn-sm" data-action="pe-new">新規作成</button>') + '</h2>' + helpBox('plan', '科目・種類・回数・期間・1回の授業時間と授業料・コメントを1つの「案内」として作り、保護者へ送ります。月をまたぐ期間（定期テスト対策・夏期講習など）も1つの案内にできます。同じ科目・種類で期間が重なる案内は作れません。承認済みの案内に回数を足すときは「＋追加」を使います。') + '<div class="card">';
           if (!dis) {
             if ((p.defaultRows || []).length) h += '<div class="row" style="margin-bottom:8px"><button class="btn-quiet btn-sm" data-action="pl-fromdefault" data-ym="' + esc(addMonths(s.month || thisYm(), 1)) + '">既定から' + (+addMonths(s.month || thisYm(), 1).slice(5)) + '月の下書きを作る</button></div>';
             if (f && !f.lineId && !f.parentId) h += renderPlanEditor(s, f);
@@ -1892,7 +1898,7 @@
         }
         function renderBilling(s) {
           var e = billingEditor(s), b = e.preview, disabled = busy || e.busy || !!e.pending;
-          var h = '<h2>請求・入金管理</h2><div class="card"><p class="small">対象月の承認済み料金と実施実績から請求額を計算します。請求済みの履歴は、あとで基本料金を変えても変わりません。</p><div class="row"><label for="billing-month">対象月</label><input type="month" id="billing-month" data-billing-field="ym" value="' + esc(e.ym) + '"' + (disabled ? " disabled" : "") + '>' + billingButton("preview", e.busy ? "確認中…" : "請求内容を確認", disabled) + '</div>';
+          var h = '<h2>請求・入金管理' + helpButton('billing') + '</h2>' + helpBox('billing', '対象月の承認済み料金と実施実績から請求額を計算します。請求済みの履歴は、あとで基本料金を変えても変わりません。') + '<div class="card"><div class="row"><label for="billing-month">対象月</label><input type="month" id="billing-month" data-billing-field="ym" value="' + esc(e.ym) + '"' + (disabled ? " disabled" : "") + '>' + billingButton("preview", e.busy ? "確認中…" : "請求内容を確認", disabled) + '</div>';
           if (e.error) h += '<p class="lc-notice" role="alert">' + esc(e.error) + (!e.pending ? ' <button class="btn-quiet btn-sm" data-action="reload">最新のカルテを確認</button>' : "") + '</p>';
           if (e.pending) h += '<p class="lc-notice">保存結果の確認が必要です。' + billingButton("retry", e.pending.op === "kanriAddPayment" ? "同じ請求を再試行" : "同じ入金・取消処理を再試行", e.busy, "", "btn-primary") + '</p>';
           if (b) {
@@ -2356,6 +2362,7 @@
             case "pe-new": planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
             case "pe-open": { var peL = planLineById(cur, btn.getAttribute("data-line")); if (!peL) return; planEdits[cur.id] = planEditOf(cur, peL); render(); break; }
             case "pe-addon": { var paP = planLineById(cur, btn.getAttribute("data-line")); if (!paP) return; planEdits[cur.id] = planEditAddon(cur, paP); render(); var pe1 = document.getElementById("plan-editor"); if (pe1 && pe1.scrollIntoView) pe1.scrollIntoView({ behavior: "smooth", block: "center" }); break; }
+            case "help-toggle": { var hk = btn.getAttribute("data-help"); helpOpen[hk] = !helpOpen[hk]; render(); break; }
             case "pe-cancel": delete planEdits[cur.id]; render(); break;
             case "pe-month": { var pmF = planEdits[cur.id], pmYm = btn.getAttribute("data-ym"); if (!pmF || !pmYm) return; pmF.startDate = pmYm + "-01"; pmF.endDate = monthEnd(pmYm); render(); break; }
             case "pe-draft": planEditSubmit(false); break;

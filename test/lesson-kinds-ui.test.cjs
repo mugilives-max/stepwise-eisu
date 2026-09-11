@@ -47,7 +47,7 @@ test('the admin plan card lists lines with status, opens one editor at a time, a
   assert.doesNotMatch(ui.html(), /class="tag (amber|gray)">(承認待ち|下書き)</); assert.doesNotMatch(ui.html(), /2026年9月|2026\/9\/22/); assert.match(ui.html(), /<div class="plan-gs" data-line="d1"><div class="row"[^>]*><button class="btn-primary btn-sm" data-action="pl-send" data-line="d1" data-rev="1">送信<\/button><button class="btn-quiet btn-sm" data-action="pe-open" data-line="d1"/); assert.doesNotMatch(ui.html(), /案内を送信<\/button>|data-action="pl-delete"/);
   assert.match(ui.html(), /data-action="plancopy" data-line="p1"/); assert.doesNotMatch(ui.html(), /data-action="plancopy" data-line="d1"/);
   assert.match(ui.html(), /既定から10月の下書きを作る/); assert.doesNotMatch(ui.html(), /第\d+版|30分単価/);
-  assert.match(ui.html(), /<h2>授業計画の作成<button class="btn-primary btn-sm" data-action="pe-new">新規作成<\/button><\/h2><div class="card">(?![^]*案内を追加)[^]*?<h3 class="plan-group"[^>]*>下書き <span[^>]*>1件<\/span><\/h3>[^]*data-line="d1"[^]*毎月の既定回数[^]*<h2>授業計画の承認状況<\/h2><div class="card"><h3 class="plan-group"[^>]*>送信済み（保護者の承認待ち） <span[^>]*>1件<\/span><\/h3>[^]*data-line="p1"[^]*<h3 class="plan-group"[^>]*>承認済み <span[^>]*>1件<\/span><\/h3>[^]*data-line="a1"/); assert.doesNotMatch(ui.html(), /plan-group[^>]*>見送り/);
+  assert.match(ui.html(), /<h2>授業計画の作成<button type="button" class="help-btn" data-action="help-toggle" data-help="plan"[^>]*>\?<\/button><button class="btn-primary btn-sm" data-action="pe-new">新規作成<\/button><\/h2><div class="card">(?![^]*案内を追加)[^]*?<h3 class="plan-group"[^>]*>下書き <span[^>]*>1件<\/span><\/h3>[^]*data-line="d1"[^]*毎月の既定回数[^]*<h2>授業計画の承認状況<\/h2><div class="card"><h3 class="plan-group"[^>]*>送信済み（保護者の承認待ち） <span[^>]*>1件<\/span><\/h3>[^]*data-line="p1"[^]*<h3 class="plan-group"[^>]*>承認済み <span[^>]*>1件<\/span><\/h3>[^]*data-line="a1"/); assert.doesNotMatch(ui.html(), /plan-group[^>]*>見送り/);
   // teacher consent record for the proposed line
   ui.input('pa-memo-p1', 'LINEで承諾'); ui.click('pl-approve', { 'data-line': 'p1' });
   let r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineApproveTeacher'); assert.equal(r.lineId, 'p1'); assert.equal(r.expectedRevision, 3); assert.equal(r.via, 'LINE'); assert.equal(r.memo, 'LINEで承諾');
@@ -74,4 +74,13 @@ test('the admin plan card lists lines with status, opens one editor at a time, a
   ui.requests.at(-1).reply({ ok: true, data: card({ plan: { lines: lines.concat([line({ id: 'x1', subject: '数学', kind: '演習', parentId: 'a1', addon: true, count: 2, status: 'proposed', startDate: '2026-09-22', endDate: '2026-10-05', period: '2026/9/22〜10/5', month: '', lessonMin: 60, lessonFee: 3000, comment: 'テスト前' })]), defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }) }); await require('./helpers/operations-ui-harness.cjs').flush();
   assert.match(ui.html(), /<div class="plan-gr" data-line="x1"><div class="plan-gc">数学<span class="sub">追加<\/span><\/div><div class="plan-gc">演習<\/div><div class="plan-gc">＋2回<\/div>/); assert.doesNotMatch(ui.html(), /data-action="pe-addon" data-line="x1"/);
   ui.click('pl-fromdefault'); r = ui.requests.at(-1).body; assert.equal(r.op, 'planLinesFromDefault'); assert.equal(r.ym, '2026-10');
+});
+
+test('the plan and billing headings carry a ? help toggle instead of an always-visible explanation', async () => {
+  const { adminReady, card } = require('./helpers/operations-ui-harness.cjs');
+  const ui = await adminReady(card(), 'billing');
+  assert.doesNotMatch(ui.html(), /1つの「案内」として作り|請求済みの履歴は/);
+  ui.click('help-toggle', { 'data-help': 'plan' }); assert.match(ui.html(), /aria-expanded="true">\?<\/button>[^]*1つの「案内」として作り/);
+  ui.click('help-toggle', { 'data-help': 'billing' }); assert.match(ui.html(), /<h2>請求・入金管理<button[^>]*aria-expanded="true"[^>]*>\?<\/button><\/h2><div class="card note"[^>]*>対象月の承認済み料金と実施実績から/);
+  ui.click('help-toggle', { 'data-help': 'plan' }); assert.doesNotMatch(ui.html(), /1つの「案内」として作り/);
 });
