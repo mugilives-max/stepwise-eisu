@@ -1833,7 +1833,12 @@
             if (f && !f.lineId) h += renderPlanEditor(s, f);
           }
           if (!lines.length) h += '<div class="empty">案内はまだありません</div>';
-          lines.forEach(function (l) {
+          // 状態ごとに見出しを分けて並べる: 送信済み(承認待ち) → 下書き → 承認済み → 見送り
+          var groups = [['proposed', '送信済み（保護者の承認待ち）'], ['draft', '下書き'], ['approved', '承認済み'], ['declined', '見送り']];
+          groups.forEach(function (g) {
+            var gl = lines.filter(function (l) { return l.status === g[0]; }); if (!gl.length) return;
+            h += '<h3 class="plan-group" style="margin:14px 0 2px;font-size:14px">' + g[1] + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
+            gl.forEach(function (l) {
             var attrs = ' data-line="' + esc(l.id) + '"';
             h += '<div class="plan-line" style="padding:10px 0;border-top:1px solid var(--line)"><div class="row between"><span>' + planStatusTag(l) + ' ' + planSummary(l) + '</span></div>';
             if (l.comment) h += '<div class="small" style="white-space:pre-wrap;margin:4px 0">' + esc(l.comment) + '</div>';
@@ -1850,6 +1855,7 @@
               if (f && f.lineId === l.id) h += renderPlanEditor(s, f);
             }
             h += '</div>';
+            });
           });
           h += '<details class="add" style="margin-top:10px"><summary>毎月の既定回数（新しい月の下書きの雛形）</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-kind">種類</label><select id="pl-kind">' + kindOptions("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>既定を保存</button></div><p class="note">「既定から下書きを作る」で、その月の案内の下書きをまとめて作れます（時間・料金は種類の標準、なければ基本単価×90分）。0回で既定から外れます。</p>' + ((p.defaultRows || []).length ? '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回'; }).join("、") + '</p>' : '') + '</details>';
           return h + '</div>';

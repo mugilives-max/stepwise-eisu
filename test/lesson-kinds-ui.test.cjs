@@ -47,6 +47,7 @@ test('the admin plan card lists lines with status, opens one editor at a time, a
   assert.match(ui.html(), /<span class="tag gray">下書き<\/span> 国語（通常）/); assert.match(ui.html(), /data-action="pl-send" data-line="d1" data-rev="1"/);
   assert.match(ui.html(), /data-action="plancopy" data-line="p1"/); assert.doesNotMatch(ui.html(), /data-action="plancopy" data-line="d1"/);
   assert.match(ui.html(), /既定から10月の下書きを作る/); assert.doesNotMatch(ui.html(), /第\d+版|30分単価/);
+  assert.match(ui.html(), /<h3 class="plan-group"[^>]*>送信済み（保護者の承認待ち） <span[^>]*>1件<\/span><\/h3>[^]*data-line="p1"[^]*<h3 class="plan-group"[^>]*>下書き <span[^>]*>1件<\/span><\/h3>[^]*data-line="d1"[^]*<h3 class="plan-group"[^>]*>承認済み <span[^>]*>1件<\/span><\/h3>[^]*data-line="a1"/); assert.doesNotMatch(ui.html(), /plan-group[^>]*>見送り/);
   // teacher consent record for the proposed line
   ui.input('pa-memo-p1', 'LINEで承諾'); ui.click('pl-approve', { 'data-line': 'p1' });
   let r = ui.requests.at(-1).body; assert.equal(r.op, 'planLineApproveTeacher'); assert.equal(r.lineId, 'p1'); assert.equal(r.expectedRevision, 3); assert.equal(r.via, 'LINE'); assert.equal(r.memo, 'LINEで承諾');
