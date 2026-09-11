@@ -189,7 +189,8 @@ test('the student page has no 予定 tab and registers or removes schedule items
 test('students turn a sentence into checked proposals and register them through the existing actions', async () => {
   const s = { ...state(), nlEnabled:true, blocked:[{ id:'b0', date:'2026-09-16' }] };
   const ui = await studentReady(s);
-  assert.ok(ui.el('nl-text')); const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
+  assert.equal(ui.el('nl-text'), undefined); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd');
+  assert.ok(ui.el('nl-text')); assert.match(ui.html(), /文章で予定入力/); const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
   ui.input('nl-text', text); ui.click('nl-parse');
   assert.deepEqual(ui.requests.at(-1).body, { action:'scheduleParse', k:'test-link-a', text });
   ui.requests.at(-1).reply({ ok:true, summary:'3件を読み取りました。', today:'2026-09-08', questions:['模試の時間は登録していません。'], items:[
@@ -210,7 +211,7 @@ test('students turn a sentence into checked proposals and register them through 
 });
 
 test('the sentence card is hidden while the API key is not configured', async () => {
-  const ui = await studentReady(state()); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を伝える/);
+  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定入力/);
 });
 
 test('the offers section is a collapsed details block with one select-all / clear toggle', async () => {

@@ -454,6 +454,7 @@
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業可能</button>' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">授業不可</button>' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定を共有</button></div>';
+              if (S.nlEnabled && !previewK) html += renderNaturalEntry();
             }
           }
           if (route() === 'home' && selMode) html += renderSelBar(D, true);
@@ -567,12 +568,12 @@
           return html + '</div></div>';
         }
 
-        /* ---------- 文章で予定を伝える(GAS が AI で候補に変換 → ここで確認 → 既存の登録処理へ) ---------- */
+        /* ---------- 文章で予定入力(「選んだ日の予定」の＋を押すと表示。GAS が AI で候補に変換 → ここで確認 → 既存の登録処理へ) ---------- */
         var NL_LABEL = { wish: '授業できる時間帯', block: '授業できない日', event: '予定の共有' };
         function nlDates(dates) { return groupDays(dates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + '〜' + fmtDateW(g.dateTo); }).join('、'); }
         function renderNaturalEntry() {
           var dis = NL.busy || busy ? ' disabled' : '';
-          var h = '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 6px;font-size:16px">文章で予定を伝える</h3>';
+          var h = '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><h3 style="margin:0 0 6px;font-size:15px">文章で予定入力</h3>';
           h += '<p class="note" style="margin-top:0">例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。読み取った内容を確認してから登録します。</p>';
           h += '<textarea id="nl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px"' + dis + '>' + esc(NL.text) + '</textarea>';
           h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="nl-parse"' + dis + '>' + (NL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (NL.proposal || NL.text ? '<button class="btn-quiet btn-sm" data-action="nl-clear"' + dis + '>消す</button>' : '') + '</div>';
@@ -666,7 +667,6 @@
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
           html += renderCal(D.info, today, true);
           html += renderDayDetail(D, true, true);
-          if (S.nlEnabled && !previewK) html += renderNaturalEntry();
 
           // 今月の授業
           (function () {
