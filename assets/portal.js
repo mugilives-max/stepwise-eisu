@@ -344,8 +344,8 @@
             if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="calmark" style="color:var(--danger)">×</span>'; }
             marks += "</span>";
             if (it && it.ngT && !past) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
-            if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可（先生都合）</span>';
-            if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可（先生都合）' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
+            if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可（先生都合）</span>';
+            if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可（先生都合）' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
             if (hasItems) {
               var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
               lb.slice(0, 2).forEach(function (l) {
@@ -365,7 +365,7 @@
           h += '<span><span class="callbl ev" style="display:inline">予定</span> 共有した予定</span>';
           h += '<span><span class="callbl ts" style="display:inline">テスト</span> テスト・模試</span>';
           h += '<span><span class="calmark">×</span> 授業できない日</span>';
-          if (showToff) h += '<span class="callbl to" style="display:inline">授業不可（先生都合）</span>';
+          if (showToff) h += '<span class="callbl to" style="display:inline">登録不可（先生都合）</span>';
           h += "</div></div>";
           return h;
         }
@@ -431,7 +431,7 @@
           if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
           else {
             html += '<div class="chips">';
-            dayOffs.forEach(function (o) { html += '<span class="chip toff">' + (o.start ? '授業不可（先生都合） ' + o.start + '〜' + o.end : '授業不可（先生都合・終日）') + '</span>'; });
+            dayOffs.forEach(function (o) { html += '<span class="chip toff">' + (o.start ? '登録不可（先生都合） ' + o.start + '〜' + o.end : '登録不可（先生都合・終日）') + '</span>'; });
             ds2.forEach(function (s) {
               if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
               var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "") + (s.deliveryMode === 'in_person' ? '' : '・' + deliveryLabel(s.deliveryMode));
