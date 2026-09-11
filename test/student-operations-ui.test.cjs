@@ -161,3 +161,12 @@ test('students toggle mail items per kind, saving immediately and reverting on f
   ui.requests.at(-1).reply({ error:'通知設定の内容を確認してください' }); await flush();
   assert.match(ui.html(), /通知設定の内容を確認してください/); assert.equal(checked(ui.html()), 3); assert.equal(ui.requests.length, 3);
 });
+
+test('the home calendar shows registration-unavailable days and times like the schedule page', async () => {
+  const s = { ...state(), teacherOff:[{ date:'2026-09-15' }, { date:'2026-09-16', start:'12:00', end:'13:30' }] };
+  const ui = await studentReady(s);
+  assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可12-13:30<\/span>/);
+  ui.click('calday', { 'data-date':'2026-09-15' }); assert.match(ui.html(), /登録不可（終日）/);
+  ui.navigate('#schedule'); assert.match(ui.html(), /登録不可12-13:30/);
+});

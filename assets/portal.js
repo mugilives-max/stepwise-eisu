@@ -402,7 +402,7 @@
           return '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー' + (long ? '。ここでの操作は本人として反映されます' : '') + ')</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
         }
 
-        // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)、showToff=false なら先生の休みを出さない(ホーム)
+        // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)。登録不可(先生の休み)はホーム・予定の両方で出す(2026-09-11)
         function renderDayDetail(D, withActions, showToff) {
           var today = D.today;
           var ds2 = (D.byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
@@ -576,8 +576,8 @@
 
           // 予定表と日付ごとの登録(先生の休みは表示しない)
           html += '<h2>予定表 <a href="#schedule" class="small" style="font-weight:500;margin-left:6px">授業可能日時・予定の登録 →</a></h2>';
-          html += renderCal(D.info, today, false);
-          html += renderDayDetail(D, false, false);
+          html += renderCal(D.info, today, true);
+          html += renderDayDetail(D, false, true);
 
           // 今月の授業
           (function () {

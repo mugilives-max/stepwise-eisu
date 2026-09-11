@@ -143,11 +143,6 @@
 
 ## C: いつか・小さな改善
 
-### 生徒ページ「予定」の先生の休み表示の要否
-- **背景**: 2026-09-07 にホームの予定表からは先生の休みを外した。予定ページには「希望日を選ぶときに分かった方が二度手間にならない」という判断で残している。先生の確認待ち。
-- **関連**: `yoyaku/index.html` renderSchedulePage(renderCal の第3引数)。
-- **追加日**: 2026-09-07
-
 ### 共通コードの重複
 - **背景**: `examPoints` / `examTable` / `judgeCls`(模試)、`cT`、カレンダー描画の一部が `kanri/index.html` と `yoyaku/index.html` に同じコードで存在する。片方だけ直すとずれる。
 - **やること**: 1ファイル完結の方針を保ちつつ、共通部分を `assets/shared.js` に出すか、重複箇所にコメントで対応関係を明記する。
@@ -177,6 +172,7 @@
 
 ## 済み(記録用)
 
+- 2026-09-11 生徒ページの「登録不可」表示は先生の判断でホーム・予定の両方に表示することで確定（`assets/portal.js` renderCal / renderDayDetail の第3引数）。2026-09-07 の「ホームでは出さない」は取り消し。
 - 2026-09-09 連絡欄の MCP 処理(list_inbox / claim_message / resolve_message、登録ツールの message_id / process_id、`contactProcessing` ジャーナル)を GAS v54 `2026-09-09-mcp-inbox` と stepwise-mcp 0.3.0 へ公開。ローカル検証 6件追加(全体 416件通過)
 - 2026-09-08 MCP 登録ツール4本(offer_lessons / add_teacher_off / add_student_unavailable / add_student_wishes)を実装・公開(GAS v52 `2026-09-08-mcp-writes`、Worker Version ec4f2bf5、stepwise-mcp 0.2.0)。日付展開(毎週/隔週/毎月/曜日/期間/除外)、項目別検証と結果、再送安全、`MCP_WRITE_SCOPE`(mcpEnableWrites / mcpRestrictWritesToTest)。ローカル検証 11件+日付展開 5件通過。詳細は MCP_DESIGN.md 合意節と MCP_OPERATIONS.md 2-2節
 - 2026-09-08 Codex の MCP をリモート版(Cloudflare `/mcp`、OAuth)に一本化。`~/.codex/config.toml` を `url` 指定に変更(旧 stdio はコメントアウトで予備)、Worker は `mcpLog` の client 列に OAuth の client_name を記録するよう変更して再配置(Version 91cbe92d)。初回の `codex mcp login stepwise` は先生が実施(MCP_OPERATIONS.md 1章)
