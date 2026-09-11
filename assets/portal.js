@@ -428,7 +428,8 @@
           var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
           var dayToff = dayOffs.some(function (o) { return !o.start; });
-          var html = '<div style="margin-top:10px"><div class="row" style="margin-bottom:6px"><span class="small muted">' + fmtDateW(selDate) + '</span>'+(selDate>=today?'<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">＋</button>':'')+'</div>';
+          var dayLabel = Number(selDate.slice(5, 7)) + '月' + Number(selDate.slice(8, 10)) + '日（' + WD[wdOf(selDate)] + '）の予定';
+          var html = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>'+(selDate>=today?'<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">＋</button>':'')+'</div>';
           if (!ds2.length && !dayNg.length && !dayOffs.length) html += '<div class="empty">この日の予定はありません</div>';
           else {
             html += '<div class="chips">';
