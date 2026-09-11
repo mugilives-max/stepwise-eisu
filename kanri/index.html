@@ -905,9 +905,6 @@
           html += studentParentInviteHtml(s) + studentFamilySettingsHtml(s);
           }
           if (section === 'billing') {
-          // 今月の確定した会計条件だけを表示する
-          var tm = s.thisMonth || {}, currentBilling = s.billing;
-          var thisMonthHtml = '<h2>今月の授業と請求 <span class="cnt">' + esc(s.month) + '</span></h2><div class="grid2"><div class="card"><div class="muted small">実施済み</div><div class="stat">' + esc(tm.count || 0) + '<small>回 / ' + esc(tm.minutes || 0) + '分</small></div></div><div class="card"><div class="muted small">今月の授業料</div>' + (currentBilling && (currentBilling.canBill || currentBilling.invoice) ? '<div class="stat">' + yen(currentBilling.invoice ? currentBilling.invoice.amount : currentBilling.amount) + '</div>' : '<div class="stat">未確定</div><div class="small">' + esc(currentBilling && currentBilling.reason || '下の「請求内容を確認」から計算してください') + '</div>') + '</div></div><p class="note">実施状態と授業記録の保存は別操作です。請求は下の「請求・入金管理」で確認してください。</p>';
 
           html += renderPlanCard(s);
 
@@ -1020,7 +1017,7 @@
           html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。次回授業を選ぶと、指定科目の確定済み授業に期限が連動します。予定がなければ「予定未定」と表示します。</div></div>';
 
           }
-          if (section === 'billing') html += thisMonthHtml + renderBilling(s);
+          if (section === 'billing') html += renderBilling(s);
           if (section === 'progress') {
 
           // 面談
