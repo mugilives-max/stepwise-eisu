@@ -354,7 +354,7 @@
               lb.slice(0, 2).forEach(function (l) {
                 if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + "</span>"; return; }
                 var lc = l.st === "offer" ? " of" : l.st === "past" ? " dn" : "";
-                marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
+                marks += '<span class="callbl tm' + lc + '" style="white-space:normal;overflow-wrap:anywhere">' + esc(l.start) + (l.end ? '-' + esc(l.end) : '') + '</span><span class="callbl' + lc + '">' + esc(l.text) + "</span>";
               });
               if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + "</span>";
             }
@@ -410,7 +410,7 @@
           slots.concat(hist).concat(evDays.map(function (e) { return { date: e.date, subject: e.title, st: "event", start: "99:99", kind: e.kind }; })).forEach(function (s) {
             var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] });
             if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev++; else it[s.st]++;
-            it.labels.push({ text: lessonLabel(s) || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, kind: s.kind });
+            it.labels.push({ text: lessonLabel(s) || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, end: s.st !== "event" && s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind });
           });
           blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else it.ngAll = 1; });
           (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
