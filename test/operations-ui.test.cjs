@@ -103,3 +103,17 @@ test('selected calendar day exposes add button and carries date into student off
 test('home calendar preserves past selection and shows its lessons without add action',async()=>{
  const ui=createUI('admin',{hash:'#home'});ui.requests[0].reply({data:{today:'2026-09-08',slots:[{id:'old',date:'2026-09-05',start:'13:00',min:60,status:'booked',studentId:'test-a',studentName:'【テスト】過去授業',subject:'英語'}],lessonsToday:[],lessonsWeek:[],pending:[],unpaid:[],students:[],meetings:[]}});await flush();ui.click('calday',{'data-date':'2026-09-05'});assert.match(ui.html(),/9\/5\(土\)の予定/);assert.match(ui.html(),/【テスト】過去授業/);assert.doesNotMatch(ui.html(),/data-action="calendar-add"/);
 });
+
+test('the admin student page draws the same calendar as the student mypage (boxes, hatched days, legend)', async () => {
+  const c = card({ lessons: [{ id: 'l1', date: '2026-09-15', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語', kind: '演習' }, { id: 'l2', date: '2026-09-16', start: '18:00', min: 60, status: 'offered', done: false, subject: '数学', kind: '' }], blocked: [{ id: 'b1', date: '2026-09-17', start: '', end: '', note: '' }], teacherOff: [{ id: 't1', date: '2026-09-18', note: '' }], wishes: [{ id: 'w1', date: '2026-09-19', start: '16:00', end: '18:00' }], events: [{ id: 'e1', date: '2026-09-20', dateTo: '2026-09-21', title: '中間テスト', kind: 'test' }] });
+  const ui = await adminReady(c, 'overview');
+  assert.match(ui.html(), /<h2>【テスト】生徒A<\/h2>|さんの予定表<\/h2>/);
+  assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:30<\/span><span class="s">英語（演習）<\/span><\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="calbox of"><span class="t">18:00-<wbr>19:00<\/span><span class="s">数学<\/span>/);
+  assert.match(ui.html(), /class="calday ngday" data-action="calday" data-date="2026-09-17">17<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span>/);
+  assert.match(ui.html(), /class="calday toff" data-action="calday" data-date="2026-09-18">18<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-19">19<span class="calmarks"><\/span><span class="callbl wi">授業可<\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-20">20<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/); assert.match(ui.html(), /data-date="2026-09-21">21<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/);
+  assert.match(ui.html(), /<div class="callegend"><span><span class="callbl" style="display:inline">授業<\/span><\/span>[^]*登録不可<\/span> 先生の休み/);
+  assert.doesNotMatch(ui.html(), /class="caldot|class="cbox/);
+});

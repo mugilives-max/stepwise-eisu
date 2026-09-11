@@ -181,6 +181,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js?v=20260911-simple-record"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260912-shared-cal"><script src="/assets/calendar.js?v=20260912-shared-cal"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -825,20 +826,12 @@
           // この生徒の予定表
           (function () {
             var tdy = s.today || today();
-            var info = {};
-            var it0 = function (dd) { return info[dd] || (info[dd] = { booked: 0, offered: 0, req: 0, ng: 0, wish: 0, ev: 0, labels: [] }); };
-            (s.lessons || []).forEach(function (l) {
-              if (l.status !== "booked" && l.status !== "offered") return;
-              var it = it0(l.date);
-              if (l.status === "booked") { it.booked++; if (l.req) it.req++; } else it.offered++;
-              it.labels.push({ start: l.start, text: l.subject || "授業", st: l.status === "offered" ? "offer" : (l.done ? "done" : "mine") });
-            });
-            (s.blocked || []).forEach(function (b) { ngMark(it0(b.date), b); });
-            (s.teacherOff || []).forEach(function (o) { offMark(it0(o.date), o); });
-            (s.wishes || []).forEach(function (x) { it0(x.date).wish++; });
-            (s.events || []).forEach(function (e) { var dd = e.date; for (var i = 0; i < 61 && dd <= e.dateTo; i++) { var it = it0(dd); it.ev++; it.labels.push({ start: "99:99", text: e.title, st: "event" }); dd = addDaysStr(dd, 1); } });
+            // 生徒マイページと同じ予定表(共通部品 assets/calendar.js)。授業は確定=青・案内=黄、授業不可・登録不可は斜線、授業可は緑
+            var info = window.StepwiseCalendar.buildInfo({
+              lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
+              events: s.events || [], blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
-            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + renderCal(info, tdy);
+            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
             var dayL = (s.lessons || []).filter(function (l) { return l.date === selDate && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
             var dayE = (s.events || []).filter(function (e) { return e.date <= selDate && selDate <= e.dateTo; });
             var dayN = (s.blocked || []).filter(function (b) { return b.date === selDate; });

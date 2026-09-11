@@ -331,59 +331,9 @@
         }
 
         /* ---------- 予定表 ---------- */
+        // 予定表の本体は共通部品 assets/calendar.js(管理画面の生徒カルテと同じ)
         function renderCal(info, today, showToff) {
-          var label = calY + "年" + (calM + 1) + "月";
-          var minIdx = calNow.getFullYear() * 12 + calNow.getMonth() - 2, curIdx = calY * 12 + calM, maxIdx = minIdx + 5;
-          var h = '<div class="card cal"><div class="calhead">';
-          h += '<button class="btn-quiet btn-sm" data-action="calprev"' + (curIdx <= minIdx ? " disabled" : "") + ' aria-label="前の月">◀</button>';
-          h += '<span class="callabel">' + label + "</span>";
-          h += '<button class="btn-quiet btn-sm" data-action="calnext"' + (curIdx >= maxIdx ? " disabled" : "") + ' aria-label="次の月">▶</button>';
-          h += '</div><div class="calgrid">';
-          WD.forEach(function (w, i) { h += '<span class="calwd' + (i === 0 ? " sun" : i === 6 ? " sat" : "") + '">' + w + "</span>"; });
-          var startWd = new Date(calY, calM, 1).getDay();
-          for (var i = 0; i < startWd; i++) h += "<span></span>";
-          var days = new Date(calY, calM + 1, 0).getDate();
-          for (var d = 1; d <= days; d++) {
-            var ds = calY + "-" + pad(calM + 1) + "-" + pad(d);
-            var it = info[ds], wd = (startWd + d - 1) % 7, cls = "calday", past = ds < today;
-            if (wd === 0) cls += " sun"; if (wd === 6) cls += " sat";
-            if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
-            var hasItems = !!(it && it.labels && it.labels.length);
-            if (showToff && it && it.toff && !past) cls += " toff";
-            if (it && it.ngAll && !past) cls += " ngday";
-            var marks = '<span class="calmarks">';
-            if (it && !past) {
-              if (it.mine) cls += " mine";
-            }
-            if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
-            marks += "</span>";
-            if (it && it.ngAll && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
-            if (it && it.ngT && !past) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
-            if (it && it.wish && !past) marks += '<span class="callbl wi">授業可</span>';
-            if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可</span>';
-            if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
-            if (hasItems) {
-              var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
-              // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
-              lb.forEach(function (l) {
-                if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
-                var lc = l.st === "offer" ? " of" : "";
-                marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
-              });
-            }
-            var clickable = !past || hasItems; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)
-            if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";
-            else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
-          }
-          h += '</div><div class="callegend">';
-          h += '<span><span class="callbl" style="display:inline">授業</span></span>';
-          h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
-          h += '<span><span class="callbl ev" style="display:inline">予定</span> 重要な予定（テスト・行事など）</span>';
-          h += '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
-          h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';
-          if (showToff) h += '<span><span class="callbl to toffswatch" style="display:inline">登録不可</span> 先生の休み（登録できません）</span>';
-          h += "</div></div>";
-          return h;
+          return window.StepwiseCalendar.render(info, { year: calY, month: calM, today: today, selDate: selDate, selMode: selMode, selDays: selDays, showToff: !!showToff, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
         }
 
         /* ---------- 画面: 専用リンクなし ---------- */
@@ -419,15 +369,7 @@
             selDate = found || today;
             var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
-          var info = {};
-          slots.concat(hist).concat(evDays.map(function (e) { return { date: e.date, subject: e.title, st: "event", start: "99:99", kind: e.kind }; })).forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] });
-            if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "event") it.ev++; else it[s.st]++;
-            it.labels.push({ text: lessonLabel(s) || (s.st === "event" ? "予定" : "授業"), st: s.st, start: s.start, end: s.st !== "event" && s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind });
-          });
-          blocked.forEach(function (b) { var it = info[b.date] || (info[b.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else it.ngAll = 1; });
-          (S.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
-          (S.wishes || []).forEach(function (w) { var it = info[w.date] || (info[w.date] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); it.wish = (it.wish || 0) + 1; });
+          var info = window.StepwiseCalendar.buildInfo({ lessons: slots.concat(hist), events: events, blocked: blocked, teacherOff: S.teacherOff || [], wishes: S.wishes || [], lessonLabel: lessonLabel });
           var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
           return { today: today, slots: slots, mine: mine, offers: offers, hist: hist, blocked: blocked, events: events, byDate: byDate, info: info, upcoming: upcoming, next: upcoming[0] };
         }

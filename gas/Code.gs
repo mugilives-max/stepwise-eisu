@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-plan-usage' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-shared-cal' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1987,7 +1987,7 @@ function kanriStudent_(studentId,section) {
   if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
     .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
-      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   if (section==='overview') return Object.assign(base,{
     lessons:lessons.filter(function(l){return l.date>=today;}).concat(lessons.filter(function(l){return l.date<today;}).slice(0,20)),

@@ -33,31 +33,12 @@
       .row.between { justify-content: space-between; }
       .small { font-size: 12.5px; }
       .muted { color: var(--muted); }
-      /* 予定表 */
-      .cal { padding: 12px 12px 10px; }
-      .calhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-      .callabel { font-weight: 700; font-size: 15px; }
-      .calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
-      .calwd { font-size: 11px; color: var(--muted); padding: 2px 0; }
-      .calwd.sun { color: var(--danger); } .calwd.sat { color: var(--primary); }
-      .calday { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px; max-width: 100%; overflow: hidden; border-radius: 9px; border: 1px solid transparent; background: transparent; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
-      button.calday { cursor: pointer; font-size: 13px; }
-      .calday.sun { color: var(--danger); } .calday.sat { color: var(--primary); }
-      .calday.off { opacity: 0.35; }
-      .calday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
-      .calday.ngday:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px); }
-      .calday.ngday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px, var(--taken) 7px 10px, transparent 10px 14px); }
-      .ngswatch { padding: 0 4px; background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px); }
-      .toffswatch { padding: 0 4px; background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
+      /* 予定表の本体は assets/calendar.css(生徒・保護者・管理画面で共通)。ここには日付選択モードなど生徒ページ固有の見た目だけ */
       .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
       .folder-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); cursor: pointer; font: inherit; color: inherit; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
       .folder-card:hover { border-color: var(--primary); }
       .folder-card .fname { font-size: 17px; font-weight: 700; }
-      .callbl.to { color: var(--muted); font-weight: 600; }
       .chip.toff { background: var(--taken); border-color: var(--line); color: var(--muted); }
-      .calday.today { border-color: var(--muted); }
-      .calday.mine:not(.sel) { background: var(--coral-soft); }
-      .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
       .calday.selday { border: 1px dashed var(--danger); background: var(--danger-soft); }
       .calday.selday.wish { border-color: var(--green); background: var(--green-soft); }
       .calday.selday.event { border-color: var(--coral); background: var(--coral-soft); }
@@ -67,18 +48,6 @@
       .selbar { border-top: 3px solid var(--danger); }
       .selbar.wish { border-top-color: var(--green); }
       .selbar.event { border-top-color: var(--coral); }
-      .caldot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-      .caldot.of { background: #d99a2b; }
-      .calday.sel .caldot { background: var(--white); }
-      .calmark { font-size: 10px; line-height: 1; color: var(--muted); font-weight: 700; }
-      .calday.sel .calmark { color: var(--white); }
-      .calmarks { display: flex; align-items: center; gap: 2px; min-height: 7px; }
-      .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .callbl.tm { font-weight: 600; opacity: .85; }
-      .callbl.of { color: var(--amber); }
-      .callbl.dn { color: var(--muted); }
-      .callbl.ev { color: var(--coral); font-weight: 600; }
-      .callbl.ts { color: #7a4fc9; font-weight: 700; }
       .chip.ts { background: #f1ecfb; border-color: #7a4fc9; color: #7a4fc9; font-weight: 700; }
       .task { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); }
       .task:last-child { border-bottom: none; }
@@ -91,17 +60,6 @@
       .countdown .cd { flex: 1; min-width: 140px; background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
       .countdown .cd .n { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
       .countdown .cd .n small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
-      .callbl.more { color: var(--muted); font-weight: 500; }
-      .calday.sel .callbl { color: var(--white); }
-      .calbox { display: block; margin: 2px 0 0; padding: 2px 3px; border-radius: 4px; font-size: 10px; line-height: 1.2; font-weight: 700; text-align: left; background: var(--soft); color: var(--primary); border-left: 3px solid var(--primary); }
-      .calbox .t { display: block; font-variant-numeric: tabular-nums; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
-      .calbox .s { display: block; white-space: normal; overflow-wrap: anywhere; }
-      @media (max-width: 480px) { .calbox { font-size: 9px; padding: 2px 2px; border-left-width: 2px; } .calday .callbl { font-size: 9px; } }
-      .calbox.of { background: var(--amber-soft); color: var(--amber); border-left-color: var(--amber); }
-      .calbox.ev { background: var(--coral-soft); color: var(--coral); border-left-color: var(--coral); }
-      .calday.sel .calbox { background: rgba(255,255,255,.18); color: var(--white); border-left-color: var(--white); }
-      .callegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
-      .callegend span { display: inline-flex; align-items: center; gap: 4px; }
       /* チップ・行 */
       .chips { display: flex; flex-wrap: wrap; gap: 8px; }
       .chip { font-variant-numeric: tabular-nums; border-radius: 10px; padding: 8px 12px; font-size: 14px; border: 1px solid var(--line); background: var(--white); display: inline-flex; align-items: center; gap: 6px; }
@@ -113,7 +71,6 @@
       .chip.ev { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 600; }
       .chip.ng { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .chip.wish { background: #eaf6ee; border-color: #2f8a4c; color: #2f8a4c; font-weight: 600; }
-      .callbl.wi { color: #2f8a4c; font-weight: 700; }
       .daylist { margin: 0 -2px; }
       .daylist .slotline .time:empty { display: none; }
       details.fold > summary { list-style: none; cursor: pointer; }
