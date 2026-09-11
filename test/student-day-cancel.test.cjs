@@ -1,0 +1,2 @@
+const assert=require('node:assert/strict'),{test}=require('node:test'),h=require('./helpers/operations-ui-harness.cjs');
+test('selected lesson cancellation asks for reason before sending',async()=>{const u=await h.studentReady(h.state([h.slot('booked',{st:'mine'})]));u.click('calday',{'data-date':'2026-09-10'});assert.match(u.html(),/>キャンセル<\/button>/);u.click('askcancel',{'data-id':'booked'});assert.ok(u.el('f-creason'));assert.match(u.html(),/先生が確認してから取消/);assert.equal(u.requests.length,1);u.click('closebar');assert.equal(u.requests.length,1);});

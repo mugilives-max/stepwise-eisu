@@ -435,7 +435,7 @@
             ds2.forEach(function (s) {
               if (s.st === "event") { html += '<span class="chip ' + (s.kind === "test" ? "ts" : "ev") + '">' + (s.kind === "test" ? "テスト " : "") + esc(s.title) + "</span>"; return; }
               var label = s.start + "〜" + endTime(s.start, s.min) + (s.subject ? " " + esc(s.subject) : "") + (s.deliveryMode === 'in_person' ? '' : '・' + deliveryLabel(s.deliveryMode));
-              if (s.st === "mine") html += '<span class="chip mine">✓ ' + label + "</span>";
+              if (s.st === "mine") html += '<div class="row" style="width:100%;gap:8px"><span class="chip mine">✓ ' + label + '</span>' + cancelControl(s, true) + '</div>';
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
@@ -685,10 +685,10 @@
           return html;
         }
 
-        function cancelControl(s) {
+        function cancelControl(s, compact) {
           if (s.req) return '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">依頼を取り下げる</button>';
-          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">例外取消を申請</button>';
-          return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">取消を依頼</button>';
+          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : '例外取消を申請') + '</button>';
+          return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : '取消を依頼') + '</button>';
         }
 
         function renderWishPanel(today) {
