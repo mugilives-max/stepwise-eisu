@@ -71,18 +71,12 @@
       .chip.ev { background: var(--coral-soft); border-color: var(--coral); color: var(--coral); font-weight: 600; }
       .chip.ng { background: var(--taken); border-color: var(--line); color: var(--muted); }
       .chip.wish { background: #eaf6ee; border-color: #2f8a4c; color: #2f8a4c; font-weight: 600; }
-      .daylist { margin: 0 -2px; }
-      .daylist .slotline .time:empty { display: none; }
       details.fold > summary { list-style: none; cursor: pointer; }
       details.fold > summary::-webkit-details-marker { display: none; }
       details.fold > summary h2 { margin-bottom: 8px; }
       details.fold > summary .mk::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); }
       details.fold[open] > summary .mk::before { content: '▾'; }
       .empty { color: var(--muted); font-size: 13.5px; padding: 8px 2px; }
-      .slotline { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-      .slotline:last-child { border-bottom: none; }
-      .slotline .time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 104px; }
-      .slotline .who { flex: 1; min-width: 80px; }
       .tag { font-size: 11.5px; border-radius: 6px; padding: 1px 7px; font-weight: 700; white-space: nowrap; }
       .tag.blue { background: var(--soft); color: var(--primary); }
       .tag.amber { background: var(--amber-soft); color: var(--amber); }

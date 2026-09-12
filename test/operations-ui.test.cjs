@@ -98,7 +98,7 @@ test('calendar overlap chains keep all four lessons without claiming four people
   assert.equal(ui.html().includes('2人同時'), false);
 });
 test('selected calendar day exposes add button and carries date into student offer',async()=>{
- const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/aria-label="この日に予定を追加"/);ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');assert.equal(ui.requests.length,1);
+ const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="sdayadd" aria-label="9\/15\(火\)の予定を追加"/);ui.click('sdayadd');ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');assert.equal(ui.requests.length,1);
 });
 test('home calendar preserves past selection and shows its lessons without add action',async()=>{
  const ui=createUI('admin',{hash:'#home'});ui.requests[0].reply({data:{today:'2026-09-08',slots:[{id:'old',date:'2026-09-05',start:'13:00',min:60,status:'booked',studentId:'test-a',studentName:'【テスト】過去授業',subject:'英語'}],lessonsToday:[],lessonsWeek:[],pending:[],unpaid:[],students:[],meetings:[]}});await flush();ui.click('calday',{'data-date':'2026-09-05'});assert.match(ui.html(),/9\/5\(土\)の予定/);assert.match(ui.html(),/【テスト】過去授業/);assert.doesNotMatch(ui.html(),/data-action="calendar-add"/);
@@ -116,4 +116,24 @@ test('the admin student page draws the same calendar as the student mypage (boxe
   assert.match(ui.html(), /data-date="2026-09-20">20<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/); assert.match(ui.html(), /data-date="2026-09-21">21<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/);
   assert.match(ui.html(), /<div class="callegend"><span><span class="callbl" style="display:inline">授業<\/span><\/span>[^]*登録不可<\/span> 先生の休み/);
   assert.doesNotMatch(ui.html(), /class="caldot|class="cbox/);
+});
+
+test('the admin day card mirrors the student 予定の編集 card with teacher actions', async () => {
+  const c = card({ lessons: [{ id: 'l1', date: '2026-09-15', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語', kind: '演習', meetUrl: 'https://meet.example.invalid/x' }, { id: 'l2', date: '2026-09-15', start: '19:00', min: 60, status: 'offered', done: false, subject: '数学', kind: '' }, { id: 'l3', date: '2026-09-15', start: '15:00', min: 60, status: 'booked', done: true, subject: '国語', kind: '' }], blocked: [{ id: 'b1', date: '2026-09-15', start: '', end: '', note: '部活' }], teacherOff: [{ id: 't1', date: '2026-09-15', start: '09:00', end: '12:00', note: '' }], wishes: [{ id: 'w1', date: '2026-09-15', start: '16:00', end: '18:00', kind: 'ok', deliveryMode: 'online', duration: 90 }], events: [{ id: 'e1', date: '2026-09-15', dateTo: '2026-09-15', title: '中間テスト', kind: 'test' }] });
+  const ui = await adminReady(c, 'overview'); ui.click('calday', { 'data-date': '2026-09-15' });
+  assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"[^>]*><div class="row"[^>]*><h3[^>]*>9月15日（火）の予定<\/h3><button class="btn-primary"[^>]*data-action="sdayadd" aria-label="9\/15\(火\)の予定を追加" aria-expanded="false">＋<\/button><\/div><div class="daylist">/);
+  assert.match(ui.html(), /<div class="slotline"><span class="tag gray">登録不可<\/span><span class="time">09:00〜12:00<\/span>/);
+  assert.match(ui.html(), /<span class="tag coral">重要な予定<\/span><span class="time"><\/span><span class="who">中間テスト<\/span><button class="btn-quiet btn-sm" data-action="delevent" data-id="e1">削除<\/button>/);
+  assert.match(ui.html(), /<span class="tag gray">実施済<\/span><span class="time">15:00〜16:00<\/span><span class="who">国語<\/span><button class="btn-quiet btn-sm" data-action="toggledone" data-id="l3" data-done="0">未実施に戻す<\/button><a class="btn-quiet btn-sm"[^>]*>記録<\/a>/);
+  assert.match(ui.html(), /<span class="tag green">確定<\/span><span class="time">17:00〜18:30<\/span><span class="who">英語（演習）<\/span><a class="btn-ghost btn-sm"[^>]*>Meet<\/a><button class="btn-quiet btn-sm" data-action="toggledone" data-id="l1" data-done="1">実施済にする<\/button><button class="btn-quiet btn-sm" data-action="unbook" data-id="l1"/);
+  assert.match(ui.html(), /<span class="tag amber">案内<\/span><span class="time">19:00〜20:00<\/span><span class="who">数学<\/span><button class="btn-quiet btn-sm" data-action="delslot" data-id="l2" data-sid="test-a">取り下げ<\/button>/);
+  assert.match(ui.html(), /<span class="tag gray">授業不可<\/span><span class="time">終日<\/span><span class="who">部活<\/span><button class="btn-quiet btn-sm" data-action="sdelblock" data-id="b1">解除<\/button>/);
+  assert.match(ui.html(), /<span class="tag green">授業可<\/span><span class="time">16:00〜18:00<\/span><span class="who"><span class="tag green">この時間帯のどこかで<\/span>[^]*?data-action="usewish"[^>]*>この希望で案内<\/button><button class="btn-quiet btn-sm" data-action="delwish" data-id="w1"/);
+  assert.doesNotMatch(ui.html(), /手動で予定入力/);
+  ui.click('sdayadd'); assert.match(ui.html(), /<h3[^>]*>手動で予定入力<\/h3><div class="row"[^>]*><button class="btn-quiet btn-sm" data-action="dayoffer" data-date="2026-09-15">授業を案内<\/button><button class="btn-quiet btn-sm" data-action="sblockopen"[^>]*>授業不可を登録<\/button>/);
+  ui.click('sblockopen'); ui.input('sb-start', '16:00'); ui.input('sb-end', '18:00'); ui.input('sb-note', '塾の面談'); ui.click('sblockadd');
+  const r = ui.requests.at(-1).body; assert.equal(r.op, 'addBlock'); assert.equal(r.studentId, 'test-a'); assert.equal(r.date, '2026-09-15'); assert.equal(r.dateTo, '2026-09-15'); assert.equal(r.start, '16:00'); assert.equal(r.end, '18:00'); assert.equal(r.note, '塾の面談');
+  ui.requests.at(-1).reply({ ok: true, admin: { today: '2026-09-08', students: [], slots: [], blocked: [], teacherOff: [], wishes: [], events: [], plans: [], log: [] } }); await flush();
+  const reload = ui.requests.at(-1); if (reload.body.op === 'kanriStudent') { reload.reply({ ok: true, data: c }); await flush(); }
+  ui.click('sdelblock', { 'data-id': 'b1' }); assert.equal(ui.requests.at(-1).body.op, 'delBlock'); assert.equal(ui.requests.at(-1).body.blockId, 'b1');
 });

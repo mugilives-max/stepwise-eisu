@@ -42,3 +42,10 @@ button.calday { cursor: pointer; font-size: 13px; }
 .calday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
 .calday.ngday:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px); }
 .calday.ngday.toff:not(.sel):not(.selday) { background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 7px, var(--taken) 7px 10px, transparent 10px 14px); }
+/* 予定表の下の「その日の予定」の行(生徒・保護者・管理画面で共通) */
+.daylist { margin: 0 -2px; }
+.daylist .slotline .time:empty { display: none; }
+.slotline { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.slotline:last-child { border-bottom: none; }
+.slotline .time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 104px; }
+.slotline .who { flex: 1; min-width: 80px; }
