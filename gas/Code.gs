@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-shared-cal' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-teacher-nl' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1223,6 +1223,8 @@ function admin_(req) {
     case 'delWish':     return kanriWrap_(req, { ok: delWish_(req.wishId) }, req.studentId);
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
+    case 'scheduleParseTeacher': return scheduleParseTeacher_(req);
+    case 'nlApplyTeacher': { var na = nlApplyTeacher_(req); if (na.error) return na; var nw = kanriWrap_(req, na, req.studentId); if (nw && nw.ok) { nw.results = na.results; nw.added = na.added; } return nw; }
     case 'planLineSave': return kanriWrap_(req, planLineSave_(req), req.studentId);
     case 'planLineDelete': return kanriWrap_(req, planLineDelete_(req), req.studentId);
     case 'planLineApproveTeacher': return kanriWrap_(req, planLineApproveTeacher_(req), req.studentId);
@@ -1982,7 +1984,7 @@ function kanriStudent_(studentId,section) {
   var profile = null;
   ledgerRows_('生徒台帳').forEach(function (p) { if (String(p['生徒ID']) === id) profile = p; });
   if (profile) delete profile._row;
-  var base={section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
+  var base={section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,nlEnabled:typeof nlConfigured_==='function'&&nlConfigured_(),code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
   if (section==='settings') return Object.assign(base,{email:String(sys.email || ''),emailStatus:studentEmailStatus_(id),rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),parentAuth:parentStatus_(id)});
   if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })

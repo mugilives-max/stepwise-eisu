@@ -814,6 +814,76 @@
         /* ---------- 生徒カルテ ---------- */
         // 予定表の下の「その日の予定」カード。生徒マイページの「予定の編集」と同じ見た目(行の形・タグ・＋ボタン)で、操作は先生ができるものに置き換える
         var sDayAddOpen = false, sBlockOpen = false;
+        // 文章で自動入力(先生版)。文章 → scheduleParseTeacher で候補 → 確認・修正 → nlApplyTeacher で登録(案内・授業不可・予定)
+        var TNL = { text: "", busy: false, proposal: null, error: "" };
+        var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "予定の共有" };
+        function tnlDates(dates) { var out = [], cur = null; (dates || []).forEach(function (d) { if (cur && addDaysStr(cur.to, 1) === d) cur.to = d; else { cur = { from: d, to: d }; out.push(cur); } }); return out.map(function (g) { return g.from === g.to ? fmtD(g.from) : fmtD(g.from) + "〜" + fmtD(g.to); }).join("、"); }
+        function renderTeacherNL(s) {
+          var dis = TNL.busy || busy ? ' disabled' : '';
+          var h = '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><h3 style="margin:0 0 6px;font-size:15px">文章で自動入力</h3>';
+          h += '<p class="note" style="margin-top:0">例:「来週の水曜17時から90分、英語の演習を案内」「20日は部活で授業不可」「25日と26日は中間テスト」。読み取った内容を確認してから登録します。</p>';
+          h += '<textarea id="tnl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box"' + dis + '>' + esc(TNL.text) + '</textarea>';
+          h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="tnl-parse"' + dis + '>' + (TNL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (TNL.proposal || TNL.text ? '<button class="btn-quiet btn-sm" data-action="tnl-clear"' + dis + '>クリア</button>' : '') + '</div>';
+          if (TNL.error) h += '<p role="alert" style="color:var(--danger);margin:8px 0 0">' + esc(TNL.error) + '</p>';
+          if (TNL.proposal) h += renderTeacherProposal(s, TNL.proposal, dis);
+          return h + '</div>';
+        }
+        function renderTeacherProposal(s, p, dis) {
+          var h = '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">';
+          if (p.summary) h += '<p style="margin:0 0 6px">' + esc(p.summary) + '</p>';
+          if (!p.items.length) h += '<div class="empty">登録できる予定を読み取れませんでした。日付と時間を入れて書き直してください。</div>';
+          p.items.forEach(function (it, i) {
+            var head = TNL_LABEL[it.kind] + (it.kind === 'event' ? '：' + esc(it.title) + (it.test ? '（テスト・模試）' : '') + (it.alsoBlock ? '（授業できない日としても登録）' : '') : '');
+            h += '<label class="task" style="align-items:flex-start;display:flex;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)"><input type="checkbox" data-action="tnl-item" data-i="' + i + '"' + (it.sel ? ' checked' : '') + (it.done ? ' disabled' : dis) + '><span class="tt" style="flex:1"><strong>' + head + '</strong>' + (it.done ? ' <span class="tag green">登録済み</span>' : '') + '<br>' + esc(tnlDates(it.dates));
+            if (it.kind === 'offer') {
+              if (it.needsTime) h += '<br><span class="small" style="color:var(--danger)">開始時刻を入れてください</span>';
+              h += '<br><input type="time" id="tnl-start-' + i + '" value="' + esc(it.start || '') + '" step="300"' + dis + '> <select id="tnl-min-' + i + '"' + dis + '>' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (Number(it.min) || 90) ? ' selected' : '') + '>' + m + '分</option>'; }).join('') + '</select> <select id="tnl-subject-' + i + '"' + dis + '>' + [''].concat(LESSON_SUBJECTS).map(function (o) { return '<option value="' + esc(o) + '"' + (o === (it.subject || '') ? ' selected' : '') + '>' + (o || '科目を選択') + '</option>'; }).join('') + '</select> <select id="tnl-kind-' + i + '"' + dis + '>' + kindOptions(it.lessonKind || '通常') + '</select>';
+            } else if (it.start && it.end) h += ' ' + esc(it.start) + '〜' + esc(it.end);
+            else if (it.kind === 'block') h += ' 終日';
+            if (it.note) h += '<br><span class="small muted">' + esc(it.note) + '</span>';
+            if (it.confidence === 'low') h += '<br><span class="small" style="color:var(--amber)">読み取りに自信がありません。内容を確認してください</span>';
+            if (it.errors && it.errors.length) h += '<br><span class="small" style="color:var(--danger)">' + it.errors.map(esc).join('<br>') + '</span>';
+            h += '</span></label>';
+          });
+          if (p.questions && p.questions.length) h += '<ul class="small" style="margin:8px 0 0 18px;padding:0">' + p.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>';
+          if (p.items.some(function (it) { return !it.done; })) h += '<div class="row" style="margin-top:10px"><button class="btn-primary" data-action="tnl-register"' + dis + '>チェックした内容で登録する</button></div><p class="note">授業の案内は生徒ページに表示され、生徒が承認すると確定します（確定には保護者の承認済み計画が必要）。授業できない日と予定は生徒の予定表にも表示されます。</p>';
+          return h + '</div>';
+        }
+        function tnlParse() {
+          if (TNL.busy || busy || !cur) return;
+          var text = String(TNL.text || '').trim(); if (!text) { toast('予定の文章を入れてください'); return; }
+          var sid = cur.id; TNL.busy = true; TNL.error = ''; TNL.proposal = null; render();
+          admin('scheduleParseTeacher', { studentId: sid, text: text, subjects: LESSON_SUBJECTS }).then(function (res) {
+            if (!cur || !sameId(cur.id, sid)) return; TNL.busy = false;
+            (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'offer') { if (!it.start) it.start = '17:00'; if (!it.min) it.min = 90; } });
+            TNL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; render();
+          }).catch(function (er) { if (!cur || !sameId(cur.id, sid)) return; TNL.busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
+        }
+        function tnlRegister() {
+          var p = TNL.proposal; if (!p || busy || TNL.busy || !cur) return;
+          var items = [], idx = [];
+          for (var i = 0; i < p.items.length; i++) {
+            var it = p.items[i]; if (!it.sel || it.done) continue;
+            if (it.kind === 'offer') {
+              var st = val('tnl-start-' + i) || it.start, min = +(val('tnl-min-' + i) || it.min || 90), subject = val('tnl-subject-' + i) || it.subject, lk = val('tnl-kind-' + i) || it.lessonKind || '通常';
+              if (!st) { toast(tnlDates(it.dates) + ' の開始時刻を入れてください'); return; }
+              if (!subject) { toast(tnlDates(it.dates) + ' の科目を選んでください'); return; }
+              items.push({ kind: 'offer', dates: it.dates, start: st, min: min, subject: subject, lessonKind: lk });
+            } else if (it.kind === 'block') items.push({ kind: 'block', dates: it.dates, start: it.start || '', end: it.end || '', note: it.note || '' });
+            else items.push({ kind: 'event', dates: it.dates, title: it.title, test: !!it.test, alsoBlock: !!it.alsoBlock });
+            idx.push(i);
+          }
+          if (!items.length) { toast('登録する項目にチェックを入れてください'); return; }
+          var sid = cur.id, r = route(); busy = true; render();
+          admin('nlApplyTeacher', { studentId: sid, deliveryMode: cur.deliveryMode || 'in_person', items: items }).then(function (res) {
+            busy = false; if (!cur || !sameId(cur.id, sid)) return;
+            (res.results || []).forEach(function (x) { var it = p.items[idx[x.i]]; if (!it) return; it.errors = x.errors || []; if (x.status === 'added' || x.status === 'partial') { it.done = true; it.sel = false; } });
+            var left = p.items.some(function (it) { return it.sel && !it.done; });
+            if (!left && !(res.results || []).some(function (x) { return x.status === 'error'; })) { TNL.text = ''; TNL.proposal = null; TNL.error = ''; }
+            toast((res.added || 0) + '件を登録しました' + ((res.results || []).some(function (x) { return x.status !== 'added'; }) ? '（登録できなかった項目があります）' : ''));
+            cacheClear(); if (!applyResult(res, r)) load(true); else render();
+          }).catch(function (er) { busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
+        }
         function renderStudentDayCard(s, tdy) {
           var canEdit = s.active !== false && !busy;
           var dayL = (s.lessons || []).filter(function (l) { return l.date === selDate && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
@@ -847,6 +917,7 @@
           if (selDate >= tdy && canEdit && sDayAddOpen) {
             h += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3><div class="row" style="gap:6px"><button class="btn-quiet btn-sm" data-action="dayoffer" data-date="' + selDate + '">授業を案内</button><button class="btn-quiet btn-sm" data-action="sblockopen" aria-expanded="' + (sBlockOpen ? 'true' : 'false') + '">授業不可を登録</button></div>';
             if (sBlockOpen) h += '<div class="row" style="margin-top:8px;gap:8px"><label>時間帯 <input type="time" id="sb-start" step="1800"> 〜 <input type="time" id="sb-end" step="1800"></label><input type="text" id="sb-note" maxlength="50" placeholder="メモ(任意)" style="flex:1;min-width:120px"><button class="btn-primary btn-sm" data-action="sblockadd" data-date="' + selDate + '">登録</button></div><p class="note" style="margin:4px 0 0">時間帯を空欄にすると終日の授業不可になります。生徒の予定表にも表示されます。</p>';
+            if (s.nlEnabled) h += renderTeacherNL(s);
           }
           return h + '</div>';
         }
@@ -2037,6 +2108,7 @@
         document.addEventListener("input", function (ev) {
           if (route().page !== "student" || !cur) return;
           var el = ev.target;
+          if (el.id === "tnl-text") TNL.text = el.value;
           if (el.getAttribute("data-pe-field")) planEditInput(el);
           var e = billingEditor(cur), bf = el.getAttribute("data-billing-field"), id = el.getAttribute("data-invoice"), prop = el.getAttribute("data-invoice-field");
           if (bf === "ym" && !e.busy && !e.pending) { e.ym = el.value; e.preview = null; }
@@ -2392,6 +2464,10 @@
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
               actA("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました"); break;
             case "sdayadd": sDayAddOpen = !sDayAddOpen; if (!sDayAddOpen) sBlockOpen = false; render(); break;
+            case "tnl-parse": tnlParse(); break;
+            case "tnl-clear": TNL = { text: "", busy: false, proposal: null, error: "" }; render(); break;
+            case "tnl-item": { var ti = TNL.proposal && TNL.proposal.items[+btn.getAttribute("data-i")]; if (ti && !ti.done) ti.sel = !ti.sel; break; }
+            case "tnl-register": tnlRegister(); break;
             case "sblockopen": sBlockOpen = !sBlockOpen; render(); break;
             case "sblockadd": {
               var sbd = btn.getAttribute("data-date"), sbs = val("sb-start"), sbe = val("sb-end");

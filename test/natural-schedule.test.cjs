@@ -1,6 +1,6 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
-const { createHarness } = require('./gas-harness.cjs');
+const { createHarness, TEACHER_TOKEN } = require('./gas-harness.cjs');
 const KEY = 'synthetic-anthropic-key-only-for-test';
 function toolReply(input) { return { content: [{ type: 'tool_use', name: 'propose_schedule', input }], usage: { input_tokens: 900, output_tokens: 120 } }; }
 function setup(options = {}) {
@@ -80,4 +80,46 @@ test('upstream failures are reported without details and calls are limited per s
   assert.equal(t.parse('明日').errorCode, 'rateLimited'); assert.equal(t.calls.length, 20);
   assert.equal(t.parse('明日', 'synthetic-link-b').ok, true);
   t.h.advance(3601000); assert.equal(t.parse('明日').ok, true);
+});
+
+test('the teacher variant proposes offers, blocks and events with the subject and kind lists, and applies them through the existing admin paths', () => {
+  const t = setup({ input: { items: [
+    { kind: 'offer', dates: ['2026-09-16', '2026-09-23'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習' },
+    { kind: 'offer', dates: ['2026-09-17'], start: '', subject: '数学の授業', min: 50 },
+    { kind: 'block', dates: ['2026-09-20'], note: '部活の大会' },
+    { kind: 'event', dates: ['2026-09-25', '2026-09-26'], title: '中間テスト', test: true },
+    { kind: 'wish', dates: ['2026-09-27'] }
+  ], questions: [], summary: '案内2件と授業不可、テストを読み取りました。' } });
+  t.setKey();
+  const admin = (op, args) => t.post({ action: 'admin', token: TEACHER_TOKEN, op, ...args });
+  assert.equal(admin('lessonKindSave', { name: '演習', standardMin: 60 }).ok, true);
+  for (const id of ['test-a']) t.h.setRow('students', 'id', id, { deliveryMode: 'in_person' });
+  assert.equal(admin('scheduleParseTeacher', { studentId: 'nobody', text: 'x' }).errorCode, 'notFound');
+  assert.ok(admin('scheduleParseTeacher', { studentId: 'test-a', text: '  ' }).error);
+  assert.equal(t.h.admin('kanriStudent', { studentId: 'test-a', section: 'overview' }).data.nlEnabled, true);
+  const r = admin('scheduleParseTeacher', { studentId: 'test-a', text: '来週水曜と再来週水曜17時から90分英語の演習。木曜は数学。20日は部活で休み。25・26日は中間テスト', subjects: ['英語', '数学'] });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.deepEqual(r.items.map(i => [i.kind, i.dates.join(','), i.start, i.min, i.subject, i.lessonKind, i.needsTime, i.title || '']), [
+    ['offer', '2026-09-16,2026-09-23', '17:00', 90, '英語', '演習', false, ''],
+    ['offer', '2026-09-17', '', 0, '数学', '', true, ''],
+    ['block', '2026-09-20', '', undefined, undefined, undefined, undefined, ''],
+    ['event', '2026-09-25,2026-09-26', '', undefined, undefined, undefined, undefined, '中間テスト']
+  ]);
+  const call = t.calls.at(-1);
+  assert.match(call.payload.system, /科目の一覧: 英語、数学。授業の種類の一覧: 通常、演習/); assert.match(call.payload.messages[0].content, /<teacher_text>/);
+  assert.equal(JSON.stringify(call.payload).includes('【テスト】'), false); assert.equal(JSON.stringify(call.payload).includes('test-a'), false);
+  const a = admin('nlApplyTeacher', { studentId: 'test-a', deliveryMode: 'in_person', from: 'kanri', items: [
+    { kind: 'offer', dates: ['2026-09-16', '2026-09-23'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習' },
+    { kind: 'block', dates: ['2026-09-20'], note: '部活の大会' },
+    { kind: 'event', dates: ['2026-09-25', '2026-09-26'], title: '中間テスト', test: true }
+  ] });
+  assert.equal(a.ok, true, JSON.stringify(a)); assert.equal(a.added, 4); assert.ok(a.data && a.data.id === 'test-a', 'card refreshed');
+  assert.deepEqual(a.results.map(x => [x.kind, x.status, x.count, x.errors.length]), [['offer', 'added', 2, 0], ['block', 'added', 1, 0], ['event', 'added', 1, 0]]);
+  const offered = t.h.rows('slots').filter(x => x.studentId === 'test-a' && x.status === 'offered');
+  assert.deepEqual(offered.map(x => [x.date, x.start, Number(x.min), x.subject, x.kind]), [['2026-09-16', '17:00', 90, '英語', '演習'], ['2026-09-23', '17:00', 90, '英語', '演習']]);
+  assert.deepEqual(t.h.rows('blocked').filter(b => b.studentId === 'test-a').map(b => [b.date, b.note]), [['2026-09-20', '部活の大会']]);
+  assert.deepEqual(t.h.rows('events').filter(e => e.studentId === 'test-a').map(e => [e.date, e.dateTo, e.title]), [['2026-09-25', '2026-09-26', '中間テスト']]);
+  const again = admin('nlApplyTeacher', { studentId: 'test-a', items: [{ kind: 'block', dates: ['2026-09-20'] }, { kind: 'offer', dates: ['2026-09-30'], start: '', min: 90, subject: '英語' }] });
+  assert.equal(again.ok, true); assert.deepEqual(again.results.map(x => x.status), ['error', 'error']); assert.equal(again.added, 0);
+  assert.ok(admin('nlApplyTeacher', { studentId: 'test-a', items: [] }).error);
 });

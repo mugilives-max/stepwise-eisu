@@ -137,3 +137,25 @@ test('the admin day card mirrors the student 予定の編集 card with teacher a
   const reload = ui.requests.at(-1); if (reload.body.op === 'kanriStudent') { reload.reply({ ok: true, data: c }); await flush(); }
   ui.click('sdelblock', { 'data-id': 'b1' }); assert.equal(ui.requests.at(-1).body.op, 'delBlock'); assert.equal(ui.requests.at(-1).body.blockId, 'b1');
 });
+
+test('the admin day card offers 文章で自動入力: parse through scheduleParseTeacher, edit the proposal, register through nlApplyTeacher', async () => {
+  const ui = await adminReady(card({ nlEnabled: true, deliveryMode: 'online' }), 'overview');
+  ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('sdayadd');
+  assert.match(ui.html(), /<h3[^>]*>文章で自動入力<\/h3>/);
+  ui.input('tnl-text', '来週水曜17時から90分英語の演習。20日は部活で休み。25日は中間テスト'); ui.click('tnl-parse');
+  let r = ui.requests.at(-1).body; assert.equal(r.op, 'scheduleParseTeacher'); assert.equal(r.studentId, 'test-a'); assert.match(r.text, /英語の演習/); assert.deepEqual(r.subjects.slice(0, 2), ['英語', '数学']);
+  ui.requests.at(-1).reply({ ok: true, items: [
+    { kind: 'offer', dates: ['2026-09-16'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習', needsTime: false, confidence: 'high', note: '' },
+    { kind: 'offer', dates: ['2026-09-17'], start: '', min: 0, subject: '', lessonKind: '', needsTime: true, confidence: 'low', note: '' },
+    { kind: 'block', dates: ['2026-09-20'], start: '', end: '', note: '部活', confidence: 'high' },
+    { kind: 'event', dates: ['2026-09-25'], title: '中間テスト', test: true, alsoBlock: false, start: '', end: '', note: '', confidence: 'high' }
+  ], questions: ['木曜の時刻は？'], summary: '案内2件、授業不可1件、予定1件です。' }); await flush();
+  assert.match(ui.html(), /案内2件、授業不可1件、予定1件です。/); assert.match(ui.html(), /<strong>授業を案内<\/strong><br>9\/16\(水\)<br><input type="time" id="tnl-start-0" value="17:00"/); assert.match(ui.html(), /開始時刻を入れてください/); assert.match(ui.html(), /<strong>予定の共有：中間テスト（テスト・模試）<\/strong>/); assert.match(ui.html(), /<li>木曜の時刻は？<\/li>/);
+  ui.click('tnl-item', { 'data-i': '1' }); ui.click('tnl-register');
+  r = ui.requests.at(-1).body; assert.equal(r.op, 'nlApplyTeacher'); assert.equal(r.studentId, 'test-a'); assert.equal(r.deliveryMode, 'online');
+  assert.deepEqual(r.items, [{ kind: 'offer', dates: ['2026-09-16'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習' }, { kind: 'block', dates: ['2026-09-20'], start: '', end: '', note: '部活' }, { kind: 'event', dates: ['2026-09-25'], title: '中間テスト', test: true, alsoBlock: false }]);
+  ui.requests.at(-1).reply({ ok: true, id: 'test-a', data: card({ nlEnabled: true }), added: 3, results: [{ i: 0, kind: 'offer', status: 'added', count: 1, errors: [] }, { i: 1, kind: 'block', status: 'added', count: 1, errors: [] }, { i: 2, kind: 'event', status: 'added', count: 1, errors: [] }] }); await flush();
+  assert.match(ui.el('toast').textContent, /3件を登録しました/);
+  // everything registered → the proposal is cleared, like the student page
+  assert.doesNotMatch(ui.html(), /data-action="tnl-register"|登録済み/); assert.equal(ui.el('tnl-text').value, '');
+});
