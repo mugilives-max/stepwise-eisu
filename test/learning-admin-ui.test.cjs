@@ -124,7 +124,10 @@ test('lesson save explains public content and private notes while new homework d
   // a blank homework row is shown by default; a second one is added and left blank (ignored on save)
   // one blank row per section (宿題 / 持ち物 / メモ) by default; the date field appears only for 日付を指定
   assert.ok(ui.el('lc-title-0') && ui.el('lc-title-1') && ui.el('lc-title-2'), 'default rows'); assert.doesNotMatch(ui.html(), /<option[^>]*>持ち物<\/option>/);
-  assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-mode-2').value, 'none'); assert.equal(ui.el('lc-due-0'), undefined);
+  // the deadline control stays hidden while the default applies; ＋ 期限を設定 reveals it
+  assert.equal(ui.el('lc-due-mode-0'), undefined); assert.match(ui.html(), /data-action="lc-duetoggle"/);
+  ui.click('lc-duetoggle', { 'data-item': ui.html().match(/data-lc-item="([^"]+)" data-lc-prop="title"/)[1] });
+  assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-mode-2'), undefined); assert.equal(ui.el('lc-due-0'), undefined);
   ui.click('lc-add', { 'data-type': '持ち物' }); assert.ok(ui.el('lc-title-3')); assert.match(ui.html(), /<label for="lc-title-3">持ち物 2<\/label>/);
   ui.input('lc-title-0', '化学ワークp.10'); ui.click('lc-save'); const req = ui.requests.at(-1).body;
   assert.equal(req.op, 'lessonRecordSave'); assert.equal(req.record.homework.length, 1); assert.equal(req.record.homework[0].dueMode, 'nextLesson'); assert.equal(req.record.homework[0].due, '');

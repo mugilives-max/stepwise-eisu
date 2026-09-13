@@ -1759,8 +1759,13 @@
               rows.forEach(function (r, n) {
                 var x = r.x, i = r.i, dis = readonly ? " disabled" : "", mode = x.dueMode || (x.due ? "date" : "none");
                 h += '<div class="lc-homework"><label for="lc-title-' + i + '">' + type + ' ' + (n + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" placeholder="' + (type === "宿題" ? "例: ワークp.12〜15" : type === "持ち物" ? "例: 英単語帳" : "例: 次回は小テスト") + '" aria-label="' + type + ' ' + (n + 1) + ' の内容"' + dis + '>';
-                h += '<div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(mode) + '</select>';
-                if (mode === "date") h += '<input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '" aria-label="' + type + ' ' + (n + 1) + ' の期限日"' + dis + '>';
+                // 期限は既定(宿題・持ち物=次の同じ科目の授業、メモ=期限なし)なら隠す。「＋ 期限を設定」で開く。既定以外が保存されていれば最初から表示
+                var defMode = type === "メモ" ? "none" : "nextLesson", dueOpen = (e.dueOpen || {})[x.itemId] || mode !== defMode;
+                h += '<div class="row">';
+                if (dueOpen) {
+                  h += '<label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(mode) + '</select>';
+                  if (mode === "date") h += '<input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '" aria-label="' + type + ' ' + (n + 1) + ' の期限日"' + dis + '>';
+                } else if (!readonly) h += lessonAction("duetoggle", "＋ 期限を設定", false, "", ' data-item="' + esc(x.itemId) + '"');
                 h += lessonAction("remove", "外す", readonly, "", ' data-item="' + esc(x.itemId) + '" style="margin-left:auto"') + '</div></div>';
               });
               h += '<div class="row" style="margin:4px 0 6px">' + lessonAction("add", "＋ " + type + "を追加", readonly || e.form.homework.length >= 10, "", ' data-type="' + type + '"') + '</div></div>';
@@ -1848,6 +1853,7 @@
               var addType = btn.getAttribute("data-type") || "宿題";
               e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: addType === "メモ" ? "none" : "nextLesson", type: addType }); e.dirty = true; break;
             }
+            case "lc-duetoggle": e.dueOpen = e.dueOpen || {}; e.dueOpen[itemId] = true; break;
             case "lc-remove":
               e.form.homework = e.form.homework.filter(function (x) { return x.itemId !== itemId; }); e.dirty = true; break;
             case "lc-reissue":
@@ -1913,7 +1919,7 @@
             var prop = el.getAttribute("data-lc-prop");
             e.form.homework.forEach(function (x) { if (x.itemId === itemId && ["title", "due", "dueMode", "type"].indexOf(prop) >= 0) x[prop] = el.value; });
             e.dirty = true; e.preview = false;
-            if (prop === "dueMode") { e.form.homework.forEach(function (x) { if (x.itemId === itemId && x.dueMode !== "date") x.due = ""; }); lessonRender(e); }
+            if (prop === "dueMode") { e.dueOpen = e.dueOpen || {}; e.dueOpen[itemId] = true; e.form.homework.forEach(function (x) { if (x.itemId === itemId && x.dueMode !== "date") x.due = ""; }); lessonRender(e); }
           }
           if (el.hasAttribute("data-lc-body")) { e.body = el.value; e.draftDirty = true; }
           if (el.hasAttribute("data-lc-reason")) e.voidReason = el.value;
