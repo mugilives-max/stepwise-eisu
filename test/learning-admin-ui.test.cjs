@@ -126,7 +126,10 @@ test('lesson save explains public content and private notes while new homework d
   assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-0').disabled, true);
   ui.input('lc-title-0', '化学ワークp.10'); ui.click('lc-save'); const req = ui.requests.at(-1).body;
   assert.equal(req.op, 'lessonRecordSave'); assert.equal(req.record.homework.length, 1); assert.equal(req.record.homework[0].dueMode, 'nextLesson'); assert.equal(req.record.homework[0].due, '');
-  assert.ok(ui.html().indexOf('<h2>今回の記録</h2>') < ui.html().indexOf('前回の確認と現在の未完了宿題'), '今回の記録 comes first');
+  assert.ok(ui.html().indexOf('<h2>今回の記録<button') < ui.html().indexOf('前回の確認と現在の未完了宿題'), '今回の記録 comes first');
+  assert.doesNotMatch(ui.html(), /単元とコメントだけで十分です|保存した授業記録を生徒・保護者と共有/);
+  ui.click('help-toggle', { 'data-help': 'record' }); assert.match(ui.html(), /単元とコメントだけで十分です/);
+  ui.click('help-toggle', { 'data-help': 'lesson' }); assert.match(ui.html(), /<h1[^>]*>授業記録<button[^>]*data-help="lesson"[^>]*aria-expanded="true"[^>]*>\?<\/button><\/h1><\/div>[^]*?<div class="card note"[^>]*>保存した授業記録を生徒・保護者と共有します/);
   assert.equal(req.record.teacherNote, 'SYNTHETIC_PRIVATE_NOTE');
   assert.equal(JSON.stringify([...ui.local, ...ui.session]).includes('SYNTHETIC_PRIVATE_NOTE'), false);
 });

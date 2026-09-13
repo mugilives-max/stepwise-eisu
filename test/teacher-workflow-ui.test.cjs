@@ -26,7 +26,7 @@ test('a delayed settings write cannot replace the overview or invalidate its in-
  assert.match(ui.html(),/data-action="sdayadd"/);assert.equal(ui.html().includes('data-action="editfee"'),false);
 });
 test('future lessons expose a private preparation form, preserve its draft and retry the same write',async()=>{
- const c=context(),ui=await preparation(c);assert.match(ui.html(),/<h1>授業準備<\/h1>/);assert.equal(ui.html().includes('data-action="lc-save"'),false);
+ const c=context(),ui=await preparation(c);assert.match(ui.html(),/<h1[^>]*>授業準備<button[^>]*data-help="lesson"/);assert.equal(ui.html().includes('data-action="lc-save"'),false);
  ui.input('lc-preparation','PRIVATE_PREP_UI');assert.match(ui.el('lc-preparation-status').textContent,/未保存/);assert.equal(ui.beforeUnload(),true);ui.click('lc-prep-save');const first=ui.requests.at(-1),payload=structuredClone(first.body);
  assert.equal(payload.op,'lessonPreparationSave');assert.equal(payload.body,'PRIVATE_PREP_UI');assert.equal(payload.record,undefined);
  first.fail();await flush();assert.equal(ui.el('lc-preparation').disabled,true);ui.click('lc-retry');assert.deepEqual(ui.requests.at(-1).body,payload);

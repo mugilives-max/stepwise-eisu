@@ -1720,8 +1720,7 @@
         }
         function lessonFields(form, disabled) {
           var rep = form.report || {};
-          var h = '<p class="note">単元とコメントだけで十分です。補足が必要なときは下の折り畳みに入れてください。</p>';
-          h += '<label class="lc-label" for="lc-report-actualUnit">単元</label><input id="lc-report-actualUnit" data-lc-report="actualUnit" type="text" maxlength="200" placeholder="例: 受動態、二次関数" value="' + esc(rep.actualUnit || "") + '"' + (disabled ? " disabled" : "") + '>';
+          var h = '<label class="lc-label" for="lc-report-actualUnit">単元</label><input id="lc-report-actualUnit" data-lc-report="actualUnit" type="text" maxlength="200" placeholder="例: 受動態、二次関数" value="' + esc(rep.actualUnit || "") + '"' + (disabled ? " disabled" : "") + '>';
           h += '<label class="lc-label" for="lc-content">コメント（必須）</label><textarea id="lc-content" data-lc-field="content" rows="3" maxlength="2000"' + (disabled ? " disabled" : "") + '>' + esc(form.content) + '</textarea>';
           var labels = { progress: "取り組みの様子・理解できたこと（任意・1,000文字まで）", nextFocus: "次回の焦点（任意・1,000文字まで）", teacherNote: "先生だけのメモ（任意・2,000文字まで）" };
           h += '<details><summary>補足・先生用メモ（任意）</summary>' + window.StepwiseReport.fields(rep, disabled, ["actualUnit"]);
@@ -1735,7 +1734,8 @@
         function lessonHTML(e) {
           var c = e.context, r = c && c.record;
           var future = c && c.slot && c.slot.date > (c.today || today());
-          var h = '<div class="head"><div><h1>' + (future ? '授業準備' : '授業記録') + '</h1><p class="sub">' + (future ? '次の授業の計画を先生専用で保存' : '保存した授業記録を生徒・保護者と共有') + '</p></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
+          var h = '<div class="head"><div><h1 style="display:inline-flex;align-items:center;gap:8px">' + (future ? '授業準備' : '授業記録') + helpButton('lesson') + '</h1></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
+          h += helpBox('lesson', future ? '次の授業の計画を先生専用で保存します。準備の内容は自動では公開・転記されません。' : '保存した授業記録を生徒・保護者と共有します。単元とコメントを書いて保存すると、生徒・保護者のページに公開されます。宿題は保存後に「やること」へ反映できます。');
           if (e.error) h += '<div class="card lc-notice" role="alert">' + esc(e.error) + '</div>';
           if (e.message) h += '<p role="status">' + esc(e.message) + '</p>';
           if (e.pending) h += '<div class="card lc-notice">保存結果の確認が必要です。' + lessonAction("retry", e.busy ? "確認中…" : "同じ処理を再試行", e.busy, "btn-primary") + '</div>';
@@ -1751,7 +1751,7 @@
           if (!future) {
             // 今回の記録を最上部に。宿題の欄は最初から1つ出しておく(空欄のままなら保存時に無視)
             if (!readonly && !e.form.homework.length) e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: "宿題" });
-            h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
+            h += '<h2>今回の記録' + helpButton('record') + '</h2>' + helpBox('record', '単元とコメントだけで十分です。補足（取り組みの様子・次回の焦点・先生だけのメモ）が必要なときは、入力欄の下の折り畳みに入れてください。') + '<div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
             e.form.homework.forEach(function (x, i) {
               var dis = readonly ? " disabled" : "";
               h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "記録の宿題から外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
