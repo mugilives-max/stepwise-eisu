@@ -1576,7 +1576,7 @@
         var lessonEditors = Object.create(null), lessonPair=null;
         function lessonPairPane(e,index) {
           var prefix='pair-'+index+'-'; e.panePrefix=prefix;
-          return lessonHTML(e).replace(/<h1>([^<]*)<\/h1>/,function(_,title){return '<h2>'+esc(e.context && e.context.student.name || '授業')+'：'+title+'</h2>';}).replace(/\s(id|for)="([^"]+)"/g,function(_,attr,id){return ' '+attr+'="'+prefix+id+'"';}).replace(/<(button|input|textarea|select)\b/g,function(_,tag){return '<'+tag+' data-lc-editor="'+esc(e.key)+'"';});
+          return lessonHTML(e).replace(/<h1[^>]*>([^<]*)(<button[\s\S]*?<\/button>)?<\/h1>/,function(_,title,btn){return '<h2>'+esc(e.context && e.context.student.name || '授業')+'：'+title+(btn||'')+'</h2>';}).replace(/\s(id|for)="([^"]+)"/g,function(_,attr,id){return ' '+attr+'="'+prefix+id+'"';}).replace(/<(button|input|textarea|select)\b/g,function(_,tag){return '<'+tag+' data-lc-editor="'+esc(e.key)+'"';});
         }
         function loadLessonPair(force) {
           var r=route(),hash=location.hash;
@@ -1750,13 +1750,22 @@
           if (c.pending && !e.pending) h += '<div class="card lc-notice">前の処理が完了していません。' + lessonAction("resume", e.busy ? "再開中…" : "前の処理を再開", e.busy, "btn-primary") + '</div>';
           if (!future) {
             // 今回の記録を最上部に。宿題の欄は最初から1つ出しておく(空欄のままなら保存時に無視)
-            if (!readonly && !e.form.homework.length) e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: "宿題" });
-            h += '<h2>今回の記録' + helpButton('record') + '</h2>' + helpBox('record', '単元とコメントだけで十分です。補足（取り組みの様子・次回の焦点・先生だけのメモ）が必要なときは、入力欄の下の折り畳みに入れてください。') + '<div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
-            e.form.homework.forEach(function (x, i) {
-              var dis = readonly ? " disabled" : "";
-              h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "記録の宿題から外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
+            if (!readonly) ["宿題", "持ち物", "メモ"].forEach(function (type) { if (!e.form.homework.some(function (x) { return (x.type || "宿題") === type; })) e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: type === "メモ" ? "none" : "nextLesson", type: type }); });
+            h += '<h2>今回の記録' + helpButton('record') + '</h2>' + helpBox('record', '単元とコメントだけで十分です。補足（取り組みの様子・次回の焦点・先生だけのメモ）が必要なときは、入力欄の下の折り畳みに入れてください。') + '<div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題・持ち物・メモ</h3><div class="note">授業記録の一部として公開されます。生徒の「やること」への追加・更新は、保存後に下の反映操作で行います。</div>';
+            // 種類ごとの欄。期限は「次の同じ科目の授業」が既定で、「日付を指定」を選んだときだけ日付欄を出す
+            ["宿題", "持ち物", "メモ"].forEach(function (type) {
+              var rows = []; e.form.homework.forEach(function (x, i) { if ((x.type || "宿題") === type) rows.push({ x: x, i: i }); });
+              h += '<div class="lc-hwgroup"><div class="small muted" style="margin:10px 0 2px;font-weight:700">' + type + '</div>';
+              rows.forEach(function (r, n) {
+                var x = r.x, i = r.i, dis = readonly ? " disabled" : "", mode = x.dueMode || (x.due ? "date" : "none");
+                h += '<div class="lc-homework"><label for="lc-title-' + i + '">' + type + ' ' + (n + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" placeholder="' + (type === "宿題" ? "例: ワークp.12〜15" : type === "持ち物" ? "例: 英単語帳" : "例: 次回は小テスト") + '" aria-label="' + type + ' ' + (n + 1) + ' の内容"' + dis + '>';
+                h += '<div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(mode) + '</select>';
+                if (mode === "date") h += '<input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '" aria-label="' + type + ' ' + (n + 1) + ' の期限日"' + dis + '>';
+                h += lessonAction("remove", "外す", readonly, "", ' data-item="' + esc(x.itemId) + '" style="margin-left:auto"') + '</div></div>';
+              });
+              h += '<div class="row" style="margin:4px 0 6px">' + lessonAction("add", "＋ " + type + "を追加", readonly || e.form.homework.length >= 10, "", ' data-type="' + type + '"') + '</div></div>';
             });
-            h += '<div class="row" style="margin-top:12px">' + lessonAction("add", "宿題欄を追加", readonly || e.form.homework.length >= 10) + lessonAction("save", e.busy ? "保存中…" : "保存して生徒・保護者へ公開", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容・取り組み・次回の焦点・宿題を保存時に公開します。先生だけのメモは非公開です。入力はこのタブの間だけ保持します。</p></div>';
+            h += '<div class="row" style="margin-top:12px">' + lessonAction("save", e.busy ? "保存中…" : "保存して生徒・保護者へ公開", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容・取り組み・次回の焦点・宿題を保存時に公開します。先生だけのメモは非公開です。入力はこのタブの間だけ保持します。</p></div>';
             if (r) {
               h += '<h2>保存済み宿題を生徒へ反映</h2><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
               h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
@@ -1834,9 +1843,11 @@
             case "lc-prep-rebase":
               if (!e.latest) return;
               e.context=e.latest; e.prepRevision=e.latest.preparation ? e.latest.preparation.revision : 0; e.latest=null; e.conflict=false; e.error=''; e.message='手元の準備を保持しました。保存する内容を確認してください。'; break;
-            case "lc-add":
+            case "lc-add": {
               if (e.form.homework.length >= 10) return;
-              e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: "宿題" }); e.dirty = true; break;
+              var addType = btn.getAttribute("data-type") || "宿題";
+              e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: addType === "メモ" ? "none" : "nextLesson", type: addType }); e.dirty = true; break;
+            }
             case "lc-remove":
               e.form.homework = e.form.homework.filter(function (x) { return x.itemId !== itemId; }); e.dirty = true; break;
             case "lc-reissue":

@@ -122,8 +122,10 @@ test('lesson save explains public content and private notes while new homework d
   const ui = await lessonReady(); assert.match(ui.html(), /保存して生徒・保護者へ公開/); assert.match(ui.html(), /先生だけのメモは非公開/);
   ui.input('lc-content', '化学反応式を練習'); ui.input('lc-teacherNote', 'SYNTHETIC_PRIVATE_NOTE');
   // a blank homework row is shown by default; a second one is added and left blank (ignored on save)
-  assert.ok(ui.el('lc-title-0'), 'default homework row'); ui.click('lc-add'); assert.ok(ui.el('lc-title-1'));
-  assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-0').disabled, true);
+  // one blank row per section (宿題 / 持ち物 / メモ) by default; the date field appears only for 日付を指定
+  assert.ok(ui.el('lc-title-0') && ui.el('lc-title-1') && ui.el('lc-title-2'), 'default rows'); assert.doesNotMatch(ui.html(), /<option[^>]*>持ち物<\/option>/);
+  assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-mode-2').value, 'none'); assert.equal(ui.el('lc-due-0'), undefined);
+  ui.click('lc-add', { 'data-type': '持ち物' }); assert.ok(ui.el('lc-title-3')); assert.match(ui.html(), /<label for="lc-title-3">持ち物 2<\/label>/);
   ui.input('lc-title-0', '化学ワークp.10'); ui.click('lc-save'); const req = ui.requests.at(-1).body;
   assert.equal(req.op, 'lessonRecordSave'); assert.equal(req.record.homework.length, 1); assert.equal(req.record.homework[0].dueMode, 'nextLesson'); assert.equal(req.record.homework[0].due, '');
   assert.ok(ui.html().indexOf('<h2>今回の記録<button') < ui.html().indexOf('前回の確認と現在の未完了宿題'), '今回の記録 comes first');
@@ -139,7 +141,7 @@ test('lesson homework deadline changes clear stale dates and retain the chosen p
     homework: [{ itemId: 'synthetic-homework', title: '宿題', dueMode: 'date', due: '2026-09-20', type: '宿題' }] };
   const ui = await lessonReady(record); assert.match(ui.html(), /公開済み/); assert.match(ui.html(), /保存しても送信・公開されません/);
   assert.equal(ui.el('lc-due-0').disabled, false); ui.input('lc-due-mode-0', 'nextLesson');
-  assert.equal(ui.el('lc-due-0').disabled, true); assert.equal(ui.el('lc-due-0').value, '');
+  assert.equal(ui.el('lc-due-0'), undefined, 'the date field is hidden unless 日付を指定'); ui.input('lc-due-mode-0', 'date'); assert.equal(ui.el('lc-due-0').value, ''); ui.input('lc-due-mode-0', 'nextLesson');
   ui.click('lc-save'); const payload = structuredClone(ui.requests.at(-1).body); assert.equal(payload.record.homework[0].dueMode, 'nextLesson');
   ui.requests.at(-1).fail(); await flush(); ui.click('lc-retry'); assert.deepEqual(ui.requests.at(-1).body, payload);
 });
