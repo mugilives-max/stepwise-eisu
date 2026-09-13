@@ -1709,8 +1709,9 @@
           if (!form.content.trim()) return "授業内容を入力してください。";
           var limits = { content: 2000, progress: 1000, nextFocus: 1000, teacherNote: 2000 };
           if (Object.keys(limits).some(function (k) { return form[k].length > limits[k]; })) return "入力の文字数が上限を超えています。";
-          if (form.homework.length > 10) return "宿題は10件までです。";
-          if (form.homework.some(function (x) { return !x.title.trim() || x.title.length > 80 || (x.due && (!/^\d{4}-\d{2}-\d{2}$/.test(x.due) || isNaN(Date.parse(x.due)) || new Date(x.due).toISOString().slice(0, 10) !== x.due)); })) return "宿題の題名（80文字以内）と期限を確認してください。";
+          var hw = form.homework.filter(function (x) { return String(x.title || "").trim(); });
+          if (hw.length > 10) return "宿題は10件までです。";
+          if (hw.some(function (x) { return x.title.length > 80 || (x.due && (!/^\d{4}-\d{2}-\d{2}$/.test(x.due) || isNaN(Date.parse(x.due)) || new Date(x.due).toISOString().slice(0, 10) !== x.due)); })) return "宿題の題名（80文字以内）と期限を確認してください。";
           return "";
         }
         function lessonText(s) { return '<div class="lc-text">' + esc(s || "—") + '</div>'; }
@@ -1747,6 +1748,27 @@
           if (c.slotChanged) h += '<p class="lc-notice">元の予約が取消／変更されています。内容の保存はできません。宿題の取り下げは別に行えます。</p>';
           if (c.student && c.student.active === false) h += '<p class="lc-notice">停止中の生徒です。既存記録は訂正できますが、新しい宿題は反映できません。</p>';
           if (c.pending && !e.pending) h += '<div class="card lc-notice">前の処理が完了していません。' + lessonAction("resume", e.busy ? "再開中…" : "前の処理を再開", e.busy, "btn-primary") + '</div>';
+          if (!future) {
+            // 今回の記録を最上部に。宿題の欄は最初から1つ出しておく(空欄のままなら保存時に無視)
+            if (!readonly && !e.form.homework.length) e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: "宿題" });
+            h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
+            e.form.homework.forEach(function (x, i) {
+              var dis = readonly ? " disabled" : "";
+              h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "記録の宿題から外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
+            });
+            h += '<div class="row" style="margin-top:12px">' + lessonAction("add", "宿題欄を追加", readonly || e.form.homework.length >= 10) + lessonAction("save", e.busy ? "保存中…" : "保存して生徒・保護者へ公開", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容・取り組み・次回の焦点・宿題を保存時に公開します。先生だけのメモは非公開です。入力はこのタブの間だけ保持します。</p></div>';
+            if (r) {
+              h += '<h2>保存済み宿題を生徒へ反映</h2><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
+              h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
+              if (e.dirty) h += '<p class="note">編集中の宿題はまだ保存されていません。先に記録を保存してください。</p>';
+              if (e.preview) h += '<div class="lc-notice"><strong>上に表示した保存済み宿題を反映します。</strong><p class="small">未反映の宿題を追加し、未完了の宿題を更新します。完了済みの変更は保留し、取り下げ済みの宿題は復活しません。</p>' + lessonAction("apply", "宿題を生徒へ反映する", blocked, "btn-primary") + ' ' + lessonAction("cancelpreview", "閉じる", blocked) + '</div>';
+              h += '</div><h2>保護者への報告下書き <span class="tag amber">未公開</span></h2><div class="card"><p class="small">先生画面内だけの下書きです。保存しても送信・公開されません。先生だけのメモは定型文に含めません。</p>';
+              if (c.draft && c.draft.sourceRevision !== r.revision) h += '<p class="lc-notice">記録更新あり。下書きの元は第' + esc(c.draft.sourceRevision) + '版です。</p>';
+              h += '<div class="row">' + lessonAction("generate", "保存済み記録から定型文を作る", readonly || e.dirty) + '</div><label class="lc-label" for="lc-body">報告本文（4,000文字まで）</label><textarea id="lc-body" data-lc-body rows="8" maxlength="4000"' + (readonly ? " disabled" : "") + '>' + esc(e.body) + '</textarea><div class="row" style="margin-top:8px">' + lessonAction("report", "下書きを保存", readonly || e.conflict, "btn-primary") + '<span class="small muted">' + (c.draft ? '下書き第' + esc(c.draft.revision) + '版・' + esc(fmtAuthTime(c.draft.updatedAt)) : "まだ保存されていません") + '</span></div></div>';
+              if (r.status !== "void") h += '<details class="add"><summary>記録の無効化</summary><div class="card"><p class="small">本文の履歴を残して授業記録の公開を取り消します。「やること」に反映した宿題、予約、実施状態、請求は変わりません。</p><label for="lc-void">無効化する理由</label><input id="lc-void" data-lc-reason value="' + esc(e.voidReason || "") + '" maxlength="200">' + lessonAction("void", "この記録を無効化", blocked || e.dirty || e.draftDirty, "btn-danger") + '</div></details>';
+              else h += '<p>' + lessonAction("new", "この授業の記録を新しく作る", blocked || c.slotChanged, "btn-primary") + '</p>';
+            }
+          }
           if ((c.lessonChoices || []).length) {
             h += '<details class="add"><summary>別の授業・過去の記録を開く</summary><div class="card lc-history">';
             c.lessonChoices.forEach(function (x) { h += '<div class="line"><a href="' + esc(lessonHref(e.studentId, x.id, x.recordId)) + '">' + fmtDY(x.date) + ' ' + esc(x.start) + ' ' + esc(x.subject || "科目なし") + '</a><span class="tag gray">' + (x.recordStatus === "void" ? "無効化済み" : x.recordId ? "記録済み" : x.date > (c.today || today()) ? "授業前" : "未入力") + '</span>' + (x.slotChanged ? '<span class="small muted">予約変更あり</span>' : "") + '</div>'; });
@@ -1772,23 +1794,6 @@
           }
           h += renderPreparation(e, c, blocked);
           if (future) { return h + '<p class="note">授業記録の入力は授業当日から開けます。準備の内容は自動公開・転記しません。</p>'; }
-          h += '<h2>今回の記録</h2><div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題</h3><div class="note">授業記録の宿題として公開されます。「やること」への追加・更新は下の反映操作で行います。</div>';
-          e.form.homework.forEach(function (x, i) {
-            var dis = readonly ? " disabled" : "";
-            h += '<div class="lc-homework"><label for="lc-title-' + i + '">宿題 ' + (i + 1) + '</label><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" aria-label="宿題 ' + (i + 1) + ' の題名"' + dis + '><div class="row"><label for="lc-due-mode-' + i + '">期限</label><select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(x.dueMode || (x.due ? "date" : "none")) + '</select><label for="lc-due-' + i + '">指定日</label><input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '"' + (readonly || x.dueMode !== "date" ? " disabled" : "") + '><select aria-label="宿題 ' + (i + 1) + ' の種類" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="type"' + dis + '>' + ["宿題", "持ち物", "メモ"].map(function (type) { return '<option' + (type === x.type ? " selected" : "") + '>' + type + '</option>'; }).join("") + '</select>' + lessonAction("remove", "記録の宿題から外す", readonly, "", ' data-item="' + esc(x.itemId) + '"') + '</div></div>';
-          });
-          h += '<div class="row" style="margin-top:12px">' + lessonAction("add", "宿題欄を追加", readonly || e.form.homework.length >= 10) + lessonAction("save", e.busy ? "保存中…" : "保存して生徒・保護者へ公開", readonly || e.conflict, "btn-primary") + lessonAction("refresh", "最新を確認", blocked) + '</div><p class="note">授業内容・取り組み・次回の焦点・宿題を保存時に公開します。先生だけのメモは非公開です。入力はこのタブの間だけ保持します。</p></div>';
-          if (r) {
-            h += '<h2>保存済み宿題を生徒へ反映</h2><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
-            h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
-            if (e.dirty) h += '<p class="note">編集中の宿題はまだ保存されていません。先に記録を保存してください。</p>';
-            if (e.preview) h += '<div class="lc-notice"><strong>上に表示した保存済み宿題を反映します。</strong><p class="small">未反映の宿題を追加し、未完了の宿題を更新します。完了済みの変更は保留し、取り下げ済みの宿題は復活しません。</p>' + lessonAction("apply", "宿題を生徒へ反映する", blocked, "btn-primary") + ' ' + lessonAction("cancelpreview", "閉じる", blocked) + '</div>';
-            h += '</div><h2>保護者への報告下書き <span class="tag amber">未公開</span></h2><div class="card"><p class="small">先生画面内だけの下書きです。保存しても送信・公開されません。先生だけのメモは定型文に含めません。</p>';
-            if (c.draft && c.draft.sourceRevision !== r.revision) h += '<p class="lc-notice">記録更新あり。下書きの元は第' + esc(c.draft.sourceRevision) + '版です。</p>';
-            h += '<div class="row">' + lessonAction("generate", "保存済み記録から定型文を作る", readonly || e.dirty) + '</div><label class="lc-label" for="lc-body">報告本文（4,000文字まで）</label><textarea id="lc-body" data-lc-body rows="8" maxlength="4000"' + (readonly ? " disabled" : "") + '>' + esc(e.body) + '</textarea><div class="row" style="margin-top:8px">' + lessonAction("report", "下書きを保存", readonly || e.conflict, "btn-primary") + '<span class="small muted">' + (c.draft ? '下書き第' + esc(c.draft.revision) + '版・' + esc(fmtAuthTime(c.draft.updatedAt)) : "まだ保存されていません") + '</span></div></div>';
-            if (r.status !== "void") h += '<details class="add"><summary>記録の無効化</summary><div class="card"><p class="small">本文の履歴を残して授業記録の公開を取り消します。「やること」に反映した宿題、予約、実施状態、請求は変わりません。</p><label for="lc-void">無効化する理由</label><input id="lc-void" data-lc-reason value="' + esc(e.voidReason || "") + '" maxlength="200">' + lessonAction("void", "この記録を無効化", blocked || e.dirty || e.draftDirty, "btn-danger") + '</div></details>';
-            else h += '<p>' + lessonAction("new", "この授業の記録を新しく作る", blocked || c.slotChanged, "btn-primary") + '</p>';
-          }
           return h;
         }
 
@@ -1843,7 +1848,8 @@
               if (c && c.slot && c.slot.date > (c.today || today())) return;
               var validation = lessonValidate(e.form);
               if (validation) { e.error = validation; break; }
-              lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, record: JSON.parse(JSON.stringify(e.form)) }); return;
+              var saveForm = JSON.parse(JSON.stringify(e.form)); saveForm.homework = saveForm.homework.filter(function (x) { return String(x.title || "").trim(); });
+              lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, record: saveForm }); return;
             case "lc-preview": if (e.dirty) { toast("先に記録を保存してください"); return; } e.preview = true; break;
             case "lc-cancelpreview": e.preview = false; break;
             case "lc-apply":

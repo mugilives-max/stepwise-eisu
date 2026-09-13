@@ -120,10 +120,13 @@ async function lessonReady(record = null, extra = {}) {
 
 test('lesson save explains public content and private notes while new homework defaults to the next lesson', async () => {
   const ui = await lessonReady(); assert.match(ui.html(), /保存して生徒・保護者へ公開/); assert.match(ui.html(), /先生だけのメモは非公開/);
-  ui.input('lc-content', '化学反応式を練習'); ui.input('lc-teacherNote', 'SYNTHETIC_PRIVATE_NOTE'); ui.click('lc-add');
+  ui.input('lc-content', '化学反応式を練習'); ui.input('lc-teacherNote', 'SYNTHETIC_PRIVATE_NOTE');
+  // a blank homework row is shown by default; a second one is added and left blank (ignored on save)
+  assert.ok(ui.el('lc-title-0'), 'default homework row'); ui.click('lc-add'); assert.ok(ui.el('lc-title-1'));
   assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-0').disabled, true);
   ui.input('lc-title-0', '化学ワークp.10'); ui.click('lc-save'); const req = ui.requests.at(-1).body;
-  assert.equal(req.op, 'lessonRecordSave'); assert.equal(req.record.homework[0].dueMode, 'nextLesson'); assert.equal(req.record.homework[0].due, '');
+  assert.equal(req.op, 'lessonRecordSave'); assert.equal(req.record.homework.length, 1); assert.equal(req.record.homework[0].dueMode, 'nextLesson'); assert.equal(req.record.homework[0].due, '');
+  assert.ok(ui.html().indexOf('<h2>今回の記録</h2>') < ui.html().indexOf('前回の確認と現在の未完了宿題'), '今回の記録 comes first');
   assert.equal(req.record.teacherNote, 'SYNTHETIC_PRIVATE_NOTE');
   assert.equal(JSON.stringify([...ui.local, ...ui.session]).includes('SYNTHETIC_PRIVATE_NOTE'), false);
 });
