@@ -1743,15 +1743,17 @@
           var blocked = e.busy || !!e.pending || !!c.pending, readonly = blocked || !c.slot || c.slotChanged || (r && r.status === "void") || (!r && c.student && c.student.active === false);
           if (!c.slot) { return h + '<div class="card" style="margin-top:14px">記録できる確定授業はまだありません。授業を確定してから開いてください。</div>'; }
           var slot = r ? Object.assign({}, c.slot, { date: r.date || c.slot.date, start: r.start || c.slot.start, min: r.min || c.slot.min, subject: r.subject || c.slot.subject }) : c.slot;
-          h += '<div class="card" style="margin-top:14px"><strong>' + esc((c.student || {}).name) + '</strong>　' + fmtDY(slot.date) + ' ' + esc(slot.start) + '　' + esc(slot.subject || "科目なし") + '　' + esc(slot.min || "") + '分 <span class="tag ' + (slot.done ? "gray" : "blue") + '">' + (slot.done ? "実施済み" : "未実施") + '</span>';
-          h += '<div class="note">' + (r && r.status !== 'void' ? (r.publishedRevision ? '生徒・保護者へ公開済み（第' + esc(r.publishedRevision) + '版）・' : '未公開（次の保存で公開）・') : '') + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : future ? "授業前・準備内容は非公開です" : "授業記録は未入力です") + '</div></div>';
+          // 生徒名・日時・科目・状態。授業記録では「今回の記録」カードの先頭に入れる(授業準備ではそのまま1枚のカード)
+          var slotInfo = '<strong>' + esc((c.student || {}).name) + '</strong>　' + fmtDY(slot.date) + ' ' + esc(slot.start) + '　' + esc(slot.subject || "科目なし") + '　' + esc(slot.min || "") + '分 <span class="tag ' + (slot.done ? "gray" : "blue") + '">' + (slot.done ? "実施済み" : "未実施") + '</span>';
+          h += '<div class="note">' + (r && r.status !== 'void' ? (r.publishedRevision ? '生徒・保護者へ公開済み（第' + esc(r.publishedRevision) + '版）・' : '未公開（次の保存で公開）・') : '') + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : future ? "授業前・準備内容は非公開です" : "授業記録は未入力です") + '</div>';
+          if (future) h += '<div class="card" style="margin-top:14px">' + slotInfo + '</div>';
           if (c.slotChanged) h += '<p class="lc-notice">元の予約が取消／変更されています。内容の保存はできません。宿題の取り下げは別に行えます。</p>';
           if (c.student && c.student.active === false) h += '<p class="lc-notice">停止中の生徒です。既存記録は訂正できますが、新しい宿題は反映できません。</p>';
           if (c.pending && !e.pending) h += '<div class="card lc-notice">前の処理が完了していません。' + lessonAction("resume", e.busy ? "再開中…" : "前の処理を再開", e.busy, "btn-primary") + '</div>';
           if (!future) {
             // 今回の記録を最上部に。宿題の欄は最初から1つ出しておく(空欄のままなら保存時に無視)
             if (!readonly) ["宿題", "持ち物", "メモ"].forEach(function (type) { if (!e.form.homework.some(function (x) { return (x.type || "宿題") === type; })) e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: type === "メモ" ? "none" : "nextLesson", type: type }); });
-            h += '<h2>今回の記録' + helpButton('record') + '</h2>' + helpBox('record', '単元とコメントだけで十分です。補足（取り組みの様子・次回の焦点・先生だけのメモ）が必要なときは、入力欄の下の折り畳みに入れてください。') + '<div class="card">' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題・持ち物・メモ</h3><div class="note">授業記録の一部として公開されます。生徒の「やること」への追加・更新は、保存後に下の反映操作で行います。</div>';
+            h += '<h2>今回の記録' + helpButton('record') + '</h2>' + helpBox('record', '単元とコメントだけで十分です。補足（取り組みの様子・次回の焦点・先生だけのメモ）が必要なときは、入力欄の下の折り畳みに入れてください。') + '<div class="card"><div class="lc-slotinfo" style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)">' + slotInfo + '</div>' + lessonFields(e.form, readonly) + '<h3 class="lc-label">宿題・持ち物・メモ</h3><div class="note">授業記録の一部として公開されます。生徒の「やること」への追加・更新は、保存後に下の反映操作で行います。</div>';
             // 種類ごとの欄。期限は「次の同じ科目の授業」が既定で、「日付を指定」を選んだときだけ日付欄を出す
             ["宿題", "持ち物", "メモ"].forEach(function (type) {
               var rows = []; e.form.homework.forEach(function (x, i) { if ((x.type || "宿題") === type) rows.push({ x: x, i: i }); });
