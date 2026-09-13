@@ -813,7 +813,7 @@
 
         /* ---------- 生徒カルテ ---------- */
         // 予定表の下の「その日の予定」カード。生徒マイページの「予定の編集」と同じ見た目(行の形・タグ・＋ボタン)で、操作は先生ができるものに置き換える
-        var sDayAddOpen = false, sBlockOpen = false;
+        var sDayAddOpen = false, sBlockOpen = false, sOfferOpen = false; // ＋の中の「授業を案内」で案内フォームを開く(カルテ内の案内はここに集約)
         // 文章で自動入力(先生版)。文章 → scheduleParseTeacher で候補 → 確認・修正 → nlApplyTeacher で登録(案内・授業不可・予定)
         var TNL = { text: "", busy: false, proposal: null, error: "" };
         var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "予定の共有" };
@@ -915,7 +915,8 @@
             h += '</div>';
           }
           if (selDate >= tdy && canEdit && sDayAddOpen) {
-            h += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3><div class="row" style="gap:6px"><button class="btn-quiet btn-sm" data-action="dayoffer" data-date="' + selDate + '">授業を案内</button><button class="btn-quiet btn-sm" data-action="sblockopen" aria-expanded="' + (sBlockOpen ? 'true' : 'false') + '">授業不可を登録</button></div>';
+            h += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3><div class="row" style="gap:6px"><button class="' + (sOfferOpen ? 'btn-primary' : 'btn-quiet') + ' btn-sm" data-action="dayoffer" data-date="' + selDate + '" aria-expanded="' + (sOfferOpen ? 'true' : 'false') + '">授業を案内</button><button class="' + (sBlockOpen ? 'btn-primary' : 'btn-quiet') + ' btn-sm" data-action="sblockopen" aria-expanded="' + (sBlockOpen ? 'true' : 'false') + '">授業不可を登録</button></div>';
+            if (sOfferOpen) { if (offerDraft && !sameId(offerDraft.studentId, s.id)) offerDraft = null; if (!offerDraft) offerDraft = { studentId: s.id, date: selDate }; h += '<div style="margin-top:8px"><h4 style="margin:0 0 6px;font-size:14px">' + esc(s.name) + 'さんに授業を案内する</h4>' + offerForm(tdy, [], s) + '</div>'; }
             if (sBlockOpen) h += '<div class="row" style="margin-top:8px;gap:8px"><label>時間帯 <input type="time" id="sb-start" step="1800"> 〜 <input type="time" id="sb-end" step="1800"></label><input type="text" id="sb-note" maxlength="50" placeholder="メモ(任意)" style="flex:1;min-width:120px"><button class="btn-primary btn-sm" data-action="sblockadd" data-date="' + selDate + '">登録</button></div><p class="note" style="margin:4px 0 0">時間帯を空欄にすると終日の授業不可になります。生徒の予定表にも表示されます。</p>';
             if (s.nlEnabled) h += renderTeacherNL(s);
           }
@@ -1076,7 +1077,6 @@
           if (s.active !== false) {
             if (offerDraft && !sameId(offerDraft.studentId, s.id)) offerDraft = null;
             if (!offerDraft) offerDraft = { studentId: s.id, date: tdy, subject: (function () { var ls = "", ld = ""; (s.lessons || []).forEach(function (l) { if (l.subject && l.date >= ld) { ld = l.date; ls = l.subject; } }); return ls; })() };
-            html += '<h2>' + esc(s.name) + 'さんに授業を案内する</h2>' + offerForm(tdy, [], s);
           }
 
           // 授業履歴(実施済み・過去)
@@ -2378,6 +2378,7 @@
               if(+btn.getAttribute('data-duration'))uw.min=+btn.getAttribute('data-duration');
               uw.subject = lsub;
               offerDraft = uw; selDate = uw.date; selManual = true; boardOpen = true; boardDate = uw.date;
+              if (route().page === "student") { sDayAddOpen = true; sOfferOpen = true; sBlockOpen = false; var uwp = uw.date.split("-"); calY = +uwp[0]; calM = +uwp[1] - 1; }
               render();
               var fe = document.getElementById("f-date"); if (fe) fe.scrollIntoView({ behavior: "smooth", block: "center" });
               toast(uwWant ? "希望日時をフォームに入れました。内容を確認して案内してください" : "空き時間 " + uw.window + " のあいだで開始時刻と長さを決めて案内してください");
@@ -2463,12 +2464,12 @@
               var cpw = (document.getElementById("f-curpass") || {}).value || "", npw = (document.getElementById("f-newpass") || {}).value || "";
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
               actA("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました"); break;
-            case "sdayadd": sDayAddOpen = !sDayAddOpen; if (!sDayAddOpen) sBlockOpen = false; render(); break;
+            case "sdayadd": sDayAddOpen = !sDayAddOpen; if (!sDayAddOpen) { sBlockOpen = false; sOfferOpen = false; } render(); break;
             case "tnl-parse": tnlParse(); break;
             case "tnl-clear": TNL = { text: "", busy: false, proposal: null, error: "" }; render(); break;
             case "tnl-item": { var ti = TNL.proposal && TNL.proposal.items[+btn.getAttribute("data-i")]; if (ti && !ti.done) ti.sel = !ti.sel; break; }
             case "tnl-register": tnlRegister(); break;
-            case "sblockopen": sBlockOpen = !sBlockOpen; render(); break;
+            case "sblockopen": sBlockOpen = !sBlockOpen; if (sBlockOpen) sOfferOpen = false; render(); break;
             case "sblockadd": {
               var sbd = btn.getAttribute("data-date"), sbs = val("sb-start"), sbe = val("sb-end");
               if ((sbs && !sbe) || (!sbs && sbe)) { toast("時間帯は開始と終了の両方を入れてください(終日なら両方空欄)"); return; }
@@ -2477,10 +2478,10 @@
             }
             case "sdelblock": act("delBlock", { blockId: btn.getAttribute("data-id"), studentId: cur.id }, "解除しました"); break;
             case "dayoffer":
-              offerDraft = Object.assign({}, offerDraft || {}, { studentId: cur.id, date: btn.getAttribute("data-date") });
+              sDayAddOpen = true; sOfferOpen = !sOfferOpen; if (sOfferOpen) sBlockOpen = false;
+              if (sOfferOpen) offerDraft = Object.assign({}, offerDraft || {}, { studentId: cur.id, date: btn.getAttribute("data-date") });
               render();
-              var fd = document.getElementById("f-date"); if (fd) fd.scrollIntoView({ behavior: "smooth", block: "center" });
-              toast(fmtD(btn.getAttribute("data-date")) + " を案内フォームに入れました");
+              if (sOfferOpen) { var fd = document.getElementById("f-date"); if (fd && fd.scrollIntoView) fd.scrollIntoView({ behavior: "smooth", block: "center" }); }
               break;
             case "pe-new": planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
             case "pe-open": { var peL = planLineById(cur, btn.getAttribute("data-line")); if (!peL) return; planEdits[cur.id] = planEditOf(cur, peL); render(); break; }

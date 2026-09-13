@@ -20,7 +20,7 @@ test('student single and batch confirmations carry exactly the displayed lesson 
 });
 
 test('chemistry can be selected for a new offer independently of the student default mode', async () => {
-  const ui = await adminReady(); assert.match(ui.html(), /<option[^>]*>化学<\/option>/);
+  const ui = await adminReady(); ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('sdayadd'); ui.click('dayoffer', { 'data-date': '2026-09-15' }); assert.match(ui.html(), /<option[^>]*>化学<\/option>/);
   ui.input('f-subject', '化学'); ui.input('f-date', '2026-09-15'); ui.input('f-start', '17:00'); ui.click('offerslot');
   assert.equal(ui.requests.at(-1).body.subject, '化学'); assert.equal(ui.requests.at(-1).body.deliveryMode, 'online');
 });

@@ -23,7 +23,7 @@ test('a delayed settings write cannot replace the overview or invalidate its in-
  save.reply({ok:true,data:card({section:'settings',rate30:2000})});await flush();
  // The act helper may refresh the destination after an unrelated write; answer the newest read.
  ui.requests.at(-1).reply({data:card({section:'overview'})});read.reply({data:card({section:'overview'})});await flush();
- assert.match(ui.html(),/data-action="offerslot"/);assert.equal(ui.html().includes('data-action="editfee"'),false);
+ assert.match(ui.html(),/data-action="sdayadd"/);assert.equal(ui.html().includes('data-action="editfee"'),false);
 });
 test('future lessons expose a private preparation form, preserve its draft and retry the same write',async()=>{
  const c=context(),ui=await preparation(c);assert.match(ui.html(),/<h1>授業準備<\/h1>/);assert.equal(ui.html().includes('data-action="lc-save"'),false);
