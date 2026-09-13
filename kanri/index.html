@@ -48,6 +48,11 @@
       .mono { font-variant-numeric: tabular-nums; }
       .muted { color: var(--muted); }
       .small { font-size: 12.5px; }
+      details.fold > summary { list-style: none; cursor: pointer; }
+      details.fold > summary::-webkit-details-marker { display: none; }
+      details.fold > summary h2 { margin-bottom: 8px; }
+      details.fold > summary .mk::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); }
+      details.fold[open] > summary .mk::before { content: '▾'; }
       .tag { font-size: 11.5px; border-radius: 6px; padding: 1px 7px; font-weight: 700; white-space: nowrap; }
       .tag.blue { background: var(--soft); color: var(--primary); }
       .tag.amber { background: var(--amber-soft); color: var(--amber); }
@@ -813,6 +818,10 @@
 
         /* ---------- 生徒カルテ ---------- */
         // 予定表の下の「その日の予定」カード。生徒マイページの「予定の編集」と同じ見た目(行の形・タグ・＋ボタン)で、操作は先生ができるものに置き換える
+        // 生徒カルテの折りたたみ(今後の予定・授業履歴)。開閉は再描画をまたいで保持
+        var kFolds = { upcoming: true, history: false };
+        function foldHead(key, title, cnt) { return '<details class="fold " data-fold="' + key + '"' + (kFolds[key] ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>' + title + (cnt ? ' <span class="cnt">' + cnt + '</span>' : '') + '</h2></summary>'; }
+        document.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && Object.prototype.hasOwnProperty.call(kFolds, key)) kFolds[key] = !!d.open; }, true);
         var sDayAddOpen = false, sBlockOpen = false, sOfferOpen = false; // ＋の中の「授業を案内」で案内フォームを開く(カルテ内の案内はここに集約)
         // 文章で自動入力(先生版)。文章 → scheduleParseTeacher で候補 → 確認・修正 → nlApplyTeacher で登録(案内・授業不可・予定)
         var TNL = { text: "", busy: false, proposal: null, error: "" };
@@ -1048,7 +1057,7 @@
           var tdy = s.today || today();
           var upcoming = (s.lessons || []).filter(function (l) { return l.date >= tdy && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
           html += expiredCard((s.lessons || []).filter(function (l) { return l.status === "offered" && l.date < tdy; }).map(function (l) { return Object.assign({ studentId: s.id, studentName: s.name }, l); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }), false);
-          html += '<h2>今後の予定 <span class="cnt">' + upcoming.length + '件</span></h2><div class="card">';
+          html += foldHead('upcoming', '今後の予定', upcoming.length + '件') + '<div class="card">';
           if (upcoming.length) {
             upcoming.forEach(function (l) {
               html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
@@ -1065,7 +1074,7 @@
               html += '</div>';
             });
           } else html += '<div class="empty">今後の予定はありません</div>';
-          html += '</div>';
+          html += '</div></details>';
           var sev = s.events || [];
           if (sev.length) {
             html += '<h2>' + esc(s.name) + 'さんの共有予定 <span class="cnt">' + sev.length + '件</span></h2><div class="card">' + sev.map(function (e) { return eventRow(e, false); }).join("") + '<div class="note">生徒・保護者が予定ページから共有した予定です(大会・見学など)。授業の調整の参考に。</div></div>';
@@ -1081,7 +1090,7 @@
 
           // 授業履歴(実施済み・過去)
           var pastL = (s.lessons || []).filter(function (l) { return l.date < tdy; });
-          html += '<h2>授業履歴 <span class="cnt">直近' + Math.min(20, pastL.length) + '件</span></h2><div class="card">';
+          html += foldHead('history', '授業履歴', '直近' + Math.min(20, pastL.length) + '件') + '<div class="card">';
           if (pastL.length) {
             pastL.slice(0, 20).forEach(function (l) {
               html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
@@ -1091,7 +1100,7 @@
               html += '</div>';
             });
           } else html += '<div class="empty">過去の授業はまだありません</div>';
-          html += '</div>';
+          html += '</div></details>';
 
           // 宿題・持ち物
           var tks = (s.tasks || []).filter(function (t) { return !t.withdrawnAt && !t.withdrawn; });

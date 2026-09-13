@@ -161,3 +161,9 @@ test('the admin day card offers 文章で自動入力: parse through schedulePar
   // everything registered → the proposal is cleared, like the student page
   assert.doesNotMatch(ui.html(), /data-action="tnl-register"|登録済み/); assert.equal(ui.el('tnl-text').value, '');
 });
+
+test('今後の予定 and 授業履歴 on the student page are collapsible folds (upcoming open, history closed by default)', async () => {
+  const ui = await adminReady(card({ lessons: [{ id: 'p1', date: '2026-09-01', start: '17:00', min: 90, status: 'booked', done: true, subject: '英語' }, { id: 'u1', date: '2026-09-20', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語' }] }), 'overview');
+  assert.match(ui.html(), /<details class="fold " data-fold="upcoming" open><summary><h2><span class="mk" aria-hidden="true"><\/span>今後の予定 <span class="cnt">1件<\/span><\/h2><\/summary><div class="card">/);
+  assert.match(ui.html(), /<details class="fold " data-fold="history"><summary><h2><span class="mk" aria-hidden="true"><\/span>授業履歴 <span class="cnt">直近1件<\/span><\/h2><\/summary><div class="card">[^]*?<\/div><\/details>/);
+});
