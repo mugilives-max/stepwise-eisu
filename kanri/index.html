@@ -950,7 +950,7 @@
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
             '<div class="row">' + "" + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
-          html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定・宿題'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
+          html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
           if (section === 'overview') {
           html += unrecordedCard(s.unrecordedLessons || (s.lessons || []).filter(function(l){return l.status==='booked' && !l.done && l.date<(s.today || today());}),false,s);
           // この生徒の予定表
@@ -1113,19 +1113,7 @@
           } else html += '<div class="empty">過去の授業はまだありません</div>';
           html += '</div></details>';
 
-          // 宿題・持ち物
-          var tks = (s.tasks || []).filter(function (t) { return !t.withdrawnAt && !t.withdrawn; });
-          var tOpen = tks.filter(function (t) { return !t.done; }), tDone = tks.filter(function (t) { return t.done; });
-          var nextLesson = (s.lessons || []).filter(function (l) { return l.status === "booked" && l.date >= (s.today || today()); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; })[0];
-          html += '<h2>宿題・持ち物 <span class="cnt">未完了 ' + tOpen.length + '件</span></h2><div class="card">';
-          if (!tOpen.length) html += '<div class="empty">未完了の宿題・持ち物はありません</div>';
-          tOpen.concat(tDone.slice(0, 10)).forEach(function (t) {
-            html += '<div class="line' + (t.done ? ' muted' : '') + '"><span class="t">' + taskDueText(t) + '</span><span class="w"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + (t.done ? '<s>' + esc(t.title) + '</s> <span class="small muted">完了 ' + esc(t.doneAt) + '</span>' : esc(t.title)) + (t.createdBy === "student" ? ' <span class="small muted">(生徒が登録)</span>' : '') + '</span>';
-            html += '<button class="btn-quiet btn-sm" data-action="taskdone" data-id="' + esc(t.id) + '" data-done="' + (t.done ? "0" : "1") + '">' + (t.done ? "未完了に戻す" : "完了にする") + '</button><button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" data-source="' + esc(t.sourceRecordId || '') + '">' + (t.sourceRecordId ? '取り下げ' : '削除') + '</button></div>';
-          });
-          html += '<div class="row" style="margin-top:10px"><select id="tk-type"><option>宿題</option><option>持ち物</option><option>メモ</option></select><input type="text" id="tk-title" placeholder="内容(例: ワークp.12〜15 / 次回は英単語帳を持参)" maxlength="80" style="flex:1;min-width:200px">' + taskDeadlineInputs(nextLesson ? nextLesson.subject : '') + '<button class="btn-primary btn-sm" data-action="taskadd"' + (busy ? " disabled" : "") + '>出す</button></div>';
-          html += '<div class="note">生徒のマイページ「やること」に表示され、生徒がチェックを付けます。次回授業を選ぶと、指定科目の確定済み授業に期限が連動します。予定がなければ「予定未定」と表示します。</div></div>';
-
+          // 宿題・持ち物の一覧と追加欄は廃止(2026-09-18)。宿題・持ち物・メモは授業記録ページから出す
           }
           if (section === 'billing') html += renderBilling(s);
           if (section === 'progress') {

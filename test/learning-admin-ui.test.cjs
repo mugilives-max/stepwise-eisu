@@ -100,15 +100,10 @@ test('a stale edit conflict can be closed and does not leave an unrecoverable pe
   assert.deepEqual(ui.requests.at(-1).body.expectedSnapshot, snapshot(latest));
 });
 
-for (const dueMode of ['nextLesson', 'date', 'none']) test('teacher tasks submit the selected deadline policy: ' + dueMode, async () => {
-  const ui = await adminReady(card({ lessons: [offered({ status: 'booked', subject: '化学' })] }));
-  assert.equal(ui.el('tk-due-mode').value, 'nextLesson'); assert.equal(ui.el('tk-due-subject').value, '化学');
-  ui.input('tk-title', '化学のワーク'); ui.change('tk-due-mode', dueMode);
-  assert.equal(ui.el('tk-due').disabled, dueMode !== 'date'); assert.equal(ui.el('tk-due-subject').disabled, dueMode !== 'nextLesson');
-  if (dueMode === 'date') ui.input('tk-due', '2026-09-22');
-  ui.click('taskadd'); const req = ui.requests.at(-1).body;
-  assert.equal(req.op, 'taskAdd'); assert.equal(req.dueMode, dueMode); assert.equal(req.due, dueMode === 'date' ? '2026-09-22' : '');
-  if (dueMode === 'nextLesson') assert.equal(req.dueSubject, '化学');
+test('the admin student page no longer offers a task form; tasks come from the lesson record page', async () => {
+  const ui = await adminReady(card({ lessons: [offered({ status: 'booked', subject: '化学' })], tasks: [{ id: 't1', type: '宿題', title: 'ワーク', due: '', done: false }] }));
+  assert.equal(ui.el('tk-title'), undefined); assert.doesNotMatch(ui.html(), /data-action="taskadd"|<h2>宿題・持ち物/);
+  assert.match(ui.html(), /aria-current="page">予定<\/a>/); assert.doesNotMatch(ui.html(), /予定・宿題/);
 });
 
 async function lessonReady(record = null, extra = {}) {
