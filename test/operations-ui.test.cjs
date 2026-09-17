@@ -24,7 +24,7 @@ test('a late batch response cannot display the previous student after a dedicate
   const ui = await studentReady(); ui.click('batchall'); ui.click('batchreview'); ui.click('batchsend'); const old = ui.requests.at(-1);
   ui.switchStudent('test-link-b'); ui.requests.at(-1).reply(state([], '【テスト】生徒B')); await flush();
   old.reply({ ok: true, pending: false, results: [], state: state([], '古いAの応答') }); await flush();
-  assert.match(ui.html(), /生徒B/); assert.equal(ui.html().includes('古いAの応答'), false);
+  assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.equal(ui.html().includes('古いAの応答'), false); assert.equal(ui.html().includes('data-action="batchsend"'), false, 'the old batch state is gone after the switch');
 });
 
 test('batch validation failure permits correction and uncertain mail never offers a notification resend', async () => {

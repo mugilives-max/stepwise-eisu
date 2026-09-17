@@ -152,7 +152,7 @@ test('teacher email status permits explicit retries only for safe queued message
   ];
   ui.requests.at(-1).reply({ ok: true, emailStatus, notifications }); await flush();
   assert.match(ui.html(), /送信結果不明/); assert.equal(ui.html().includes('data-action="sm-retry" data-id="uncertain-notice"'), false);
-  ui.click('sm-retry', { 'data-id': 'failed-notice' }); assert.equal(ui.requests.length, 2); assert.match(ui.html(), /synthetic@example.invalid/);
+  const before = ui.requests.length; ui.click('sm-retry', { 'data-id': 'failed-notice' }); assert.equal(ui.requests.length, before, 'retry only asks for confirmation'); assert.match(ui.html(), /synthetic@example.invalid/);
   ui.click('sm-send'); const req = ui.requests.at(-1).body; assert.equal(req.op, 'studentEmailRetryNotification'); assert.equal(req.studentId, 'test-a'); assert.equal(req.notificationId, 'failed-notice');
   assert.equal(ui.confirms(), 0);
 });

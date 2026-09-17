@@ -99,7 +99,8 @@ test('late family data cannot replace the student page after route departure', a
   const ui = loggedUI(); ui.requests[0].reply(home()); await flush(); const old = ui.requests.at(-1);
   ui.navigate('#home'); ui.requests.at(-1).reply(state([], '生徒ページの表示')); await flush();
   old.reply({ ok: true, data: data('遅れて届いた家族の表示') }); await flush();
-  assert.match(ui.html(), /生徒ページの表示/); assert.equal(ui.html().includes('遅れて届いた家族'), false);
+  // the student home stays on screen (名前はヘッダーに出るので本文では予定表で判定); the late family payload must not replace it
+  assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.equal(ui.html().includes('遅れて届いた家族'), false); assert.equal(ui.html().includes('今後の授業'), false);
 });
 
 test('teacher unlink sends only the final child list after explicit confirmation', async () => {
