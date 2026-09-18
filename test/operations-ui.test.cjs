@@ -46,6 +46,37 @@ test('teacher offers inherit the student default, allow one-off mode, and retain
   assert.match(ui.html(), /2026-09-17/); assert.match(ui.html(), /2026-10-01/); assert.equal(ui.el('f-delivery').value, 'in_person'); assert.equal(ui.el('f-rep').value, '4');
 });
 
+test('an offer beyond the plan shows the plan prompt in the form: cancel, or send a prefilled plan line and then the offer with planForce', async () => {
+  const ui = await adminReady();
+  ui.click('calday', { 'data-date': '2026-09-10' }); ui.click('sdayadd'); ui.click('dayoffer', { 'data-date': '2026-09-10' });
+  ui.input('f-subject', '英語'); ui.input('f-delivery', 'in_person'); ui.input('f-date', '2026-09-10'); ui.input('f-start', '17:00'); ui.input('f-rep', '2'); ui.click('offerslot');
+  const first = ui.requests.at(-1); assert.equal(first.body.op, 'offer'); assert.equal(first.body.planForce, false);
+  const suggest = { studentId: 'test-a', subject: '英語', kind: '通常', count: 2, dates: ['2026-09-10', '2026-09-17'], startDate: '2026-09-01', endDate: '2026-09-30', lessonMin: 90, lessonFee: 4500, parentId: '', parentLabel: '' };
+  first.reply({ error: '授業計画の上限を超えています（2件）。', errorCode: 'planShort', needPlan: true, planSuggest: suggest }); await flush();
+  assert.match(ui.html(), /<strong>授業計画の上限を超えていますが案内しますか？<\/strong>/); assert.match(ui.html(), /英語（通常） 2026\/9\/10、2026\/9\/17 の 2件が/);
+  assert.doesNotMatch(ui.html(), /data-action="offerslot"/, 'the send button gives way to the prompt'); assert.equal(ui.el('pp-start'), undefined, 'the plan form opens only after the teacher chooses to send a plan');
+  // cancel closes the prompt and brings the button back with the draft intact
+  ui.click('pp-cancel'); assert.match(ui.html(), /data-action="offerslot"/); assert.equal(ui.el('f-rep').value, '2'); assert.equal(ui.el('f-subject').value, '英語');
+  ui.click('offerslot'); ui.requests.at(-1).reply({ error: 'x', errorCode: 'planShort', needPlan: true, planSuggest: suggest }); await flush();
+  ui.click('pp-open');
+  assert.equal(ui.el('pp-start').value, '2026-09-01'); assert.equal(ui.el('pp-end').value, '2026-09-30'); assert.equal(ui.el('pp-count').value, '2'); assert.equal(ui.el('pp-min').value, '90'); assert.equal(ui.el('pp-fee').value, '4500');
+  ui.input('pp-count', '4'); ui.input('pp-comment', '10月の定期テストまで週2回に増やすため'); ui.click('pp-send');
+  const plan = ui.requests.at(-1); assert.equal(plan.body.op, 'planLineSave'); assert.equal(plan.body.studentId, 'test-a'); assert.equal(plan.body.propose, true); assert.equal(plan.body.parentId, '');
+  assert.deepEqual([plan.body.subject, plan.body.kind, plan.body.count, plan.body.startDate, plan.body.endDate, plan.body.lessonMin, plan.body.lessonFee, plan.body.comment], ['英語', '通常', 4, '2026-09-01', '2026-09-30', 90, 4500, '10月の定期テストまで週2回に増やすため']);
+  plan.reply({ ok: true, line: { id: 'ln1' }, data: card() }); await flush();
+  const again = ui.requests.at(-1); assert.equal(again.body.op, 'offer'); assert.equal(again.body.planForce, true); assert.equal(again.body.repeat, 2); assert.equal(again.body.subject, '英語');
+  assert.match(ui.el('toast').textContent, /授業計画の案内を送りました/);
+  again.reply({ ok: true, added: 2, data: card() }); await flush();
+  assert.doesNotMatch(ui.html(), /授業計画の上限を超えていますが/);
+  // an addon suggestion sends the parent id and says so (the form stays open after a sent offer)
+  ui.input('f-subject', '数学'); ui.input('f-delivery', 'in_person'); ui.input('f-date', '2026-09-24'); ui.input('f-start', '17:00'); ui.click('offerslot');
+  ui.requests.at(-1).reply({ error: 'x', errorCode: 'planShort', needPlan: true, planSuggest: { ...suggest, subject: '数学', count: 1, dates: ['2026-09-24'], parentId: 'parent-1', parentLabel: '2026年9月 数学 4回' } }); await flush();
+  ui.click('pp-open'); assert.match(ui.html(), /2026年9月 数学 4回 への追加案内として送ります/); ui.click('pp-send');
+  assert.equal(ui.requests.at(-1).body.parentId, 'parent-1'); assert.equal(ui.requests.at(-1).body.count, 1);
+  ui.requests.at(-1).reply({ error: '追加案内の期間は元の案内の期間の中にしてください' }); await flush();
+  assert.match(ui.html(), /追加案内の期間は元の案内の期間の中にしてください/); assert.ok(ui.el('pp-start'), 'the plan form stays open after a server error');
+});
+
 test('slot mode changes carry the old mode and target only that student and slot', async () => {
   const s = slot('slot-a', { status: 'booked', studentId: 'test-a', done: false }); const ui = await adminReady(card({ lessons: [s] }));
   ui.click('slotmode', { 'data-id': 'slot-a' }); ui.input('se-mode', 'online'); ui.click('se-save');
@@ -156,6 +187,13 @@ test('the admin day card offers 文章で自動入力: parse through schedulePar
   ui.click('tnl-item', { 'data-i': '1' }); ui.click('tnl-register');
   r = ui.requests.at(-1).body; assert.equal(r.op, 'nlApplyTeacher'); assert.equal(r.studentId, 'test-a'); assert.equal(r.deliveryMode, 'online');
   assert.deepEqual(r.items, [{ kind: 'offer', dates: ['2026-09-16'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習' }, { kind: 'block', dates: ['2026-09-20'], start: '', end: '', note: '部活' }, { kind: 'event', dates: ['2026-09-25'], title: '中間テスト', test: true, alsoBlock: false }]);
+  assert.equal(r.planForce, false);
+  // the plan prompt works here too: nothing was registered, so the same items are re-sent with planForce after the plan line goes out
+  ui.requests.at(-1).reply({ error: '授業計画の上限を超えています（1件）。', errorCode: 'planShort', needPlan: true, planSuggest: { studentId: 'test-a', subject: '英語', kind: '演習', count: 1, dates: ['2026-09-16'], startDate: '2026-09-01', endDate: '2026-09-30', lessonMin: 90, lessonFee: 4500, parentId: '', parentLabel: '' } }); await flush();
+  assert.match(ui.html(), /授業計画の上限を超えていますが案内しますか？/); assert.match(ui.html(), /英語（演習） 2026\/9\/16 の 1件が/);
+  ui.click('pp-open'); ui.click('pp-send'); assert.equal(ui.requests.at(-1).body.op, 'planLineSave'); assert.equal(ui.requests.at(-1).body.kind, '演習');
+  ui.requests.at(-1).reply({ ok: true, line: { id: 'ln-1' } }); await flush();
+  r = ui.requests.at(-1).body; assert.equal(r.op, 'nlApplyTeacher'); assert.equal(r.planForce, true); assert.equal(r.items.length, 3);
   ui.requests.at(-1).reply({ ok: true, id: 'test-a', data: card({ nlEnabled: true }), added: 3, results: [{ i: 0, kind: 'offer', status: 'added', count: 1, errors: [] }, { i: 1, kind: 'block', status: 'added', count: 1, errors: [] }, { i: 2, kind: 'event', status: 'added', count: 1, errors: [] }] }); await flush();
   assert.match(ui.el('toast').textContent, /3件を登録しました/);
   // everything registered → the proposal is cleared, like the student page

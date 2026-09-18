@@ -365,7 +365,7 @@
             try { console.log("[kanri] " + op + " " + (Date.now() - t0) + "ms (server " + (res && res.ms) + "ms)"); } catch (e) {}
             if (body.token !== token()) { var changed = new Error("ログインが更新されました。内容を確認してもう一度操作してください"); changed.code = "sessionChanged"; throw changed; }
             if (res && res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); throw new Error("ログインし直してください"); }
-            if (res && res.error) { var er = new Error(res.error); er.code = res.errorCode || ""; throw er; }
+            if (res && res.error) { var er = new Error(res.error); er.code = res.errorCode || ""; er.res = res; throw er; }
             return res;
           });
         }
@@ -385,6 +385,7 @@
         var A = null; // 予約システムの全データ(slots/students/blocked/log)
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
         var selDate = null, selManual = false, offerDraft = null, pendingDayOffer = null;
+        var planPrompt = null; // 授業計画の枠を超える案内のとき: {src:'offer'|'tnl', suggest, open, after}
         var homeOffOpen = null; // ホームで「先生の休みにする」フォームを開いている日付
         function isLessons(r) { return r.page === "lessons" || r.page === "settings"; }
         function viewOf() { var p = route().page; return p === "student" ? "student" : (p === "lessons" || p === "settings") ? "lessons" : "home"; }
@@ -467,27 +468,14 @@
           h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300">';
           h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
           h += '<label for="f-rep">くり返し</label><select id="f-rep">' + [1, 2, 4, 8, 12].map(function (n) { return '<option value="' + n + '"' + (n === (+d.repeat || 1) ? ' selected' : '') + '>' + (n === 1 ? 'この日だけ' : '毎週×' + n + '回') + '</option>'; }).join('') + '</select>';
-          h += '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>' + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
-          if (d.studentId && A && A.plans) {
-            var ymNow = today.slice(0, 7), pRows = A.plans.filter(function (x) { return sameId(x.studentId, d.studentId); });
-            var mRows = pRows.filter(function (x) { return x.ym === ymNow; }), useRows = mRows.length ? mRows : pRows.filter(function (x) { return x.ym === "default"; });
-            if (useRows.length) {
-              var parts = useRows.map(function (x) {
-                var have = (A.slots || []).filter(function (s) { return sameId(s.studentId, d.studentId) && s.status === "booked" && s.date.slice(0, 7) === ymNow && (s.subject || "その他") === x.subject; }).length;
-                return esc(lessonLabel(x)) + ' ' + have + '/' + x.count + '回' + (have < x.count ? '(あと' + (x.count - have) + ')' : '');
-              });
-              var stRows = mRows.length ? mRows : [];
-              var stAll = stRows.length ? (stRows.some(function (x) { return x.status === "declined"; }) ? "declined" : stRows.every(function (x) { return x.status === "approved"; }) ? "approved" : stRows.some(function (x) { return x.status === "proposed"; }) ? "proposed" : "draft") : "none";
-              var stTxt = stAll === "approved" ? '<span class="tag green">保護者承認済み</span>' : stAll === "proposed" ? '<span class="tag amber">保護者の承認待ち</span>' : '<span class="tag red">保護者の承諾が未記録</span>';
-              h += '<div class="small" style="margin-top:8px;color:var(--primary)">今月の計画: ' + parts.join("、") + ' ' + stTxt + (stAll !== "approved" ? '<span class="muted">(承諾前の授業は請求できません。カルテの「保護者に提案」から)</span>' : '') + '</div>';
-            }
-          }
+          h += '</div><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
+          h += planPromptHtml('offer');
           var warningData=A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]};
           var liveWarnings=window.StepwiseBoard.warnings(warningData,Object.assign({start:'17:00',min:90},d,{deliveryMode:d.deliveryMode||student.deliveryMode}));
           h+='<div id="board-warnings" role="status">'+liveWarnings.map(function(w){return '<p class="board-warning">'+esc(w)+'</p>';}).join('')+'</div>';
           h+='<label class="small"><input type="checkbox" id="f-outside"'+(d.outside?' checked':'')+'> 7:00〜22:00の範囲外を指定する</label>';
           if (d.error) h += '<div role="alert" class="lc-notice">' + esc(d.error) + (d.conflicts || []).map(function (x) { return '<p>' + esc(x.date || '') + ' ' + esc(x.start || '') + '：' + esc(x.error || '') + '</p>'; }).join('') + '</div>';
-          h += '<div class="note">全日程の定員と形式を確認してから案内します。案内は生徒ページに表示され、保護者の月間承認後に日程を確定できます。確定時にカレンダー登録・通知、オンラインの場合はMeet発行を行います。</div></div>';
+          h += '<div class="note">全日程の定員と形式を確認してから案内します。案内は生徒ページに表示され、生徒が承認すると確定します（保護者の承認は待ちません）。承認済み・案内中の授業計画に収まらない案内は、計画の案内を送るかどうかをその場で選べます。確定時にカレンダー登録・通知、オンラインの場合はMeet発行を行います。</div></div>';
           if(busy)h=h.replace(/<(input|select)\b/g,'<$1 disabled');
           return h;
         }
@@ -505,7 +493,7 @@
           return { page: "home" };
         }
         window.addEventListener("hashchange", function () {
-          editProfile = false; editEmail = false; editFee = false; offerDraft = null; selManual = false;
+          editProfile = false; editEmail = false; editFee = false; offerDraft = null; planPrompt = null; selManual = false;
           if (skipLoad) { skipLoad = false; render(); return; }
           load();
         });
@@ -865,7 +853,7 @@
             h += '</span></label>';
           });
           if (p.questions && p.questions.length) h += '<ul class="small" style="margin:8px 0 0 18px;padding:0">' + p.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>';
-          if (p.items.some(function (it) { return !it.done; })) h += '<div class="row" style="margin-top:10px"><button class="btn-primary" data-action="tnl-register"' + dis + '>チェックした内容で登録する</button></div><p class="note">授業の案内は生徒ページに表示され、生徒が承認すると確定します（確定には保護者の承認済み計画が必要）。授業できない日と予定は生徒の予定表にも表示されます。</p>';
+          if (p.items.some(function (it) { return !it.done; })) h += '<div class="row" style="margin-top:10px"><button class="btn-primary" data-action="tnl-register"' + dis + '>チェックした内容で登録する</button></div>' + planPromptHtml('tnl') + '<p class="note">授業の案内は生徒ページに表示され、生徒が承認すると確定します（保護者の承認は待ちません。承認前の授業は請求できません）。授業できない日と予定は生徒の予定表にも表示されます。</p>';
           return h + '</div>';
         }
         function tnlParse() {
@@ -878,7 +866,7 @@
             TNL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; render();
           }).catch(function (er) { if (!cur || !sameId(cur.id, sid)) return; TNL.busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
         }
-        function tnlRegister() {
+        function tnlRegister(planForce) {
           var p = TNL.proposal; if (!p || busy || TNL.busy || !cur) return;
           var items = [], idx = [];
           for (var i = 0; i < p.items.length; i++) {
@@ -894,14 +882,19 @@
           }
           if (!items.length) { toast('登録する項目にチェックを入れてください'); return; }
           var sid = cur.id, r = route(); busy = true; render();
-          admin('nlApplyTeacher', { studentId: sid, deliveryMode: cur.deliveryMode || 'in_person', items: items }).then(function (res) {
+          admin('nlApplyTeacher', { studentId: sid, deliveryMode: cur.deliveryMode || 'in_person', items: items, planForce: !!planForce }).then(function (res) {
             busy = false; if (!cur || !sameId(cur.id, sid)) return;
             (res.results || []).forEach(function (x) { var it = p.items[idx[x.i]]; if (!it) return; it.errors = x.errors || []; if (x.status === 'added' || x.status === 'partial') { it.done = true; it.sel = false; } });
             var left = p.items.some(function (it) { return it.sel && !it.done; });
             if (!left && !(res.results || []).some(function (x) { return x.status === 'error'; })) { TNL.text = ''; TNL.proposal = null; TNL.error = ''; }
             toast((res.added || 0) + '件を登録しました' + ((res.results || []).some(function (x) { return x.status !== 'added'; }) ? '（登録できなかった項目があります）' : ''));
             cacheClear(); if (!applyResult(res, r)) load(true); else render();
-          }).catch(function (er) { busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
+          }).catch(function (er) {
+            busy = false; if (!cur || !sameId(cur.id, sid)) return;
+            // 授業計画の枠を超える案内: 何も登録されていないので、計画の案内を送ってから同じ内容を planForce で登録し直す
+            if (er.res && er.res.needPlan) { TNL.error = ''; planPromptOpen('tnl', er.res, function () { tnlRegister(true); }); render(); return; }
+            TNL.error = er.message || '通信に失敗しました'; render();
+          });
         }
         function renderStudentDayCard(s, tdy) {
           var canEdit = s.active !== false && !busy;
@@ -1404,7 +1397,7 @@
           if (["in_person", "online"].indexOf(offerDraft.deliveryMode) < 0) { toast("授業の形式を選んでください"); return; }
           var sendingDraft = offerDraft, sendingRoute = route(); sendingDraft.error = ""; sendingDraft.conflicts = [];
           busy = true; syncMsg = "送信中…"; render();
-          var body = { action: "admin", token: token(), op: "offer", from: "kanri", view: viewOf(), force: !!force };
+          var body = { action: "admin", token: token(), op: "offer", from: "kanri", view: viewOf(), force: !!force, planForce: !!sendingDraft.planForce };
           ["studentId", "date", "start", "min", "repeat", "subject", "kind", "wishId", "deliveryMode"].forEach(function (k2) { if (sendingDraft[k2]) body[k2] = sendingDraft[k2]; });
           post(body).then(function (res) {
             if (offerDraft !== sendingDraft || keyOf(route()) !== keyOf(sendingRoute)) return;
@@ -1412,6 +1405,8 @@
             if (body.token !== token()) { render(); return; }
             if (res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); return; }
             if (res.error) {
+              // 授業計画の枠を超える案内: キャンセルか、計画の案内を送ってから続けるかをフォーム内で選ぶ
+              if (res.needPlan) { planPromptOpen('offer', res, function () { sendingDraft.planForce = true; sendOffer(force); }); render(); return; }
               if (res.needForce) { if (confirm(res.error + "\n\nそれでも案内しますか?")) { sendOffer(true); return; } render(); return; }
               sendingDraft.error = res.error; sendingDraft.conflicts = res.conflicts || []; toast(res.error); render(); return;
             }
@@ -1420,6 +1415,41 @@
             selDate = d.date; selManual = true;
             render(); toast("案内を送りました");
           }).catch(function () { if (offerDraft !== sendingDraft || keyOf(route()) !== keyOf(sendingRoute)) return; busy = false; syncMsg = ""; sendingDraft.error = "通信に失敗しました。入力を保持しています。最新の案内を確認してから再試行してください。"; render(); });
+        }
+
+        /* ---------- 授業計画の枠を超える案内のプロンプト ---------- */
+        function planPromptOpen(src, res, after) { planPrompt = { src: src, suggest: res.planSuggest || {}, open: false, error: "", after: after }; }
+        function planPromptHtml(src) {
+          var pp = planPrompt; if (!pp || pp.src !== src) return "";
+          var sg = pp.suggest || {}, dis = busy ? " disabled" : "";
+          var h = '<div class="lc-notice plan-prompt" role="alert" style="margin-top:10px"><strong>授業計画の上限を超えていますが案内しますか？</strong><div class="small" style="margin-top:4px">' + esc(planLabel(sg)) + ' ' + (sg.dates || []).map(fmtDY).join('、') + ' の ' + (sg.count || 0) + '件が、承認済み・案内中の授業計画に収まりません。承認前の授業は請求できません。</div>';
+          if (!pp.open) h += '<div class="row" style="margin-top:8px;gap:6px"><button class="btn-quiet btn-sm" data-action="pp-cancel"' + dis + '>キャンセル</button><button class="btn-primary btn-sm" data-action="pp-open"' + dis + '>授業計画の案内をして授業を実施する</button></div>';
+          else {
+            h += '<div class="form" style="margin-top:8px">';
+            h += '<div class="small">' + (sg.parentId ? esc(sg.parentLabel || "") + ' への追加案内として送ります' : esc(planLabel(sg)) + ' の新しい案内を保護者に送ります') + '</div>';
+            h += '<label for="pp-start">開始日</label><input type="date" id="pp-start" value="' + esc(sg.startDate || "") + '"' + dis + '>';
+            h += '<label for="pp-end">終了日</label><input type="date" id="pp-end" value="' + esc(sg.endDate || "") + '"' + dis + '>';
+            h += '<label for="pp-count">回数</label><input type="number" id="pp-count" min="1" max="99" value="' + (sg.count || 1) + '"' + dis + '>';
+            h += '<label for="pp-min">1回の授業時間</label><select id="pp-min"' + dis + '>' + [30, 60, 90, 120, 150, 180, 210, 240].map(function (m) { return '<option value="' + m + '"' + (m === (+sg.lessonMin || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
+            h += '<label for="pp-fee">1回の授業料</label><input type="number" id="pp-fee" min="0" step="100" value="' + (+sg.lessonFee || 0) + '"' + dis + '>';
+            h += '<label for="pp-comment">コメント（保護者向け）</label><input id="pp-comment" maxlength="500" placeholder="例: 定期テスト前に演習を増やすため"' + dis + '>';
+            h += '</div><div class="row" style="margin-top:8px;gap:6px"><button class="btn-quiet btn-sm" data-action="pp-cancel"' + dis + '>キャンセル</button><button class="btn-primary btn-sm" data-action="pp-send"' + dis + '>' + (busy ? "送信中…" : "計画を案内して授業を案内する") + '</button></div>';
+          }
+          if (pp.error) h += '<p class="small" role="alert" style="color:var(--danger);margin:6px 0 0">' + esc(pp.error) + '</p>';
+          return h + '</div>';
+        }
+        function planPromptSend() {
+          var pp = planPrompt; if (!pp || busy) return; var sg = pp.suggest || {};
+          var args = { studentId: sg.studentId, subject: sg.subject, kind: sg.kind || "通常", parentId: sg.parentId || "", startDate: val("pp-start"), endDate: val("pp-end"), count: +val("pp-count"), lessonMin: +val("pp-min"), lessonFee: +val("pp-fee"), comment: val("pp-comment"), propose: true };
+          if (!args.startDate || !args.endDate || !(args.count > 0)) { toast("期間と回数を入力してください"); return; }
+          var r = route(); busy = true; render();
+          admin("planLineSave", args).then(function (res) {
+            busy = false;
+            if (res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); return; }
+            if (res.error) { pp.error = res.error; toast(res.error); render(); return; }
+            planPrompt = null; cacheClear(); if (res.data && cur && sameId(cur.id, args.studentId)) applyResult(res, r);
+            toast("授業計画の案内を送りました"); pp.after();
+          }).catch(function (er) { busy = false; pp.error = er.message || "通信に失敗しました"; render(); });
         }
 
         function render() {
@@ -2040,12 +2070,17 @@
         }
         function renderBilling(s) {
           var e = billingEditor(s), b = e.preview, disabled = busy || e.busy || !!e.pending;
-          var h = '<h2>請求・入金管理' + helpButton('billing') + '</h2>' + helpBox('billing', '対象月の承認済み料金と実施実績から請求額を計算します。請求済みの履歴は、あとで基本料金を変えても変わりません。') + '<div class="card"><div class="row"><label for="billing-month">対象月</label><input type="month" id="billing-month" data-billing-field="ym" value="' + esc(e.ym) + '"' + (disabled ? " disabled" : "") + '>' + billingButton("preview", e.busy ? "確認中…" : "請求内容を確認", disabled) + '</div>';
+          var h = '<h2>請求・入金管理' + helpButton('billing') + '</h2>' + helpBox('billing', '対象月に実施した授業のうち、承認済みの授業計画に当てはまる分だけを請求します。計画に収まらない授業は「承認待ち（請求対象外）」に分け、保護者が計画を承認すると、その月かそれ以降の請求に繰り越して含めます。見送られた分は請求しません。請求済みの履歴は、あとで基本料金を変えても変わりません。') + '<div class="card"><div class="row"><label for="billing-month">対象月</label><input type="month" id="billing-month" data-billing-field="ym" value="' + esc(e.ym) + '"' + (disabled ? " disabled" : "") + '>' + billingButton("preview", e.busy ? "確認中…" : "請求内容を確認", disabled) + '</div>';
           if (e.error) h += '<p class="lc-notice" role="alert">' + esc(e.error) + (!e.pending ? ' <button class="btn-quiet btn-sm" data-action="reload">最新のカルテを確認</button>' : "") + '</p>';
           if (e.pending) h += '<p class="lc-notice">保存結果の確認が必要です。' + billingButton("retry", e.pending.op === "kanriAddPayment" ? "同じ請求を再試行" : "同じ入金・取消処理を再試行", e.busy, "", "btn-primary") + '</p>';
           if (b) {
             h += '<div class="card" style="margin-top:12px"><strong>' + esc(b.ym) + '分　' + yen(b.amount) + '</strong><p class="small">' + (b.mode === "recorded" ? '過去の請求記録（当時の料金条件は未記録）' : (b.mode === "monthly" ? '月謝 ' + yen(b.monthly) : '30分 ' + yen(b.rate30) + ' × 実施 ' + esc(b.minutes) + '分') + '・' + esc(b.count) + '回') + '</p>';
-            h += (b.invoice ? b.invoice.lessons || [] : b.lessons || []).map(function (l) { return '<div class="small">' + fmtDY(l.date) + ' ' + esc(l.start) + ' ' + esc(l.subject || "") + ' ' + esc(l.min) + '分</div>'; }).join("");
+            h += (b.invoice ? b.invoice.lessons || [] : b.lessons || []).map(function (l) { return '<div class="small">' + fmtDY(l.date) + ' ' + esc(l.start) + ' ' + esc(l.subject || "") + ' ' + esc(l.min) + '分' + (l.carried ? ' <span class="tag gray">繰越</span>' : '') + '</div>'; }).join("");
+            if ((b.pending || []).length) {
+              h += '<div class="small" style="margin-top:8px"><span class="tag amber">承認待ち（請求対象外）</span> ' + b.pending.length + '件・' + yen(b.pendingAmount || 0) + '</div>';
+              h += b.pending.map(function (l) { return '<div class="small muted">' + fmtDY(l.date) + ' ' + esc(l.start) + ' ' + esc(l.subject || "") + ' ' + esc(l.min) + '分' + (l.status === "proposed" ? '（案内中の計画の承認待ち）' : '（計画の案内がありません）') + '</div>'; }).join("");
+              h += '<p class="note">承認待ちの授業は、保護者が授業計画を承認すると請求に含められます（この月を請求済みなら翌月以降に繰越）。</p>';
+            }
             if (b.reason) h += '<p class="lc-notice">' + esc(b.reason) + '</p>';
             if (b.invoice) h += '<p><span class="tag gray">請求記録あり</span> ' + yen(b.invoice.amount) + '・' + esc(b.invoice.status) + '</p>';
             h += '<p>' + billingButton("issue", "この内容で請求を記録", disabled || !b.canBill, "", "btn-primary") + '</p><p class="note">請求額は保存時にもう一度計算します。条件や実績が変わっていたら、更新して確認し直してください。</p></div>';
@@ -2501,7 +2536,10 @@
             case "tnl-parse": tnlParse(); break;
             case "tnl-clear": TNL = { text: "", busy: false, proposal: null, error: "" }; render(); break;
             case "tnl-item": { var ti = TNL.proposal && TNL.proposal.items[+btn.getAttribute("data-i")]; if (ti && !ti.done) ti.sel = !ti.sel; break; }
-            case "tnl-register": tnlRegister(); break;
+            case "tnl-register": tnlRegister(false); break;
+            case "pp-cancel": planPrompt = null; render(); break;
+            case "pp-open": if (planPrompt) { planPrompt.open = true; render(); } break;
+            case "pp-send": planPromptSend(); break;
             case "sblockopen": sBlockOpen = !sBlockOpen; if (sBlockOpen) sOfferOpen = false; render(); break;
             case "sblockadd": {
               var sbd = btn.getAttribute("data-date"), sbs = val("sb-start"), sbe = val("sb-end");

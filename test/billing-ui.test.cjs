@@ -121,6 +121,19 @@ test('a new line is prefilled from the current base fee and an explicitly edited
   assert.equal(body.op, 'planLineSave'); assert.equal(body.propose, false); assert.equal(body.lineId, undefined); assert.equal(body.lessonFee, 5250); assert.equal(body.startDate, '2026-11-01');
 });
 
+test('the billing preview lists approval-pending lessons apart from billable ones and marks carried lessons', async () => {
+  const ui = await ready(); ui.click('billing-preview');
+  ui.requests.at(-1).reply({ ok: true, billing: { ym: '2026-09', amount: 3000, pendingAmount: 4500, mode: 'time', rate30: 1500, minutes: 60, count: 1, canBill: true, carried: 1,
+    lessons: [{ date: '2026-08-28', start: '16:00', subject: '数学', min: 60, amount: 3000, carried: true }],
+    pending: [{ date: '2026-09-10', start: '17:00', subject: '英語', min: 90, amount: 4500, status: 'proposed' }, { date: '2026-09-12', start: '17:00', subject: '英語', min: 90, amount: 4500, status: 'none' }] } }); await flush();
+  const html = ui.html();
+  assert.match(html, /2026\/8\/28 16:00 数学 60分 <span class="tag gray">繰越<\/span>/);
+  assert.match(html, /<span class="tag amber">承認待ち（請求対象外）<\/span> 2件・4,500円/);
+  assert.match(html, /2026\/9\/10 17:00 英語 90分（案内中の計画の承認待ち）/); assert.match(html, /2026\/9\/12 17:00 英語 90分（計画の案内がありません）/);
+  assert.match(html, /data-action="billing-issue"(?![^>]*disabled)/, 'the month is still billable for the approved part');
+  ui.click('billing-issue'); assert.equal(ui.requests.at(-1).body.amount, 3000, 'pending lessons are not part of the invoice amount');
+});
+
 test('invoice creation uses preview amount and repeats the same request after a network error', async () => {
   const ui = await ready();
   assert.equal(ui.el('p-amount'), undefined, 'no free-form invoice amount input');

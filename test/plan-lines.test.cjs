@@ -65,24 +65,27 @@ test('propose, parent approval with a reduced count, teacher consent record, and
   assert.equal(lines(h)[0].status, 'declined'); assert.equal(lines(h)[0].approvedCount, 0); assert.equal(decl.data.planLines.length, 0);
 });
 
-test('booking is gated by the matching line across month boundaries and counts the whole period', () => {
+test('the matching line is checked when offering across month boundaries, counts the whole period, and booked lessons pin the line', () => {
   const h = createSchedulingHarness();
   const sent = ok(save(h, { subject: '数学', startDate: '2026-09-22', endDate: '2026-10-05', count: 2, propose: true }));
   const approved = h.approveLine(sent.line.id);
   assert.equal(approved.line.status, 'approved');
-  const s1 = h.seedSlot({ date: '2026-09-25' }), s2 = h.seedSlot({ date: '2026-10-02' }), s3 = h.seedSlot({ date: '2026-10-03' }), out = h.seedSlot({ date: '2026-10-06' }), eng = h.seedSlot({ date: '2026-09-25', start: '18:00', subject: '英語' });
+  const s1 = h.seedSlot({ date: '2026-09-25' }), s2 = h.seedSlot({ date: '2026-10-02' });
   ok(h.accept(s1.id)); ok(h.accept(s2.id));
-  rejected(h.accept(s3.id), 'planLimit');
-  rejected(h.accept(out.id), 'approvalRequired'); rejected(h.accept(eng.id), 'approvalRequired');
+  // confirmation is no longer gated (2026-09-18); the offer form asks first when the line is full or missing
+  rejected(h.offer({ date: '2026-10-03', planForce: false }), 'planShort');
+  rejected(h.offer({ date: '2026-10-06', planForce: false }), 'planShort'); rejected(h.offer({ date: '2026-09-25', start: '18:00', subject: '英語', planForce: false }), 'planShort');
+  const s3 = h.seedSlot({ date: '2026-10-03' }); ok(h.accept(s3.id));
   // the line cannot shrink below or away from booked lessons, nor be deleted
   rejected(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-10-05', count: 1, expectedRevision: 1 }), 'bookedOver');
   rejected(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-09-30', count: 2, expectedRevision: 1 }), 'bookedOver');
   rejected(h.admin('planLineDelete', { studentId: 'test-a', lineId: sent.line.id }), 'bookedExists');
   ok(save(h, { lineId: sent.line.id, subject: '数学', startDate: '2026-09-22', endDate: '2026-10-10', count: 3, expectedRevision: 1 }));
-  // batch acceptance also uses the line limit
-  h.approveLine(sent.line.id, 2);
+  // batch acceptance is not capped either; the parent cannot approve fewer than the booked lessons need
+  h.approveLine(sent.line.id, 3);
   const s4 = h.seedSlot({ date: '2026-10-08' }), s5 = h.seedSlot({ date: '2026-10-09' });
-  const batch = h.acceptMany([s4.id, s5.id]); assert.equal(batch.errorCode, 'planLimit', JSON.stringify(batch));
+  ok(h.acceptMany([s4.id, s5.id]));
+  assert.equal(h.rows('slots').filter(x => x.status === 'booked').length, 5);
 });
 
 test('monthly billing applies each lesson to its line rate, flags unapproved lessons and locks lines once invoiced', () => {
@@ -96,7 +99,9 @@ test('monthly billing applies each lesson to its line rate, flags unapproved les
   assert.deepEqual(p.lessons.map(l => [l.date, l.amount, l.lineId === a.line.id ? 'a' : l.lineId === b.line.id ? 'b' : '?']), [['2026-09-02', 4500, 'a'], ['2026-09-25', 3000, 'b']]);
   const oct = preview(h, '2026-10'); assert.equal(oct.amount, 3000); assert.equal(oct.canBill, true, oct.reason);
   h.seedSlot({ date: '2026-09-10', status: 'booked', done: true, min: 60, subject: '英語' });
-  p = preview(h); assert.equal(p.canBill, false); assert.equal(p.reason, '承認されていない科目・回数の授業があります'); assert.equal(p.provisional, true); assert.equal(p.amount, 7500 + 3000);
+  // a lesson with no approved line is not billed: it is listed as pending (priced at the base rate as a guide) and the month can still be invoiced
+  p = preview(h); assert.equal(p.canBill, true, p.reason); assert.equal(p.provisional, true); assert.equal(p.amount, 7500); assert.equal(p.pendingAmount, 3000);
+  assert.deepEqual(p.pending.map(l => [l.date, l.subject, l.status, l.amount]), [['2026-09-10', '英語', 'none', 3000]]);
   h.setRow('slots', 'date', '2026-09-10', { subject: '数学' });
   p = preview(h); assert.equal(p.canBill, true, p.reason); assert.equal(p.amount, 7500 + 3000);
   const inv = ok(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'plan-lines-invoice-1' }));
@@ -163,12 +168,13 @@ test('addon lines top up an approved line: same subject and kind, period inside 
   assert.deepEqual(st.planLines.map(l => [l.subject, l.count, l.addon, l.status]), [['数学', 1, true, 'proposed'], ['数学', 2, false, 'approved']]);
   // the parent cannot be deleted while addons exist; an addon can be deleted while unused
   rejected(h.admin('planLineDelete', { studentId: 'test-a', lineId: parent.line.id }), 'addonExists');
-  // booking: parent limit 2, addon not yet approved → third lesson is over the limit
+  // offering: parent 2 + proposed addon a1 1 cover three lessons (a2 is still a draft); confirmation itself is not gated
   const s1 = h.seedSlot({ date: '2026-09-10' }), s2 = h.seedSlot({ date: '2026-09-12' }), s3 = h.seedSlot({ date: '2026-09-22' }), s4 = h.seedSlot({ date: '2026-09-26' });
-  ok(h.accept(s1.id)); ok(h.accept(s2.id)); rejected(h.accept(s3.id), 'planLimit');
-  h.approveLine(a1.line.id); ok(h.accept(s3.id));
-  rejected(h.accept(s4.id), 'planLimit');
-  h.approveLine(a2.line.id); ok(h.accept(s4.id));
+  ok(h.accept(s1.id)); ok(h.accept(s2.id)); ok(h.accept(s3.id)); ok(h.accept(s4.id));
+  assert.equal(rejected(h.offer({ date: '2026-09-28', planForce: false }), 'planShort').planSuggest.count, 1);
+  h.approveLine(a1.line.id); h.approveLine(a2.line.id);
+  // with a2 sent and approved the five lessons fit: of two more only the second is short
+  const two = rejected(h.offer({ date: '2026-09-28', repeat: 2, planForce: false }), 'planShort'); assert.deepEqual(two.planSuggest.dates, ['2026-10-05']); assert.equal(two.planSuggest.parentId, '', 'October is outside the parent period');
   // billing: the first two lessons use the parent rate, the next the addon rates in order
   h.advance(40 * 86400000);
   for (const id of [s1.id, s2.id, s3.id, s4.id]) h.setRow('slots', 'id', id, { done: true });

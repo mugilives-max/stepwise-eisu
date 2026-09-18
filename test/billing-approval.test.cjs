@@ -84,9 +84,11 @@ test('legacy parent line decision cannot use an absent or another student sessio
   assert.deepEqual(h.payments(), []);
 });
 
-test('a teacher can send an offer before a line is approved without confirming or billing it', () => {
+test('a teacher can send an offer before a line is approved: the form asks first, and planForce continues without billing it', () => {
   const h = createBillingHarness();
-  const result = ok(h.admin('offer', { studentId: 'test-a', date: '2026-09-15', start: '16:00', min: 60, subject: '数学' }));
+  const short = rejected(h.admin('offer', { studentId: 'test-a', date: '2026-09-15', start: '16:00', min: 60, subject: '数学' }), 'planShort');
+  assert.equal(short.needPlan, true); assert.equal(short.planSuggest.count, 1); assert.equal(h.rows('slots').length, 0);
+  const result = ok(h.admin('offer', { studentId: 'test-a', date: '2026-09-15', start: '16:00', min: 60, subject: '数学', planForce: true }));
   assert.equal(result.added, 1);
   const slots = h.rows('slots');
   assert.equal(slots.length, 1);
@@ -97,7 +99,7 @@ test('a teacher can send an offer before a line is approved without confirming o
   assert.deepEqual(h.effects, []);
 });
 
-test('an offer cannot be accepted without an approved line for its student, subject and date', () => {
+test('an offer can be accepted without an approved line; the lesson is then pending at billing time instead of billable', () => {
   for (const setup of [
     () => {},
     h => h.seedPlan({ ym: 'default', status: 'approved' }),
@@ -110,22 +112,26 @@ test('an offer cannot be accepted without an approved line for its student, subj
     const h = createBillingHarness();
     setup(h);
     const slot = h.seedSlot();
-    rejected(h.accept(slot.id), 'approvalRequired');
-    assert.equal(h.rows('slots').find(row => row.id === slot.id).status, 'offered');
+    ok(h.accept(slot.id));
+    assert.equal(h.rows('slots').find(row => row.id === slot.id).status, 'booked');
+    h.advance(30 * 86400000); h.setRow('slots', 'id', slot.id, { done: true });
+    const bill = preview(h);
+    assert.deepEqual(bill.lessons, []); assert.equal(bill.pending.length, 1); assert.equal(bill.pending[0].id, slot.id); assert.equal(bill.amount, 0);
+    assert.equal(bill.canBill, false); assert.match(bill.reason, /承認待ちの授業 1件/);
     assert.deepEqual(h.payments(), []);
-    assert.deepEqual(h.effects, []);
   }
 });
 
-test('an approved line quota counts each booked lesson once and cancellation releases a place', () => {
+test('an approved line quota counts each booked and offered lesson once when offering, and cancellation releases a place', () => {
   const h = createBillingHarness();
   h.seedSlot({ date: '2026-09-01', status: 'booked', done: true });
   approveMonth(h, { count: 2 });
   const first = h.seedSlot({ date: '2026-09-15' });
-  const second = h.seedSlot({ date: '2026-09-22' });
   ok(h.accept(first.id));
-  rejected(h.accept(second.id), 'planLimit');
+  rejected(h.admin('offer', { studentId: 'test-a', date: '2026-09-22', start: '16:00', min: 60, subject: '数学' }), 'planShort');
   ok(h.admin('unbook', { studentId: 'test-a', slotId: first.id }));
+  ok(h.admin('offer', { studentId: 'test-a', date: '2026-09-22', start: '16:00', min: 60, subject: '数学' }));
+  const second = h.rows('slots').find(row => row.date === '2026-09-22');
   ok(h.accept(second.id));
   assert.equal(h.rows('slots').filter(row => row.status === 'booked').length, 2);
 });
@@ -162,11 +168,12 @@ test('changing one line invalidates only that line until it is approved again', 
   assert.equal(lineById(h, math.id).status, 'draft');
   const english = h.seedSlot({ subject: '英語' });
   ok(h.accept(english.id));
-  rejected(h.accept(h.seedSlot({ date: '2026-09-16' }).id), 'approvalRequired');
+  // the maths lesson of 09-01 lost its approved line, so it is pending; the English line is intact but its lesson is not done yet
   const blocked = preview(h);
   assert.equal(blocked.canBill, false);
-  assert.equal(blocked.reason, '承認されていない科目・回数の授業があります');
-  rejected(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-unapproved-line' }), 'approvalRequired');
+  assert.equal(blocked.amount, 0); assert.equal(blocked.pending.length, 1); assert.equal(blocked.pending[0].status, 'draft' === lineById(h, math.id).status ? 'none' : 'proposed');
+  assert.match(blocked.reason, /未実施の確定授業/);
+  rejected(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-unapproved-line' }));
   assert.deepEqual(h.payments(), []);
 });
 
@@ -208,7 +215,8 @@ test('a line keeps its own fee after base rate changes and a re-proposed line is
   const resent = ok(editLine(h, line, { lessonFee: 3600, propose: true })).line;
   assert.equal(resent.revision, line.revision + 1);
   const changed = preview(h, 'test-a', '2026-08');
-  assert.equal(changed.amount, 5000);
+  // the re-proposed line no longer covers the lesson: it is pending, priced at the proposed line's new rate as a guide
+  assert.equal(changed.amount, 0); assert.equal(changed.pendingAmount, 2400); assert.equal(changed.pending[0].status, 'proposed');
   assert.equal(changed.provisional, true);
   assert.equal(changed.planStatus, 'proposed');
   assert.equal(changed.canBill, false);
@@ -340,18 +348,20 @@ test('issuing an invoice freezes its lines, booked lessons, completed status and
   const futureOffer = h.seedSlot({ date: '2026-09-15' });
   issueInvoice(h);
   const before = { slots: h.rows('slots'), lines: h.rows('planLines'), payments: h.payments() };
-  rejected(h.accept(futureOffer.id), 'invoiceLocked');
+  // only the invoiced lesson is frozen: the future offer of the same month can still be confirmed
+  ok(h.accept(futureOffer.id)); before.slots = h.rows('slots');
   for (const operation of [
     { op: 'toggleDone', slotId: completed.id },
     { op: 'unbook', slotId: completed.id },
-    { op: 'finishOffered', slotId: oldOffer.id },
-    { op: 'deleteSlot', slotId: oldOffer.id },
     { op: 'resolveCancel', slotId: completed.id, approve: true }
-  ]) rejected(h.admin(operation.op, { studentId: 'test-a', ...operation }));
+  ]) rejected(h.admin(operation.op, { studentId: 'test-a', ...operation }), 'invoiceLocked');
+  // an offer that was never invoiced is not frozen by the month's invoice
+  ok(h.admin('deleteSlot', { studentId: 'test-a', slotId: oldOffer.id })); before.slots = h.rows('slots');
   rejected(editLine(h, h.line, { count: 4 }), 'invoiceLocked');
   rejected(editLine(h, h.line, { lessonFee: 6000, propose: true }), 'invoiceLocked');
   rejected(h.admin('planLineDelete', { studentId: 'test-a', lineId: h.line.id }), 'invoiceLocked');
-  rejected(h.admin('planLineSave', { studentId: 'test-a', subject: '英語', kind: '通常', count: 1, startDate: '2026-09-20', endDate: '2026-10-05', lessonMin: 60, lessonFee: 3000 }), 'invoiceLocked');
+  // a new line may still be created over an invoiced month: that is how lessons left pending get approved and billed later
+  ok(h.admin('planLineSave', { studentId: 'test-a', subject: '英語', kind: '通常', count: 1, startDate: '2026-09-20', endDate: '2026-10-05', lessonMin: 60, lessonFee: 3000 })); before.lines = h.rows('planLines');
   assert.deepEqual(h.rows('slots'), before.slots);
   assert.deepEqual(h.rows('planLines'), before.lines);
   assert.deepEqual(h.payments(), before.payments);
@@ -512,7 +522,7 @@ test('duplicate line rows fail closed for line edits, booking and invoicing', ()
   sheet.appendRow([...sheet.values[1]]);
   const before = { slots: h.rows('slots'), lines: h.rows('planLines') };
   rejected(editLine(h, line, { count: 3 }));
-  rejected(h.accept(slot.id));
+  rejected(h.admin('offer', { studentId: 'test-a', date: '2026-09-16', start: '16:00', min: 60, subject: '数学' }));
   assert.equal(h.rows('slots').find(row => row.id === slot.id).status, 'offered');
   rejected(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-duplicate-line' }));
   assert.deepEqual(h.payments(), []);
@@ -687,7 +697,8 @@ test('duration is saved with the line and reduced parent counts govern actual bo
     sh.appendRow(sh.values[0].map(k => slot[k] ?? ''));
   }
   c.memoClear_();
-  assert.equal(c.billingSlotAllowed_({ id: 'new-slot', studentId: 'test-a', date: '2026-09-21', start: '10:00', min: 90, subject: '数学' }).errorCode, 'planLimit');
+  assert.equal(c.billingSlotAllowed_({ id: 'new-slot', studentId: 'test-a', date: '2026-09-21', start: '10:00', min: 90, subject: '数学' }), null, 'confirmation is not gated by the reduced count');
+  assert.deepEqual(c.planCoverageShort_('test-a', [{ id: 'new-slot', studentId: 'test-a', date: '2026-09-21', start: '10:00', min: 90, subject: '数学' }]).map(x => x.id), ['new-slot'], 'the reduced count governs the offer-time check');
   assert.equal(preview(h).planStatus, 'approved');
 });
 
@@ -703,5 +714,38 @@ test('partial approval rejects invalid counts and zero counts remain declined', 
   assert.equal(Number(h.rows('planLines')[0].approvedCount), 0);
   assert.deepEqual(declined.data.planLines, []);
   assert.equal(preview(h).planStatus, 'declined');
-  rejected(h.accept(h.seedSlot().id), 'approvalRequired');
+  // a declined line does not cover offers, and a lesson taught anyway is never billed
+  rejected(h.admin('offer', { studentId: 'test-a', date: '2026-09-16', start: '16:00', min: 60, subject: '数学' }), 'planShort');
+  const taught = h.seedSlot(); ok(h.accept(taught.id));
+  h.advance(30 * 86400000); h.setRow('slots', 'id', taught.id, { done: true });
+  const bill = preview(h); assert.equal(bill.amount, 0); assert.equal(bill.pending.length, 1); assert.equal(bill.canBill, false);
+});
+
+test('a lesson left pending when its month was invoiced is carried into the next invoice once the parent approves a covering line', () => {
+  const h = createBillingHarness();
+  approveMonth(h, { count: 1 });
+  h.seedSlot({ date: '2026-09-01', status: 'booked', done: true });
+  const extra = h.seedSlot({ date: '2026-09-08', status: 'booked' });
+  h.advance(10 * 86400000); h.setRow('slots', 'id', extra.id, { done: true });
+  let sep = preview(h); assert.equal(sep.amount, 3000); assert.deepEqual(sep.pending.map(p => p.id), [extra.id]);
+  const invoice = ok(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-carry-1' })).invoice;
+  assert.equal(invoice.amount, 3000); assert.equal(invoice.lessons.length, 1);
+  // the pending lesson is still mutable (it was not invoiced), and October shows it as pending, not billable
+  ok(h.admin('toggleDone', { studentId: 'test-a', slotId: extra.id })); ok(h.admin('toggleDone', { studentId: 'test-a', slotId: extra.id }));
+  let oct = preview(h, 'test-a', '2026-10'); assert.equal(oct.amount, 0); assert.deepEqual(oct.pending.map(p => [p.id, p.carried]), [[extra.id, true]]);
+  // an addon approved later covers it: October bills it as a carried lesson at the addon rate
+  const addon = proposeLine(h, { count: 1, lessonFee: 3000, parentId: lines(h)[0].id, startDate: '2026-09-01', endDate: '2026-09-30' });
+  approveLine(h, addon);
+  h.seedSlot({ date: '2026-10-01', status: 'booked', done: true });
+  approveMonth(h, { ym: '2026-10', count: 1 });
+  h.advance(31 * 86400000);
+  oct = preview(h, 'test-a', '2026-10');
+  assert.equal(oct.canBill, true, oct.reason); assert.equal(oct.carried, 1); assert.deepEqual(oct.lessons.map(l => [l.date, l.amount, !!l.carried]), [['2026-09-08', 2000, true], ['2026-10-01', 3000, false]]);
+  assert.equal(oct.amount, 5000); assert.deepEqual(oct.pending, []);
+  const second = ok(h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-10', requestId: 'synthetic-carry-2' })).invoice;
+  assert.equal(second.amount, 5000);
+  // now the carried lesson is frozen and the addon line is locked
+  rejected(h.admin('toggleDone', { studentId: 'test-a', slotId: extra.id }), 'invoiceLocked');
+  rejected(editLine(h, lineById(h, addon.id), { count: 2 }), 'invoiceLocked');
+  assert.deepEqual(preview(h, 'test-a', '2026-11').pending, []);
 });

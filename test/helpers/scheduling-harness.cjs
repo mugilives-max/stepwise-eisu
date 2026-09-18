@@ -51,7 +51,8 @@ function createSchedulingHarness(options = {}) {
   }
   return Object.assign(h, {
     seedSlot: slot, append, approve, approveLine, requestWith, snapshot,
-    offer: (args = {}) => h.admin('offer', { studentId: 'test-a', date: '2026-09-15', start: '16:00', min: 60, subject: '数学', ...args }),
+    // planForce: the plan-shortfall prompt is a teacher decision; tests exercise it explicitly with planForce:false
+    offer: (args = {}) => h.admin('offer', { studentId: 'test-a', date: '2026-09-15', start: '16:00', min: 60, subject: '数学', planForce: true, ...args }),
     acceptMany: (slotIds, requestId = 'synthetic-batch-request', extra = {}) => h.request({ action: 'acceptMany', k: 'synthetic-link-a', slotIds, requestId, expectedSnapshots: slotIds.map(snapshot), ...extra }),
     accept: slotId => h.request({ action: 'accept', k: 'synthetic-link-a', slotId, expectedSnapshot: snapshot(slotId) }),
     teacherRequest: (op, args = {}) => ({ action: 'admin', op, token: TEACHER_TOKEN, ...(op === 'setSlotDeliveryMode' ? { requestId: 'synthetic-mode-' + (++seq) } : {}), ...args })

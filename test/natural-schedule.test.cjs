@@ -108,18 +108,24 @@ test('the teacher variant proposes offers, blocks and events with the subject an
   const call = t.calls.at(-1);
   assert.match(call.payload.system, /科目の一覧: 英語、数学。授業の種類の一覧: 通常、演習/); assert.match(call.payload.messages[0].content, /<teacher_text>/);
   assert.equal(JSON.stringify(call.payload).includes('【テスト】'), false); assert.equal(JSON.stringify(call.payload).includes('test-a'), false);
-  const a = admin('nlApplyTeacher', { studentId: 'test-a', deliveryMode: 'in_person', from: 'kanri', items: [
+  const applyItems = [
     { kind: 'offer', dates: ['2026-09-16', '2026-09-23'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習' },
     { kind: 'block', dates: ['2026-09-20'], note: '部活の大会' },
     { kind: 'event', dates: ['2026-09-25', '2026-09-26'], title: '中間テスト', test: true }
-  ] });
+  ];
+  // no plan line covers the offers: nothing is written and the same plan prompt as the offer form comes back
+  const short = admin('nlApplyTeacher', { studentId: 'test-a', deliveryMode: 'in_person', from: 'kanri', items: applyItems });
+  assert.equal(short.errorCode, 'planShort'); assert.equal(short.needPlan, true);
+  assert.deepEqual([short.planSuggest.subject, short.planSuggest.kind, short.planSuggest.count, short.planSuggest.dates, short.planSuggest.lessonMin], ['英語', '演習', 2, ['2026-09-16', '2026-09-23'], 90]);
+  assert.equal(t.h.rows('blocked').filter(b => b.studentId === 'test-a').length, 0);
+  const a = admin('nlApplyTeacher', { studentId: 'test-a', deliveryMode: 'in_person', from: 'kanri', planForce: true, items: applyItems });
   assert.equal(a.ok, true, JSON.stringify(a)); assert.equal(a.added, 4); assert.ok(a.data && a.data.id === 'test-a', 'card refreshed');
   assert.deepEqual(a.results.map(x => [x.kind, x.status, x.count, x.errors.length]), [['offer', 'added', 2, 0], ['block', 'added', 1, 0], ['event', 'added', 1, 0]]);
   const offered = t.h.rows('slots').filter(x => x.studentId === 'test-a' && x.status === 'offered');
   assert.deepEqual(offered.map(x => [x.date, x.start, Number(x.min), x.subject, x.kind]), [['2026-09-16', '17:00', 90, '英語', '演習'], ['2026-09-23', '17:00', 90, '英語', '演習']]);
   assert.deepEqual(t.h.rows('blocked').filter(b => b.studentId === 'test-a').map(b => [b.date, b.note]), [['2026-09-20', '部活の大会']]);
   assert.deepEqual(t.h.rows('events').filter(e => e.studentId === 'test-a').map(e => [e.date, e.dateTo, e.title]), [['2026-09-25', '2026-09-26', '中間テスト']]);
-  const again = admin('nlApplyTeacher', { studentId: 'test-a', items: [{ kind: 'block', dates: ['2026-09-20'] }, { kind: 'offer', dates: ['2026-09-30'], start: '', min: 90, subject: '英語' }] });
+  const again = admin('nlApplyTeacher', { studentId: 'test-a', planForce: true, items: [{ kind: 'block', dates: ['2026-09-20'] }, { kind: 'offer', dates: ['2026-09-30'], start: '', min: 90, subject: '英語' }] });
   assert.equal(again.ok, true); assert.deepEqual(again.results.map(x => x.status), ['error', 'error']); assert.equal(again.added, 0);
   assert.ok(admin('nlApplyTeacher', { studentId: 'test-a', items: [] }).error);
 });

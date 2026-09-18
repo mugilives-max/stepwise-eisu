@@ -12,7 +12,8 @@ function statuses(result) { return result.results.map(r => r.status); }
 function harness() {
   const h = createSchedulingHarness();
   return Object.assign(h, {
-    mcp: (op, args = {}) => h.request({ action: 'admin', mcpKey: MCP_KEY, client: 'synthetic-test', requestId: 'req-' + Math.random().toString(36).slice(2), op, ...args }),
+    // planForce: the plan-shortfall confirmation is covered by its own test below
+    mcp: (op, args = {}) => h.request({ action: 'admin', mcpKey: MCP_KEY, client: 'synthetic-test', requestId: 'req-' + Math.random().toString(36).slice(2), op, planForce: true, ...args }),
     props: () => h.context().PropertiesService.getScriptProperties(),
   });
 }
@@ -183,14 +184,19 @@ test('write scope: real students are refused until mcpEnableWrites; reads unaffe
   assert.match(h.mcp('addStudent', { name: 'x' }).error, /MCP から実行できません/);
 });
 
-test('invoice-locked month blocks new offers like the admin screen', () => {
+test('an invoiced month no longer blocks offers; a plan shortfall asks for confirmation unless planForce is set', () => {
   const h = harness();
   h.approve();
   h.seedSlot({ date: '2026-09-01', min: 90, status: 'booked', done: true });
   const invoice = h.admin('kanriAddPayment', { studentId: 'test-a', ym: '2026-09', requestId: 'synthetic-invoice-1' });
   assert.equal(invoice.ok, true, JSON.stringify(invoice));
-  const r = ok(h.mcp('mcpOfferLessons', { studentId: 'test-a', subject: '数学', start: '18:00', min: 60, items: [{ date: '2026-09-23' }, { date: '2026-10-07' }] }));
-  assert.equal(r.results[0].status, 'conflict');
-  assert.equal(r.results[0].code, 'invoiceLocked');
-  assert.equal(r.results[1].status, 'added');
+  const args = { studentId: 'test-a', subject: '数学', start: '18:00', min: 60, items: [{ date: '2026-09-23' }, { date: '2026-10-07' }] };
+  const r = ok(h.mcp('mcpOfferLessons', { ...args, planForce: false }));
+  assert.equal(r.results[0].status, 'added', 'the September line still has room; the invoice locks only invoiced lessons');
+  assert.equal(r.results[1].status, 'needsConfirm');
+  assert.equal(r.results[1].code, 'planShort');
+  assert.match(r.results[1].reason, /planForce=true/);
+  assert.equal(h.rows('slots').filter(s => s.studentId === 'test-a' && s.status === 'offered').length, 1);
+  const forced = ok(h.mcp('mcpOfferLessons', args));
+  assert.deepEqual(statuses(forced), ['exists', 'added']);
 });

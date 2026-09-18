@@ -81,7 +81,7 @@ test('the plan and billing headings carry a ? help toggle instead of an always-v
   const ui = await adminReady(card(), 'billing');
   assert.doesNotMatch(ui.html(), /1つの「案内」として作り|請求済みの履歴は/);
   ui.click('help-toggle', { 'data-help': 'plan' }); assert.match(ui.html(), /aria-expanded="true">\?<\/button>[^]*1つの「案内」として作り/);
-  ui.click('help-toggle', { 'data-help': 'billing' }); assert.match(ui.html(), /<h2>請求・入金管理<button[^>]*aria-expanded="true"[^>]*>\?<\/button><\/h2><div class="card note"[^>]*>対象月の承認済み料金と実施実績から/);
+  ui.click('help-toggle', { 'data-help': 'billing' }); assert.match(ui.html(), /<h2>請求・入金管理<button[^>]*aria-expanded="true"[^>]*>\?<\/button><\/h2><div class="card note"[^>]*>対象月に実施した授業のうち、承認済みの授業計画に当てはまる分だけを請求します/);
   ui.click('help-toggle', { 'data-help': 'plan' }); assert.doesNotMatch(ui.html(), /1つの「案内」として作り/);
 });
 

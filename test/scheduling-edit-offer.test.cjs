@@ -46,10 +46,16 @@ for (const patch of [{ min: 0 }, { min: 481 }, { min: 60.5 }, { start: '23:30', 
   });
 }
 
-for (const ym of ['2026-09', '2026-10']) test('editing across months respects invoice freeze in ' + ym, () => {
-  const h = createSchedulingHarness(), slot = h.seedSlot(); freeze(h, ym); const before = saved(h);
+// A legacy invoice (no lesson list) still freezes every lesson of its month; an invoice elsewhere no longer blocks moving an offer into that month
+test('editing an offer out of a legacy-invoiced month is refused', () => {
+  const h = createSchedulingHarness(), slot = h.seedSlot(); freeze(h, '2026-09'); const before = saved(h);
   rejected(h.request(request(h, slot, { date: '2026-10-01', force: true })), 'invoiceLocked');
   assert.deepEqual(saved(h), before);
+});
+test('an invoice in the target month does not freeze an offered lesson that was never invoiced', () => {
+  const h = createSchedulingHarness(), slot = h.seedSlot(); freeze(h, '2026-10');
+  ok(h.request(request(h, slot, { date: '2026-10-01', force: true })));
+  assert.equal(h.snapshot(slot.id).date, '2026-10-01');
 });
 
 test('moving earlier checks the target teacher day and student blocked times; force bypasses only those warnings', () => {

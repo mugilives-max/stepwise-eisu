@@ -165,7 +165,7 @@ function schedulingPendingEdits_(studentId) {
   });
 }
 function schedulingEditGate_(before,desired,force,editId,op) {
-  var gate=billingSlotMutable_(before)||billingMonthUnlocked_(desired.studentId,desired.date.slice(0,7))||schedulingPendingSlotMutation_(before.id,undefined,editId)||schedulingCapacityError_(desired,undefined,desired.id);
+  var gate=billingSlotMutable_(before)||schedulingPendingSlotMutation_(before.id,undefined,editId)||schedulingCapacityError_(desired,undefined,desired.id);
   if(gate)return gate;
   if(op==='editOffered'&&!force){
     var warnings=[];
@@ -258,7 +258,7 @@ function schedulingAdminOffer_(req) {
   var existing=readRows_('slots'),candidates=[],conflicts=[],blocks=blockedRows_(),offs=teacherOff_(req.date,true),warnings=[];
   for(var w=0;w<repeat;w++){
     var s={id:uid_(),date:addDays_(req.date,w*7),start:req.start,min:Number(req.min),status:'offered',studentId:student.id,done:'',eventId:'',meetUrl:'',subject:String(req.subject).trim(),req:'',deliveryMode:mode,kind:kind};
-    var gate=billingMonthUnlocked_(student.id,s.date.slice(0,7))||schedulingCapacityError_(s,existing.concat(candidates));
+    var gate=schedulingCapacityError_(s,existing.concat(candidates));
     if(gate)conflicts.push({date:s.date,start:s.start,error:gate.error,errorCode:gate.errorCode});
     if(!req.force){
       if(blocks.some(function(b){return String(b.studentId)===String(student.id)&&offHits_(b,s.date,s.start,s.min);}))warnings.push(fmtDateJa_(s.date)+' は生徒が授業できない日時です');
@@ -268,6 +268,11 @@ function schedulingAdminOffer_(req) {
   }
   if(conflicts.length)return {error:'重なる授業・月間計画を確認してください。案内は追加していません',errorCode:conflicts[0].errorCode,conflicts:conflicts};
   if(warnings.length)return {error:warnings.join('。'),needForce:true};
+  // 授業計画(承認済み・送信済み)の枠に収まらない案内は、計画の案内を送るか取り消すかを先生に選んでもらう(planForce で続行)
+  if(!req.planForce){
+    var short=planCoverageShort_(student.id,candidates);
+    if(short.length)return {error:'授業計画の上限を超えています（'+short.length+'件）。授業計画の案内を送ってから案内するか、取り消してください',errorCode:'planShort',needPlan:true,planSuggest:planSuggest_(student,req,short)};
+  }
   var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode,s.kind||''];});
   // 12回分も1回の Sheets 書き込み。途中までの追加・行ごとの再読み込みを避ける。
   sh.getRange(sh.getLastRow()+1,1,values.length,13).setValues(values);

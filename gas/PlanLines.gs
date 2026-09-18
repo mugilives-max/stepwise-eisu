@@ -70,10 +70,12 @@ function planLineParentOf_(lines, l) { return l && l.parentId ? lines.filter(fun
 function planLineAddonsOf_(lines, l) { return lines.filter(function (x) { return x.parentId === l.id; }); }
 // 確定授業の割り当て: 生徒の確定授業を日付順に、その日を含む承認済みの行(親 → 追加の順、追加は開始日順)のうち枠の残っている行へ当てる。
 // 返り値は slotId → {line, candidates}。candidates=0 なら科目・種類・日付の合う承認済みの行がない、line=null なら枠が足りない
-function planAssign_(lines, slots) {
-  var approved = lines.filter(function (l) { return l.status === 'approved'; }), cap = {}, map = {};
+function planAssign_(lines, slots, opts) {
+  opts = opts || {};
+  var statuses = opts.statuses || ['approved'], slotStatuses = opts.slotStatuses || ['booked'];
+  var approved = lines.filter(function (l) { return statuses.indexOf(l.status) >= 0; }), cap = {}, map = {};
   approved.forEach(function (l) { cap[l.id] = planLineLimit_(l); });
-  var booked = slots.filter(function (s) { return s.status === 'booked'; }).slice().sort(function (a, b) { var ka = String(a.date) + ' ' + String(a.start) + ' ' + String(a.id), kb = String(b.date) + ' ' + String(b.start) + ' ' + String(b.id); return ka < kb ? -1 : ka > kb ? 1 : 0; });
+  var booked = slots.filter(function (s) { return slotStatuses.indexOf(s.status) >= 0; }).slice().sort(function (a, b) { var ka = String(a.date) + ' ' + String(a.start) + ' ' + String(a.id), kb = String(b.date) + ' ' + String(b.start) + ' ' + String(b.id); return ka < kb ? -1 : ka > kb ? 1 : 0; });
   booked.forEach(function (s) {
     var cands = approved.filter(function (l) { return String(s.studentId) === l.studentId && l.subject === String(s.subject || '') && l.kind === kindNorm_(s.kind) && planLineCovers_(l, String(s.date || '')); })
       .sort(function (a, b) { return ((a.parentId ? 1 : 0) - (b.parentId ? 1 : 0)) || (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0); });
@@ -100,10 +102,29 @@ function planLinesChangeError_(studentId, lines, nextLines, message, code) {
   return null;
 }
 // 期間に請求済みの月があれば、その行は変更できない(請求の根拠を変えない)
+// 請求済みの授業が割り当てられている行は変更できない(請求の根拠を変えない)。旧形式(授業明細のない請求)の月にかかる行も同様
 function planLineLocked_(l) {
-  var months = planLineMonths_(l);
-  for (var i = 0; i < months.length; i++) { var c = billingMonthUnlocked_(l.studentId, months[i]); if (c) return c; }
-  return null;
+  var inv = billingInvoicedIds_(l.studentId), months = planLineMonths_(l);
+  for (var i = 0; i < months.length; i++) if (inv.legacyMonths[months[i]]) return billingError_('この期間は請求を記録済みです。未入金の請求を取り消してから変更してください', 'invoiceLocked');
+  if (!l.id) return null;
+  var slots = planStudentSlots_(l.studentId), assign = planAssign_(planLinesFor_(l.studentId), slots);
+  var hit = slots.some(function (s) { var a = assign[String(s.id)]; return a && a.line && a.line.id === l.id && inv.ids[String(s.id)]; });
+  return hit ? billingError_('この案内の授業は請求を記録済みです。未入金の請求を取り消してから変更してください', 'invoiceLocked') : null;
+}
+// 授業の案内が計画(承認済み・送信済み)の枠に収まるか。既存の確定・案内中の授業と候補をまとめて割り当て、収まらない候補を返す
+function planCoverageShort_(studentId, candidates) {
+  var lines = planLinesFor_(studentId), slots = planStudentSlots_(studentId).filter(function (s) { return s.status === 'booked' || s.status === 'offered'; });
+  var map = planAssign_(lines, slots.concat(candidates.map(function (c) { return Object.assign({}, c, { status: 'booked' }); })), { statuses: ['approved', 'proposed'], slotStatuses: ['booked', 'offered'] });
+  return candidates.filter(function (c) { var a = map[String(c.id)]; return !a || !a.line; });
+}
+// 収まらなかった案内に合わせた授業計画の提案(管理画面のフォーム初期値)。承認済みの同じ科目・種類の行が全日程を含めば、その行への追加案内にする
+function planSuggest_(student, req, short) {
+  var kind = kindNorm_(req.kind), subject = String(req.subject || '').trim(), dates = short.map(function (s) { return s.date; }).sort(), min = Number(req.min) || 90;
+  var lines = planLinesFor_(student.id), parent = lines.filter(function (l) { return l.status === 'approved' && !l.parentId && l.subject === subject && l.kind === kind && dates.every(function (d) { return planLineCovers_(l, d); }); })[0] || null;
+  var k = lessonKinds_().filter(function (x) { return x.name === (kind || LESSON_KIND_DEFAULT_); })[0];
+  var fee = k && k.standardFee != null && k.standardFee !== '' && Number(k.standardMin) === min ? Number(k.standardFee) : (parent ? Math.round(parent.rate30 * min / 30) : Math.round((Number(student.rate30) || 0) * min / 30));
+  return { studentId: String(student.id), subject: subject, kind: kind || LESSON_KIND_DEFAULT_, count: short.length, dates: dates, startDate: parent ? parent.startDate : dates[0].slice(0, 7) + '-01', endDate: parent ? parent.endDate : planMonthEnd_(dates[dates.length - 1].slice(0, 7)),
+    lessonMin: min, lessonFee: fee, parentId: parent ? parent.id : '', parentLabel: parent ? planPeriodLabel_(parent) + ' ' + kindLabel_(parent.subject, parent.kind) + ' ' + planLineLimit_(parent) + '回' : '' };
 }
 function planLineView_(l) {
   return { id: l.id, subject: l.subject, kind: l.kind, count: l.count, approvedCount: l.approvedCount, startDate: l.startDate, endDate: l.endDate, period: planPeriodLabel_(l), month: planLineIsMonth_(l) ? l.startDate.slice(0, 7) : '',

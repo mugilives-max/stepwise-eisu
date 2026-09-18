@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-12-teacher-nl' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-18-approval-policy' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -796,7 +796,7 @@ function parentDataForStudent_(student) {
     .sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);})
     .map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),status:s.status,subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||''),meetUrl:String(s.meetUrl||'')};});
   return { ok: true, data: { name: d.name, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(student.id) : [], deliveryMode:String(student.deliveryMode||''), upcoming:upcoming, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
-    billing: {amount:d.billing.amount,mode:d.billing.mode,rate30:d.billing.rate30,monthly:d.billing.monthly,provisional:d.billing.provisional,invoice:d.billing.invoice?{amount:d.billing.invoice.amount,status:d.billing.invoice.status}:null},
+    billing: {amount:d.billing.amount,pendingAmount:d.billing.pendingAmount||0,pendingCount:(d.billing.pending||[]).length,mode:d.billing.mode,rate30:d.billing.rate30,monthly:d.billing.monthly,provisional:d.billing.provisional,invoice:d.billing.invoice?{amount:d.billing.invoice.amount,status:d.billing.invoice.status}:null},
     payments: d.payments.map(function (p) { return { ym: p.ym, amount: p.amount, billDate: p.billDate, paidDate: p.paidDate, method: p.method, status: p.status }; }),
     grades: d.grades.map(function (g) { return { date: g.date, test: g.test, subject: g.subject, score: g.score, max: g.max, dev: g.dev, rank: g.rank }; }),
     months: keys.sort().reverse().slice(0, 6).map(function (m) { return months[m]; }), planLines: planLines } };
@@ -1318,9 +1318,6 @@ function adminOffer_(req) {
   if (!student) return { error: '案内する生徒をえらんでください' };
   var repeat = req.repeat == null ? 1 : Number(req.repeat);
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > 12 || !billingSlotValid_({date:req.date,start:req.start,min:req.min,subject:req.subject})) return {error:'正しい日付・時刻・授業分数・科目を入力してください'};
-  for (var checkWeek=0;checkWeek<repeat;checkWeek++) {
-    var gate=billingMonthUnlocked_(student.id,addDays_(req.date,checkWeek*7).slice(0,7));if(gate)return gate;
-  }
   // 生徒が「授業できない日」に登録している日への案内は警告(force指定で強行可)
   if (!req.force) {
     var blockedRows = blockedRows_();
@@ -2399,8 +2396,10 @@ function mcpOfferLessons_(req) {
     if (seen[key]) return done('duplicate', '同じ依頼の中に同じ日時があります', 'validation'); seen[key] = 1;
     var same = existing.filter(function (x) { return String(x.studentId) === String(student.id) && x.date === s.date && x.start === s.start && schedulingOccupied_(x); })[0];
     if (same) { r.slotId = String(same.id); return done('exists', (same.status === 'booked' ? '確定済み' : '案内済み') + 'の授業がすでにあります(登録しません)', same.status); }
-    var gate = billingMonthUnlocked_(student.id, s.date.slice(0, 7)) || schedulingCapacityError_(s, existing.concat(candidates));
+    var gate = schedulingCapacityError_(s, existing.concat(candidates));
     if (gate) return done('conflict', gate.error, gate.errorCode);
+    // 授業計画(承認済み・案内中)の枠に収まらない案内は、計画の案内を送るか planForce=true で続行するかを呼び出し側に選ばせる
+    if (!req.planForce && planCoverageShort_(student.id, candidates.concat([s])).length) return done('needsConfirm', '授業計画（承認済み・案内中）の枠に収まりません。授業計画の案内を送るか、承認を待たずに進めるなら planForce=true で再実行してください（承認前の授業は請求できません）', 'planShort');
     if (!force) {
       var warn = [];
       blocks.forEach(function (b) { if (offHits_(b, s.date, s.start, s.min)) warn.push('生徒の授業できない日時(' + (b.start ? b.start + '〜' + b.end : '終日') + (b.note ? '・' + b.note : '') + ')'); });

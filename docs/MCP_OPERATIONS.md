@@ -75,7 +75,7 @@ stdio は `.env` をプロセス開始時に読みます。`dist` や .env 変�
 
 | ツール | 入力 | 動作 | GAS op |
 |---|---|---|---|
-| `offer_lessons` | `student`, `subject`, `start`, `min`, 任意 `delivery_mode`, 日付指定(`dates` / `range` / `recurrence` / `exclude`), `force`, `dry_run` | 1人の生徒に案内(offered)をまとめて登録。管理画面の案内と同じ検証(請求確定月・定員 対面2/オンライン1・同じ生徒の重複・生徒NG・先生の休み)を項目ごとに行い、可能な分だけ登録。生徒への通知は既存の確認済みメール経路 | `mcpOfferLessons` |
+| `offer_lessons` | `student`, `subject`, `start`, `min`, 任意 `delivery_mode`, 日付指定(`dates` / `range` / `recurrence` / `exclude`), `force`, `dry_run` | 1人の生徒に案内(offered)をまとめて登録。管理画面の案内と同じ検証(定員 対面2/オンライン1・同じ生徒の重複・生徒NG・先生の休み・授業計画の枠)を項目ごとに行い、可能な分だけ登録。承認済み・案内中の授業計画に収まらない案内は `needsConfirm`(code `planShort`)で止まり、先生の指示があれば `planForce=true` で登録できる(承認前の授業は請求されない。2026-09-18)。生徒への通知は既存の確認済みメール経路 | `mcpOfferLessons` |
 | `add_teacher_off` | 日付指定, 任意 `start`/`end`(省略で終日), `note`, `dry_run` | 先生の休みをまとめて登録。重なる案内中・確定の授業を `affectedLessons` で返す(登録は止めない) | `mcpAddTeacherOff` |
 | `add_student_unavailable` | `student`, 日付指定, 任意 `start`/`end`, `note`, `dry_run` | 生徒の授業できない日時を先生が代理登録(LINE 連絡の転記など) | `mcpAddStudentNg` |
 | `add_student_wishes` | `student`, `dates`(1〜20), `kind`(want/ok), `start`, `end`(ok), `min`(want), 任意 `delivery_mode`, `note`, `dry_run` | 生徒の希望を生徒ページと同じ処理(`schedulingWishSave_`)で代理登録。満員の日も「要調整」として登録。先生宛ての希望メールは送らない | `mcpAddStudentWishes` |
@@ -167,7 +167,7 @@ GASのキー認証失敗は共通キャッシュで数え、20回以上で一時
 | MCP認証失敗による一時停止 | GASの共通失敗キャッシュか確認。誤った接続元を止め、記録期限を待って正しい設定で再試行 |
 | 「この操作はMCPから実行できません」 | 許可外のため拒否(取消・削除・確定・請求など)。エラーを消すためだけに許可リストへ追加しない |
 | 「MCP からの登録はいまテスト生徒に限定されています」 | `MCP_WRITE_SCOPE=test`。意図した制限なら維持。開放するときは先生がエディタで `mcpEnableWrites` を実行 |
-| 登録ツールが `needsConfirm` を返す | 生徒の授業できない日時か先生の休みに重なっている。先生がそれでも案内すると判断したときだけ `force=true` で再実行 |
+| 登録ツールが `needsConfirm` を返す | 生徒の授業できない日時か先生の休みに重なっている(`force=true` で再実行)。code が `planShort` なら授業計画の枠に収まらない: 先生に授業計画の案内を送るか、承認を待たずに進める(`planForce=true`)かを確認する |
 | 連絡欄の処理で `claimed` / `claimRequired` / `conflict` | 別の処理が進行中(15分で失効)、処理権なしで登録しようとした、処理中に先生・利用者が連絡を更新した。`list_inbox` で最新を確認して `claim_message` からやり直す。`contactProcessing` シートに経過が残る |
 | 遅い・通信失敗 | 中継は1試行25秒、例外時に1.5秒待って1回再試行。起動待ち・Spreadsheet・ScriptLock待ち等を切り分ける。正常なJSONの業務エラーは自動再試行しない。更新ツールへこの再送を流用しない |
 | Codexで接続できない | まず `codex mcp get stepwise` で `url` が上記 `/mcp` か確認し、`codex mcp login stepwise` で再認証。Workerの `/` と `/mcp`(未認証で401)の応答も確認。予備のstdioに戻す場合は Node、生成済みdist/stdio.js、プロジェクト直下.envの存在・項目を確認し、ビルド後に再起動。.envの値を丸ごと出力しない |

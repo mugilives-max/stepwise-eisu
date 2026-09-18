@@ -80,10 +80,8 @@ test('weekly offer validates every occurrence before one write and force cannot 
   assert.ok(h.rows('slots').slice(1).every(s => s.deliveryMode === 'in_person'));
 });
 
-test('single confirmation preserves approval gates and refuses an overlapping capacity violation', () => {
+test('single confirmation does not wait for parent approval but still refuses an overlapping capacity violation', () => {
   const h = createSchedulingHarness(), slot = h.seedSlot();
-  reject(h.accept(slot.id), 'approvalRequired');
-  h.approve();
   h.seedSlot({ studentId: 'test-b', deliveryMode: 'online' });
   reject(h.accept(slot.id), 'capacity');
   assert.equal(h.rows('slots')[0].status, 'offered');
@@ -103,11 +101,32 @@ test('12 selected offers become booked with one final student state and replay d
   assert.equal(h.effects.filter(e => ['calendar', 'email'].includes(e.kind)).length, 0);
 });
 
-test('aggregate monthly limit is validated before any selected booking or journal write', () => {
+test('selected bookings are not capped by the plan; the lesson beyond the line waits for approval at billing time', () => {
   const h = createSchedulingHarness(); h.approve({ count: 1 });
-  const ids = [h.seedSlot().id, h.seedSlot({ date: '2026-09-16' }).id], before = data(h);
-  reject(h.acceptMany(ids), 'planLimit');
-  assert.deepEqual(data(h), before);
+  const ids = [h.seedSlot().id, h.seedSlot({ date: '2026-09-16' }).id];
+  ok(h.acceptMany(ids));
+  assert.equal(h.rows('slots').filter(s => s.status === 'booked').length, 2);
+  h.advance(40 * 86400000); ids.forEach(id => h.setRow('slots', 'id', id, { done: true }));
+  const b = ok(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' })).billing;
+  assert.equal(b.canBill, true, b.reason); assert.equal(b.lessons.length, 1); assert.deepEqual(b.pending.map(p => p.date), ['2026-09-16']); assert.equal(b.pendingAmount, 3000);
+});
+
+test('an offer outside the approved and proposed lines asks the teacher to send a plan first, and planForce continues', () => {
+  const h = createSchedulingHarness(); h.approve({ count: 1 }); h.seedSlot({ status: 'booked' });
+  const r = reject(h.offer({ date: '2026-09-16', planForce: false }), 'planShort');
+  assert.equal(r.needPlan, true); assert.equal(h.rows('slots').length, 1, 'nothing written');
+  assert.deepEqual([r.planSuggest.studentId, r.planSuggest.subject, r.planSuggest.kind, r.planSuggest.count, r.planSuggest.dates, r.planSuggest.lessonMin, r.planSuggest.lessonFee], ['test-a', '数学', '通常', 1, ['2026-09-16'], 60, 3000]);
+  assert.ok(r.planSuggest.parentId, 'an approved line covering the date is offered as the addon parent'); assert.match(r.planSuggest.parentLabel, /数学/);
+  assert.equal(r.planSuggest.startDate, '2026-09-01'); assert.equal(r.planSuggest.endDate, '2026-09-30');
+  // weekly repeats report only the occurrences that do not fit, and a proposed (not yet approved) line already counts as cover
+  const rep = reject(h.offer({ date: '2026-09-16', repeat: 3, planForce: false }), 'planShort'); assert.equal(rep.planSuggest.count, 3);
+  ok(h.admin('planLineSave', { studentId: 'test-a', subject: '数学', kind: '通常', count: 2, startDate: '2026-09-01', endDate: '2026-09-30', lessonMin: 60, lessonFee: 3000, propose: true, parentId: r.planSuggest.parentId }));
+  const rep2 = reject(h.offer({ date: '2026-09-16', repeat: 3, planForce: false }), 'planShort'); assert.equal(rep2.planSuggest.count, 1); assert.deepEqual(rep2.planSuggest.dates, ['2026-09-30']);
+  ok(h.offer({ date: '2026-09-16', repeat: 3 }));
+  assert.equal(h.rows('slots').length, 4);
+  // a student with no lines at all: everything is short and the suggestion is a fresh month line priced from the student rate
+  const none = reject(h.offer({ studentId: 'test-b', planForce: false }), 'planShort');
+  assert.equal(none.planSuggest.parentId, ''); assert.equal(none.planSuggest.startDate, '2026-09-01');
 });
 
 test('invalid selection is atomic, scoped to the student, bounded and cannot reuse a key with changed selection', () => {

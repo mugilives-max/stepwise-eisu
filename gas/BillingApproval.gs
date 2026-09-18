@@ -70,19 +70,21 @@ function billingRevisionCheck_(req,a,required) {
 }
 function billingRevisionValid_(v) { return (typeof v==='number'||typeof v==='string'&&/^\d+$/.test(v)) && Number.isSafeInteger(Number(v)) && Number(v)>=0; }
 function billingMoney_(value) { return billingRevisionValid_(value) && Number(value)<=10000000; }
-// 確定してよいか: この授業を確定済みとして割り当て直し、枠から外れる授業が増えなければよい。extra は同じ処理で先に確定した授業(一括確定)
+// 請求済みの授業ID(有効な請求の実績JSONから)。授業明細のない旧形式の請求は、その月全体を請求済みとして扱う
+function billingInvoicedIds_(studentId) {
+  var ids={},legacyMonths={};
+  billingActiveInvoices_(studentId).forEach(function(p){var ls=billingSavedLessons_(p);if(!ls.length)legacyMonths[String(p['年月'])]=true;ls.forEach(function(l){if(l&&l.id)ids[String(l.id)]=true;});});
+  return {ids:ids,legacyMonths:legacyMonths};
+}
+function billingSlotInvoiced_(slot,inv) { inv=inv||billingInvoicedIds_(slot.studentId); return !!(inv.ids[String(slot.id)]||inv.legacyMonths[String(slot.date||'').slice(0,7)]); }
+// 確定してよいか: 授業の内容が正しく、請求済みでなければよい。保護者の承認は請求の可否だけを決め、確定は止めない(2026-09-18)
 function billingSlotAllowed_(slot,extra) {
   if(!billingSlotValid_(slot))return billingError_('授業の日付・時刻・分数・科目を確認してください');
-  var id=String(slot.studentId||''),ym=String(slot.date||'').slice(0,7);
-  var check=billingMonthUnlocked_(id,ym);if(check)return check;
+  var id=String(slot.studentId||'');
   if(!findStudent_(id))return billingError_('在籍生徒の授業だけを確定・実施できます','notFound');
-  var lines=planLinesFor_(id),others=planStudentSlots_(id).filter(function(s){return String(s.id)!==String(slot.id);}).concat((extra||[]).filter(function(s){return String(s.studentId)===id&&String(s.id)!==String(slot.id);}).map(function(s){return Object.assign({},s,{status:'booked'});}));
-  var mine=Object.assign({},slot,{studentId:id,status:'booked'}),before=planAssign_(lines,others),after=planAssign_(lines,others.concat([mine])),me=after[String(slot.id)];
-  if(!me||!me.candidates)return billingError_('この授業(科目・種類・日付)の回数と料金について、保護者の承認が必要です','approvalRequired');
-  if(!me.line||planUnassigned_(after)>planUnassigned_(before))return billingError_('この案内の承認回数を超えます。追加の案内を送るか、回数を変更して再承認を得てください','planLimit');
-  return null;
+  return billingSlotMutable_(Object.assign({},slot,{studentId:id}));
 }
-function billingSlotMutable_(slot) { return slot.studentId?billingMonthUnlocked_(slot.studentId,String(slot.date).slice(0,7)):null; }
+function billingSlotMutable_(slot) { return slot.studentId&&billingSlotInvoiced_(slot)?billingError_('請求済みの授業は変更できません。未入金の請求を取り消してから変更してください','invoiceLocked'):null; }
 function billingSlotValid_(s) {
   var min=Number(s.min),subject=String(s.subject||'').trim(),start=String(s.start||'');
   return billingDateValid_(String(s.date||'')) && /^([01]\d|2[0-3]):[0-5]\d$/.test(start) && Number.isInteger(min) && min>0 && min<=480 && Number(start.slice(0,2))*60+Number(start.slice(3))+min<=1440 && !!subject && subject.length<=20 && !/^[=+@-]/.test(subject);
@@ -94,43 +96,52 @@ function billingInvoiceView_(p) {
   return {id:String(p['請求ID']||''),ym:String(p['年月']),amount:Number(p['請求額'])||0,status:String(p['状態']||''),billDate:String(p['請求日']||''),paidDate:String(p['入金日']||''),method:String(p['入金方法']||''),revision:Number(p['承認版'])||0,paymentRevision:Number(p['入金版'])||0,voidedAt:String(p['取消日時']||''),voidReason:String(p['取消理由']||''),lessons:billingSavedLessons_(p)};
 }
 // 実施済み授業ごとに、該当する承認済みの案内の単価で計算する。案内のない授業は生徒の基本単価で仮計算(provisional)
+// 対象月までの実施済み・未請求の授業を、承認済みの行に割り当てて金額を出す。
+// 行に当てはまる授業=請求対象(前月以前の繰越を含む)。当てはまらない授業=承認待ち(請求対象外。案内中の行があればその単価、なければ基本単価で目安を出す)
 function billingMonthCalc_(id,ym) {
-  var st=systemStudent_(id)||{},base=Number(st.rate30)||0,lines=planLinesFor_(id),all=planStudentSlots_(id),assign=planAssign_(lines,all);
+  var st=systemStudent_(id)||{},base=Number(st.rate30)||0,lines=planLinesFor_(id),all=planStudentSlots_(id),assign=planAssign_(lines,all),inv=billingInvoicedIds_(id);
   var slots=all.filter(function(s){return s.status==='booked'&&String(s.date||'').slice(0,7)===ym;});
   var done=slots.filter(function(s){return s.done===true||String(s.done)==='true';}).sort(slotSort_);
-  var amount=0,provisional=false,rates={};
-  var lessons=done.map(function(s){
-    var l=(assign[String(s.id)]||{}).line||null,rate=l?l.rate30:base;if(!l)provisional=true;rates[rate]=true;
-    var amt=Math.round((Number(s.min)||0)/30*rate);amount+=amt;
-    return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:amt,rate30:rate,lineId:l?l.id:'',lineRevision:l?l.revision:0,lineCount:l?planLineLimit_(l):0};
+  // 繰越: 請求済みの月に実施したが、その時点で承認がなく請求に含められなかった授業だけを対象月に含める(未請求の月の授業はその月で請求する)
+  var invMonths={};billingActiveInvoices_(id).forEach(function(p){invMonths[String(p['年月'])]=true;});
+  var open=all.filter(function(s){var m=String(s.date||'').slice(0,7);return s.status==='booked'&&(s.done===true||String(s.done)==='true')&&(m===ym||(m<ym&&invMonths[m]))&&!billingSlotInvoiced_(s,inv);}).sort(slotSort_);
+  var amount=0,pendingAmount=0,rates={},lessons=[],pending=[];
+  open.forEach(function(s){
+    var l=(assign[String(s.id)]||{}).line||null,carried=String(s.date).slice(0,7)!==ym;
+    if(l){
+      var amt=Math.round((Number(s.min)||0)/30*l.rate30);amount+=amt;rates[l.rate30]=true;
+      lessons.push({id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:amt,rate30:l.rate30,lineId:l.id,lineRevision:l.revision,lineCount:planLineLimit_(l),carried:carried});
+    } else {
+      var pl=planLineMatch_(lines,s,['proposed']),rate=pl?pl.rate30:base,est=Math.round((Number(s.min)||0)/30*rate);pendingAmount+=est;
+      pending.push({id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:est,rate30:rate,lineId:pl?pl.id:'',status:pl?'proposed':'none',carried:carried});
+    }
   });
   var keys=Object.keys(rates);
-  return {amount:amount,provisional:provisional,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,slots:slots,done:done,lines:lines,assign:assign};
+  return {amount:amount,pendingAmount:pendingAmount,provisional:pending.length>0,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,pending:pending,slots:slots,done:done,lines:lines,assign:assign,invoiced:inv};
 }
 function billingFee_(studentId,minutes,ym) {
   ym=ym||todayStr_().slice(0,7);
   var invoices=billingActiveInvoices_(studentId,ym),p=invoices[0];
   if(p)return {amount:Number(p['請求額'])||0,mode:String(p['料金方式']||'recorded'),rate30:Number(p['確定単価(30分)'])||0,monthly:Number(p['確定月謝'])||0,locked:true};
   var calc=billingMonthCalc_(String(studentId||''),ym);
-  return {amount:calc.amount,mode:'time',rate30:calc.rate30,monthly:0,locked:false,provisional:calc.provisional,legacyTerms:false};
+  return {amount:calc.amount,pendingAmount:calc.pendingAmount,mode:'time',rate30:calc.rate30,monthly:0,locked:false,provisional:calc.provisional,legacyTerms:false};
 }
 function billingPreview_(studentId,ym) {
   var id=String(studentId||'');
   if(!systemStudent_(id))return billingError_('生徒が見つかりません','notFound');
   if(!billingMonthValid_(ym))return billingError_('月の形式は YYYY-MM です');
   var info=billingMonthInfo_(id,ym),invoices=billingActiveInvoices_(id,ym),calc=billingMonthCalc_(id,ym);
-  var slots=calc.slots,done=calc.done,minutes=done.reduce(function(n,s){return n+(Number(s.min)||0);},0),fee=billingFee_(id,minutes,ym),reason='';
+  var slots=calc.slots,done=calc.done,minutes=calc.lessons.reduce(function(n,s){return n+(Number(s.min)||0);},0),fee=billingFee_(id,minutes,ym),reason='';
   if(invoices.length)reason=invoices.length>1?'この月の請求が重複しています。台帳を確認してください':'この月は請求を記録済みです';
   else {
-    if(slots.some(function(s){return !(calc.assign[String(s.id)]||{}).line;}))reason='承認されていない科目・回数の授業があります';
-    if(!reason && slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
+    if(slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
     if(!reason && slots.some(function(s){return !(s.done===true||String(s.done)==='true');}))reason='未実施の確定授業が残っています。実施・取消の確認後に請求してください';
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';
-    if(!reason && !(fee.amount>0))reason='請求対象の授業料がありません';
+    if(!reason && !(fee.amount>0))reason='請求対象の授業料がありません'+(calc.pending.length?'（承認待ちの授業 '+calc.pending.length+'件は保護者の承認後に請求できます）':'');
   }
-  return {ym:ym,amount:fee.amount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:done.length,planStatus:info.status,revision:0,canBill:!reason,reason:reason,provisional:!!fee.provisional,
+  return {ym:ym,amount:fee.amount,pendingAmount:fee.locked?0:calc.pendingAmount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:fee.locked?Number(invoices[0]['実施回数'])||0:calc.lessons.length,doneCount:done.length,planStatus:info.status,revision:0,canBill:!reason,reason:reason,provisional:!!fee.provisional,
     invoice:invoices.length?billingInvoiceView_(invoices[0]):null,
-    lessons:fee.locked?billingSavedLessons_(invoices[0]):calc.lessons,lines:info.lines};
+    lessons:fee.locked?billingSavedLessons_(invoices[0]):calc.lessons,pending:fee.locked?[]:calc.pending,carried:fee.locked?0:calc.lessons.filter(function(l){return l.carried;}).length,lines:info.lines};
 }
 function billingMonths_(id) {
   var seen={},current=todayStr_().slice(0,7);seen[current]=true;seen[nextYm_(current)]=true;

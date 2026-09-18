@@ -237,12 +237,25 @@ function nlApplyTeacher_(req) {
   var items = Array.isArray(req.items) ? req.items.slice(0, 10) : [], results = [], added = 0;
   if (!items.length) return nlError_('登録する項目を選んでください');
   var deliveryMode = String(req.deliveryMode || student.deliveryMode || 'in_person');
+  // 授業の案内が授業計画(承認済み・案内中)の枠に収まらないときは、何も登録せずに計画の案内を促す(planForce で続行)
+  if (!req.planForce) {
+    var cands = [];
+    items.forEach(function (it) {
+      if (!it || it.kind !== 'offer') return;
+      (Array.isArray(it.dates) ? it.dates : []).forEach(function (d) { d = String(d || ''); if (nlValidDate_(d)) cands.push({ id: 'nl-' + cands.length, studentId: student.id, date: d, start: nlTime_(it.start), min: Number(it.min) || 0, subject: nlText_(it.subject, 20), kind: kindNorm_(it.lessonKind), status: 'booked' }); });
+    });
+    var short = cands.length ? planCoverageShort_(student.id, cands) : [];
+    if (short.length) {
+      var f = short[0], same = short.filter(function (x) { return x.subject === f.subject && x.kind === f.kind; });
+      return { error: '授業計画の上限を超えています（' + short.length + '件）。授業計画の案内を送ってから登録するか、取り消してください', errorCode: 'planShort', needPlan: true, planSuggest: planSuggest_(student, { subject: f.subject, kind: f.kind, min: f.min }, same) };
+    }
+  }
   items.forEach(function (it, i) {
     var kind = String(it && it.kind || ''), dates = (Array.isArray(it && it.dates) ? it.dates : []).map(function (d) { return String(d || ''); }).filter(nlValidDate_).slice(0, 20), r = { i: i, kind: kind, status: 'added', count: 0, errors: [] };
     if (!dates.length || NL_TEACHER_KINDS_.indexOf(kind) < 0) { r.status = 'error'; r.errors.push('日付がありません'); results.push(r); return; }
     if (kind === 'offer') {
       dates.forEach(function (d) {
-        var res = adminOffer_({ studentId: student.id, date: d, start: nlTime_(it.start), min: Number(it.min) || 0, subject: nlText_(it.subject, 20), kind: kindNorm_(it.lessonKind), deliveryMode: deliveryMode, force: it.force === true });
+        var res = adminOffer_({ studentId: student.id, date: d, start: nlTime_(it.start), min: Number(it.min) || 0, subject: nlText_(it.subject, 20), kind: kindNorm_(it.lessonKind), deliveryMode: deliveryMode, force: it.force === true, planForce: true });
         if (res && res.ok) r.count++; else r.errors.push(d + ': ' + String(res && res.error || '登録できませんでした'));
       });
     } else if (kind === 'block') {

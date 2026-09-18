@@ -52,7 +52,9 @@ test('lines and offers carry the kind; 通常 stays empty in storage and billing
   // billing check matches subject and kind: the 演習 line allows 2 lessons
   h.seedSlot({ date: '2026-09-01', start: '16:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '演習' });
   h.seedSlot({ date: '2026-09-02', start: '16:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '演習' });
-  assert.notEqual(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.reason, '承認されていない科目・回数の授業があります');
+  let bp = h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing; assert.equal(bp.pending.length, 0); assert.equal(bp.lessons.length, 2);
+  // a third 演習 lesson is not blocked any more: it is billed later, once the parent approves more (2026-09-18 policy)
   h.seedSlot({ date: '2026-09-03', start: '16:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '演習' });
-  assert.equal(h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing.reason, '承認されていない科目・回数の授業があります');
+  bp = h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09' }).billing;
+  assert.equal(bp.canBill, true, bp.reason); assert.equal(bp.lessons.length, 2); assert.deepEqual(bp.pending.map(p => [p.date, p.kind, p.status]), [['2026-09-03', '演習', 'none']]);
 });
