@@ -302,3 +302,32 @@ test('a parent approves the proposed lesson plan directly from the mypage 授業
   const again = ui.requests.filter(r => r.body.action === 'familyStudentState'); assert.equal(again.length, 2); again.at(-1).reply({ ...state(), viewer: 'family', planLines: [{ ...data('x').planLines[0], status: 'approved', approvedCount: 4 }] }); await flush();
   assert.match(ui.html(), /<span class="tag green">承認済み<\/span><span class="time">9月<\/span><span class="who"><strong>英語<\/strong>/); assert.doesNotMatch(ui.html(), /data-action="fa-planok"/);
 });
+
+test('a teacher-recorded approval shows a confirm-or-inquire notice on the parent mypage and the kanri card shows the reply', async () => {
+  const recorded = { ...data('x').planLines[0], status: 'approved', approvedCount: 4, approvedVia: '電話', consentDate: '2026-09-05', teacherRecorded: true, parentAck: '', parentAckAt: '', parentAckMemo: '' };
+  const ui = loggedUI(); ui.requests[0].reply(home([{ studentId: 'child-a', name: '【テスト】子A' }])); await flush();
+  ui.requests.at(-1).reply({ ok: true, data: { ...data('【テスト】子A'), planLines: [recorded] } }); await flush();
+  ui.navigate('#family/home');
+  const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planLines: [recorded] }); await flush();
+  const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
+  assert.match(ui.html(), /<div class="note plan-ack" role="status"[^>]*><strong>先生が記録した承認です。<\/strong>2026-09-05に電話で承諾いただいた内容として、先生がこの計画（英語（通常） 4回・90分・1回 3,000円）を承認済みにしました。心当たりがない場合や内容が違う場合は問い合わせてください。<div class="row"[^>]*><button class="btn-primary btn-sm" data-action="fa-planack" data-child="child-a" data-line="line-1" data-ack="confirmed">内容を確認しました<\/button><button class="btn-quiet btn-sm" data-action="fa-planack" data-child="child-a" data-line="line-1" data-ack="inquiry">先生に問い合わせる<\/button>/);
+  // inquiry: a message is required, then familyPlanAck(inquiry) is sent with the displayed revision
+  ui.click('fa-planack', { 'data-ack': 'inquiry' }); assert.match(ui.html(), /先生に伝える内容を書いてください/); const count = ui.requests.length;
+  ui.click('fa-ack-send'); assert.equal(ui.requests.length, count); assert.match(ui.html(), /問い合わせの内容を入力してください/);
+  ui.input('fa-plan-message', '電話では月3回と聞いていました'); ui.click('fa-ack-send');
+  let req = ui.requests.at(-1).body; assert.equal(req.action, 'familyPlanAck'); assert.equal(req.ack, 'inquiry'); assert.equal(req.lineId, 'line-1'); assert.equal(req.expectedRevision, 7); assert.equal(req.memo, '電話では月3回と聞いていました'); assert.equal(req.ftoken, 'test-family-token');
+  ui.requests.at(-1).reply({ ok: true, data: { ...data('【テスト】子A'), planLines: [{ ...recorded, parentAck: 'inquiry', parentAckAt: '2026-09-19T10:00:00.000Z', parentAckMemo: '電話では月3回と聞いていました' }] } }); await flush();
+  assert.match(ui.html(), /先生に問い合わせを送りました/); assert.match(ui.html(), /<span class="tag amber">問い合わせ済み<\/span> 先生からの連絡をお待ちください。\n電話では月3回と聞いていました/); assert.match(ui.html(), /data-ack="inquiry">問い合わせを追加する</);
+  // confirming sends immediately and hides the buttons
+  ui.click('fa-planack', { 'data-ack': 'confirmed' });
+  req = ui.requests.at(-1).body; assert.equal(req.action, 'familyPlanAck'); assert.equal(req.ack, 'confirmed'); assert.equal(req.memo, '');
+  ui.requests.at(-1).reply({ ok: true, data: { ...data('【テスト】子A'), planLines: [{ ...recorded, parentAck: 'confirmed', parentAckAt: '2026-09-19T10:05:00.000Z' }] } }); await flush();
+  assert.match(ui.html(), /確認を記録しました/); assert.match(ui.html(), /<span class="tag green">確認済み<\/span> 2026-09-19/); assert.doesNotMatch(ui.html(), /data-action="fa-planack"/);
+  // a line approved from the parent page carries no such notice
+  ui.requests.filter(r => r.body.action === 'familyStudentState').at(-1)?.reply({ ...state(), viewer: 'family', planLines: [{ ...recorded, approvedVia: '保護者ページ', teacherRecorded: false }] });
+  const { adminReady, card, line } = require('./helpers/operations-ui-harness.cjs');
+  const k = await adminReady(card({ plan: { lines: [line({ id: 'a1', status: 'approved', approvedCount: 4, approvedVia: 'LINE', consentDate: '2026-09-05', teacherRecorded: true, parentAck: 'inquiry', parentAckAt: '2026-09-19T10:00:00.000Z', parentAckMemo: 'LINEでは月3回と聞いていました' }), line({ id: 'a2', subject: '数学', status: 'approved', approvedCount: 2, count: 2, approvedVia: '電話', consentDate: '2026-09-05', teacherRecorded: true, parentAck: '' }), line({ id: 'a3', subject: '国語', status: 'approved', approvedCount: 2, count: 2, approvedVia: '保護者ページ', consentDate: '2026-09-06', teacherRecorded: false, parentAck: '' })], defaultRows: [] } }), 'billing');
+  assert.match(k.html(), /承諾: 2026-09-05・LINE<\/div><div class="small" style="[^"]*color:var\(--amber\)[^"]*"><strong>保護者から問い合わせ<\/strong>（2026-09-19）: LINEでは月3回と聞いていました<\/div>/);
+  assert.match(k.html(), /承諾: 2026-09-05・電話<\/div><div class="small muted"[^>]*>保護者ページでの確認待ち（先生が記録した承認）<\/div>/);
+  assert.match(k.html(), /承諾: 2026-09-06・保護者ページ<\/div>(?!<div class=\"small)/, 'a parent-page approval has no confirmation line');
+});

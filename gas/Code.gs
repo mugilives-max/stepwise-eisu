@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-18-approval-policy' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-19-parent-ack' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1699,7 +1699,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk22')) return;
+  if (cache.get('schemaOk23')) return;
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
@@ -1726,7 +1726,7 @@ function ensureSchema_() {
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
   if (typeof ensureLessonKindsSheet_ === 'function') { ensureLessonKindsSheet_(); ensureKindColumns_(); }
-  cache.put('schemaOk22', '1', 21600);
+  cache.put('schemaOk23', '1', 21600);
 }
 
 function readRows_(name) {

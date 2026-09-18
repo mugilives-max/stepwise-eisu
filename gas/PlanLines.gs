@@ -2,7 +2,9 @@
    行ごとに 下書き(draft) → 案内送信(proposed) → 承認(approved)/見送り(declined) と進み、行ごとに版(revision)を持つ。
    月は期間の特別な場合(1日〜月末)。同じ科目・種類で期間が重なる行は作れない(実施した授業がどの行の分か決められなくなる)。
    請求は今までどおり月ごと。実施した授業を日付・科目・種類の合う承認済みの行に当てはめ、行の単価で時間按分する。 */
-var PLAN_LINE_COLS_ = ['id','studentId','subject','kind','count','startDate','endDate','lessonMin','rate30','comment','status','revision','proposedAt','approvedAt','approvedVia','consentDate','memo','approvedCount','createdAt','updatedAt','parentId'];
+var PLAN_LINE_COLS_ = ['id','studentId','subject','kind','count','startDate','endDate','lessonMin','rate30','comment','status','revision','proposedAt','approvedAt','approvedVia','consentDate','memo','approvedCount','createdAt','updatedAt','parentId','parentAck','parentAckAt','parentAckMemo'];
+// parentAck: 先生が記録した承認(approvedVia が保護者ページ以外)に対する保護者の反応。'' 未確認 / confirmed 内容を確認 / inquiry 問い合わせ
+var PLAN_VIA_PARENT_ = '保護者ページ';
 var PLAN_LINE_MAX_DAYS_ = 366;
 var PLAN_LINE_STATUSES_ = ['draft','proposed','approved','declined'];
 
@@ -26,7 +28,7 @@ function planLineNorm_(r, row) {
   return { _row: row, id: String(r.id || ''), studentId: String(r.studentId || ''), subject: String(r.subject || ''), kind: kindNorm_(r.kind), count: Number(r.count) || 0,
     startDate: planDate_(r.startDate), endDate: planDate_(r.endDate), lessonMin: Number(r.lessonMin) || 0, rate30: Number(r.rate30) || 0, comment: String(r.comment || ''),
     status: String(r.status || '') || 'draft', revision: Number(r.revision) || 0, proposedAt: String(r.proposedAt || ''), approvedAt: String(r.approvedAt || ''), approvedVia: String(r.approvedVia || ''),
-    consentDate: planDate_(r.consentDate), memo: String(r.memo || ''), approvedCount: r.approvedCount === '' || r.approvedCount == null ? null : Number(r.approvedCount), createdAt: String(r.createdAt || ''), updatedAt: String(r.updatedAt || ''), parentId: String(r.parentId || '') };
+    consentDate: planDate_(r.consentDate), memo: String(r.memo || ''), approvedCount: r.approvedCount === '' || r.approvedCount == null ? null : Number(r.approvedCount), createdAt: String(r.createdAt || ''), updatedAt: String(r.updatedAt || ''), parentId: String(r.parentId || ''), parentAck: String(r.parentAck || ''), parentAckAt: String(r.parentAckAt || ''), parentAckMemo: String(r.parentAckMemo || '') };
 }
 function planLineWrite_(l) {
   l.updatedAt = billingStamp_(); if (!l.createdAt) l.createdAt = l.updatedAt;
@@ -128,7 +130,8 @@ function planSuggest_(student, req, short) {
 }
 function planLineView_(l) {
   return { id: l.id, subject: l.subject, kind: l.kind, count: l.count, approvedCount: l.approvedCount, startDate: l.startDate, endDate: l.endDate, period: planPeriodLabel_(l), month: planLineIsMonth_(l) ? l.startDate.slice(0, 7) : '',
-    lessonMin: l.lessonMin, rate30: l.rate30, lessonFee: planLineFee_(l), comment: l.comment, status: l.status, revision: l.revision, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedVia: l.approvedVia, consentDate: l.consentDate, memo: l.memo, updatedAt: l.updatedAt, parentId: l.parentId || '', addon: !!l.parentId };
+    lessonMin: l.lessonMin, rate30: l.rate30, lessonFee: planLineFee_(l), comment: l.comment, status: l.status, revision: l.revision, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedVia: l.approvedVia, consentDate: l.consentDate, memo: l.memo, updatedAt: l.updatedAt, parentId: l.parentId || '', addon: !!l.parentId,
+    teacherRecorded: l.status === 'approved' && !!l.approvedVia && l.approvedVia !== PLAN_VIA_PARENT_, parentAck: l.parentAck || '', parentAckAt: l.parentAckAt || '', parentAckMemo: l.parentAckMemo || '' };
 }
 function planLineSort_(a, b) { return a.startDate === b.startDate ? (a.subject + a.kind).localeCompare(b.subject + b.kind) : (a.startDate < b.startDate ? 1 : -1); }
 // 監査(approvalEvents)は月間承認と同じ列に書く: ym には期間、planJson には行の内容
@@ -187,7 +190,7 @@ function planLineSave_(req) {
   }
   if (!l) l = { id: billingId_(), studentId: id, revision: 0, createdAt: '', parentId: parentId };
   l.subject = subject; l.kind = kind; l.count = count; l.startDate = start; l.endDate = end; l.lessonMin = lessonMin; l.rate30 = rate30; l.comment = comment;
-  l.revision = Number(l.revision) + 1; l.approvedAt = ''; l.approvedVia = ''; l.consentDate = ''; l.memo = ''; l.approvedCount = null;
+  l.revision = Number(l.revision) + 1; l.approvedAt = ''; l.approvedVia = ''; l.consentDate = ''; l.memo = ''; l.approvedCount = null; l.parentAck = ''; l.parentAckAt = ''; l.parentAckMemo = '';
   l.status = propose ? 'proposed' : 'draft'; l.proposedAt = propose ? billingStamp_() : '';
   planLineWrite_(l);
   billingAudit_(planLineAuditable_(l), propose ? 'proposed' : 'planChanged', l.id + ':' + l.revision + ':' + (propose ? 'proposed' : 'changed'), previous ? { previousStatus: previous } : undefined);
@@ -229,7 +232,7 @@ function planLineApprove_(req, id, parent) {
   if (l.status !== 'proposed') return billingError_('現在の案内を読み直してください', 'conflict');
   var today = todayStr_(), date = parent ? today : String(req.consentDate || '');
   if (!billingDateValid_(date) || date > today) return billingError_('実際に承諾を得た日を、今日以前の日付で入力してください');
-  var via = parent ? '保護者ページ' : String(req.via || '').trim(), memo = String(req.memo || '').trim();
+  var via = parent ? PLAN_VIA_PARENT_ : String(req.via || '').trim(), memo = String(req.memo || '').trim();
   if (!via || via.length > 40 || memo.length > 500) return billingError_('承諾方法と500文字以内のメモを入力してください');
   var booked = planLineBooked_(l);
   var retrospective = l.endDate < today || booked.some(function (s) { return s.date < date; });
@@ -240,7 +243,7 @@ function planLineApprove_(req, id, parent) {
     var withDecided = linesNow.map(function (x) { return x.id === l.id ? decided : x; });
     if (approvedCount < l.count && planLinesChangeError_(id, withFull, withDecided, 'x', 'x')) return billingError_('確定済みの授業数より少なくする場合は、先に先生へ授業の取消・見直しをご相談ください');
   }
-  l.status = approve ? 'approved' : 'declined'; l.approvedCount = approvedCount; l.approvedAt = approve ? billingStamp_() : ''; l.approvedVia = approve ? via : ''; l.consentDate = date; l.memo = memo;
+  l.status = approve ? 'approved' : 'declined'; l.approvedCount = approvedCount; l.approvedAt = approve ? billingStamp_() : ''; l.approvedVia = approve ? via : ''; l.consentDate = date; l.memo = memo; l.parentAck = ''; l.parentAckAt = ''; l.parentAckMemo = '';
   // 承諾の記録が保存できなければ承認を有効にしない
   billingAudit_(planLineAuditable_(l), l.status, l.id + ':' + l.revision + ':' + l.status);
   planLineWrite_(l);
@@ -250,6 +253,29 @@ function planLineApprove_(req, id, parent) {
 function planLineApproveTeacher_(req) {
   var id = String(req.studentId || ''); if (!systemStudent_(id)) return billingError_('生徒が見つかりません', 'notFound');
   return planLineApprove_(req, id, false);
+}
+// 保護者: 先生が記録した承認(電話・LINEなど)への反応。confirmed=内容を確認した / inquiry=先生に問い合わせる(伝言必須)。
+// 「知らないうちに承認されていた」を防ぐため、保護者ページは確認されるまでこの承認を目立たせ、問い合わせは先生に通知する
+function planLineParentAck_(student, req) {
+  var id = String(student.id), l = planLine_(id, String(req.lineId || ''));
+  if (!l) return billingError_('計画が見つかりません。最新の画面を読み直してください', 'notFound');
+  var check = billingRevisionCheck_(req, l, true); if (check) return check;
+  if (l.status !== 'approved' || !l.approvedVia || l.approvedVia === PLAN_VIA_PARENT_) return billingError_('この計画は確認の対象ではありません。最新の画面を読み直してください', 'conflict');
+  var ack = String(req.ack || ''), memo = String(req.memo || '').trim();
+  if (ack !== 'confirmed' && ack !== 'inquiry') return billingError_('「内容を確認しました」か「先生に問い合わせる」を選んでください');
+  if (memo.length > 500) return billingError_('伝言は500文字以内で入力してください');
+  if (ack === 'inquiry' && !memo) return billingError_('問い合わせの内容を入力してください');
+  var out = function (replayed) { return Object.assign({ ok: true, line: planLineView_(l), data: parentDataForStudent_(student).data }, replayed ? { replayed: true } : {}); };
+  if (l.parentAck === ack && l.parentAckMemo === memo) return out(true);
+  l.parentAck = ack; l.parentAckAt = billingStamp_(); l.parentAckMemo = memo;
+  // 監査(approvalEvents)に保護者の反応を残してから保存する
+  billingAudit_(planLineAuditable_(Object.assign({}, l, { approvedVia: PLAN_VIA_PARENT_, consentDate: todayStr_(), memo: memo })), ack === 'confirmed' ? 'parentConfirmed' : 'parentInquiry', l.id + ':' + l.revision + ':' + ack + ':' + l.parentAckAt);
+  planLineWrite_(l);
+  var label = kindLabel_(l.subject, l.kind) + ' ' + planPeriodLabel_(l);
+  addLog_('保護者が' + studentName_(id) + 'さんの授業計画 ' + label + '（先生が記録した承認）を' + (ack === 'confirmed' ? '確認' : '問い合わせ'));
+  if (ack === 'inquiry' && !isTestStudent_(student)) notify_('【授業計画の問い合わせ】' + student.name + 'さん ' + label, '先生が記録した承認について、保護者ページから問い合わせがありました。管理画面の「授業計画の承認状況」で内容を確認し、保護者に連絡してください。');
+  memoClear_();
+  return out(false);
 }
 function planLineParentDecide_(student, req) {
   var res = planLineApprove_(req, String(student.id), true); if (res.error) return res;

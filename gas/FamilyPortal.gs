@@ -260,6 +260,7 @@ function familyDispatch_(req) {
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
     case 'familyStudentState':{var fs=familyChildRequire_(req);if(fs.error)return fs;var st=studentState_(String(fs.student&&fs.student.code||''));if(st&&typeof st==='object'){delete st.emailStatus;st.viewer='family';}return st;}
     case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:planLineParentDecide_(b.student,req);}
+    case 'familyPlanAck':{var pa=familyChildRequire_(req);return pa.error?pa:planLineParentAck_(pa.student,req);}
     default:return familyError_('操作が見つかりません');
   }}catch(e){return familyError_('処理を完了できませんでした。入力を保持して再試行してください。登録済みの場合は確認メールを再発行できます');}
 }
@@ -416,6 +417,8 @@ function familyNotices_(account,req){
     var sid=String(c.studentId),student=findStudent_(sid);if(!student)return;
     var response=parentDataForStudent_(student);if(!response.ok)throw Error('Notice data unavailable');var d=response.data;
     (d.planLines||[]).filter(function(l){return l.status==='proposed';}).forEach(function(l){add('plan:'+sid+':'+l.id+':'+l.revision,c,l.period+' '+kindLabel_(l.subject,l.kind)+'の回数・料金をご確認ください','billing',0,true,l.proposedAt);});
+    // 先生が記録した承認は、保護者が「内容を確認しました」を押すまで必須の通知として出す(問い合わせ中も残す)
+    (d.planLines||[]).filter(function(l){return l.teacherRecorded&&l.parentAck!=='confirmed';}).forEach(function(l){add('plan-ack:'+sid+':'+l.id+':'+l.revision,c,l.period+' '+kindLabel_(l.subject,l.kind)+'：先生が記録した承認をご確認ください','billing',0,true,l.approvedAt);});
     (d.payments||[]).filter(function(p){return p.status!=='取消'&&p.status!=='入金済';}).forEach(function(p){add('bill:'+sid+':'+p.ym+':'+p.amount+':'+p.billDate,c,p.ym+'のお支払いをご確認ください','billing',0,true,p.billDate);});
     (d.lessonRecords||[]).forEach(function(r){add('record:'+sid+':'+r.recordId+':'+r.revision,c,(r.lessonDate||r.date||'')+' '+(r.subject||'')+'の授業報告','records',2,false,r.updatedAt);});
     messages.filter(function(m){return String(m.studentId)===sid&&m.reply;}).forEach(function(m){add('reply:'+m.id+':'+m.revision,c,'先生から返信が届いています','contacts',2,false,m.updatedAt);});

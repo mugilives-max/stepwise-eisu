@@ -84,6 +84,7 @@
 | familyHome | ftoken | 家族の表示情報と現在の子ども一覧 |
 | familyData | ftoken、studentId | 指定した子どもの保護者向けデータのみ |
 | familyPlanDecide | ftoken、studentId、lineId、approve、expectedRevision、approvedCount(任意) | 表示した子どもの授業計画の案内(行)への回答。approvedCount で案内以内の回数に減らせる(0＝見送り)。任意のmemo。更新後の本人データ(`planLines`)を返す |
+| familyPlanAck | ftoken、studentId、lineId、ack(confirmed / inquiry)、expectedRevision、memo(inquiry は必須) | 先生が記録した承認(approvedVia が保護者ページ以外)への保護者の反応。confirmed で通知が消え、inquiry は先生にメール通知して管理画面に伝言を出す。監査 approvalEvents に parentConfirmed / parentInquiry。更新後の本人データを返す |
 | familyLogout | ftoken | 失効。古いトークンの再送で新しいログインを失効させない |
 | familyResetRequest | email | 共通の受付案内。パスワード設定済みの active / pending に再設定リンクを送る |
 | familyResetConfirm | challenge、pass | 新しいパスワードへ変更し、ログインを失効 |

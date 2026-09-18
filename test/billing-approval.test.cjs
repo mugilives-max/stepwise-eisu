@@ -749,3 +749,40 @@ test('a lesson left pending when its month was invoiced is carried into the next
   rejected(editLine(h, lineById(h, addon.id), { count: 2 }), 'invoiceLocked');
   assert.deepEqual(preview(h, 'test-a', '2026-11').pending, []);
 });
+
+test('a teacher-recorded approval is flagged to the parent until confirmed; an inquiry needs a message, notifies the teacher and stays visible', () => {
+  const h = createBillingHarness();
+  const token = parentSession(h);
+  const line = approveMonth(h);
+  const family = (action, args = {}) => h.request({ action, ftoken: token, studentId: 'test-a', ...args });
+  let d = ok(family('familyData')).data;
+  assert.equal(d.planLines[0].teacherRecorded, true); assert.equal(d.planLines[0].parentAck, ''); assert.equal(d.planLines[0].approvedVia, '電話');
+  const noticeIds = () => ok(family('familyNotices')).notices.filter(n => n.id.startsWith('plan-ack:')).map(n => [n.id, n.required, n.title]);
+  assert.deepEqual(noticeIds(), [['plan-ack:test-a:' + line.id + ':' + line.revision, true, '2026年9月 数学：先生が記録した承認をご確認ください']]);
+  // validation: revision, ack kind, inquiry message
+  rejected(family('familyPlanAck', { lineId: line.id, ack: 'confirmed', expectedRevision: line.revision + 1 }), 'conflict');
+  rejected(family('familyPlanAck', { lineId: line.id, ack: 'later', expectedRevision: line.revision }));
+  rejected(family('familyPlanAck', { lineId: line.id, ack: 'inquiry', expectedRevision: line.revision, memo: '  ' }));
+  assert.equal(lineById(h, line.id).parentAck, '');
+  const effectsBefore = h.effects.length;
+  const inquiry = ok(family('familyPlanAck', { lineId: line.id, ack: 'inquiry', expectedRevision: line.revision, memo: '電話では月3回と聞いていました' }));
+  assert.equal(inquiry.data.planLines[0].parentAck, 'inquiry'); assert.equal(inquiry.data.planLines[0].parentAckMemo, '電話では月3回と聞いていました');
+  assert.equal(lineById(h, line.id).status, 'approved', 'an inquiry does not cancel the approval; billing is unchanged until the teacher acts');
+  assert.equal(h.effects.length, effectsBefore, 'test students never send the teacher mail');
+  assert.deepEqual(h.rows('approvalEvents').map(e => e.event), ['proposed', 'approved', 'parentInquiry']);
+  assert.equal(ok(family('familyPlanAck', { lineId: line.id, ack: 'inquiry', expectedRevision: line.revision, memo: '電話では月3回と聞いていました' })).replayed, true);
+  assert.equal(noticeIds().length, 1, 'the notice stays while the inquiry is open');
+  const kanri = h.admin('kanriStudent', { studentId: 'test-a', section: 'billing' }).data.plan.lines.find(l => l.id === line.id);
+  assert.equal(kanri.parentAck, 'inquiry'); assert.equal(kanri.parentAckMemo, '電話では月3回と聞いていました'); assert.equal(kanri.teacherRecorded, true);
+  // confirmation clears the notice and is audited
+  ok(family('familyPlanAck', { lineId: line.id, ack: 'confirmed', expectedRevision: line.revision }));
+  assert.equal(lineById(h, line.id).parentAck, 'confirmed'); assert.deepEqual(noticeIds(), []);
+  assert.deepEqual(h.rows('approvalEvents').map(e => e.event), ['proposed', 'approved', 'parentInquiry', 'parentConfirmed']);
+  // re-sending the line resets the acknowledgement; a line approved from the parent page is never flagged
+  const resent = ok(editLine(h, lineById(h, line.id), { count: 3, propose: true })).line;
+  assert.equal(resent.parentAck, ''); assert.equal(resent.teacherRecorded, false);
+  ok(family('familyPlanDecide', { lineId: line.id, approve: true, expectedRevision: resent.revision }));
+  d = ok(family('familyData')).data; assert.equal(d.planLines[0].teacherRecorded, false);
+  rejected(family('familyPlanAck', { lineId: line.id, ack: 'confirmed', expectedRevision: d.planLines[0].revision }), 'conflict');
+  assert.deepEqual(noticeIds(), []);
+});
