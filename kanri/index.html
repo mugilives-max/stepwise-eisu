@@ -757,7 +757,8 @@
         function renderTeacherNL(s) {
           var dis = TNL.busy || busy ? ' disabled' : '';
           var h = '<div>';
-          h += '<p class="note" style="margin-top:0">例:「来週の水曜17時から90分、英語の演習を案内」「20日は部活で授業不可」「25日と26日は中間テスト」。読み取った内容を確認してから登録します。</p>';
+          h += '<p class="note" style="margin-top:0"><strong>文章を書くだけで、AIが「授業の案内」「授業不可」「予定の共有」に分けて登録の下書きを作ります。</strong>下書きは次の画面で確認・修正でき、チェックを入れた項目だけ登録されます（勝手に登録されることはありません）。</p>';
+          h += '<p class="note" style="margin-top:0">例:「来週の水曜17時から90分、英語の演習を案内」「20日は部活で授業不可」「25日と26日は中間テスト」。時刻や科目が読み取れない案内は、確認画面で入力できます。</p>';
           h += '<textarea id="tnl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box"' + dis + '>' + esc(TNL.text) + '</textarea>';
           h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="tnl-parse"' + dis + '>' + (TNL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (TNL.proposal || TNL.text ? '<button class="btn-quiet btn-sm" data-action="tnl-clear"' + dis + '>クリア</button>' : '') + '</div>';
           if (TNL.error) h += '<p role="alert" style="color:var(--danger);margin:8px 0 0">' + esc(TNL.error) + '</p>';
@@ -837,7 +838,7 @@
           var dayW = (d.wishes || []).filter(function (x) { return x.date === selDate; });
           var dayO = (d.teacherOff || []).filter(function (o) { return o.date === selDate; });
           function nm(id, name) { return '<a class="nm" href="#s=' + encodeURIComponent(id) + '" style="text-decoration:none;color:inherit"><strong>' + esc(name) + '</strong></a> '; }
-          var h = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayHeading(selDate) + '</h3>' + (selDate >= tdy && canEdit ? '<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="sdayadd" aria-label="' + fmtD(selDate) + 'の予定を追加" aria-expanded="' + (sDayAddOpen ? 'true' : 'false') + '">＋</button>' : '') + '</div>';
+          var h = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayHeading(selDate) + '</h3>' + (selDate >= tdy && canEdit ? '<button class="' + (sDayAddOpen ? 'btn-quiet' : 'btn-primary') + '" style="border-radius:999px;padding:8px 16px;font-weight:700" data-action="sdayadd" aria-label="' + fmtD(selDate) + 'の予定を追加" aria-expanded="' + (sDayAddOpen ? 'true' : 'false') + '">' + (sDayAddOpen ? '閉じる' : '＋ 予定を追加') + '</button>' : '') + '</div>';
           if (!dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) h += '<div class="empty">この日の予定はありません</div>';
           else {
             h += '<div class="daylist">';
@@ -877,7 +878,7 @@
           var dayW = (s.wishes || []).filter(function (x) { return x.date === selDate; });
           var dayO = (s.teacherOff || []).filter(function (o) { return o.date === selDate; });
           var dayLabel = dayHeading(selDate);
-          var h = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>' + (selDate >= tdy && canEdit ? '<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="sdayadd" aria-label="' + fmtD(selDate) + 'の予定を追加" aria-expanded="' + (sDayAddOpen ? 'true' : 'false') + '">＋</button>' : '') + '</div>';
+          var h = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>' + (selDate >= tdy && canEdit ? '<button class="' + (sDayAddOpen ? 'btn-quiet' : 'btn-primary') + '" style="border-radius:999px;padding:8px 16px;font-weight:700" data-action="sdayadd" aria-label="' + fmtD(selDate) + 'の予定を追加" aria-expanded="' + (sDayAddOpen ? 'true' : 'false') + '">' + (sDayAddOpen ? '閉じる' : '＋ 予定を追加') + '</button>' : '') + '</div>';
           var dayRow = dayRowHtml;
           if (!dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) h += '<div class="empty">この日の予定はありません</div>';
           else {

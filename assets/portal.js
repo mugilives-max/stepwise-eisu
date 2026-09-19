@@ -388,7 +388,7 @@
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
           var dayWishes = (S.wishes || []).filter(function (w) { return w.date === selDate; });
           var dayLabel = Number(selDate.slice(5, 7)) + '月' + Number(selDate.slice(8, 10)) + '日（' + WD[wdOf(selDate)] + '）の予定';
-          var html = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>'+(selDate>=today?'<button class="btn-primary" style="border-radius:50%;width:40px;height:40px;padding:0;font-size:26px" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">＋</button>':'')+'</div>';
+          var html = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>'+(selDate>=today?'<button class="'+(dayAddOpen?'btn-quiet':'btn-primary')+'" style="border-radius:999px;padding:8px 16px;font-weight:700" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">'+(dayAddOpen?'閉じる':'＋ 予定を追加')+'</button>':'')+'</div>';
           if (!ds2.length && !dayNg.length && !dayOffs.length && !dayWishes.length) html += '<div class="empty">この日の予定はありません</div>';
           else {
             // 授業登録の一覧と同じ行形式(左: 種類のタグ、時刻、内容 / 右: 操作)
@@ -615,7 +615,8 @@
         function renderNaturalEntry() {
           var dis = NL.busy || busy ? ' disabled' : '';
           var h = '<div>';
-          h += '<p class="note" style="margin-top:0">例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。読み取った内容を確認してから登録します。</p>';
+          h += '<p class="note" style="margin-top:0"><strong>文章を書くだけで、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。</strong>下書きは次の画面で確認でき、チェックを入れた項目だけ登録されます（勝手に登録されることはありません）。</p>';
+          h += '<p class="note" style="margin-top:0">例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。日付や時間が読み取れない項目は、確認画面で入力できます。</p>';
           h += '<textarea id="nl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px"' + dis + '>' + esc(NL.text) + '</textarea>';
           h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="nl-parse"' + dis + '>' + (NL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (NL.proposal || NL.text ? '<button class="btn-quiet btn-sm" data-action="nl-clear"' + dis + '>消す</button>' : '') + '</div>';
           if (NL.error) h += '<p role="alert" style="color:var(--danger);margin:8px 0 0">' + esc(NL.error) + '</p>';
