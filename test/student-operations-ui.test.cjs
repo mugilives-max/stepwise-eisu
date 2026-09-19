@@ -192,7 +192,12 @@ test('students turn a sentence into checked proposals and register them through 
   const s = { ...state(), nlEnabled:true, blocked:[{ id:'b0', date:'2026-09-16' }] };
   const ui = await studentReady(s);
   assert.equal(ui.el('nl-text'), undefined); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd');
-  assert.ok(ui.el('nl-text')); assert.match(ui.html(), /手動で予定入力[^]*?文章で自動入力/); const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
+  // the sentence entry is the default; manual buttons are behind the switch and never shown at the same time
+  assert.ok(ui.el('nl-text')); assert.match(ui.html(), /<div class="seg" role="tablist"[^>]*><button type="button" role="tab" class="on" aria-selected="true" data-action="dayinput" data-mode="text">文章で予定を登録<\/button><button type="button" role="tab" class="" aria-selected="false" data-action="dayinput" data-mode="manual">手動で入力<\/button><\/div>/);
+  assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayact"/);
+  ui.click('dayinput', { 'data-mode': 'manual' }); assert.equal(ui.el('nl-text'), undefined); assert.match(ui.html(), /data-action="dayact" data-m="wish"/); assert.match(ui.html(), /data-mode="manual">手動で入力<\/button>/); assert.match(ui.html(), /class="on" aria-selected="true" data-action="dayinput" data-mode="manual"/);
+  ui.click('dayinput', { 'data-mode': 'text' }); assert.ok(ui.el('nl-text')); assert.doesNotMatch(ui.html(), /data-action="dayact"/);
+  const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
   ui.input('nl-text', text); ui.click('nl-parse');
   assert.deepEqual(ui.requests.at(-1).body, { action:'scheduleParse', k:'test-link-a', text });
   ui.requests.at(-1).reply({ ok:true, summary:'3件を読み取りました。', today:'2026-09-08', questions:['模試の時間は登録していません。'], items:[
@@ -213,7 +218,7 @@ test('students turn a sentence into checked proposals and register them through 
 });
 
 test('the sentence card is hidden while the API key is not configured', async () => {
-  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で自動入力/); assert.match(ui.html(), /手動で予定入力/);
+  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を登録|data-action="dayinput"/, 'no switch when the sentence entry is unavailable'); assert.match(ui.html(), /手動で予定入力/); assert.match(ui.html(), /data-action="dayact" data-m="wish"/);
 });
 
 test('the offers section is a collapsed details block with one select-all / clear toggle', async () => {

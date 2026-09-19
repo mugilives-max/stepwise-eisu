@@ -219,10 +219,13 @@ test('the admin day card mirrors the student 予定の編集 card with teacher a
   ui.click('sdelblock', { 'data-id': 'b1' }); assert.equal(ui.requests.at(-1).body.op, 'delBlock'); assert.equal(ui.requests.at(-1).body.blockId, 'b1');
 });
 
-test('the admin day card offers 文章で自動入力: parse through scheduleParseTeacher, edit the proposal, register through nlApplyTeacher', async () => {
+test('the admin day card defaults to 文章で予定を登録 with a switch to manual entry: parse through scheduleParseTeacher, edit the proposal, register through nlApplyTeacher', async () => {
   const ui = await adminReady(card({ nlEnabled: true, deliveryMode: 'online' }), 'overview');
   ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('sdayadd');
-  assert.match(ui.html(), /<h3[^>]*>文章で自動入力<\/h3>/);
+  assert.match(ui.html(), /<div class="seg" role="tablist"[^>]*><button type="button" role="tab" class="on" aria-selected="true" data-action="dayinput" data-mode="text">文章で予定を登録<\/button><button type="button" role="tab" class="" aria-selected="false" data-action="dayinput" data-mode="manual">手動で入力<\/button><\/div>/);
+  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"/);
+  ui.click('dayinput', { 'data-mode': 'manual' }); assert.equal(ui.el('tnl-text'), undefined); assert.match(ui.html(), /data-action="dayoffer" data-date="2026-09-15"/); assert.match(ui.html(), /data-action="sblockopen"/);
+  ui.click('dayinput', { 'data-mode': 'text' }); assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /data-action="dayoffer"/);
   ui.input('tnl-text', '来週水曜17時から90分英語の演習。20日は部活で休み。25日は中間テスト'); ui.click('tnl-parse');
   let r = ui.requests.at(-1).body; assert.equal(r.op, 'scheduleParseTeacher'); assert.equal(r.studentId, 'test-a'); assert.match(r.text, /英語の演習/); assert.deepEqual(r.subjects.slice(0, 2), ['英語', '数学']);
   ui.requests.at(-1).reply({ ok: true, items: [

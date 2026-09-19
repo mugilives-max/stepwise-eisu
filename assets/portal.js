@@ -12,6 +12,7 @@
         var pending = null;      // 確認バー {kind, slotId}
         var acceptBatches = Object.create(null), stateSeq = 0, stateKey = "";
         var selDate = null, selManual = false, dayAddOpen = false;
+        var dayInputMode = 'text'; // ＋の中の入力方法: text=文章で予定を登録(既定) / manual=手動で入力。文章入力が使えないときは手動だけ
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
         var panel = "";          // "" | "wish" | "event" | "ng"
         var wishKind = "ok";   // 生徒の登録は授業可能時間帯に統一
@@ -420,11 +421,15 @@
           }
           if (selDate >= today) {
             if (dayAddOpen) {
-              html += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3><div class="row" style="gap:6px">' +
+              // 文章入力が使えるときは「文章で予定を登録」を既定にし、切り替えで手動入力を出す(両方同時には出さない)
+              var canText = S.nlEnabled && !previewK, mode = canText ? dayInputMode : 'manual';
+              if (canText) html += dayInputSwitch(mode);
+              else html += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3>';
+              if (mode === 'manual') html += '<div class="row" style="gap:6px">' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業可能</button>' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">授業不可</button>' +
                 '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定共有</button></div>';
-              if (S.nlEnabled && !previewK) html += renderNaturalEntry();
+              else html += renderNaturalEntry();
             }
           }
           if ((route() === 'home' || route() === 'family') && selMode) html += renderSelBar(D, true);
@@ -598,12 +603,18 @@
           return html + '</div></div>';
         }
 
-        /* ---------- 文章で自動入力(「選んだ日の予定」の＋を押すと表示。GAS が AI で候補に変換 → ここで確認 → 既存の登録処理へ) ---------- */
+        /* ---------- 文章で予定を登録(「選んだ日の予定」の＋を押すと既定で表示。GAS が AI で候補に変換 → ここで確認 → 既存の登録処理へ) ---------- */
         var NL_LABEL = { wish: '授業できる時間帯', block: '授業できない日', event: '予定の共有' };
         function nlDates(dates) { return groupDays(dates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + '〜' + fmtDateW(g.dateTo); }).join('、'); }
+        // ＋の中の入力方法の切り替え(文章で予定を登録 / 手動で入力)
+        function dayInputSwitch(mode) {
+          return '<div class="row" style="margin:12px 0 8px;gap:8px;align-items:center"><div class="seg" role="tablist" aria-label="予定の入力方法">' +
+            '<button type="button" role="tab" class="' + (mode === 'text' ? 'on' : '') + '" aria-selected="' + (mode === 'text' ? 'true' : 'false') + '" data-action="dayinput" data-mode="text">文章で予定を登録</button>' +
+            '<button type="button" role="tab" class="' + (mode === 'manual' ? 'on' : '') + '" aria-selected="' + (mode === 'manual' ? 'true' : 'false') + '" data-action="dayinput" data-mode="manual">手動で入力</button></div></div>';
+        }
         function renderNaturalEntry() {
           var dis = NL.busy || busy ? ' disabled' : '';
-          var h = '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><h3 style="margin:0 0 6px;font-size:15px">文章で自動入力</h3>';
+          var h = '<div>';
           h += '<p class="note" style="margin-top:0">例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。読み取った内容を確認してから登録します。</p>';
           h += '<textarea id="nl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px"' + dis + '>' + esc(NL.text) + '</textarea>';
           h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="nl-parse"' + dis + '>' + (NL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (NL.proposal || NL.text ? '<button class="btn-quiet btn-sm" data-action="nl-clear"' + dis + '>消す</button>' : '') + '</div>';
@@ -1366,6 +1377,7 @@
             case "helpwish": helpWish = !helpWish; render(); break;
             case "histback": histFolder = null; render(); break;
             case "dayadd": dayAddOpen=!dayAddOpen;render();break;
+            case "dayinput": dayInputMode = btn.getAttribute("data-mode") === "manual" ? "manual" : "text"; render(); break;
             case "calday":
               dayAddOpen=false;
               if (selMode) { var nd = btn.getAttribute("data-date"); selDays[nd] = !selDays[nd]; render(); break; }
