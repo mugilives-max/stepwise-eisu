@@ -82,3 +82,18 @@ test('calendars get a year of history: student state, admin student card and das
  assert.ok(card.lessons.some(l=>l.id==='y-in'));assert.ok(!card.lessons.some(l=>l.id==='y-out'),'older than a year is not sent to the card');
  const dash=c.kanriDashboard_().slots.map(s=>s.id);assert.ok(dash.includes('y-in')&&dash.includes('y-out'),'the dashboard keeps all saved lessons');
 });
+test('teacher preview returns the student and parent views read-only with the teacher token and never the student code or email status',()=>{
+ const h=fixture(),c=h.context();
+ const {TEACHER_TOKEN}=require('./gas-harness.cjs');
+ const call=(args)=>JSON.parse(c.doPost({postData:{contents:JSON.stringify({action:'preview',...args})}}).getContent());
+ assert.equal(call({token:'wrong',studentId:'test-a',view:'student'}).badAuth,true);
+ assert.equal(call({token:TEACHER_TOKEN,studentId:'nobody',view:'student'}).errorCode,'notFound');
+ assert.ok(call({token:TEACHER_TOKEN,studentId:'test-a',view:'other'}).error);
+ const before=JSON.stringify([h.rows('slots'),h.rows('familyAccounts'),h.rows('familyLinks')]);
+ const st=call({token:TEACHER_TOKEN,studentId:'test-a',view:'student'});
+ assert.ok(st.me&&st.me.name);assert.equal(st.viewer,'preview');assert.equal('emailStatus' in st,false);assert.ok(st.slots.some(x=>x.id==='prep-slot'));
+ assert.equal(JSON.stringify(st).includes('synthetic-link-a'),false,'the student code is never in the preview');
+ const pd=call({token:TEACHER_TOKEN,studentId:'test-a',view:'parent'});assert.equal(pd.ok,true);assert.equal(pd.preview,true);assert.ok(Array.isArray(pd.data.planLines));
+ const home=call({token:TEACHER_TOKEN,studentId:'test-a',view:'home'});assert.equal(home.ok,true);assert.deepEqual(JSON.parse(JSON.stringify(home.children.map(x=>x.studentId))),['test-a']);assert.equal(home.family.label,'先生のプレビュー');assert.ok(Array.isArray(home.billing));
+ assert.equal(JSON.stringify([h.rows('slots'),h.rows('familyAccounts'),h.rows('familyLinks')]),before,'preview writes nothing');
+});

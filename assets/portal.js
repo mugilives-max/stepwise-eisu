@@ -17,7 +17,10 @@
         var panel = "";          // "" | "wish" | "event" | "ng"
         var wishKind = "ok";   // 生徒の登録は授業可能時間帯に統一
         var selMode = "", selDays = {}; // 予定表で日付を選択中のモード("" | "ng" | "wish" | "event") と選んだ日付
-        var previewK = null;     // 旧プレビューURLは受け付けない
+        // 先生のプレビュー(2026-09-20): /yoyaku/?preview=student:<生徒ID>#home か ?preview=parent:<生徒ID>#family/home。
+        // 同じオリジンの管理画面のログイン(localStorage sw_admt)を使って表示だけ取り出す。登録・変更の送信はすべて止める
+        var PREVIEW = (function () { try { var m = /^(student|parent):([\w-]+)$/.exec(new URLSearchParams(location.search).get('preview') || ''); return m ? { view: m[1], studentId: m[2] } : null; } catch (e) { return null; } })();
+        var previewK = PREVIEW ? 'preview' : null; // 旧プレビューURL(k 形式)は受け付けない
         var parentStep = "pass"; // "pass" | "setup" | "data" | "logout"
         var parentNotice = "";
         var parentPlanMemos = Object.create(null), parentPlanNotice = "";
@@ -208,11 +211,24 @@
 
         /* ---------- API ---------- */
         function apiGet(params) {
+          var pv = previewRoute(params); if (pv) return pv;
           var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
           return fetch(API + "?" + q).then(function (r) { return r.json(); });
         }
         // 保護者ページの「マイページ」では、生徒本人用の送信(k 付き)を保護者のログイン(ftoken)＋子どもの ID に置き換えて送る。GAS 側で家族の紐付きを確認して子ども本人と同じ扱いにする
+        // プレビュー中の送信: 表示に必要な読み取りだけを先生のログインで取り、それ以外(登録・変更)は送らずに断る
+        function previewRoute(body) {
+          if (!PREVIEW || !body) return null;
+          var a = String(body.action || ''), tok = lsGet('sw_admt') || '';
+          function go(view) { return fetch(API, { method: 'POST', body: JSON.stringify({ action: 'preview', token: tok, studentId: PREVIEW.studentId, view: view }) }).then(function (r) { return r.json(); }); }
+          if (a === 'state' || a === 'familyStudentState') return go('student');
+          if (a === 'familyData') return go('parent');
+          if (a === 'familyHome') return go('home');
+          if (a === 'familyNotices' || a === 'familyNoticeRead') return Promise.resolve({ ok: true, notices: [] });
+          return Promise.resolve({ error: '先生のプレビューでは表示だけできます（登録・変更はできません）', preview: true });
+        }
         function apiPost(body) {
+          var pv = previewRoute(body); if (pv) return pv;
           var proxied = null;
           if (route() === 'family' && F.home && body && body.k !== undefined && !body.ftoken) { var pc = familyMypageChild(); body = Object.assign({}, body); delete body.k; body.ftoken = familyToken(); body.studentId = pc ? pc.studentId : ''; proxied = pc ? pc.studentId : ''; }
           return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (res) { if (proxied && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
@@ -377,6 +393,10 @@
 
         function previewBanner(long) {
           if (!previewK) return "";
+          if (PREVIEW) {
+            var pname = S && S.me && S.me.name ? S.me.name : (F.home && F.home.children && F.home.children[0] ? F.home.children[0].name : '');
+            return '<div class="preview-banner" role="status" style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(pname) + 'さんの' + (PREVIEW.view === 'parent' ? '保護者ページ' : 'マイページ') + 'を表示中</strong>（先生のプレビュー・表示のみ。登録や変更はできません）</span><a class="btn-quiet btn-sm" href="/kanri/#s=' + encodeURIComponent(PREVIEW.studentId) + '" style="text-decoration:none">管理画面の生徒ページへ</a></div>';
+          }
           return '<div style="background:var(--amber-soft);border:1px solid #d99a2b;color:var(--amber);border-radius:12px;padding:10px 14px;font-size:13.5px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="flex:1"><strong>' + esc(S.me.name) + 'さんのページを表示中</strong>(先生プレビュー' + (long ? '。ここでの操作は本人として反映されます' : '') + ')</span><a class="btn-quiet btn-sm" href="../kanri/" style="text-decoration:none">管理画面へ</a></div>';
         }
 
@@ -968,7 +988,7 @@
         /* ---------- 家族の保護者認証: 専用リンク方式とは別のセッション ---------- */
         var notices={items:[],open:false,busy:false,error:"",seq:0};
         var F = { step: "login", invite: "", email: "", home: null, childrenData: Object.create(null), childState: Object.create(null), stateBusy: '', stateSeq: 0, mypageTab: 'home', studentId: "", busy: false, message: "", error: "", seq: 0, challenge: "", challengeKind: "", verificationInfo: null, verificationInvalid: false, confirm: null, memos: Object.create(null) };
-        function familyToken() { return ssGet("sw_ft_v1") || ""; }
+        function familyToken() { return PREVIEW ? "preview" : (ssGet("sw_ft_v1") || ""); }
         function familyMypageChild() { var list = F.home && F.home.children || []; if (!list.length) return null; return list.filter(function (x) { return sameId(x.studentId, F.studentId); })[0] || list[0]; }
         // 子どものマイページ状態は他の読み込み(旧データ・お知らせ)と並行して取る(F.busy とは別枠)。ホームはこれが届いた時点で表示できる
         function familyLoadChildState(id) {
@@ -1012,8 +1032,8 @@
           return h;
         }
         function renderFamilyMypage(fixedTab) {
-          var c = familyMypageChild(), h = '';
-          if (!c) return '<p>子どもの紐付けを先生にご依頼ください。</p>';
+          var c = familyMypageChild(), h = previewBanner(true);
+          if (!c) return h + '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if ((F.home.children || []).length > 1) h += '<p><label class="small">表示する子ども <select id="fa-mychild">' + F.home.children.map(function (x) { return '<option value="' + esc(x.studentId) + '"' + (sameId(x.studentId, c.studentId) ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label></p>';
           var st = F.childState[c.studentId];
           if (!st || !st.me) { familyLoadChildState(c.studentId); return h + '<div class="loading"><div class="spinner"></div>' + esc(c.name) + 'さんのページを読み込んでいます…</div>'; }
@@ -1059,7 +1079,7 @@
         }
         function familyLoadHome() {
           if (F.busy || !familyToken()) return;
-          if (ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
+          if (!PREVIEW && ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
           F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.confirm = null; notices.items=[];
           familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; var first = familyMypageChild(); if (first) familyLoadChildState(first.studentId); familyLoadChild(); });
         }
@@ -1495,9 +1515,10 @@
           var qs = new URLSearchParams(location.search);
           var qk = qs.get("k"), qp = qs.get("preview");
           if (qk) { lsSet("sw_k", qk); history.replaceState(null, "", location.pathname + location.hash); }
-          else if (qp) { history.replaceState(null, "", location.pathname + location.hash); }
-          else if (qs.toString()) history.replaceState(null, "", location.pathname + location.hash);
+          else if (qp && !PREVIEW) { history.replaceState(null, "", location.pathname + location.hash); }
+          else if (qs.toString() && !PREVIEW) history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
+        if (PREVIEW && PREVIEW.view === 'parent' && route() !== 'family') location.hash = '#family/home';
         window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; histFolder = null; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
         window.addEventListener("storage", function (ev) {
           if (route()==='family')return;

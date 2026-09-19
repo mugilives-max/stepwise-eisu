@@ -77,8 +77,8 @@ function familyEmailPrefsSave_(req){
   return {ok:true,emailPrefs:familyEmailPrefs_(a.id)};
 }
 // Read-only statement of existing child invoices; does not issue or pay again.
-function familyBilling_(a,includeInactive) {
-  var children=familyChildren_(a,includeInactive),months={};
+function familyBilling_(a,includeInactive,childrenOverride) {
+  var children=childrenOverride||familyChildren_(a,includeInactive),months={};
   children.forEach(function(child){billingInvoiceRows_(child.studentId).forEach(function(p){
     if(p['取消日時']||String(p['状態'])==='取消')return;
     var invoice=billingInvoiceView_(p),ym=invoice.ym;

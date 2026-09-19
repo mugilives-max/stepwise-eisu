@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-19-past-calendar' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-20-teacher-preview' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -77,6 +77,7 @@ function doPost(e) {
     else if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
     else if (String(req.action || '').indexOf('studentEmail') === 0) res = studentEmailDispatch_(req);
     else switch (req.action) {
+      case 'preview': res = previewOp_(req); break;
       case 'learningService': res = servicePublic_(req); break;
       case 'accept':  res = accept_(req.slotId, req.k, req.expectedSnapshot); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;
@@ -781,6 +782,21 @@ function parentData_(req) {
   return parentDataForStudent_(auth.student);
 }
 // 呼び出し側で生徒への閲覧権限を確認してから、保護者向けの項目だけ返す。
+// 先生のプレビュー(2026-09-20): 生徒マイページ／保護者ページの表示内容を、先生のログイン(token)で取り出す。
+// 読み取りだけで、書き込みは一切しない。生徒の専用コードや保護者の認証情報は返さない
+function previewOp_(req) {
+  if (authMode_() !== 'account' || !tokenOk_(req.token)) return { error: '先生アカウントでログインし直してください', badAuth: true };
+  var id = String(req.studentId || ''), student = findStudent_(id) || systemStudent_(id);
+  if (!student) return { error: '生徒が見つかりません', errorCode: 'notFound' };
+  var view = String(req.view || 'student');
+  if (view === 'student') { var st = studentState_(String(student.code || '')); if (st && typeof st === 'object') { delete st.emailStatus; st.viewer = 'preview'; } return st; }
+  if (view === 'parent') { var pd = parentDataForStudent_(student); if (pd && pd.ok) pd.preview = true; return pd; }
+  if (view === 'home') {
+    var kids = [{ studentId: String(student.id), name: String(student.name), active: true }];
+    return { ok: true, preview: true, family: { id: 'preview', label: '先生のプレビュー', email: '' }, children: kids, billing: familyBilling_({ id: 'preview' }, false, kids), emailPrefs: familyEmailPrefs_('') };
+  }
+  return { error: '表示する項目が正しくありません' };
+}
 function parentDataForStudent_(student) {
   var d = kanriStudent_(student.id);
   if (d.error) return d;

@@ -916,7 +916,7 @@
           var p = s.profile || {}, section = route().section || "overview";
           var html = '<div class="head"><div><a href="#students" class="small">← 生徒一覧</a><h1>' + esc(s.name) + '</h1>' +
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
-            '<div class="row">' + "" + '<button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+            '<div class="row"><a class="btn-quiet btn-sm" href="/yoyaku/?preview=student:' + encodeURIComponent(s.id) + '#home" target="_blank" rel="noopener" title="生徒本人に見えている画面を表示だけします（登録・変更はできません）">生徒ページを見る</a><a class="btn-quiet btn-sm" href="/yoyaku/?preview=parent:' + encodeURIComponent(s.id) + '#family/home" target="_blank" rel="noopener" title="保護者に見えている画面を表示だけします（登録・変更はできません）">保護者ページを見る</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
           if (section === 'overview') {

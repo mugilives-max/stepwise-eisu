@@ -288,3 +288,26 @@ test('approved addon lines are folded into their parent plan and proposed addons
   assert.match(ui.html(), /<strong>追加（9\/20〜9\/30・＋2回）：<\/strong>テスト前に演習を増やすため/);
   assert.equal((ui.html().match(/<span class="tag green">承認済み<\/span>/g) || []).length, 1, 'the approved addon is not listed as a separate row');
 });
+
+test('teacher preview of the student mypage: reads through action=preview with the teacher token, shows the banner, and blocks every write without a request', async () => {
+  const ui = createUI('student', { hash: '#home', search: '?preview=student:test-a', local: new Map([['sw_admt', 'test-teacher-token']]) });
+  const first = ui.requests[0].body; assert.deepEqual(first, { action: 'preview', token: 'test-teacher-token', studentId: 'test-a', view: 'student' });
+  assert.equal(ui.replaced.length, 0, 'the preview query stays in the URL so a reload keeps the preview');
+  ui.requests[0].reply({ ...state(), viewer: 'preview', nlEnabled: true }); await flush();
+  assert.match(ui.html(), /<div class="preview-banner"[^>]*><span[^>]*><strong>【テスト】生徒Aさんのマイページを表示中<\/strong>（先生のプレビュー・表示のみ。登録や変更はできません）<\/span><a class="btn-quiet btn-sm" href="\/kanri\/#s=test-a"/);
+  const count = ui.requests.length;
+  ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); assert.doesNotMatch(ui.html(), /data-action="dayinput"/, 'the sentence entry is off in preview'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply'); await flush();
+  assert.equal(ui.requests.length, count, 'no write request leaves the page');
+  assert.match(ui.html() + ' ' + ui.el('toast').textContent, /先生のプレビューでは表示だけできます/);
+});
+
+test('teacher preview of the parent page: home, child state and parent data come from action=preview and notices are empty', async () => {
+  const ui = createUI('student', { hash: '#family/home', search: '?preview=parent:test-a', local: new Map([['sw_admt', 'test-teacher-token']]), session: new Map() });
+  const home = ui.requests.find(r => r.body.view === 'home'); assert.ok(home, 'family home is read as a preview'); assert.equal(home.body.action, 'preview'); assert.equal(home.body.token, 'test-teacher-token');
+  home.reply({ ok: true, preview: true, family: { id: 'preview', label: '先生のプレビュー', email: '' }, children: [{ studentId: 'test-a', name: '【テスト】生徒A', active: true }], billing: [], emailPrefs: {} }); await flush();
+  const st = ui.requests.find(r => r.body.view === 'student'); assert.ok(st); st.reply({ ...state(), viewer: 'preview' }); await flush();
+  const pd = ui.requests.find(r => r.body.view === 'parent'); assert.ok(pd); pd.reply({ ok: true, preview: true, data: { name: '【テスト】生徒A', month: '2026-09', thisMonth: {}, payments: [], upcoming: [], planLines: [] } }); await flush();
+  assert.ok(ui.requests.every(r => r.body.action === 'preview'), 'no family API call carries a real token'); assert.ok(!ui.requests.some(r => r.body.action === 'familyNotices'));
+  assert.match(ui.html(), /【テスト】生徒Aさんの保護者ページを表示中<\/strong>（先生のプレビュー・表示のみ/);
+  assert.equal(ui.session.has('sw_ft_v1'), false);
+});

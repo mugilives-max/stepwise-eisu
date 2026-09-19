@@ -348,3 +348,8 @@ test('student settings sends the registration mail to a typed address, then show
   ui.requests.findLast(r => r.body.op === 'familyList').reply(familyList({ families: [{ id: 'g1', label: 'g', status: 'active', email: 'parent@example.invalid', configured: true, lastLogin: '2026-09-19T02:00:00.000Z', children: [{ studentId: 'test-a', name: '【テスト】子A' }] }] })); await flush();
   assert.match(ui.html(), /<span class="tag green">登録済み<\/span> parent@example.invalid/); assert.equal(ui.el('parent-reg-email'), undefined); assert.doesNotMatch(ui.html(), /family-student-invite/);
 });
+
+test('the admin student header links to the read-only student and parent previews', async () => {
+  const ui = createUI('admin', { hash: '#s=test-a&tab=settings' }); ui.requests[0].reply({ ok: true, data: settingsCard() }); await flush();
+  assert.match(ui.html(), /<a class="btn-quiet btn-sm" href="\/yoyaku\/\?preview=student:test-a#home" target="_blank" rel="noopener"[^>]*>生徒ページを見る<\/a><a class="btn-quiet btn-sm" href="\/yoyaku\/\?preview=parent:test-a#family\/home" target="_blank" rel="noopener"[^>]*>保護者ページを見る<\/a>/);
+});
