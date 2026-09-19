@@ -223,7 +223,7 @@ test('the admin day card defaults to 文章で予定を登録 with a switch to m
   const ui = await adminReady(card({ nlEnabled: true, deliveryMode: 'online' }), 'overview');
   ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('sdayadd');
   assert.match(ui.html(), /<div class="seg" role="tablist"[^>]*><button type="button" role="tab" class="on" aria-selected="true" data-action="dayinput" data-mode="text">文章で予定を登録<\/button><button type="button" role="tab" class="" aria-selected="false" data-action="dayinput" data-mode="manual">手動で入力<\/button><\/div>/);
-  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"/); assert.match(ui.html(), /<strong>文章を書くだけで、AIが「授業の案内」「授業不可」「予定の共有」に分けて登録の下書きを作ります。<\/strong>/);
+  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('tnl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('help-toggle', { 'data-help': 'tnl' }); assert.match(ui.html(), /<div class="card note"[^>]*>文章を書いて「内容を確認」を押すと、AIが「授業の案内」「授業不可」「予定の共有」に分けて登録の下書きを作ります。/); ui.click('help-toggle', { 'data-help': 'tnl' });
   ui.click('dayinput', { 'data-mode': 'manual' }); assert.equal(ui.el('tnl-text'), undefined); assert.match(ui.html(), /data-action="dayoffer" data-date="2026-09-15"/); assert.match(ui.html(), /data-action="sblockopen"/);
   ui.click('dayinput', { 'data-mode': 'text' }); assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /data-action="dayoffer"/);
   ui.input('tnl-text', '来週水曜17時から90分英語の演習。20日は部活で休み。25日は中間テスト'); ui.click('tnl-parse');

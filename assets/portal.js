@@ -610,14 +610,14 @@
         function dayInputSwitch(mode) {
           return '<div class="row" style="margin:12px 0 8px;gap:8px;align-items:center"><div class="seg" role="tablist" aria-label="予定の入力方法">' +
             '<button type="button" role="tab" class="' + (mode === 'text' ? 'on' : '') + '" aria-selected="' + (mode === 'text' ? 'true' : 'false') + '" data-action="dayinput" data-mode="text">文章で予定を登録</button>' +
-            '<button type="button" role="tab" class="' + (mode === 'manual' ? 'on' : '') + '" aria-selected="' + (mode === 'manual' ? 'true' : 'false') + '" data-action="dayinput" data-mode="manual">手動で入力</button></div></div>';
+            '<button type="button" role="tab" class="' + (mode === 'manual' ? 'on' : '') + '" aria-selected="' + (mode === 'manual' ? 'true' : 'false') + '" data-action="dayinput" data-mode="manual">手動で入力</button></div>' +
+            (mode === 'text' ? '<button class="btn-quiet btn-sm" data-action="helpnl" aria-label="文章で予定を登録の説明" aria-expanded="' + helpNl + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button>' : '') + '</div>' +
+            (mode === 'text' && helpNl ? '<div class="note" style="margin:0 0 8px">文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。下書きは次の画面で確認でき、チェックを入れた項目だけ登録されます。例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。日付や時間が読み取れない項目は確認画面で入力できます。</div>' : '');
         }
         function renderNaturalEntry() {
           var dis = NL.busy || busy ? ' disabled' : '';
           var h = '<div>';
-          h += '<p class="note" style="margin-top:0"><strong>文章を書くだけで、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。</strong>下書きは次の画面で確認でき、チェックを入れた項目だけ登録されます（勝手に登録されることはありません）。</p>';
-          h += '<p class="note" style="margin-top:0">例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。日付や時間が読み取れない項目は、確認画面で入力できます。</p>';
-          h += '<textarea id="nl-text" rows="3" maxlength="400" placeholder="予定を文章で入力" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px"' + dis + '>' + esc(NL.text) + '</textarea>';
+          h += '<textarea id="nl-text" rows="3" maxlength="400" placeholder="予定を文章で入力。AIが予定に変換し、下書きを作ります" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px"' + dis + '>' + esc(NL.text) + '</textarea>';
           h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="nl-parse"' + dis + '>' + (NL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (NL.proposal || NL.text ? '<button class="btn-quiet btn-sm" data-action="nl-clear"' + dis + '>消す</button>' : '') + '</div>';
           if (NL.error) h += '<p role="alert" style="color:var(--danger);margin:8px 0 0">' + esc(NL.error) + '</p>';
           if (NL.proposal) h += renderNaturalProposal(NL.proposal, dis);
@@ -783,7 +783,7 @@
 
         // 授業の記録: 科目＋種類ごとのフォルダをカードで並べ、開くとそのフォルダの中身(公開された授業記録と実施済みの授業、日付の新しい順)を表示する
         var histFolder = null;
-        var helpToff = false, helpWish = false; // 「登録不可」「授業可」の説明(？ボタン)の開閉
+        var helpToff = false, helpWish = false, helpNl = false; // 「登録不可」「授業可」「文章で予定を登録」の説明(？ボタン)の開閉
         function historyFolders() {
           var done = (S.history || []).filter(function (x) { return x.done; }), records = (S.lessonRecords || []).slice(), used = {};
           function recordFor(x) { return records.filter(function (r) { return r.date === x.date && r.start === x.start && r.subject === (x.subject || '') && Number(r.min) === Number(x.min); })[0] || null; }
@@ -1376,6 +1376,7 @@
             case "histopen": histFolder = btn.getAttribute("data-folder"); render(); window.scrollTo(0, 0); break;
             case "helptoff": helpToff = !helpToff; render(); break;
             case "helpwish": helpWish = !helpWish; render(); break;
+            case "helpnl": helpNl = !helpNl; render(); break;
             case "histback": histFolder = null; render(); break;
             case "dayadd": dayAddOpen=!dayAddOpen;render();break;
             case "dayinput": dayInputMode = btn.getAttribute("data-mode") === "manual" ? "manual" : "text"; render(); break;
