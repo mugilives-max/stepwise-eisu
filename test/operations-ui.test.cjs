@@ -120,15 +120,20 @@ test('server pending recovery overrides stale local state and shows snapshots ev
   ui.click('batchsend'); assert.equal(ui.requests.at(-1).body.requestId, 'server-pending-request'); assert.deepEqual(ui.requests.at(-1).body.slotIds, ['slot-a', 'slot-b']);
 });
 
-test('calendar overlap chains keep all four lessons without claiming four people or fixed concurrency', async () => {
-  const slots = ['17:00', '17:30', '18:30', '19:00'].map((start, i) => slot('chain-' + i, { start, min: 90, status: 'booked', studentId: i % 2 ? 'test-b' : 'test-a', studentName: i % 2 ? '【テスト】B' : '【テスト】A' }));
+test('the home calendar is the shared component: one box per lesson with time, family name and subject initial, teacher off as 休み, wishes and events named', async () => {
+  const slots = ['17:00', '17:30', '18:30', '19:00'].map((start, i) => slot('chain-' + i, { date: '2026-09-15', start, min: 90, status: 'booked', studentId: i % 2 ? 'test-b' : 'test-a', studentName: i % 2 ? '【テスト】B' : '【テスト】山田 太郎', subject: i % 2 ? '数学' : '英語', req: i === 2 ? '{"kind":"cancel"}' : '' }));
+  slots.push(slot('of-1', { date: '2026-09-16', start: '16:00', min: 60, status: 'offered', studentId: 'test-a', studentName: '【テスト】山田 太郎', subject: '英語' }));
   const ui = createUI('admin', { hash: '#home' });
-  ui.requests[0].reply({ data: { today: '2026-09-08', slots, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [] } }); await flush();
-  assert.equal((ui.html().match(/class="cgrp"/g) || []).length, 1);
-  assert.match(ui.html(), /title="時間が重なる授業"/);
-  for (const start of ['17:00', '17:30', '18:30', '19:00']) assert.ok(ui.html().includes('title="' + start + '〜'), 'calendar retains ' + start);
-  assert.equal(ui.html().includes('同じ時間帯の授業(4人)'), false);
-  assert.equal(ui.html().includes('2人同時'), false);
+  ui.requests[0].reply({ data: { today: '2026-09-08', slots, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [], teacherOff: [{ id: 'o1', date: '2026-09-20', start: '', end: '', note: '' }], wishes: [{ id: 'w1', studentId: 'test-b', studentName: '【テスト】B', date: '2026-09-18', start: '16:00', end: '18:00', kind: 'range' }], allEvents: [{ id: 'e1', studentId: 'test-a', studentName: '【テスト】山田 太郎', date: '2026-09-25', dateTo: '2026-09-25', title: '中間テスト', kind: 'test' }] } }); await flush();
+  const html = ui.html();
+  assert.doesNotMatch(html, /class="cgrp"|class="cbox|class="caldot|calday boxed/, 'the old home renderer is gone');
+  assert.match(html, /<button class="calday[^"]*" data-action="calday" data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:30<\/span><span class="s">山田 英<\/span><\/span><span class="calbox"><span class="t">17:30-<wbr>19:00<\/span><span class="s">B 数<\/span><\/span><span class="calbox rq"><span class="t">18:30-<wbr>20:00<\/span><span class="s">山田 英（取消依頼）<\/span><\/span>/);
+  assert.match(html, /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="calbox of"><span class="t">16:00-<wbr>17:00<\/span><span class="s">山田 英<\/span>/);
+  assert.match(html, /data-date="2026-09-18">18<span class="calmarks"><\/span><span class="calbox wi">希 B 16-18<\/span>/);
+  assert.match(html, /class="calday[^"]*toff[^"]*" data-action="calday" data-date="2026-09-20">20<span class="calmarks"><\/span><span class="callbl to"[^>]*>休み<\/span>/);
+  assert.match(html, /data-date="2026-09-25">25<span class="calmarks"><\/span><span class="calbox ev">山田 中間テスト<\/span>/);
+  assert.match(html, /<div class="callegend">[^]*<span class="callbl to toffswatch"[^>]*>休み<\/span> 先生の休み<\/span><span><span class="callbl rq"[^>]*>取消依頼<\/span> 生徒から取消の依頼あり<\/span><\/div>/);
+  assert.doesNotMatch(html, /登録不可/);
 });
 test('selected calendar day exposes add button and carries date into student offer',async()=>{
  const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="sdayadd" aria-label="9\/15\(火\)の予定を追加"/);ui.click('sdayadd');assert.equal(ui.el('f-date'),undefined);ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date'),undefined);assert.equal(ui.requests.length,1);

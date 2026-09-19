@@ -49,3 +49,8 @@ button.calday { cursor: pointer; font-size: 13px; }
 .slotline:last-child { border-bottom: none; }
 .slotline .time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 104px; }
 .slotline .who { flex: 1; min-width: 80px; }
+/* 管理画面の全体予定表: 取消依頼中(rq)・実施済み(dn)・生徒の希望(wi=名前つき) */
+.calbox.rq { background: var(--danger-soft); color: var(--danger); border-left-color: var(--danger); }
+.calbox.dn { background: var(--soft); color: var(--muted); border-left-color: var(--muted); }
+.calbox.wi { background: #e6f4ea; color: #2f8a4c; border-left-color: #2f8a4c; }
+.callbl.rq { color: var(--danger); font-weight: 700; }

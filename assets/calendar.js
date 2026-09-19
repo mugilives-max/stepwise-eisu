@@ -12,6 +12,7 @@
   function cT(t) { return String(t || "").replace(/^0/, "").replace(/:00$/, ""); }
   function endTime(start, min) { var p = String(start || "0:0").split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min || 0); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
   function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function byStart(a, b) { return String(a.start) < String(b.start) ? -1 : 1; }
   function defaultLabel(s) { var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); }
 
   // lessons: {date, start, min, subject, kind, st}  st = mine(確定) | offer(案内) | done(実施済み) | past(過去・未実施)
@@ -23,7 +24,8 @@
     (src.lessons || []).forEach(function (s) {
       var it = it0(s.date);
       if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "offer") it.offer++; else it.mine++;
-      it.labels.push({ text: label(s) || "授業", st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind });
+      // cls: 管理画面の全体予定表で使う追加クラス(rq=取消依頼中 / dn=実施済み)
+      it.labels.push({ text: label(s) || "授業", st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind, cls: s.cls || "" });
     });
     (src.events || []).forEach(function (e) {
       var d = e.date, to = e.dateTo || e.date;
@@ -31,13 +33,16 @@
     });
     (src.blocked || []).forEach(function (b) { var it = it0(b.date); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else it.ngAll = 1; });
     (src.teacherOff || []).forEach(function (o) { var it = it0(o.date); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
-    (src.wishes || []).forEach(function (w) { var it = it0(w.date); it.wish = (it.wish || 0) + 1; });
+    // wishes: {date, label?} label があれば(全体予定表: 生徒名と時間帯)箱で出し、なければ「授業可」の印だけ
+    (src.wishes || []).forEach(function (w) { var it = it0(w.date); it.wish = (it.wish || 0) + 1; if (w.label) (it.wishL = it.wishL || []).push(String(w.label)); });
     return info;
   }
 
-  // opts: {year, month(0始まり), today, selDate, selMode, selDays, showToff, minIdx, maxIdx}
+  // opts: {year, month(0始まり), today, selDate, selMode, selDays, showToff, minIdx, maxIdx, toffText, toffLegend}
+  //   toffText / toffLegend: 先生の休みの表示名(生徒・保護者には「登録不可」、管理画面には「休み」)
   function render(info, opts) {
     opts = opts || {}; info = info || {};
+    var toffText = opts.toffText || "登録不可", toffLegend = opts.toffLegend || "先生の休み（登録できません）";
     var now = new Date(), calY = opts.year != null ? opts.year : now.getFullYear(), calM = opts.month != null ? opts.month : now.getMonth();
     var today = opts.today || "", selDate = opts.selDate || null, selMode = opts.selMode || "", selDays = opts.selDays || {}, showToff = opts.showToff !== false;
     var minIdx = opts.minIdx != null ? opts.minIdx : now.getFullYear() * 12 + now.getMonth() - 2, curIdx = calY * 12 + calM, maxIdx = opts.maxIdx != null ? opts.maxIdx : minIdx + 5;
@@ -63,16 +68,16 @@
       if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
       marks += "</span>";
       if (it && it.ngAll && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
-      if (it && it.ngT && !past) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
-      if (it && it.wish && !past) marks += '<span class="callbl wi">授業可</span>';
-      if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可</span>';
-      if (showToff && it && it.toffT && !past) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">登録不可' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
+      if (it && it.ngT && !past) it.ngT.slice().sort(byStart).slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
+      if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
+      if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
+      if (showToff && it && it.toffT && !past) it.toffT.slice().sort(byStart).slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + cT(o.start) + '-' + cT(o.end) + '</span>'; });
       if (hasItems) {
         var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
         // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
         lb.forEach(function (l) {
           if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
-          var lc = l.st === "offer" ? " of" : "";
+          var lc = (l.st === "offer" ? " of" : "") + (l.cls ? " " + l.cls : "");
           marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
         });
       }
@@ -86,7 +91,8 @@
     h += '<span><span class="callbl ev" style="display:inline">予定</span> 重要な予定（テスト・行事など）</span>';
     h += '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
     h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';
-    if (showToff) h += '<span><span class="callbl to toffswatch" style="display:inline">登録不可</span> 先生の休み（登録できません）</span>';
+    if (showToff) h += '<span><span class="callbl to toffswatch" style="display:inline">' + esc(toffText) + '</span> ' + esc(toffLegend) + '</span>';
+    if (opts.legendReq) h += '<span><span class="callbl rq" style="display:inline">取消依頼</span> 生徒から取消の依頼あり</span>';
     h += "</div></div>";
     return h;
   }

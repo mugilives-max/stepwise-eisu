@@ -25,16 +25,18 @@ test('chemistry can be selected for a new offer independently of the student def
   assert.equal(ui.requests.at(-1).body.subject, '化学'); assert.equal(ui.requests.at(-1).body.deliveryMode, 'online');
 });
 
-test('calendar interleaves timed teacher breaks and lessons in start order while preserving overlap groups', async () => {
+test('the home calendar lists timed teacher breaks as 休み marks and the lessons of the day in start order (shared component)', async () => {
   const ui = createUI('admin', { hash: '#home' });
   const lessons = [offered({ start: '14:00', studentName: '【テスト】A' }), offered({ id: 'slot-b', start: '13:30', studentId: 'test-b', studentName: '【テスト】B' }),
     offered({ id: 'slot-c', start: '09:00', studentName: '【テスト】C', subject: '化学' })];
   ui.requests[0].reply({ data: { today: '2026-09-08', slots: lessons, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [],
     teacherOff: [{ date: '2026-09-10', start: '12:00', end: '13:00' }, { date: '2026-09-10', start: '08:00', end: '08:30' }] } }); await flush();
-  const html = ui.html(), positions = ['休 8-8:30', 'title="09:00〜', '休 12-13', 'title="13:30〜', 'title="14:00〜'].map(s => {
-    const p = html.indexOf(s); assert.ok(p >= 0, 'calendar item exists: ' + s); return p;
-  });
-  assert.deepEqual(positions, positions.slice().sort((a, b) => a - b)); assert.match(html, /化学/);
+  const html = ui.html(), cell = /data-date="2026-09-10">10<span class="calmarks"><\/span>([^]*?)<\/button>/.exec(html);
+  assert.ok(cell, 'the day cell renders'); const marks = cell[1];
+  // teacher breaks come first as 休み marks (shortest form), then one box per lesson sorted by start
+  assert.match(marks, /^<span class="callbl to"[^>]*>休み8-8:30<\/span><span class="callbl to"[^>]*>休み12-13<\/span><span class="calbox of"><span class="t">09:00-<wbr>09:30<\/span><span class="s">C 化<\/span><\/span><span class="calbox of"><span class="t">13:30-/);
+  const positions = ['09:00-', '13:30-', '14:00-'].map(s => marks.indexOf('<span class="t">' + s)); assert.deepEqual(positions, positions.slice().sort((a, b) => a - b));
+  assert.doesNotMatch(html, /class="cbox|class="cgrp|title="時間が重なる授業"/);
 });
 
 test('offered editor keeps the old snapshot while submitting the corrected date, duration, chemistry and mode', async () => {

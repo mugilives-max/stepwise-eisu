@@ -132,44 +132,7 @@
       .spinner { width: 28px; height: 28px; margin: 0 auto 12px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .9s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } #toast { transition: none; } }
-      .cal { padding: 12px 12px 10px; }
-      .calhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-      .callabel { font-weight: 700; font-size: 15px; }
-      .calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
-      .calwd { font-size: 11px; color: var(--muted); padding: 2px 0; }
-      .calwd.sun { color: var(--danger); } .calwd.sat { color: var(--primary); }
-      .calday { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px; padding: 4px 0 3px; min-height: 42px; border-radius: 9px; border: 1px solid transparent; background: transparent; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
-      button.calday { cursor: pointer; font-size: 13px; }
-      .calday.sun { color: var(--danger); } .calday.sat { color: var(--primary); }
-      .calday.off { opacity: 0.35; }
-      .calday.toff:not(.sel) { background: repeating-linear-gradient(135deg, var(--taken) 0 3px, transparent 3px 7px); }
-      .callbl.to { color: var(--muted); font-weight: 600; }
-      .calday.today { border-color: var(--muted); }
-      .calday.sel { background: var(--primary); color: var(--white); border-color: var(--primary); }
-      .caldot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-      .caldot.op { background: var(--primary); } .caldot.of { background: #d99a2b; } .caldot.rq { background: var(--danger); } .caldot.ws { background: var(--green); } .caldot.ev { background: var(--coral); }
-      .calday.sel .caldot { background: var(--white); }
-      .calmark { font-size: 10px; line-height: 1; color: var(--muted); font-weight: 700; }
-      .calday.sel .calmark { color: var(--white); }
-      .calmarks { display: flex; align-items: center; gap: 2px; min-height: 7px; }
-      .callegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
-      .callbl { display: block; max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .callbl.tm { font-weight: 600; opacity: .85; }
-      /* ホームの予定表: Google カレンダー風の Box 表示 */
-      .calday.boxed { align-items: stretch; padding: 4px 2px 3px; min-height: 48px; }
-      .calday.boxed.sel { background: var(--soft); color: var(--primary); border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
-      .cbox { display: block; width: 100%; box-sizing: border-box; border-radius: 4px; padding: 1px 4px; margin-top: 2px; font-size: 10.5px; line-height: 1.3; font-weight: 600; text-align: left; color: var(--white); background: var(--primary); white-space: normal; word-break: break-all; }
-      .cbox.of { background: #d99a2b; } .cbox.rq { background: var(--danger); } .cbox.dn { background: var(--muted); }
-      .cbox.ws { background: var(--green); } .cbox.ev { background: var(--coral); }
-      .cbox.to { background: var(--taken); color: var(--muted); } .cbox.ng { background: var(--taken); color: var(--muted); font-weight: 500; }
-      .cgrp { display: block; width: 100%; box-sizing: border-box; border-left: 3px solid var(--ink); padding-left: 3px; margin-top: 2px; }
-      .cgrp .cbox { margin-top: 1px; } .cgrp .cbox:first-child { margin-top: 0; }
-      .callegend .cbox { display: inline-block; width: auto; margin: 0; padding: 0 6px; }
-      .calgrid > * { min-width: 0; } .calday { max-width: 100%; overflow: hidden; }
-      @media (max-width: 640px) { .cbox { font-size: 9.5px; padding: 1px 2px; } }
-      .callbl.of { color: var(--amber); } .callbl.dn { color: var(--muted); } .callbl.ev { color: var(--coral); font-weight: 600; } .callbl.more { color: var(--muted); font-weight: 500; }
-      .calday.sel .callbl { color: var(--white); }
-      .callegend span { display: inline-flex; align-items: center; gap: 4px; }
+      /* 予定表の見た目は共通部品 assets/calendar.css に集約(2026-09-19) */
       .loglist { font-size: 13px; color: var(--muted); }
       .loglist div { padding: 4px 0; border-bottom: 1px dashed var(--line); }
       .loglist div:last-child { border-bottom: none; }
@@ -196,7 +159,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js?v=20260911-simple-record"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260912-daycard"><script src="/assets/calendar.js?v=20260912-shared-cal"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260919-unified-cal"><script src="/assets/calendar.js?v=20260919-unified-cal"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -404,7 +367,6 @@
         function cT(t) { return String(t || "").replace(/^0/, "").replace(/:00$/, ""); } // 13:00→13, 09:30→9:30
         function offWhen(o) { return o.start ? o.start + "〜" + o.end : "終日"; }
         function offLine(o) { return '<div class="line"><span class="w"><span class="tag gray">先生の休み</span> ' + offWhen(o) + ' <span class="small muted">' + esc(o.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="' + esc(o.id) + '">削除</button></div>'; }
-        function offMark(it, o) { if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; }
         // 予定表のセル用に名前を短くする: 空白があれば姓、【テスト】などの角括弧は外す。空白がなければ5文字以上は3文字、それ以外は2文字
         function shortName(n) {
           n = String(n || "").replace(/【[^】]*】/g, "").trim();
@@ -413,27 +375,6 @@
           if (!/[\u3040-\u30ff\u4e00-\u9fff]/.test(n)) return n.slice(0, 6);
           return n.length >= 5 ? n.slice(0, 3) : n.slice(0, 2);
         }
-        // 時刻順に並べ、時間帯の重なりが連なる授業をまとめる。グループの件数は同時人数ではない。
-        function groupOverlap(list) {
-          var sorted = list.slice().sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : String(a.studentName) < String(b.studentName) ? -1 : 1; });
-          var out = [], cur = null, curEnd = "";
-          sorted.forEach(function (l) {
-            var en = endTime(l.start, l.min);
-            if (cur && l.start < curEnd) { cur.push(l); if (en > curEnd) curEnd = en; }
-            else { cur = [l]; curEnd = en; out.push(cur); }
-          });
-          return out;
-        }
-        function calendarTimedRows(info, lessonBox) {
-          var rows = [], html = "", group = null, parts = [];
-          (info.toffT || []).forEach(function (o) { rows.push({ start: o.start, order: rows.length, group: null, html: '<span class="cbox to">休 ' + cT(o.start) + '-' + cT(o.end) + '</span>' }); });
-          (info.rows || []).forEach(function (g, i) { g.forEach(function (l) { rows.push({ start: l.start, order: rows.length, group: g.length > 1 ? i : null, html: lessonBox(l) }); }); });
-          rows.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : a.order - b.order; });
-          function flush() { if (parts.length) html += group === null ? parts.join('') : '<span class="cgrp" title="時間が重なる授業">' + parts.join('') + '</span>'; parts = []; }
-          rows.forEach(function (r) { if (r.group !== group || r.group === null) flush(); group = r.group; parts.push(r.html); }); flush();
-          return html;
-        }
-        function ngMark(it, b) { if (b.start) (it.ngT = it.ngT || []).push(b); else it.ng++; }
         function ngWhen(b) { return b.start ? ' ' + b.start + '〜' + b.end : ''; }
         function evRange(e) { return e.date === e.dateTo ? fmtD(e.date) : fmtD(e.date) + "〜" + fmtD(e.dateTo); }
         function eventRow(e, showName) {
@@ -608,19 +549,18 @@
           renderNav();
           var d = D;
           var html = '';
-          // 全体の予定表(管理者用)
+          // 全体の予定表(管理者用): 生徒ページ・生徒マイページと同じ共通部品(assets/calendar.js)。授業は「時刻 姓 科目頭文字」、取消依頼は赤、実施済みは灰、希望は緑、先生の休みは斜線
           var hs = d.slots || [];
-          var hinfo = {};
-          var hit = function (dd) { return hinfo[dd] || (hinfo[dd] = { booked: 0, offered: 0, req: 0, ng: 0, wish: 0, ev: 0 }); };
-          hs.forEach(function (s) { var it = hit(s.date); if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else it.offered++; });
-          (d.blocked || []).forEach(function (b) { ngMark(hit(b.date), b); });
-          (d.teacherOff || []).forEach(function (o) { offMark(hit(o.date), o); });
-          (d.wishes || []).forEach(function (x) { var it = hit(x.date); it.wish++; (it.wishL = it.wishL || []).push(x); });
-          (d.allEvents || []).forEach(function (e) { var dd = e.date; for (var ei = 0; ei < 61 && dd <= e.dateTo; ei++) { var it = hit(dd); it.ev++; (it.evL = it.evL || []).push(e); dd = addDaysStr(dd, 1); } });
-          (function () { var byD = {}; hs.forEach(function (s) { (byD[s.date] = byD[s.date] || []).push(s); }); Object.keys(byD).forEach(function (dd) { hit(dd).rows = groupOverlap(byD[dd]); }); })();
+          var hinfo = window.StepwiseCalendar.buildInfo({
+            lessons: hs.map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : (s2.done ? "done" : (s2.date < d.today ? "past" : "mine")), cls: s2.status !== "offered" && s2.req ? "rq" : (s2.done ? "dn" : "") }; }),
+            events: (d.allEvents || []).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
+            teacherOff: d.teacherOff || [],
+            wishes: (d.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
+            lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
+          });
           if (!selDate) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
           html += '<h2>全体の予定表 <a class="btn-quiet btn-sm" href="#lessons" style="margin-left:auto">授業を案内する・変更する</a></h2>';
-          html += renderCal(hinfo, d.today, { noNg: true, boxes: true });
+          html += window.StepwiseCalendar.render(hinfo, { year: calY, month: calM, today: d.today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           var hday = hs.filter(function (s) { return s.date === selDate; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
           var hOff = (d.teacherOff || []).filter(function (o) { return o.date === selDate; });
           html += '<h2>' + fmtD(selDate) + 'の予定 ' + calendarAddButton(selDate,d.today) + '<span class="cnt">' + hday.length + '件</span></h2>';
@@ -1130,75 +1070,6 @@
           app.innerHTML = html;
         }
 
-        function renderCal(info, today, opts) {
-          opts = opts || {};
-          var boxes = !!opts.boxes;
-          var label = calY + "年" + (calM + 1) + "月";
-          var minIdx = calNow.getFullYear() * 12 + calNow.getMonth() - 1, curIdx = calY * 12 + calM, maxIdx = minIdx + 4;
-          var h = '<div class="card cal"><div class="calhead">';
-          h += '<button class="btn-quiet btn-sm" data-action="calprev"' + (curIdx <= minIdx ? " disabled" : "") + ' aria-label="前の月">◀</button>';
-          h += '<span class="callabel">' + label + '</span>';
-          h += '<button class="btn-quiet btn-sm" data-action="calnext"' + (curIdx >= maxIdx ? " disabled" : "") + ' aria-label="次の月">▶</button>';
-          h += '</div><div class="calgrid">';
-          WD.forEach(function (w, i) { h += '<span class="calwd' + (i === 0 ? " sun" : i === 6 ? " sat" : "") + '">' + w + '</span>'; });
-          var startWd = new Date(calY, calM, 1).getDay();
-          for (var i = 0; i < startWd; i++) h += "<span></span>";
-          var days = new Date(calY, calM + 1, 0).getDate();
-          var lessonBox = function (l) {
-            var lc = l.status === "offered" ? " of" : l.req ? " rq" : l.done ? " dn" : "";
-            return '<span class="cbox' + lc + '" title="' + esc(l.start + '〜' + endTime(l.start, l.min) + ' ' + l.studentName + (l.subject ? ' ' + l.subject : '') + (l.status === "offered" ? '(承認待ち)' : l.req ? '(取消依頼中)' : '')) + '">' + cT(l.start) + ' ' + esc(shortName(l.studentName)) + (l.subject ? ' ' + esc(String(l.subject).charAt(0)) : '') + '</span>';
-          };
-          for (var d = 1; d <= days; d++) {
-            var ds = calY + "-" + pad(calM + 1) + "-" + pad(d);
-            var it = info[ds], wd = (startWd + d - 1) % 7, cls = "calday" + (boxes ? " boxed" : "");
-            if (wd === 0) cls += " sun"; if (wd === 6) cls += " sat";
-            if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
-            if (it && it.toff) cls += " toff";
-            var marks = "";
-            if (boxes) {
-              // 終日休みを先頭に置き、時間指定の休みと授業を開始時刻順に並べる。
-              if (it && it.toff) marks += '<span class="cbox to">休み(終日)</span>';
-              if (it) marks += calendarTimedRows(it, lessonBox);
-              if (it && it.wishL) it.wishL.forEach(function (x) { marks += '<span class="cbox ws" title="' + esc(x.studentName + ' ' + (x.kind === "want" ? 'この日時を希望' : 'この時間帯のどこかで') + ' ' + x.start + '〜' + x.end + (x.note ? ' ' + x.note : '')) + '">希 ' + esc(shortName(x.studentName)) + ' ' + cT(x.start) + '-' + cT(x.end) + '</span>'; });
-              if (it && it.evL) it.evL.forEach(function (e) { marks += '<span class="cbox ev" title="' + esc(e.studentName + ' ' + e.title) + '">' + esc(shortName(e.studentName)) + ' ' + esc(e.title) + '</span>'; });
-              if (it && !opts.noNg && (it.ng || it.ngT)) marks += '<span class="cbox ng">× 授業できない生徒 ' + ((it.ng || 0) + (it.ngT ? it.ngT.length : 0)) + '人</span>';
-            } else {
-              marks = '<span class="calmarks">';
-              if (it) {
-                if (it.booked) marks += '<span class="caldot op"></span>';
-                if (it.offered) marks += '<span class="caldot of"></span>';
-                if (it.req) marks += '<span class="caldot rq"></span>';
-                if (it.wish) marks += '<span class="caldot ws"></span>';
-                if (it.ev) marks += '<span class="caldot ev"></span>';
-                if (it.ng && !opts.noNg) marks += '<span class="calmark">×</span>';
-              }
-              marks += "</span>";
-              if (it && it.toff) marks += '<span class="callbl to">休</span>';
-              if (it && it.toffT) it.toffT.slice(0, 2).forEach(function (o) { marks += '<span class="callbl to">休' + cT(o.start) + '-' + cT(o.end) + '</span>'; });
-              if (it && it.ngT && !opts.noNg) it.ngT.slice(0, 2).forEach(function (b) { marks += '<span class="callbl to">×' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
-              if (it && it.labels && it.labels.length) {
-                var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
-                lb.slice(0, 2).forEach(function (l) {
-                  if (l.st === "event") { marks += '<span class="callbl ev">' + esc(l.text) + '</span>'; return; }
-                  var lc = l.st === "offer" ? " of" : l.st === "done" ? " dn" : "";
-                  marks += '<span class="callbl tm' + lc + '">' + esc(l.start) + '</span><span class="callbl' + lc + '">' + esc(l.text) + '</span>';
-                });
-                if (lb.length > 2) marks += '<span class="callbl more">+' + (lb.length - 2) + '</span>';
-              }
-            }
-            h += '<button class="' + cls + (ds < today && !it ? " off" : "") + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
-          }
-          h += '</div><div class="callegend">';
-          if (boxes) {
-            h += '<span><span class="cbox">確定</span></span><span><span class="cbox of">承認待ち</span></span><span><span class="cbox rq">取消依頼</span></span><span><span class="cbox ws">希 生徒の希望・空き時間</span></span><span><span class="cbox ev">共有予定(大会など)</span></span><span><span class="cbox to">休 先生の休み</span></span>';
-            h += '<span class="muted">授業は「時刻 姓 科目」。左に太線が付いたひとまとまりは、時間の一部が重なる授業です。' + (opts.noNg ? '生徒の授業できない日は日付をタップすると下に出ます' : '') + '</span>';
-          } else {
-            h += '<span><span class="caldot op"></span> 確定</span><span><span class="caldot of"></span> 承認待ち</span><span><span class="caldot rq"></span> 取消依頼</span><span><span class="caldot ws"></span> 生徒の希望・空き時間</span><span><span class="caldot ev"></span> 共有予定(大会など)</span>' + (opts.noNg ? '' : '<span><span class="calmark">×</span> 授業できない生徒あり</span>') + '<span><span class="callbl to" style="display:inline">休</span> 先生の休み</span>';
-          }
-          h += '</div></div>';
-          return h;
-        }
-
         // 返事がないまま日付が過ぎた案内の行。実施済みにするか、未実施(取り下げ)にするかを選ぶ
         function expiredRow(s, withName) {
           var h = '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span><span class="w">';
@@ -1283,16 +1154,17 @@
 
           // 予定表
           html += '<details><summary>月間予定表・選択日の詳細</summary>';
-          var info = {};
-          upcoming.forEach(function (s) {
-            var it = info[s.date] || (info[s.date] = { booked: 0, offered: 0, req: 0, ng: 0 });
-            if (s.status === "booked") { it.booked++; if (s.req) it.req++; } else if (s.status === "offered") it.offered++;
+          // 同じ共通部品。授業不可(生徒NG)は案内フォームで選んでいる生徒の分だけ出す(全員分を重ねると読めないため)
+          var pickSid = offerDraft && offerDraft.studentId ? String(offerDraft.studentId) : "";
+          var linfo = window.StepwiseCalendar.buildInfo({
+            lessons: upcoming.filter(function (s2) { return s2.status === "booked" || s2.status === "offered"; }).map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : "mine", cls: s2.status !== "offered" && s2.req ? "rq" : "" }; }),
+            events: (A.events || []).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
+            blocked: pickSid ? (A.blocked || []).filter(function (b2) { return sameId(b2.studentId, pickSid); }) : [],
+            teacherOff: A.teacherOff || [],
+            wishes: (A.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
+            lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
-          (A.blocked || []).forEach(function (b) { var it = info[b.date] || (info[b.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); ngMark(it, b); });
-          (A.teacherOff || []).forEach(function (o) { var it = info[o.date] || (info[o.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); offMark(it, o); });
-          (A.wishes || []).forEach(function (x) { var it = info[x.date] || (info[x.date] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.wish = (it.wish || 0) + 1; });
-          (A.events || []).forEach(function (e) { var d = e.date; for (var ei = 0; ei < 61 && d <= e.dateTo; ei++) { var it = info[d] || (info[d] = { booked: 0, offered: 0, req: 0, ng: 0 }); it.ev = (it.ev || 0) + 1; d = addDaysStr(d, 1); } });
-          html += renderCal(info, today);
+          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + '</h2>';
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。上のフォームから案内できます(日付は選択済み)。</div>';
