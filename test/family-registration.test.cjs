@@ -77,3 +77,29 @@ test('confirmation address comes from a valid proof without activating, consumin
  assert.equal(h.family('familyVerificationInfo',{challenge}).verificationUnavailable,true);
  h.family('familyResetRequest',{email:EMAIL});assert.equal(h.family('familyVerificationInfo',{challenge:h.latestChallenge('reset')}).verificationUnavailable,true);
 });
+test('the teacher can send the registration mail to an address the parent gave; the link lasts 24 hours and completes the same verify → password flow',()=>{
+  const h=createFamilyHarness();
+  assert.ok(h.admin('familySendRegistration',{studentId:'nobody',email:EMAIL}).error);
+  assert.ok(h.admin('familySendRegistration',{studentId:'test-a',email:'not-an-address'}).error);
+  assert.equal(h.mailbox.length,0);
+  const sent=h.admin('familySendRegistration',{studentId:'test-a',email:' Signup@Example.Invalid '});
+  assert.equal(sent.ok,true,JSON.stringify(sent));assert.equal(sent.mailStatus,'sent');
+  assert.equal(sent.family.email,EMAIL);assert.equal(sent.family.status,'pending');assert.equal(sent.family.configured,false);
+  assert.ok(sent.family.pendingVerification&&sent.family.pendingVerification.expiresAt-Date.parse(sent.family.pendingVerification.sentAt)>=24*3600000-1000,'a teacher-sent link lasts a day (harness clock)');
+  assert.deepEqual(sent.family.children.map(c=>c.studentId),['test-a']);
+  const mail=h.mailbox.at(-1);assert.equal(mail.to,EMAIL);assert.match(mail.subject,/保護者ページの登録案内/);assert.match(mail.body,/24時間以内/);assert.match(mail.body,/\?verify=/);assert.doesNotMatch(mail.body,/fi1\./);
+  const row=h.rows('familyChallenges').at(-1);assert.ok(Number(row.expiresAt)-Date.parse(row.createdAt)>=24*3600000-1000);
+  // resend is rate limited like the parent's own resend; the address stays
+  const again=h.admin('familySendRegistration',{studentId:'test-a',email:EMAIL});assert.ok(again.error);assert.match(again.error,/1分/);
+  assert.equal(h.rows('familyAccounts').find(a=>a.id===sent.family.id).email,EMAIL);
+  // the parent finishes on the usual pages
+  const challenge=h.latestChallenge();
+  assert.equal(h.family('familyVerificationInfo',{challenge}).email,EMAIL);
+  assert.equal(h.family('familyVerify',{challenge}).passwordRequired,true);
+  assert.ok(h.family('familyCompleteRegistration',{challenge,pass:PASS}).registered);
+  assert.ok(h.family('familyLogin',{email:EMAIL,pass:PASS}).ftoken);
+  // registered families cannot be re-targeted, and an address in use by another family is refused
+  assert.match(h.admin('familySendRegistration',{studentId:'test-a',email:'other@example.invalid'}).error,/登録済み/);
+  assert.match(h.admin('familySendRegistration',{studentId:'test-b',email:EMAIL}).error,/別の保護者アカウント/);
+  const list=h.admin('familyList');assert.equal(list.families.find(f=>f.id===sent.family.id).pendingVerification,null);
+});

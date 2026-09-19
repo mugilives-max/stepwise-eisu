@@ -1526,7 +1526,7 @@
           if (embedded) return h;
           app.innerHTML = h;
         }
-        var studentInvite = { id: '', auth: '', busy: false, error: '' };
+        var studentInvite = { id: '', auth: '', busy: false, error: '', regBusy: false, regMsg: '', regError: '' };
         function familyInviteHtml() {
           if (!FT.invite || FT.auth !== token()) return '';
           return '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクからメールアドレスを入力し、届いたメールで確認してからパスワードを設定すると利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
@@ -1545,9 +1545,37 @@
           });
           return h+'<a class="btn-quiet btn-sm" href="#students?student='+encodeURIComponent(s.id)+'">グループの変更・管理</a></div>';
         }
+        // 保護者カード: (1) メールで登録案内を送る(主経路) (2) 登録リンクを直接渡す(従来)。グループの登録状態を上に出す
         function studentParentInviteHtml(s) {
-          var own = studentInvite.id === String(s.id) && studentInvite.auth === token();
-          return '<h2>保護者</h2><div class="card"><p>この生徒が所属するグループの保護者登録案内を作成します。兄弟が同じグループにいる場合は、共通の案内になります。</p><p class="note">作成すると以前の登録案内は使えなくなります。登録済みの保護者は、ログイン画面のパスワード再設定をご利用ください。</p><button class="btn-primary" data-action="family-student-invite"' + (studentInvite.busy ? ' disabled' : '') + '>' + (own && studentInvite.busy ? '案内を作成しています…' : '保護者の登録案内を作成') + '</button>' + (own && studentInvite.error ? '<p role="alert">' + esc(studentInvite.error) + '</p>' : '') + '</div>' + (own && FT.invite && FT.invite.studentId === String(s.id) ? familyInviteHtml() : '');
+          var own = studentInvite.id === String(s.id) && studentInvite.auth === token(), d = FT.auth === token() ? FT.data : null;
+          var f = d ? (d.families || []).filter(function (g) { return (g.children || []).some(function (c) { return sameId(c.studentId, s.id); }); })[0] : null;
+          var h = '<h2>保護者</h2><div class="card">';
+          if (f && f.configured) h += '<p><span class="tag green">登録済み</span> ' + esc(f.email || '') + (f.lastLogin ? ' <span class="small muted">最終ログイン ' + esc(fmtAuthTime(f.lastLogin)) + '</span>' : '') + '</p><p class="note">パスワードを忘れた場合は、保護者ページのログイン画面から再設定できます（先生は再発行しません）。</p>';
+          else {
+            if (f && f.email) h += '<p><span class="tag amber">確認待ち</span> ' + esc(f.email) + ' <span class="small muted">' + (f.pendingVerification ? '登録メール送信済み・有効期限 ' + esc(fmtAuthTime(f.pendingVerification.expiresAt)) : '登録メールの期限切れ。再送してください') + '</span></p>';
+            else h += '<p><span class="tag gray">未登録</span> <span class="small muted">保護者アカウントはまだありません</span></p>';
+            h += '<h3 style="margin:10px 0 4px;font-size:15px">メールで登録案内を送る</h3><p class="note" style="margin-top:0">保護者から聞いたメールアドレスを入力すると、登録用のメールが届きます。保護者がメールのリンクを開き、メールアドレスを確認してパスワードを設定すると登録完了です（リンクは24時間有効。期限が切れたら同じ操作で再送）。</p>';
+            h += '<div class="row" style="gap:8px"><input type="email" id="parent-reg-email" autocomplete="off" placeholder="例: parent@example.com" value="' + esc(f && f.email || '') + '" style="flex:1;min-width:200px"' + (studentInvite.regBusy ? ' disabled' : '') + '><button class="btn-primary btn-sm" data-action="family-send-registration"' + (studentInvite.regBusy ? ' disabled' : '') + '>' + (studentInvite.regBusy ? '送信しています…' : (f && f.email ? '登録メールを再送する' : '登録メールを送る')) + '</button></div>';
+            if (own && studentInvite.regMsg) h += '<p role="status" class="small" style="color:var(--green,#2e8b57)">' + esc(studentInvite.regMsg) + '</p>';
+            if (own && studentInvite.regError) h += '<p role="alert" class="small" style="color:var(--danger)">' + esc(studentInvite.regError) + '</p>';
+            h += '<details class="add" style="margin-top:10px"><summary>登録リンクを直接渡す（メールを使わない方法）</summary><p class="note">保護者本人がリンクを開いてメールアドレスを入力し、届いたメールで確認してからパスワードを設定します。作成すると以前の登録リンクは使えなくなります。</p><button class="btn-quiet btn-sm" data-action="family-student-invite"' + (studentInvite.busy ? ' disabled' : '') + '>' + (own && studentInvite.busy ? '案内を作成しています…' : '保護者の登録リンクを作成') + '</button>' + (own && studentInvite.error ? '<p role="alert">' + esc(studentInvite.error) + '</p>' : '') + '</details>';
+          }
+          return h + '</div>' + (own && FT.invite && FT.invite.studentId === String(s.id) ? familyInviteHtml() : '');
+        }
+        function sendParentRegistration() {
+          var r = route(); if (r.page !== 'student' || r.section !== 'settings' || !cur || studentInvite.regBusy) return;
+          var email = String(val('parent-reg-email') || '').trim();
+          if (!email || email.indexOf('@') < 1) { toast('保護者のメールアドレスを入力してください'); var ef = document.getElementById('parent-reg-email'); if (ef) ef.focus(); return; }
+          var id = String(cur.id), auth = token();
+          studentInvite = { id: id, auth: auth, busy: false, error: '', regBusy: true, regMsg: '', regError: '' }; render();
+          admin('familySendRegistration', { studentId: id, email: email }).then(function (res) {
+            if (token() !== auth) { studentInvite.regBusy = false; return; }
+            studentInvite.regBusy = false;
+            var st = res.mailStatus;
+            if (st === 'sent' || st === 'suppressed') studentInvite.regMsg = email + ' へ登録メールを送りました' + (st === 'suppressed' ? '（テスト生徒のため実際のメールは送っていません）' : '') + '。保護者がメールのリンクからパスワードを設定すると登録完了です。';
+            else studentInvite.regError = st === 'limited' ? '送信間隔の制限中です。1分以上待ってからもう一度送ってください' : 'メールを送信できませんでした。しばらくしてからもう一度お試しください';
+            if (route().page === 'student' && route().id === id) { if (!FT.busy) loadFamilies(); else render(); }
+          }).catch(function (er) { studentInvite.regBusy = false; if (token() !== auth) return; studentInvite.regError = er.message; if (route().page === 'student' && route().id === id) render(); });
         }
         function issueStudentParentInvite() {
           var r=route(); if (r.page !== 'student' || r.section !== 'settings' || !cur || studentInvite.busy) return;
@@ -1561,6 +1589,7 @@
         function familyAdminClick(action, btn) {
           if(action === "family-settings-refresh" && route().page === "student" && route().section === "settings") { if(!FT.busy)loadFamilies();return; }
           if(action === "family-student-invite") { issueStudentParentInvite(); return; }
+          if(action === "family-send-registration") { sendParentRegistration(); return; }
           var studentCopy = route().page === "student" && route().section === "settings" && ["family-copy","family-hidecode"].indexOf(action) >= 0 && FT.invite && FT.invite.studentId === route().id && FT.auth === token();
           if (FT.busy || (!studentCopy && route().page !== "families" && route().page !== "students")) return;
           if (action === "family-refresh") { loadFamilies(); return; }

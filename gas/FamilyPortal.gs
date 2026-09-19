@@ -10,6 +10,8 @@ var FAMILY_EMAIL_PREF_COLS_ = ['familyId','planProposed','invoiceCreated','invoi
 var FAMILY_MAIL_KINDS_ = ['planProposed','invoiceCreated','invoiceVoided'];
 var FAMILY_PORTAL_URL_ = 'https://www.stepwise-education.jp/yoyaku/#family';
 var FAMILY_CHALLENGE_MS_ = 30 * 60 * 1000;
+// 先生が送る登録メールは、保護者が自分で申し込んだものではないので開くまでに時間がかかる。24時間有効にする
+var FAMILY_TEACHER_CHALLENGE_MS_ = 24 * 60 * 60 * 1000;
 
 function ensureFamilySchema_() {
   var definitions={familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
@@ -88,8 +90,13 @@ function familyBilling_(a,includeInactive) {
   });});
   return Object.keys(months).sort().reverse().map(function(ym){var m=months[ym];if(m.conflict){m.amount=null;m.unpaid=null;}return m;});
 }
+// 未使用・期限内の確認リンクがあるか(先生が送った登録メールの状態表示用)。秘密は返さない
+function familyPendingVerification_(a) {
+  var c=familyRows_('familyChallenges').filter(function(x){return String(x.familyId)===String(a.id)&&String(x.kind)==='verify'&&!x.usedAt&&Number(x.expiresAt)>Date.now()&&String(x.email)===String(a.email||'')&&Number(x.securityVersion)===(Number(a.securityVersion)||0);}).sort(function(x,y){return String(x.createdAt)<String(y.createdAt)?1:-1;})[0];
+  return c?{sentAt:String(c.createdAt),expiresAt:Number(c.expiresAt)}:null;
+}
 function familyView_(a) {
-  return {billing:familyBilling_(a,true),id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,
+  return {billing:familyBilling_(a,true),id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,pendingVerification:a.passHash?null:familyPendingVerification_(a),
     children:familyChildren_(a,true),inviteExpiresAt:a.inviteHash&&Number(a.inviteExpiresAt)>Date.now()?Number(a.inviteExpiresAt):0,createdAt:String(a.createdAt||''),lastLogin:String(a.lastLogin||'')};
 }
 function familySessions_(a) {
@@ -156,21 +163,24 @@ function familyRegister_(req) {
   return {ok:true,verificationRequired:true,mailStatus:delivery.status};
 }
 function familyChallengeWrite_(c) { familyWrite_('familyChallenges',FAMILY_CHALLENGE_COLS_,c); }
-function familyIssueChallengeSafe_(a,kind,email) {
-  try{return familyIssueChallenge_(a,kind,email);}catch(e){return {status:'failed'};}
+function familyIssueChallengeSafe_(a,kind,email,opts) {
+  try{return familyIssueChallenge_(a,kind,email,opts);}catch(e){return {status:'failed'};}
 }
 function familyChallengeAvailable_(a,kind) {
   var rows=familyRows_('familyChallenges').filter(function(c){return String(c.familyId)===String(a.id)&&String(c.kind)===kind;});
   return !rows.some(function(c){return Date.now()-Date.parse(c.createdAt)<60000;})&&rows.filter(function(c){return Date.now()-Date.parse(c.createdAt)<3600000;}).length<5;
 }
-function familyIssueChallenge_(a,kind,email) {
+function familyIssueChallenge_(a,kind,email,opts) {
+  var byTeacher=!!(opts&&opts.byTeacher);
   if(!familyChallengeAvailable_(a,kind))return {status:'limited'};
   familyRows_('familyChallenges').forEach(function(c){if(String(c.familyId)===String(a.id)&&String(c.kind)===kind&&!c.usedAt){c.usedAt=familyStamp_();familyChallengeWrite_(c);}});
-  var secret=parentSecret_(),c={id:familyId_(),familyId:a.id,kind:kind,email:email,expiresAt:Date.now()+FAMILY_CHALLENGE_MS_,usedAt:'',createdAt:familyStamp_(),failCount:0,securityVersion:Number(a.securityVersion)||0};
+  var secret=parentSecret_(),c={id:familyId_(),familyId:a.id,kind:kind,email:email,expiresAt:Date.now()+(byTeacher?FAMILY_TEACHER_CHALLENGE_MS_:FAMILY_CHALLENGE_MS_),usedAt:'',createdAt:familyStamp_(),failCount:0,securityVersion:Number(a.securityVersion)||0};
   c.secretHash=parentDigest_('family-challenge',c.id,secret);familyChallengeWrite_(c);
   var token='fc1.'+c.id+'.'+secret,query=kind==='reset'?'reset':'verify',url=FAMILY_PORTAL_URL_+'?'+query+'='+encodeURIComponent(token);
-  var subject=kind==='reset'?'【ステップワイズ】パスワード再設定':'【ステップワイズ】保護者メールの確認';
-  var body=(kind==='reset'?'パスワード再設定':'保護者メールの確認')+'のお申し込みを受け付けました。30分以内に次のページでお手続きください。\n\n'+url+(kind==='verify'?'\n\nメールアドレスを確認した後、保護者用パスワードを設定すると登録完了です。':'')+'\n\nお心当たりがない場合は、このメールを破棄してください。';
+  var subject=kind==='reset'?'【ステップワイズ】パスワード再設定':byTeacher?'【ステップワイズ】保護者ページの登録案内':'【ステップワイズ】保護者メールの確認';
+  var body=byTeacher
+    ?'ステップワイズ個別指導の先生から、保護者ページの登録案内をお送りしています。24時間以内に次のページを開き、メールアドレスを確認して保護者用パスワードを設定すると登録完了です。\n\n'+url+'\n\n期限が切れた場合は先生にお伝えください。再送します。\n\nお心当たりがない場合は、このメールを破棄してください（登録は行われません）。'
+    :(kind==='reset'?'パスワード再設定':'保護者メールの確認')+'のお申し込みを受け付けました。30分以内に次のページでお手続きください。\n\n'+url+(kind==='verify'?'\n\nメールアドレスを確認した後、保護者用パスワードを設定すると登録完了です。':'')+'\n\nお心当たりがない場合は、このメールを破棄してください。';
   var out=familyOutboxAdd_('auth:'+c.id,a,'',kind==='reset'?'passwordReset':'emailVerification',{email:email});
   return familyDeliverOutbox_(out,a,subject,body,true);
 }
@@ -382,6 +392,21 @@ function familyAdmin_(req) {
   if(req.op==='familyList')return req.view==='groups'?familyGroups_(String(req.studentId||'')):familyList_();
   if(req.op==='familyEnsureGroup'){var ensured=familyEnsureGroup_(String(req.studentId||''));if(ensured.error)return ensured;return familyInvite_(familyAccount_(ensured.family.id));}
   if(req.op==='familyMoveStudent')return familyMoveStudent_(req);
+  // 先生が保護者から聞いたメールアドレスへ登録メールを送る(招待リンクを渡さない経路)。保護者はメールのリンクから確認→パスワード設定で登録完了
+  if(req.op==='familySendRegistration'){
+    var ensured=familyEnsureGroup_(String(req.studentId||''));if(ensured.error)return ensured;
+    var acc=familyAccount_(ensured.family.id);if(!acc)return familyError_('グループ情報を確認してください');
+    if(acc.passHash)return familyError_('登録済みの保護者です。ログイン画面の「パスワードを忘れた」からの再設定をご案内ください');
+    if(acc.status==='disabled'||!familyChildren_(acc,false).length)return familyError_('利用中の生徒を紐付けてください');
+    var regMail=familyEmail_(req.email);if(!regMail)return familyError_('メールアドレスを確認してください');
+    if(!familyEmailAvailable_(regMail,acc.id))return familyError_('このメールアドレスは別の保護者アカウントで使われています。兄弟の場合はグループをまとめてください');
+    if(!familyChallengeAvailable_(acc,'verify'))return familyError_('送信間隔の制限中です。1分以上待ってからもう一度送ってください（1時間に5回まで）');
+    acc.email=regMail;acc.status='pending';acc.verifiedAt='';acc.inviteFailCount=0;familyInvalidate_(acc);familySave_(acc);
+    var regDelivery=familyIssueChallengeSafe_(acc,'verify',regMail,{byTeacher:true});
+    addLog_('先生が'+studentName_(String(req.studentId||''))+'さんの保護者へ登録メールを送信('+regDelivery.status+')');
+    memoClear_();
+    return {ok:true,family:familyView_(familyAccount_(acc.id)),mailStatus:regDelivery.status};
+  }
   if(req.op==='familyCreate'){
     var label=String(req.label||'').trim();if(!label||label.length>80)return familyError_('家族の表示名は1〜80文字で入力してください');
     if(!Array.isArray(req.studentIds)||!req.studentIds.length||req.studentIds.length>20||req.studentIds.some(function(id){return typeof id!=='string'||!findStudent_(id);})||new Set(req.studentIds).size!==req.studentIds.length)return familyError_('紐付ける在籍生徒を確認してください');

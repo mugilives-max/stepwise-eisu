@@ -331,3 +331,20 @@ test('a teacher-recorded approval shows a confirm-or-inquire notice on the paren
   assert.match(k.html(), /承諾: 2026-09-05・電話<\/div><div class="small muted"[^>]*>保護者ページでの確認待ち（先生が記録した承認）<\/div>/);
   assert.match(k.html(), /承諾: 2026-09-06・保護者ページ<\/div>(?!<div class=\"small)/, 'a parent-page approval has no confirmation line');
 });
+
+test('student settings sends the registration mail to a typed address, then shows the pending state from the family list', async () => {
+  const ui = createUI('admin', { hash: '#s=test-a&tab=settings' }); ui.requests[0].reply({ ok: true, data: settingsCard() }); ui.requests.findLast(r => r.body.op === 'familyList').reply(familyList()); await flush();
+  assert.match(ui.html(), /<span class="tag gray">未登録<\/span>/); assert.match(ui.html(), /<h3[^>]*>メールで登録案内を送る<\/h3>/); assert.match(ui.html(), /<summary>登録リンクを直接渡す（メールを使わない方法）<\/summary>/);
+  const count = ui.requests.length; ui.click('family-send-registration'); assert.equal(ui.requests.length, count, 'an empty address is not sent');
+  ui.input('parent-reg-email', 'parent@example.invalid'); ui.click('family-send-registration');
+  const req = ui.requests.at(-1).body; assert.equal(req.op, 'familySendRegistration'); assert.equal(req.studentId, 'test-a'); assert.equal(req.email, 'parent@example.invalid');
+  ui.requests.at(-1).reply({ ok: true, mailStatus: 'sent', family: { id: 'g1', email: 'parent@example.invalid' } }); await flush();
+  assert.match(ui.html(), /parent@example.invalid へ登録メールを送りました/);
+  const reload = ui.requests.findLast(r => r.body.op === 'familyList'); assert.ok(reload && reload !== ui.requests[1], 'the family list is reloaded for the status line');
+  reload.reply(familyList({ families: [{ id: 'g1', label: '【テスト】子Aさんのグループ', status: 'pending', email: 'parent@example.invalid', configured: false, pendingVerification: { sentAt: '2026-09-19T01:00:00.000Z', expiresAt: 1790000000000 }, children: [{ studentId: 'test-a', name: '【テスト】子A' }] }] })); await flush();
+  assert.match(ui.html(), /<span class="tag amber">確認待ち<\/span> parent@example.invalid <span class="small muted">登録メール送信済み・有効期限 /); assert.equal(ui.el('parent-reg-email').value, 'parent@example.invalid'); assert.match(ui.html(), /登録メールを再送する/);
+  // rate limit and registered state
+  ui.click('family-send-registration'); ui.requests.at(-1).reply({ ok: true, mailStatus: 'limited' }); await flush(); assert.match(ui.html(), /role="alert"[^>]*>送信間隔の制限中/);
+  ui.requests.findLast(r => r.body.op === 'familyList').reply(familyList({ families: [{ id: 'g1', label: 'g', status: 'active', email: 'parent@example.invalid', configured: true, lastLogin: '2026-09-19T02:00:00.000Z', children: [{ studentId: 'test-a', name: '【テスト】子A' }] }] })); await flush();
+  assert.match(ui.html(), /<span class="tag green">登録済み<\/span> parent@example.invalid/); assert.equal(ui.el('parent-reg-email'), undefined); assert.doesNotMatch(ui.html(), /family-student-invite/);
+});
