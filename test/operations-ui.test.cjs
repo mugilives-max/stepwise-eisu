@@ -172,6 +172,19 @@ test('the home 予定の編集 card mirrors the student page: named rows with te
   ui.click('toggledone', { 'data-id': 'bk' }); const td = ui.requests.at(-1).body; assert.equal(td.op, 'toggleDone'); assert.equal(td.slotId, 'bk'); assert.equal(td.studentId, 'test-a'); assert.equal(td.done, true);
 });
 
+test('past months stay reachable for a year and past days keep their lessons and 授業不可 marks', async () => {
+  const c = card({ lessons: [{ id: 'old', date: '2026-04-10', start: '17:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '' }], blocked: [{ id: 'b0', date: '2026-04-11', start: '', end: '', note: '' }], teacherOff: [{ id: 't0', date: '2026-04-12', start: '12:00', end: '13:00', note: '' }], wishes: [{ id: 'w0', date: '2026-04-13', start: '16:00', end: '18:00', kind: 'range' }] });
+  const ui = await adminReady(c, 'overview');
+  for (let i = 0; i < 5; i++) { assert.doesNotMatch(ui.html(), /data-action="calprev" disabled/); ui.click('calprev'); }
+  const html = ui.html();
+  assert.match(html, /<span class="callabel">2026年4月<\/span>/);
+  assert.match(html, /<button class="calday" data-action="calday" data-date="2026-04-10">10<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:00<\/span><span class="s">英語<\/span><\/span><\/button>/, 'a past lesson is a box on a clickable day');
+  assert.match(html, /<button class="calday sat ngday" data-action="calday" data-date="2026-04-11">11<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span><\/button>/, 'past 授業不可 stays visible');
+  assert.match(html, /<button class="calday sun" data-action="calday" data-date="2026-04-12">12<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可12-13<\/span><\/button>/, 'past teacher off stays visible');
+  assert.match(html, /<span class="calday off" data-date="2026-04-13">13<span class="calmarks"><\/span><\/span>|<span class="calday off">13<span class="calmarks"><\/span><\/span>/, 'an expired 授業可 request is not shown and the empty past day is faded');
+  ui.click('calday', { 'data-date': '2026-04-10' }); assert.match(ui.html(), /4月10日（金）の予定/); assert.match(ui.html(), /<span class="tag gray">実施済<\/span>/);
+});
+
 test('the admin student page draws the same calendar as the student mypage (boxes, hatched days, legend)', async () => {
   const c = card({ lessons: [{ id: 'l1', date: '2026-09-15', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語', kind: '演習' }, { id: 'l2', date: '2026-09-16', start: '18:00', min: 60, status: 'offered', done: false, subject: '数学', kind: '' }], blocked: [{ id: 'b1', date: '2026-09-17', start: '', end: '', note: '' }], teacherOff: [{ id: 't1', date: '2026-09-18', note: '' }], wishes: [{ id: 'w1', date: '2026-09-19', start: '16:00', end: '18:00' }], events: [{ id: 'e1', date: '2026-09-20', dateTo: '2026-09-21', title: '中間テスト', kind: 'test' }] });
   const ui = await adminReady(c, 'overview');

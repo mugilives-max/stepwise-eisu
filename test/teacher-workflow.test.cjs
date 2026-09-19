@@ -72,3 +72,13 @@ test('home calendar includes saved historical booked and offered lessons',()=>{
  for(const [id,status] of [['past-done','booked'],['past-offer','offered'],['past-cancel','free']])sh.appendRow([id,'2025-01-01','14:00',60,status,'test-a',true,'','','英語','']);
  const ids=h.context().kanriDashboard_().slots.map(s=>s.id);assert.ok(ids.includes('past-done'));assert.ok(ids.includes('past-offer'));assert.ok(!ids.includes('past-cancel'));
 });
+test('calendars get a year of history: student state, admin student card and dashboard include lessons up to 366 days back',()=>{
+ const h=fixture(),sh=h.spreadsheet.getSheetByName('slots');
+ // harness clock is 2026-09-07: 300 days back is inside the year, 400 days back is outside
+ for(const [id,date] of [['y-in','2025-11-11'],['y-out','2025-08-04']])sh.appendRow([id,date,'14:00',60,'booked','test-a',true,'','','英語','']);
+ const c=h.context();
+ const st=c.studentState_('synthetic-link-a');assert.deepEqual(JSON.parse(JSON.stringify(st.history.map(x=>x.id))),['y-in']);
+ const card=h.admin('kanriStudent',{studentId:'test-a',section:'overview'}).data;
+ assert.ok(card.lessons.some(l=>l.id==='y-in'));assert.ok(!card.lessons.some(l=>l.id==='y-out'),'older than a year is not sent to the card');
+ const dash=c.kanriDashboard_().slots.map(s=>s.id);assert.ok(dash.includes('y-in')&&dash.includes('y-out'),'the dashboard keeps all saved lessons');
+});

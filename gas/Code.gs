@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-19-parent-reg-mail' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-19-past-calendar' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -142,8 +142,8 @@ function studentState_(code) {
         hours: Math.round(hoursUntil_(s.date, s.start) * 10) / 10
       };
     });
-  // 過去の授業(直近120日、確定分)。カレンダーの表示と教科ごとの回数に使う。done=実施済み
-  var since = addDays_(today, -120);
+  // 過去の授業(直近1年、確定分)。カレンダーの表示・授業履歴・教科ごとの回数に使う。done=実施済み(2026-09-19: 120日→366日。過去の予定を見返せるように)
+  var since = addDays_(today, -366);
   var history = all
     .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked'; })
     .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
@@ -155,7 +155,7 @@ function studentState_(code) {
     .map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; });
   var wishes = wishRows_().filter(function (x) { return String(x.studentId) === String(me.id) && x.date >= today; })
     .map(function (x) { return { id: x.id, date: x.date, start: x.start, end: x.end, note: x.note, kind: x.kind, deliveryMode:x.deliveryMode, duration:x.duration, availability:x.availability }; });
-  var evSince = addDays_(today, -60);
+  var evSince = addDays_(today, -366);
   var events = eventRows_().filter(function (x) { return x.studentId === String(me.id) && x.dateTo >= evSince; })
     .map(function (x) { return { id: x.id, date: x.date, dateTo: x.dateTo, title: x.title, kind: x.kind }; });
   var planInfo = planFor_(me.id, today.slice(0, 7));
@@ -1301,7 +1301,7 @@ function adminState_() {
     });
   return {
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [],
-    lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(todayStr_(), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(0), plans: planRows_(), today: todayStr_(),
+    lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
     billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
   };
@@ -1939,7 +1939,7 @@ function kanriDashboard_() {
     contactPendingCount: readRows_('contactMessages').filter(function(m){return m.status==='received'||m.status==='failed';}).length,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
-    slots: upcomingAll, blocked: blockedUp, teacherOff: teacherOff_(today, true), allEvents: eventsForAdmin_(0) };
+    slots: upcomingAll, blocked: blockedUp, teacherOff: teacherOff_(addDays_(today, -366), true), allEvents: eventsForAdmin_(366) };
 }
 
 // 予約ページに表示する/しない(studentsシート active 列)。データは消さない
@@ -1989,11 +1989,12 @@ function kanriStudent_(studentId,section) {
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   if (section==='overview') return Object.assign(base,{
-    lessons:lessons.filter(function(l){return l.date>=today;}).concat(lessons.filter(function(l){return l.date<today;}).slice(0,20)),
+    // 過去分は1年(カレンダーで見返せるように。2026-09-19: 直近20件→366日)
+    lessons:lessons.filter(function(l){return l.date>=today;}).concat(lessons.filter(function(l){return l.date<today && l.date>=addDays_(today,-366);})),
     unrecordedLessons:lessons.filter(function(l){return l.status==='booked' && !l.done && /^\d{4}-\d{2}-\d{2}$/.test(l.date) && l.date<today;}),
     pendingEdits:schedulingPendingEdits_(id),wishes:wishesForAdmin_().filter(function(x){return x.studentId===id;}),
     blocked:blockedRows_().filter(function(x){return String(x.studentId)===id && x.date>=today;}),
-    teacherOff:teacherOff_(today,true),events:eventsForAdmin_(60).filter(function(x){return x.studentId===id;}),tasks:tasksFor_(id,60)
+    teacherOff:teacherOff_(addDays_(today,-366),true),events:eventsForAdmin_(366).filter(function(x){return x.studentId===id;}),tasks:tasksFor_(id,60)
   });
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });

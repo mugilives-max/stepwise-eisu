@@ -45,7 +45,8 @@
     var toffText = opts.toffText || "登録不可", toffLegend = opts.toffLegend || "先生の休み（登録できません）";
     var now = new Date(), calY = opts.year != null ? opts.year : now.getFullYear(), calM = opts.month != null ? opts.month : now.getMonth();
     var today = opts.today || "", selDate = opts.selDate || null, selMode = opts.selMode || "", selDays = opts.selDays || {}, showToff = opts.showToff !== false;
-    var minIdx = opts.minIdx != null ? opts.minIdx : now.getFullYear() * 12 + now.getMonth() - 2, curIdx = calY * 12 + calM, maxIdx = opts.maxIdx != null ? opts.maxIdx : minIdx + 5;
+    // 既定で12か月前まで戻れる(過去の予定を見返せるように)。先は3か月
+    var minIdx = opts.minIdx != null ? opts.minIdx : now.getFullYear() * 12 + now.getMonth() - 12, curIdx = calY * 12 + calM, maxIdx = opts.maxIdx != null ? opts.maxIdx : now.getFullYear() * 12 + now.getMonth() + 3;
     var h = '<div class="card cal"><div class="calhead">';
     h += '<button class="btn-quiet btn-sm" data-action="calprev"' + (curIdx <= minIdx ? " disabled" : "") + ' aria-label="前の月">◀</button>';
     h += '<span class="callabel">' + calY + "年" + (calM + 1) + "月</span>";
@@ -61,17 +62,18 @@
       if (wd === 0) cls += " sun"; if (wd === 6) cls += " sat";
       if (ds === today) cls += " today"; if (ds === selDate) cls += " sel";
       var hasItems = !!(it && it.labels && it.labels.length);
-      if (showToff && it && it.toff && !past) cls += " toff";
-      if (it && it.ngAll && !past) cls += " ngday";
+      // 過去の日も授業不可・休みの印は残す(予定の見返し用)。授業可(希望)は返事待ちの意味なので過去は出さない
+      if (showToff && it && it.toff) cls += " toff";
+      if (it && it.ngAll) cls += " ngday";
       var marks = '<span class="calmarks">';
       if (it && !past && it.mine) cls += " mine";
       if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
       marks += "</span>";
-      if (it && it.ngAll && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
-      if (it && it.ngT && !past) it.ngT.slice().sort(byStart).slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
+      if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
+      if (it && it.ngT) it.ngT.slice().sort(byStart).slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
       if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
-      if (showToff && it && it.toff && !past) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
-      if (showToff && it && it.toffT && !past) it.toffT.slice().sort(byStart).slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + cT(o.start) + '-' + cT(o.end) + '</span>'; });
+      if (showToff && it && it.toff) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
+      if (showToff && it && it.toffT) it.toffT.slice().sort(byStart).slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + cT(o.start) + '-' + cT(o.end) + '</span>'; });
       if (hasItems) {
         var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
         // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
@@ -81,8 +83,9 @@
           marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
         });
       }
-      var clickable = !past || hasItems; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)
-      if (!clickable) h += '<span class="' + cls + (past && hasItems ? "" : " off") + '">' + d + marks + "</span>";
+      var hasMarks = hasItems || !!(it && (it.ngAll || it.ngT || (showToff && (it.toff || it.toffT))));
+      var clickable = !past || hasMarks; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)。過去は何かある日だけ
+      if (!clickable) h += '<span class="' + cls + " off" + '">' + d + marks + "</span>";
       else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
     }
     h += '</div><div class="callegend">';

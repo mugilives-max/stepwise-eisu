@@ -159,7 +159,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css"><script src="/assets/lesson-report.js?v=20260911-simple-record"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260919-unified-cal"><script src="/assets/calendar.js?v=20260919-unified-cal"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260919-unified-cal"><script src="/assets/calendar.js?v=20260919-past-cal"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -560,7 +560,7 @@
           });
           if (!selDate) { selDate = d.today; var hp = selDate.split("-"); calY = +hp[0]; calM = +hp[1] - 1; }
           html += '<h2>全体の予定表 <a class="btn-quiet btn-sm" href="#lessons" style="margin-left:auto">授業を案内する・変更する</a></h2>';
-          html += window.StepwiseCalendar.render(hinfo, { year: calY, month: calM, today: d.today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          html += window.StepwiseCalendar.render(hinfo, { year: calY, month: calM, today: d.today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           html += '<h2>予定の編集</h2>' + renderHomeDayCard(d);
 
           html += '<div class="head"><div><h1>今日 ' + fmtD(d.today) + '</h1><p class="sub">ステップワイズ個別指導の運営ダッシュボード</p></div>' +
@@ -919,7 +919,7 @@
               lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
               events: s.events || [], blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
-            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
             html += '<h2>予定の編集</h2>' + renderStudentDayCard(s, tdy);
           })();
 
@@ -1189,7 +1189,7 @@
             wishes: (A.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
             lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
-          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 2, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + '</h2>';
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。上のフォームから案内できます(日付は選択済み)。</div>';
