@@ -719,15 +719,7 @@
             var doneT = tasks.filter(function (t) { return t.done; });
             var nextL = mine.filter(function (s) { return s.date >= today; })[0];
             html += foldHead('tasks', 'やることリスト', open.length ? open.length + '件' : '');
-            if (tests.length || nextL) {
-              html += '<div class="countdown" style="margin-bottom:10px">';
-              tests.slice(0, 2).forEach(function (e) {
-                var days = Math.round((new Date(e.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5);
-                html += '<div class="cd"><div class="small muted">' + esc(e.title) + ' <span class="muted">' + fmtDateW(e.date) + '</span></div><div class="n" style="color:#7a4fc9">' + (days === 0 ? "今日" : days + '<small>日後</small>') + '</div></div>';
-              });
-              if (!tests.length) html += '<div class="cd"><div class="small muted">次のテスト・模試</div><div class="small" style="margin-top:4px">未登録。予定表で日付を選び、＋の「予定を共有」で「テスト・模試」にチェックを入れて登録すると、ここに日数が出ます。</div></div>';
-              html += '</div>';
-            }
+            // テスト・模試までの日数の枠はやることリストから外した(2026-09-19)。テストの予定は予定表と「重要な予定」で見る
             html += '<div class="card">';
             if (!open.length) html += '<div class="empty">いま登録されている宿題・持ち物はありません</div>';
             open.forEach(function (t) {
