@@ -57,7 +57,7 @@ function readBundle(dir) {
     const full = path.join(dir, name);
     if (!fs.statSync(full).isFile()) continue;
     const m = /^(app|ledger)\.(.+)\.(json|csv)$/.exec(name);
-    if (!m) { if (/\.(json|csv)$/.test(name)) console.warn('  名前が <app|ledger>.<シート>.<json|csv> でないので飛ばします: ' + name); continue; }
+    if (!m) { if (/\.(json|csv)$/.test(name) && !name.startsWith('_')) console.warn('  名前が <app|ledger>.<シート>.<json|csv> でないので飛ばします: ' + name); continue; }
     const [, book, sheet, ext] = m;
     if (ext === 'json') {
       const data = JSON.parse(fs.readFileSync(full, 'utf8'));
@@ -134,8 +134,8 @@ async function main() {
   const width = Math.max(...result.tables.map(t => t.table.length), 6);
   console.log('\n' + '表'.padEnd(width) + '  書き出し  D1     判定');
   for (const t of result.tables.sort((a, b) => a.table.localeCompare(b.table))) {
-    const mark = t.errors.length ? '×' : t.matches ? 'ok' : '不一致';
-    console.log(t.table.padEnd(width) + '  ' + String(t.imported).padStart(7) + '  ' + String(t.stored).padStart(6) + '  ' + mark);
+    const mark = t.errors.length ? '×' : t.skipped ? '対象外' : t.matches ? 'ok' : '不一致';
+    console.log(t.table.padEnd(width) + '  ' + String(t.skipped ? '-' : t.imported).padStart(7) + '  ' + String(t.skipped ? '-' : t.stored).padStart(6) + '  ' + mark + (t.note ? '（' + t.note + '）' : ''));
     for (const e of t.errors) console.log('   ! ' + e);
     if (t.skippedColumns.length) console.log('   ! D1 に無い列を飛ばしました: ' + t.skippedColumns.join(', '));
   }

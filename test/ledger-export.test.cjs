@@ -51,7 +51,10 @@ function fixture(options = {}) {
     sheet('slots', [['id', 'date', 'start', 'min', 'status', 'studentId', 'done'],
       // 日本時間の 9/25。UTC に直すと 9/24 になるので、ずれたらここで落ちる
       ['s1', new Date('2026-09-24T15:00:00Z'), '17:00', 60, 'booked', 'test-a', true]]),
-    sheet('teacherOff', [['id', 'date', 'note', 'start', 'end']]),
+    // 時刻だけのセルは 1899-12-30 という基準日で入る。HH:MM に直せないと予定表が壊れる
+    sheet('teacherOff', [['id', 'date', 'note', 'start', 'end'],
+      ['t1', new Date('2026-09-24T15:00:00Z'), '', new Date('1899-12-30T11:30:00+09:00'), new Date('1899-12-30T12:00:00+09:00')]]),
+    sheet('events', [['id', 'studentId', 'date', 'dateTo', 'title', 'createdAt', 'kind']]),
     sheet('log', [['time', 'message']].concat(
       Array.from({ length: options.logRows ?? 3 }, (_, i) => [new Date('2026-09-20T01:00:00Z'), '記録' + i]))),
   ];
@@ -84,11 +87,11 @@ test('書き出しは台帳を読むだけで、シートごとに 1 ファイ�
   const res = h.c.exportLedgerForMigration();
   assert.equal(res.ok, true);
   assert.equal(res.status, 'done');
-  assert.equal(res.sheets, 5, '2冊あわせて 5 シート');
+  assert.equal(res.sheets, 6, '2冊あわせて 6 シート');
   assert.match(res.message, /完了/);
 
   const names = written(h).map(f => f.name).sort();
-  assert.deepEqual(names, ['_manifest.json', 'app.log.json', 'app.slots.json', 'app.students.json', 'app.teacherOff.json', 'ledger.入金管理.json']);
+  assert.deepEqual(names, ['_manifest.json', 'app.events.json', 'app.log.json', 'app.slots.json', 'app.students.json', 'app.teacherOff.json', 'ledger.入金管理.json']);
 
   const students = JSON.parse(written(h).find(f => f.name === 'app.students.json').body);
   assert.deepEqual(students.headers, ['id', 'name', 'active', 'rate30']);
@@ -96,9 +99,10 @@ test('書き出しは台帳を読むだけで、シートごとに 1 ファイ�
   assert.equal(students.offset, 0);
 
   // 空のシートも 0 件として残す（取り込み側で件数を突き合わせられるように）
-  const off = JSON.parse(written(h).find(f => f.name === 'app.teacherOff.json').body);
-  assert.deepEqual(off.rows, []);
-  assert.deepEqual(off.headers, ['id', 'date', 'note', 'start', 'end']);
+  const empty = JSON.parse(written(h).find(f => f.name === 'app.events.json').body);
+  assert.deepEqual(empty.rows, []);
+  const offSheet = JSON.parse(written(h).find(f => f.name === 'app.teacherOff.json').body);
+  assert.deepEqual(offSheet.headers, ['id', 'date', 'note', 'start', 'end']);
 
   const manifest = JSON.parse(written(h).find(f => f.name === '_manifest.json').body);
   assert.equal(manifest.tz, 'Asia/Tokyo');
@@ -112,6 +116,19 @@ test('日付セルは日本時間で読む（UTC に寄って前日にならな�
   assert.equal(slots.rows[0][1], '2026-09-25', '9/25 0:00 JST は 9/25 のまま');
   const log = JSON.parse(written(h).find(f => f.name === 'app.log.json').body);
   assert.equal(log.rows[0][0], '2026-09-20 10:00:00', '時刻が入っている日付は日時として残す');
+
+  // 時刻だけのセル（1899-12-30 が基準日）は HH:MM にする
+  const off = JSON.parse(written(h).find(f => f.name === 'app.teacherOff.json').body);
+  assert.deepEqual(off.rows[0].slice(3), ['11:30', '12:00'], '時刻だけのセルは基準日を落として HH:MM にする');
+  assert.equal(off.rows[0][1], '2026-09-25', '同じ行の日付は日付のまま');
+});
+
+test('古い書き出しに基準日が残っていても取り込みで HH:MM に直す', async () => {
+  const { normalizeCell, unepochTime } = await import('../cf/lib/import.mjs');
+  assert.equal(unepochTime('1899-12-30 07:30:00'), '07:30');
+  assert.equal(unepochTime('1899-12-30T17:00'), '17:00');
+  assert.equal(unepochTime('2026-09-25 17:00:00'), '2026-09-25 17:00:00', 'ふつうの日時は触らない');
+  assert.equal(normalizeCell('1899-12-30 09:00:00', { type: 'TEXT' }), '09:00');
 });
 
 test('行が多いシートは分割し、途中で終わっても続きから再開できる', () => {
@@ -122,12 +139,12 @@ test('行が多いシートは分割し、途中で終わっても続きから�
   assert.match(res.message, /exportLedgerResume/);
 
   const status = h.c.exportLedgerStatus();
-  assert.equal(status.rowsTotal, 2504, '全体の行数を把握している');
+  assert.equal(status.rowsTotal, 2505, '全体の行数を把握している');
   assert.ok(status.rowsDone < status.rowsTotal);
 
   for (let i = 0; i < 20 && res.status === 'running'; i++) res = h.c.exportLedgerResume();
   assert.equal(res.status, 'done', '続きを実行すれば最後まで終わる');
-  assert.equal(res.rowsDone, 2504);
+  assert.equal(res.rowsDone, 2505);
 
   const parts = written(h).filter(f => f.name.startsWith('app.log.')).map(f => f.name).sort();
   assert.deepEqual(parts, ['app.log.p0.json', 'app.log.p1.json'], '2000 行ごとに分ける');

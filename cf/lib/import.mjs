@@ -12,9 +12,23 @@
 
 const BOOL_TEXT = new Map([['true', 1], ['false', 0], ['TRUE', 1], ['FALSE', 0], ['はい', 1], ['いいえ', 0]]);
 
+// GAS が読まない「人が見るための表」。台帳にはあるが業務データの正本ではないので取り込まない。
+// 移行後はスプレッドシート側を D1 から書き出して作り直す対象（docs/D1_MIGRATION.md 段階 D）。
+//   一覧 … 授業（slots）を日付・生徒・科目で並べただけの一覧
+export const VIEW_SHEETS = ['一覧'];
+
 // Sheets は =+@- で始まる文字列の前に ' を足して数式化を防ぐ。読むときは剥がす。
 export function unquoteCell(value) {
   return typeof value === 'string' && value.length > 1 && value[0] === "'" && '=+@-'.includes(value[1]) ? value.slice(1) : value;
+}
+
+// スプレッドシートの「時刻だけ」のセルは 1899-12-30 という基準日で保存される。
+// 古い書き出し（この基準日を落とさなかったもの）でも HH:MM になるようここでも直す。
+// GAS 側の normTime_ と同じ結果にそろえる。
+const TIME_EPOCH = /^1899-12-30[ T](\d{2}:\d{2})(:\d{2})?$/;
+export function unepochTime(value) {
+  const m = typeof value === 'string' ? TIME_EPOCH.exec(value) : null;
+  return m ? m[1] : value;
 }
 
 export function normalizeCell(value, column) {
@@ -31,7 +45,7 @@ export function normalizeCell(value, column) {
   if (raw === null || raw === undefined) return '';
   if (raw === true) return 'true';
   if (raw === false) return 'false';
-  return String(raw);
+  return unepochTime(String(raw));
 }
 
 // D1/SQLite から表の列とその既定値を読む
@@ -66,7 +80,13 @@ export async function tableExists(db, table) {
 export async function importSheet(db, part, opts = {}) {
   const table = String(part.sheet || '');
   const syncedAt = opts.syncedAt || new Date().toISOString();
-  const out = { table, book: String(part.book || 'app'), rows: 0, skippedColumns: [], errors: [] };
+  const out = { table, book: String(part.book || 'app'), rows: 0, skippedColumns: [], errors: [], skipped: false };
+  const ignore = opts.ignoreSheets || VIEW_SHEETS;
+  if (ignore.indexOf(table) >= 0) {
+    out.skipped = true;
+    out.note = '人が見るための表なので取り込まない';
+    return out;
+  }
   if (!(await tableExists(db, table))) {
     out.errors.push(`D1 にこのシートに対応する表がありません: ${table}`);
     return out;
@@ -121,15 +141,17 @@ export async function importBundle(db, parts, opts = {}) {
 
   const byTable = new Map();
   for (const r of results) {
-    const cur = byTable.get(r.table) || { table: r.table, book: r.book, imported: 0, errors: [], skippedColumns: [] };
+    const cur = byTable.get(r.table) || { table: r.table, book: r.book, imported: 0, errors: [], skippedColumns: [], skipped: false, note: '' };
     cur.imported += r.rows;
     cur.errors.push(...r.errors);
+    if (r.skipped) { cur.skipped = true; cur.note = r.note || ''; }
     for (const c of r.skippedColumns) if (!cur.skippedColumns.includes(c)) cur.skippedColumns.push(c);
     byTable.set(r.table, cur);
   }
 
   const summary = [];
   for (const entry of byTable.values()) {
+    if (entry.skipped) { summary.push({ ...entry, stored: null, matches: true }); continue; }
     let stored = null;
     if (await tableExists(db, entry.table)) {
       const row = await db.prepare(`select count(*) as n from ${quoteIdent(entry.table)}`).first();

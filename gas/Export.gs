@@ -16,6 +16,7 @@
  */
 var SW_EXPORT_KEY_ = 'STEPWISE_EXPORT_STATE';
 var EXPORT_ROWS_PER_FILE_ = 2000;
+var EXPORT_TIME_EPOCH_ = '1899-12-30'; // スプレッドシートが「時刻だけ」のセルに使う基準日
 var EXPORT_BUDGET_MS_ = 240000; // 1回の実行で使う上限。Apps Script の 6 分より手前で切り上げる
 
 function exportState_() {
@@ -31,8 +32,11 @@ function exportSaveState_(state) {
 // セルを D1 に入れられる値にする。日付セルは Asia/Tokyo。
 function exportCell_(v) {
   if (v instanceof Date) {
+    var day = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+    // 「時刻だけ」のセルは 1899-12-30 という基準日で保存される。normTime_ と同じく HH:mm にする
+    if (day === EXPORT_TIME_EPOCH_) return Utilities.formatDate(v, TZ, 'HH:mm');
     var time = Utilities.formatDate(v, TZ, 'HH:mm:ss');
-    return time === '00:00:00' ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : Utilities.formatDate(v, TZ, 'yyyy-MM-dd HH:mm:ss');
+    return time === '00:00:00' ? day : day + ' ' + time;
   }
   if (v === true || v === false) return v;
   if (typeof v === 'number') return v;
