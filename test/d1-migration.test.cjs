@@ -132,9 +132,9 @@ test('真偽・空欄・数式よけの値が仕様どおりに直る', async ()
 
   const s = await d1.prepare('select id, active, rate30, monthly from students order by id').all();
   assert.deepEqual(s.results, [
-    { id: 's1', active: 1, rate30: 1500, monthly: 0 },
-    { id: 's2', active: 0, rate30: 0, monthly: 0 },
-  ], "TRUE/'false' は 1/0 に、空欄の金額は 0 になる");
+    { id: 's1', active: 1, rate30: 1500, monthly: null },
+    { id: 's2', active: 0, rate30: null, monthly: null },
+  ], "TRUE/'false' は 1/0 に、空欄の金額は NULL（0 と区別する。GAS 側に空欄と 0 を分ける判定がある）");
 
   const l = await d1.prepare('select id, active from familyLinks order by id').all();
   assert.deepEqual(l.results, [{ id: 'l1', active: 1 }, { id: 'l2', active: 0 }]);
@@ -149,8 +149,8 @@ test('真偽・空欄・数式よけの値が仕様どおりに直る', async ()
   assert.equal(unquoteCell("'=SUM(A1)"), '=SUM(A1)');
   assert.equal(unquoteCell("'-5"), '-5');
   assert.equal(unquoteCell("'ふつうの文"), "'ふつうの文");
-  assert.equal(normalizeCell('', { type: 'INTEGER', notNull: true, defaultValue: 1 }), 1, '既定値 1 の列の空欄は 1');
-  assert.equal(normalizeCell('', { type: 'INTEGER', notNull: false, defaultValue: 0 }), null);
+  assert.equal(normalizeCell('', { type: 'INTEGER', notNull: false, defaultValue: 0 }), null, '数値列の空欄は NULL');
+  assert.equal(normalizeCell('0', { type: 'INTEGER', notNull: false, defaultValue: 0 }), 0, '0 は 0 のまま');
 });
 
 test('D1 に無い見出しは取り込まず、見つからない表は理由を返す', async () => {

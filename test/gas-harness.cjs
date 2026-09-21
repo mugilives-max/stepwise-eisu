@@ -81,10 +81,13 @@ function createHarness(options = {}) {
     log: [['time', 'message']]
   };
   for (const name of options.omitSheets || []) delete initialSheets[name];
-  const spreadsheet = new Spreadsheet(initialSheets);
-  const ledger = new Spreadsheet();
+  // sheets / ledgerSheets を渡すと、その中身をそのまま台帳にする(D1 から戻した台帳との
+  // 突き合わせに使う)。渡さなければ従来どおりの初期状態。
+  const spreadsheet = new Spreadsheet(options.sheets || initialSheets);
+  const ledger = new Spreadsheet(options.ledgerSheets || {});
   const cacheValues = new Map();
-  const properties = new Map([['MCP_KEY', MCP_KEY]]);
+  // properties を渡すと初期値を足せる(移行済みの印など、台帳には入らない設定値)
+  const properties = new Map([['MCP_KEY', MCP_KEY], ...Object.entries(options.properties || {})]);
   const effects = [];
   const cache = {
     get(key) { const item = cacheValues.get(key); return item && item.expires > now ? item.value : null; },
@@ -155,7 +158,7 @@ function createHarness(options = {}) {
     }
   }
   return {
-    request, context, rows, setRow, spreadsheet, ledger, effects, cache,
+    request, context, rows, setRow, spreadsheet, ledger, effects, cache, properties,
     now: () => now, advance: ms => { now += ms; },
     get: params => JSON.parse(context().doGet({ parameter: params }).getContent()),
     admin: (op, args = {}) => request({ action: 'admin', token: TEACHER_TOKEN, op, ...args }),

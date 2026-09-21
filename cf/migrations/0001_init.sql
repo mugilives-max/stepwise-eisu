@@ -8,8 +8,10 @@
 --  * 真偽は INTEGER 0/1 に寄せる。シート側は TRUE/FALSE・'true'/'false'・'1'/'0' の
 --    3 通りが混在しているので、取り込み時に正規化する（scripts/ledger-to-d1.mjs）。
 --  * 金額・分数・回数は INTEGER（円・分・回）。
---  * '' と 0 を区別する必要がある数値だけ NULL 可にしてある（planLines.approvedCount、
---    lessonKinds.standardMin / standardFee）。
+--  * 数値列はすべて NULL 可にしてある。台帳には「空欄」のセルがあり、GAS 側に
+--    `rate30 !== ''` のような判定が残っているので、0 と空欄を潰すと分岐が変わる。
+--    空欄は NULL で持ち、シートの形に戻すとき '' にする（cf/lib/sheet-view.mjs）。
+--    GAS を引退させたあとに NOT NULL へ締め直してよい。
 --  * どの表にも取り込み用の _syncedAt（最後に台帳から入れた時刻）と _sheetRow
 --    （シート上の行番号。突合と部分更新に使う）を足す。業務列の updatedAt とは別物。
 --
@@ -28,11 +30,11 @@ CREATE TABLE config (
 CREATE TABLE students (
   id           TEXT PRIMARY KEY,
   name         TEXT NOT NULL DEFAULT '',
-  active       INTEGER NOT NULL DEFAULT 1,
+  active       INTEGER,
   email        TEXT NOT NULL DEFAULT '',
   code         TEXT NOT NULL DEFAULT '',   -- 生徒の専用リンクの鍵。応答に出さない
-  rate30       INTEGER NOT NULL DEFAULT 0, -- 30分あたりの円
-  monthly      INTEGER NOT NULL DEFAULT 0, -- 旧・定額月謝（証跡として保持）
+  rate30       INTEGER, -- 30分あたりの円
+  monthly      INTEGER, -- 旧・定額月謝（証跡として保持）
   parentToken  TEXT NOT NULL DEFAULT '',   -- 旧保護者認証の名残。現在は未使用
   parentExp    INTEGER,
   deliveryMode TEXT NOT NULL DEFAULT '',   -- '' | in_person | online
@@ -45,8 +47,8 @@ CREATE TABLE lessonKinds (
   name         TEXT PRIMARY KEY,           -- slots.kind / plans.kind / planLines.kind から名前で参照される
   standardMin  INTEGER,                    -- 未設定は NULL（0 と区別する）
   standardFee  INTEGER,
-  active       INTEGER NOT NULL DEFAULT 1,
-  sortOrder    INTEGER NOT NULL DEFAULT 0,
+  active       INTEGER,
+  sortOrder    INTEGER,
   updatedAt    TEXT NOT NULL DEFAULT '',
   _syncedAt    TEXT NOT NULL DEFAULT '',
   _sheetRow    INTEGER
@@ -58,10 +60,10 @@ CREATE TABLE slots (
   id           TEXT PRIMARY KEY,
   date         TEXT NOT NULL DEFAULT '',
   start        TEXT NOT NULL DEFAULT '',
-  min          INTEGER NOT NULL DEFAULT 0,
+  min          INTEGER,
   status       TEXT NOT NULL DEFAULT '',   -- open | offered | booked
   studentId    TEXT NOT NULL DEFAULT '',
-  done         INTEGER NOT NULL DEFAULT 0, -- 実施済み。請求の対象になる
+  done         INTEGER, -- 実施済み。請求の対象になる
   eventId      TEXT NOT NULL DEFAULT '',
   meetUrl      TEXT NOT NULL DEFAULT '',
   subject      TEXT NOT NULL DEFAULT '',
@@ -108,7 +110,7 @@ CREATE TABLE wishes (
   createdAt    TEXT NOT NULL DEFAULT '',
   kind         TEXT NOT NULL DEFAULT '',   -- want（その時間）| それ以外は ok（範囲内ならどこでも）
   deliveryMode TEXT NOT NULL DEFAULT '',
-  duration     INTEGER NOT NULL DEFAULT 0,
+  duration     INTEGER,
   availability TEXT NOT NULL DEFAULT '',   -- 申請時に生徒へ見せた空き状況
   _syncedAt    TEXT NOT NULL DEFAULT '',
   _sheetRow    INTEGER
@@ -158,7 +160,7 @@ CREATE TABLE plans (
   studentId  TEXT NOT NULL DEFAULT '',
   ym         TEXT NOT NULL DEFAULT '',     -- 'YYYY-MM' か 'default'
   subject    TEXT NOT NULL DEFAULT '',
-  count      INTEGER NOT NULL DEFAULT 0,
+  count      INTEGER,
   status     TEXT NOT NULL DEFAULT '',     -- draft | proposed | approved | declined（'' は draft）
   proposedAt TEXT NOT NULL DEFAULT '',
   approvedAt TEXT NOT NULL DEFAULT '',
@@ -185,14 +187,14 @@ CREATE TABLE planLines (
   studentId     TEXT NOT NULL DEFAULT '',
   subject       TEXT NOT NULL DEFAULT '',
   kind          TEXT NOT NULL DEFAULT '',
-  count         INTEGER NOT NULL DEFAULT 0,
+  count         INTEGER,
   startDate     TEXT NOT NULL DEFAULT '',
   endDate       TEXT NOT NULL DEFAULT '',
-  lessonMin     INTEGER NOT NULL DEFAULT 0,
-  rate30        INTEGER NOT NULL DEFAULT 0,
+  lessonMin     INTEGER,
+  rate30        INTEGER,
   comment       TEXT NOT NULL DEFAULT '',
   status        TEXT NOT NULL DEFAULT '',  -- draft | proposed | approved | declined
-  revision      INTEGER NOT NULL DEFAULT 0,
+  revision      INTEGER,
   proposedAt    TEXT NOT NULL DEFAULT '',
   approvedAt    TEXT NOT NULL DEFAULT '',
   approvedVia   TEXT NOT NULL DEFAULT '',  -- '保護者ページ' なら保護者本人の承認。それ以外は先生の記録
@@ -217,18 +219,18 @@ CREATE TABLE monthAgreements (
   id               TEXT PRIMARY KEY,
   studentId        TEXT NOT NULL DEFAULT '',
   ym               TEXT NOT NULL DEFAULT '',
-  revision         INTEGER NOT NULL DEFAULT 0,
+  revision         INTEGER,
   status           TEXT NOT NULL DEFAULT '',
   planJson         TEXT NOT NULL DEFAULT '',
-  rate30           INTEGER NOT NULL DEFAULT 0,
-  monthly          INTEGER NOT NULL DEFAULT 0,
+  rate30           INTEGER,
+  monthly          INTEGER,
   proposedAt       TEXT NOT NULL DEFAULT '',
   approvedAt       TEXT NOT NULL DEFAULT '',
   approvedVia      TEXT NOT NULL DEFAULT '',
   consentDate      TEXT NOT NULL DEFAULT '',
   memo             TEXT NOT NULL DEFAULT '',
   updatedAt        TEXT NOT NULL DEFAULT '',
-  lessonMin        INTEGER NOT NULL DEFAULT 0,
+  lessonMin        INTEGER,
   approvedPlanJson TEXT NOT NULL DEFAULT '',
   _syncedAt        TEXT NOT NULL DEFAULT '',
   _sheetRow        INTEGER
@@ -240,7 +242,7 @@ CREATE TABLE approvalEvents (
   id           TEXT PRIMARY KEY,
   studentId    TEXT NOT NULL DEFAULT '',
   ym           TEXT NOT NULL DEFAULT '',   -- 月契約は 'YYYY-MM'、計画行は '開始~終了'
-  revision     INTEGER NOT NULL DEFAULT 0,
+  revision     INTEGER,
   event        TEXT NOT NULL DEFAULT '',
   recordedAt   TEXT NOT NULL DEFAULT '',
   consentDate  TEXT NOT NULL DEFAULT '',
@@ -309,13 +311,13 @@ CREATE TABLE lessonRecords (
   slotId          TEXT NOT NULL DEFAULT '',
   lessonDate      TEXT NOT NULL DEFAULT '',
   lessonStart     TEXT NOT NULL DEFAULT '',
-  lessonMin       INTEGER NOT NULL DEFAULT 0,
+  lessonMin       INTEGER,
   subject         TEXT NOT NULL DEFAULT '',
   content         TEXT NOT NULL DEFAULT '',
   progress        TEXT NOT NULL DEFAULT '',
   nextFocus       TEXT NOT NULL DEFAULT '',
   homeworkJson    TEXT NOT NULL DEFAULT '',
-  revision        INTEGER NOT NULL DEFAULT 0,
+  revision        INTEGER,
   status          TEXT NOT NULL DEFAULT '', -- active | void
   createdBy       TEXT NOT NULL DEFAULT '',
   updatedBy       TEXT NOT NULL DEFAULT '',
@@ -336,11 +338,11 @@ CREATE TABLE lessonPreparations (
   slotId      TEXT NOT NULL DEFAULT '',
   studentId   TEXT NOT NULL DEFAULT '',
   body        TEXT NOT NULL DEFAULT '',     -- 先生だけが見る
-  revision    INTEGER NOT NULL DEFAULT 0,
+  revision    INTEGER,
   updatedAt   TEXT NOT NULL DEFAULT '',
   lessonDate  TEXT NOT NULL DEFAULT '',
   lessonStart TEXT NOT NULL DEFAULT '',
-  lessonMin   INTEGER NOT NULL DEFAULT 0,
+  lessonMin   INTEGER,
   subject     TEXT NOT NULL DEFAULT '',
   _syncedAt   TEXT NOT NULL DEFAULT '',
   _sheetRow   INTEGER
@@ -357,8 +359,8 @@ CREATE TABLE lessonPrivateNotes (
 CREATE TABLE lessonReportDrafts (
   recordId       TEXT PRIMARY KEY,
   body           TEXT NOT NULL DEFAULT '',
-  sourceRevision INTEGER NOT NULL DEFAULT 0,
-  revision       INTEGER NOT NULL DEFAULT 0,
+  sourceRevision INTEGER,
+  revision       INTEGER,
   updatedAt      TEXT NOT NULL DEFAULT '',
   _syncedAt      TEXT NOT NULL DEFAULT '',
   _sheetRow      INTEGER
@@ -383,10 +385,10 @@ CREATE TABLE lessonPublicSnapshots (
   recordId        TEXT NOT NULL DEFAULT '',
   studentId       TEXT NOT NULL DEFAULT '',
   slotId          TEXT NOT NULL DEFAULT '',
-  revision        INTEGER NOT NULL DEFAULT 0,
+  revision        INTEGER,
   lessonDate      TEXT NOT NULL DEFAULT '',
   lessonStart     TEXT NOT NULL DEFAULT '',
-  lessonMin       INTEGER NOT NULL DEFAULT 0,
+  lessonMin       INTEGER,
   subject         TEXT NOT NULL DEFAULT '',
   content         TEXT NOT NULL DEFAULT '',
   progress        TEXT NOT NULL DEFAULT '',
@@ -406,7 +408,7 @@ CREATE TABLE lessonReadReceipts (
   studentId TEXT NOT NULL DEFAULT '',
   readerId  TEXT NOT NULL DEFAULT '',       -- 保護者アカウントのみ。生徒の閲覧は記録しない
   recordId  TEXT NOT NULL DEFAULT '',
-  revision  INTEGER NOT NULL DEFAULT 0,
+  revision  INTEGER,
   readAt    TEXT NOT NULL DEFAULT '',
   _syncedAt TEXT NOT NULL DEFAULT '',
   _sheetRow INTEGER
@@ -426,7 +428,7 @@ CREATE TABLE examReports (
   fileId      TEXT NOT NULL DEFAULT '',     -- Drive のファイル id
   fileName    TEXT NOT NULL DEFAULT '',
   fileHash    TEXT NOT NULL DEFAULT '',
-  revision    INTEGER NOT NULL DEFAULT 0,
+  revision    INTEGER,
   requestId   TEXT NOT NULL DEFAULT '',
   payloadHash TEXT NOT NULL DEFAULT '',
   updatedAt   TEXT NOT NULL DEFAULT '',
@@ -448,7 +450,7 @@ CREATE TABLE contactMessages (
   receivedAt TEXT NOT NULL DEFAULT '',     -- サーバーの受信時刻。端末の時計は使わない
   status     TEXT NOT NULL DEFAULT '',
   reply      TEXT NOT NULL DEFAULT '',
-  revision   INTEGER NOT NULL DEFAULT 0,
+  revision   INTEGER,
   updatedAt  TEXT NOT NULL DEFAULT '',
   _syncedAt  TEXT NOT NULL DEFAULT '',
   _sheetRow  INTEGER
@@ -481,7 +483,7 @@ CREATE TABLE contactProcessing (
   processId       TEXT NOT NULL DEFAULT '',
   client          TEXT NOT NULL DEFAULT '',
   status          TEXT NOT NULL DEFAULT '',
-  claimedRevision INTEGER NOT NULL DEFAULT 0,
+  claimedRevision INTEGER,
   claimedAt       TEXT NOT NULL DEFAULT '',
   expiresAt       TEXT NOT NULL DEFAULT '',
   itemsJson       TEXT NOT NULL DEFAULT '',
@@ -502,11 +504,11 @@ CREATE TABLE parents (                      -- 旧・生徒ごとの保護者認
   passHash        TEXT NOT NULL DEFAULT '',
   setAt           TEXT NOT NULL DEFAULT '',
   lastLogin       TEXT NOT NULL DEFAULT '',
-  failCount       INTEGER NOT NULL DEFAULT 0,
+  failCount       INTEGER,
   lockUntil       INTEGER,
   setupHash       TEXT NOT NULL DEFAULT '',
   setupExpiresAt  INTEGER,
-  setupFailCount  INTEGER NOT NULL DEFAULT 0,
+  setupFailCount  INTEGER,
   tokenHash       TEXT NOT NULL DEFAULT '',
   tokenExpiresAt  INTEGER,
   _syncedAt       TEXT NOT NULL DEFAULT '',
@@ -524,15 +526,15 @@ CREATE TABLE familyAccounts (
   createdAt        TEXT NOT NULL DEFAULT '',
   updatedAt        TEXT NOT NULL DEFAULT '',
   lastLogin        TEXT NOT NULL DEFAULT '',
-  failCount        INTEGER NOT NULL DEFAULT 0,
+  failCount        INTEGER,
   lockUntil        INTEGER,
   tokenHash        TEXT NOT NULL DEFAULT '', -- [{hash,expiresAt},…] の JSON（複数端末）
   tokenExpiresAt   INTEGER,
-  securityVersion  INTEGER NOT NULL DEFAULT 0,
+  securityVersion  INTEGER,
   inviteHash       TEXT NOT NULL DEFAULT '',
   inviteExpiresAt  INTEGER,
-  inviteFailCount  INTEGER NOT NULL DEFAULT 0,
-  testOnly         INTEGER NOT NULL DEFAULT 0,
+  inviteFailCount  INTEGER,
+  testOnly         INTEGER,
   _syncedAt        TEXT NOT NULL DEFAULT '',
   _sheetRow        INTEGER
 );
@@ -542,7 +544,7 @@ CREATE TABLE familyLinks (
   id        TEXT PRIMARY KEY,
   familyId  TEXT NOT NULL DEFAULT '',
   studentId TEXT NOT NULL DEFAULT '',
-  active    INTEGER NOT NULL DEFAULT 1,
+  active    INTEGER,
   linkedAt  TEXT NOT NULL DEFAULT '',
   updatedAt TEXT NOT NULL DEFAULT '',
   _syncedAt TEXT NOT NULL DEFAULT '',
@@ -561,8 +563,8 @@ CREATE TABLE familyChallenges (
   expiresAt       INTEGER,                  -- 通常 30 分、先生が出した案内は 24 時間
   usedAt          TEXT NOT NULL DEFAULT '',
   createdAt       TEXT NOT NULL DEFAULT '',
-  failCount       INTEGER NOT NULL DEFAULT 0,
-  securityVersion INTEGER NOT NULL DEFAULT 0,
+  failCount       INTEGER,
+  securityVersion INTEGER,
   _syncedAt       TEXT NOT NULL DEFAULT '',
   _sheetRow       INTEGER
 );
@@ -575,12 +577,12 @@ CREATE TABLE familyOutbox (
   studentId TEXT NOT NULL DEFAULT '',
   kind      TEXT NOT NULL DEFAULT '',
   ym        TEXT NOT NULL DEFAULT '',
-  revision  INTEGER NOT NULL DEFAULT 0,
+  revision  INTEGER,
   email     TEXT NOT NULL DEFAULT '',
   status    TEXT NOT NULL DEFAULT '',       -- uncertain は自動再送しない（二重送信を避ける）
   createdAt TEXT NOT NULL DEFAULT '',
   sentAt    TEXT NOT NULL DEFAULT '',
-  attempts  INTEGER NOT NULL DEFAULT 0,
+  attempts  INTEGER,
   error     TEXT NOT NULL DEFAULT '',
   _syncedAt TEXT NOT NULL DEFAULT '',
   _sheetRow INTEGER
@@ -599,9 +601,9 @@ CREATE INDEX familyNoticeReads_family ON familyNoticeReads (familyId);
 
 CREATE TABLE familyEmailPrefs (
   familyId       TEXT PRIMARY KEY,
-  planProposed   INTEGER NOT NULL DEFAULT 1, -- 行が無いときは全部 on
-  invoiceCreated INTEGER NOT NULL DEFAULT 1,
-  invoiceVoided  INTEGER NOT NULL DEFAULT 1,
+  planProposed   INTEGER, -- 行が無いときは全部 on
+  invoiceCreated INTEGER,
+  invoiceVoided  INTEGER,
   updatedAt      TEXT NOT NULL DEFAULT '',
   _syncedAt      TEXT NOT NULL DEFAULT '',
   _sheetRow      INTEGER
@@ -615,12 +617,12 @@ CREATE TABLE studentEmails (
   challengeId          TEXT NOT NULL DEFAULT '',
   challengeHash        TEXT NOT NULL DEFAULT '',
   challengeExpiresAt   INTEGER,
-  challengeFailCount   INTEGER NOT NULL DEFAULT 0,
+  challengeFailCount   INTEGER,
   challengeLinkHash    TEXT NOT NULL DEFAULT '',
   challengeUsedAt      TEXT NOT NULL DEFAULT '',
   requestedAt          TEXT NOT NULL DEFAULT '',
   lastMailStatus       TEXT NOT NULL DEFAULT '',
-  revision             INTEGER NOT NULL DEFAULT 0,
+  revision             INTEGER,
   updatedAt            TEXT NOT NULL DEFAULT '',
   _syncedAt            TEXT NOT NULL DEFAULT '',
   _sheetRow            INTEGER
@@ -632,12 +634,12 @@ CREATE TABLE studentEmailOutbox (
   eventKey        TEXT NOT NULL DEFAULT '',
   kind            TEXT NOT NULL DEFAULT '',
   email           TEXT NOT NULL DEFAULT '',
-  contactRevision INTEGER NOT NULL DEFAULT 0,
+  contactRevision INTEGER,
   snapshotJson    TEXT NOT NULL DEFAULT '',
   status          TEXT NOT NULL DEFAULT '',
   createdAt       TEXT NOT NULL DEFAULT '',
   sentAt          TEXT NOT NULL DEFAULT '',
-  attempts        INTEGER NOT NULL DEFAULT 0,
+  attempts        INTEGER,
   error           TEXT NOT NULL DEFAULT '',
   _syncedAt       TEXT NOT NULL DEFAULT '',
   _sheetRow       INTEGER
@@ -646,10 +648,10 @@ CREATE UNIQUE INDEX studentEmailOutbox_event ON studentEmailOutbox (eventKey) WH
 
 CREATE TABLE studentEmailPrefs (
   studentId      TEXT PRIMARY KEY,
-  offered        INTEGER NOT NULL DEFAULT 1,
-  changed        INTEGER NOT NULL DEFAULT 1,
-  cancelled      INTEGER NOT NULL DEFAULT 1,
-  cancelDeclined INTEGER NOT NULL DEFAULT 1,
+  offered        INTEGER,
+  changed        INTEGER,
+  cancelled      INTEGER,
+  cancelDeclined INTEGER,
   updatedAt      TEXT NOT NULL DEFAULT '',
   _syncedAt      TEXT NOT NULL DEFAULT '',
   _sheetRow      INTEGER
@@ -676,7 +678,7 @@ CREATE TABLE mcpLog (
   target    TEXT NOT NULL DEFAULT '',
   params    TEXT NOT NULL DEFAULT '',
   result    TEXT NOT NULL DEFAULT '',
-  ms        INTEGER NOT NULL DEFAULT 0,
+  ms        INTEGER,
   _syncedAt TEXT NOT NULL DEFAULT '',
   _sheetRow INTEGER
 );
@@ -690,24 +692,24 @@ CREATE TABLE "入金管理" (
   "年月"          TEXT NOT NULL DEFAULT '',
   "生徒ID"        TEXT NOT NULL DEFAULT '',
   "氏名"          TEXT NOT NULL DEFAULT '',
-  "請求額"        INTEGER NOT NULL DEFAULT 0,
+  "請求額"        INTEGER,
   "請求日"        TEXT NOT NULL DEFAULT '',
   "入金日"        TEXT NOT NULL DEFAULT '',
   "入金方法"      TEXT NOT NULL DEFAULT '',
   "状態"          TEXT NOT NULL DEFAULT '', -- '取消' は取り消し済み
   "備考"          TEXT NOT NULL DEFAULT '',
   "請求ID"        TEXT NOT NULL,
-  "承認版"        INTEGER NOT NULL DEFAULT 0,
+  "承認版"        INTEGER,
   "料金方式"      TEXT NOT NULL DEFAULT '',
-  "確定単価(30分)" INTEGER NOT NULL DEFAULT 0,
-  "確定月謝"      INTEGER NOT NULL DEFAULT 0,
-  "実施分数"      INTEGER NOT NULL DEFAULT 0,
-  "実施回数"      INTEGER NOT NULL DEFAULT 0,
+  "確定単価(30分)" INTEGER,
+  "確定月謝"      INTEGER,
+  "実施分数"      INTEGER,
+  "実施回数"      INTEGER,
   "実績JSON"      TEXT NOT NULL DEFAULT '', -- 請求した授業の配列。空配列は旧方式の月まるごと
   "取消日時"      TEXT NOT NULL DEFAULT '',
   "取消理由"      TEXT NOT NULL DEFAULT '',
   "処理ID"        TEXT NOT NULL DEFAULT '',
-  "入金版"        INTEGER NOT NULL DEFAULT 0,
+  "入金版"        INTEGER,
   _syncedAt       TEXT NOT NULL DEFAULT '',
   _sheetRow       INTEGER,
   PRIMARY KEY ("請求ID")
@@ -726,8 +728,8 @@ CREATE TABLE "生徒台帳" (
   "入塾日"      TEXT NOT NULL DEFAULT '',
   "状態"        TEXT NOT NULL DEFAULT '',
   "科目"        TEXT NOT NULL DEFAULT '',
-  "単価(30分)"  INTEGER NOT NULL DEFAULT 0,
-  "月謝"        INTEGER NOT NULL DEFAULT 0,
+  "単価(30分)"  INTEGER,
+  "月謝"        INTEGER,
   "備考"        TEXT NOT NULL DEFAULT '',
   _syncedAt     TEXT NOT NULL DEFAULT '',
   _sheetRow     INTEGER
