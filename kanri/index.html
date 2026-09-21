@@ -312,9 +312,24 @@
         }
         document.addEventListener("input", function (ev) { var prop = ev.target.getAttribute("data-slot-edit"); if (prop && slotEdit && !slotEdit.pending && !slotEdit.busy) { slotEdit.form[prop] = prop === "min" ? Number(ev.target.value) : ev.target.value; slotEdit.force = false; } });
 
+        /* 読み取りだけ Worker(D1) に向ける。まだ載っていない操作・失敗・通信不能のときは
+           そのまま Apps Script に回す。READ_API が空なら最初から回す(今までどおり)。
+           書き込みは常に Apps Script。Worker は台帳に書けない。 */
+        var READ_API = "";
+        var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
+        function readFirst(body) {
+          if (!READ_API || !body || body.action !== "admin" || !READ_ADMIN_OPS[String(body.op || "")]) return Promise.resolve(null);
+          return fetch(READ_API, { method: "POST", body: JSON.stringify(body) }).then(function (r) {
+            if (r.status === 501 || !r.ok) return null;
+            return r.json().then(function (res) { return res && res.errorCode === "workerError" ? null : res; });
+          }).catch(function () { return null; });
+        }
         function post(body) {
           var started = Date.now();
-          return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (res) {
+          var fallback = function () { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); };
+          var routed = READ_API && body && body.action === "admin" && READ_ADMIN_OPS[String(body.op || "")];
+          var first = routed ? readFirst(body).then(function (r) { return r === null ? fallback() : r; }) : fallback();
+          return first.then(function (res) {
             try { console.log('[kanri timing]', body.op || body.action, { totalMs: Date.now() - started, serverMs: res.ms, stages: res.timings }); } catch (e) {}
             return res;
           });

@@ -5,6 +5,7 @@
 // 本番の GAS と同じ入出力の形（{action,...} -> {ok|error,...}）を保つことが移行の安全弁。
 import { health } from "./health.mjs";
 import { handleRead } from "./read.mjs";
+import { handleSync, syncStatus } from "./sync.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -49,9 +50,17 @@ export default {
       return reply({ steps }, 200, head);
     }
     // 疎通確認。GAS の doGet と同じ形を返す（release だけは worker 版と分かる文字列）。
-    if (request.method === "GET") return reply(await health(env), 200, head);
+    if (request.method === "GET") return reply({ ...(await health(env)), ...(await syncStatus(env)) }, 200, head);
 
     if (request.method !== "POST") return reply({ error: "POST only" }, 405, head);
+
+    // GAS からの同期。鍵を知っている呼び出しだけ（画面からは来ない）
+    if (url.pathname === "/sync") {
+      let payload;
+      try { payload = await request.json(); } catch (e) { return reply({ error: "不正なリクエストです" }, 400, head); }
+      const r = await handleSync(payload, env);
+      return reply(r.payload, r.status, head);
+    }
 
     let body;
     try {

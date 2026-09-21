@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-export-time-cells' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-worker-sync' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -110,6 +110,8 @@ function doPost(e) {
     if (req.familyProxy && res && typeof res === 'object' && res.state && typeof res.state === 'object') delete res.state.emailStatus;
     if (res && typeof res === 'object') res.ms = Date.now() - t0; // 処理時間(ミリ秒)。フロントのconsoleに出る
     if (res && typeof res === 'object') res.timings = {lockMs:afterLock-t0,schemaMs:afterSchema-afterLock,operationMs:Date.now()-afterSchema};
+    // 書き込みがあったら Worker(D1) にも伝える。失敗しても応答は壊さない(Sync.gs)
+    try { if (typeof syncPush_ === 'function') syncPush_(); } catch (e) {}
     return json_(res);
   } catch (err) {
     return json_({ error: String(err), errorCode: locked ? (err.billingCode || 'serverError') : 'pending' });
@@ -1699,6 +1701,7 @@ function ss_() { if (!MEMO_.ss) MEMO_.ss = SpreadsheetApp.getActive(); return ME
 
 // 書き込み用にシートを取る(そのシートのキャッシュは捨てる)
 function sheet_(name) {
+  if (typeof syncTouch_ === 'function') syncTouch_(name, 'app'); // 書いたら Worker へ送る目印(Sync.gs)
   delete MEMO_.rows[name];
   if (name === 'lessonRecords' || name === 'lessonReportDrafts') delete MEMO_.lessonMeta;
   return ss_().getSheetByName(name);
@@ -1843,6 +1846,7 @@ var LEDGER_COLS = {
 function ledger_() { if (!MEMO_.ledger) MEMO_.ledger = SpreadsheetApp.openById(LEDGER_ID); return MEMO_.ledger; }
 
 function ledgerSheet_(name) {
+  if (typeof syncTouch_ === 'function') syncTouch_(name, 'ledger'); // 書いたら Worker へ送る目印(Sync.gs)
   delete MEMO_.lrows[name]; // 書き込み前提なのでキャッシュを捨てる
   var ss = ledger_();
   var sh = ss.getSheetByName(name);

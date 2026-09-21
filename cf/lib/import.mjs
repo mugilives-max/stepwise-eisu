@@ -48,8 +48,14 @@ export function normalizeCell(value, column) {
   return unepochTime(String(raw));
 }
 
-// D1/SQLite から表の列とその既定値を読む
-export async function readTableColumns(db, table) {
+// D1/SQLite から表の列とその既定値を読む。
+// Worker では PRAGMA を実行できないので、呼び出し側が列の情報を渡す（cf/worker/generated/schema.mjs）。
+export async function readTableColumns(db, table, known) {
+  if (known && known[table]) return known[table];
+  return readTableColumnsViaPragma(db, table);
+}
+
+async function readTableColumnsViaPragma(db, table) {
   const { results } = await db.prepare(`pragma table_info(${quoteIdent(table)})`).all();
   return results.map(r => ({
     name: String(r.name),
@@ -91,7 +97,7 @@ export async function importSheet(db, part, opts = {}) {
     out.errors.push(`D1 にこのシートに対応する表がありません: ${table}`);
     return out;
   }
-  const columns = await readTableColumns(db, table);
+  const columns = await readTableColumns(db, table, opts.schema);
   const byName = new Map(columns.map(c => [c.name, c]));
   const headers = (part.headers || []).map(String);
 

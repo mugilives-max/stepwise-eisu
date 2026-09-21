@@ -75,8 +75,17 @@ export function schemaMap() {
     for (const line of m[3].split('\n')) {
       const t = line.trim();
       if (!t || /^(PRIMARY|UNIQUE|CHECK|FOREIGN|CONSTRAINT)\b/i.test(t)) continue;
-      const c = /^(?:"([^"]+)"|([A-Za-z_][\w$]*))\s/.exec(t);
-      if (c) columns.push(c[1] || c[2]);
+      const c = /^(?:"([^"]+)"|([A-Za-z_][\w$]*))\s+([A-Za-z]+)([^,]*)/.exec(t);
+      if (!c) continue;
+      const rest = c[4] || '';
+      const def = /DEFAULT\s+(-?\d+)/i.exec(rest);
+      columns.push({
+        name: c[1] || c[2],
+        type: /^INT/i.test(c[3]) ? 'INTEGER' : 'TEXT',
+        notNull: /NOT\s+NULL/i.test(rest) || /PRIMARY\s+KEY/i.test(rest),
+        isPk: /PRIMARY\s+KEY/i.test(rest),
+        defaultValue: def ? Number(def[1]) : 0,
+      });
     }
     if (columns.length) out[name] = columns;
   }
@@ -96,7 +105,8 @@ export function generate() {
   const schemaBody = [
     '// 自動生成（scripts/build-gas-bundle.mjs）。元は cf/migrations/*.sql。',
     '// D1 は PRAGMA を実行できないので、表ごとの列はここから読む。',
-    'export const TABLE_COLUMNS = ' + JSON.stringify(schema, null, 2) + ';',
+    'export const TABLE_SCHEMA = ' + JSON.stringify(schema, null, 2) + ';',
+    'export const TABLE_COLUMNS = Object.fromEntries(Object.entries(TABLE_SCHEMA).map(([t, cs]) => [t, cs.map(c => c.name)]));',
     '',
   ].join('\n');
   const changed = write(OUT, code) | write(schemaFile, schemaBody);

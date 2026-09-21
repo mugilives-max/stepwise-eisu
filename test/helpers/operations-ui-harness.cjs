@@ -38,8 +38,20 @@ function createUI(kind = 'student', options = {}) {
     history: { replaceState(a, b, url) { replaced.push(url); const u = new URL(url, location.href); location.hash = u.hash; location.search = u.search; } },
     URL, URLSearchParams, navigator: { clipboard: { writeText: value => { ui.clipboard = value; return Promise.resolve(); } } },
     localStorage: storage(local), sessionStorage: storage(session), setTimeout: () => 0, clearTimeout() {}, confirm: () => { ++confirmCount; return true; }, console: { log: (...v) => logs.push(v) },
-    fetch(url, config) { const body = config ? JSON.parse(config.body) : Object.fromEntries(new URL(url).searchParams); return new Promise((resolve, reject) => requests.push({ body, reply: value => resolve({ json: () => Promise.resolve(value) }), fail: () => reject(new Error('network failed')) })); } };
-  const source = kind === 'admin' ? fs.readFileSync(path.join(__dirname,'../../kanri/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1] : fs.readFileSync(path.join(__dirname,'../../assets/portal.js'),'utf8');
+    // url も控える(読み取りを Worker に振り分けているかを見るため)。
+    // reply(value, {status}) で応答の状態も指定できる。既定は 200。
+    fetch(url, config) {
+      const body = config ? JSON.parse(config.body) : Object.fromEntries(new URL(url).searchParams);
+      return new Promise((resolve, reject) => requests.push({
+        url: String(url), body,
+        reply: (value, init) => { const status = (init && init.status) || 200; resolve({ status, ok: status >= 200 && status < 300, json: () => Promise.resolve(value) }); },
+        fail: () => reject(new Error('network failed')),
+      }));
+    } };
+  const raw = kind === 'admin' ? fs.readFileSync(path.join(__dirname,'../../kanri/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1] : fs.readFileSync(path.join(__dirname,'../../assets/portal.js'),'utf8');
+  // options.source を渡すと、動かす前に画面のコードを書き換えられる
+  // (出荷時は無効にしてある設定を、テストのときだけ有効にするため)
+  const source = options.source ? options.source(raw) : raw;
   context.window.StepwiseBoard=require('../../assets/schedule-board.js');
   context.window.StepwiseCalendar=require('../../assets/calendar.js');
   context.window.StepwiseReport=require('../../assets/lesson-report.js');

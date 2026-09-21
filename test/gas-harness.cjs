@@ -131,6 +131,13 @@ function createHarness(options = {}) {
       Logger: { log: (...args) => effects.push({ kind: 'logger', args }) },
       console: { log: (...args) => effects.push({ kind: 'console', args }), warn: (...args) => effects.push({ kind: 'console', args }), error: (...args) => effects.push({ kind: 'console', args }) },
       Session: { getEffectiveUser: () => ({ getEmail: () => 'teacher@example.invalid' }) },
+      // 外部への通信。既定は「使えない」。options.urlFetch を渡したときだけ差し替わる
+      // (Worker への同期を確かめるテスト用。実際のネットワークには出ない)
+      UrlFetchApp: { fetch: (url, params) => {
+        if (!options.urlFetch) throw new Error('Network side effect forbidden in tests');
+        effects.push({ kind: 'urlFetch', url, params });
+        return options.urlFetch(url, params);
+      } },
       MailApp: { sendEmail: (...args) => { effects.push({ kind: 'email', args }); throw new Error('Email side effect forbidden in auth tests'); } },
       CalendarApp: { getDefaultCalendar: () => { effects.push({ kind: 'calendar' }); throw new Error('Calendar side effect forbidden in auth tests'); } }
     };

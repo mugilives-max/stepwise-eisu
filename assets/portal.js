@@ -210,10 +210,35 @@
         function val(id) { var el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
 
         /* ---------- API ---------- */
+
+        /* ---------- 読み取りの振り分け ----------
+           読み取りだけ Worker(D1) に向ける。速いが、まだ載っていない操作や失敗のときは
+           そのまま Apps Script に回す(READ_API が空なら最初から回す＝今までどおり)。
+           書き込みは常に Apps Script。Worker は台帳に書けない。 */
+        var READ_API = "";
+        var READ_ACTIONS = { state: 1 };
+        var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
+        function readable(body) {
+          if (!READ_API || !body) return false;
+          var a = String(body.action || "");
+          if (READ_ACTIONS[a]) return true;
+          return a === "admin" && !!READ_ADMIN_OPS[String(body.op || "")];
+        }
+        // Worker に投げる。引き受けない(501)・失敗・通信不能なら null を返し、呼び出し側が Apps Script に回す
+        function readFirst(body) {
+          if (!readable(body)) return Promise.resolve(null);
+          return fetch(READ_API, { method: "POST", body: JSON.stringify(body) }).then(function (r) {
+            if (r.status === 501) return null;
+            if (!r.ok) return null;
+            return r.json().then(function (res) { return res && res.errorCode === "workerError" ? null : res; });
+          }).catch(function () { return null; });
+        }
         function apiGet(params) {
           var pv = previewRoute(params); if (pv) return pv;
           var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
-          return fetch(API + "?" + q).then(function (r) { return r.json(); });
+          var fallback = function () { return fetch(API + "?" + q).then(function (r) { return r.json(); }); };
+          if (!readable(params)) return fallback(); // 振り分けが無効なら今までと同じ経路のまま
+          return readFirst(params).then(function (res) { return res === null ? fallback() : res; });
         }
         // 保護者ページの「マイページ」では、生徒本人用の送信(k 付き)を保護者のログイン(ftoken)＋子どもの ID に置き換えて送る。GAS 側で家族の紐付きを確認して子ども本人と同じ扱いにする
         // プレビュー中の送信: 表示に必要な読み取りだけを先生のログインで取り、それ以外(登録・変更)は送らずに断る
@@ -231,7 +256,10 @@
           var pv = previewRoute(body); if (pv) return pv;
           var proxied = null;
           if (route() === 'family' && F.home && body && body.k !== undefined && !body.ftoken) { var pc = familyMypageChild(); body = Object.assign({}, body); delete body.k; body.ftoken = familyToken(); body.studentId = pc ? pc.studentId : ''; proxied = pc ? pc.studentId : ''; }
-          return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (res) { if (proxied && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
+          var sent = body;
+          var fallback = function () { return fetch(API, { method: "POST", body: JSON.stringify(sent) }).then(function (r) { return r.json(); }); };
+          var first = readable(sent) ? readFirst(sent).then(function (res) { return res === null ? fallback() : res; }) : fallback();
+          return first.then(function (res) { if (proxied && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
         }
         function myKey() { return previewK || lsGet("sw_k") || ""; }
         function parentSessionKey(k) { return "sw_pt_v2:" + (k === undefined ? myKey() : k); }
