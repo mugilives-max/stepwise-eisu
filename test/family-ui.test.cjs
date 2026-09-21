@@ -220,7 +220,11 @@ test('all-child approval targets child B and keeps child A visible after saving'
 });
 test('one child has no selector and failed second-child loading retains the first with retry',async()=>{
  const one=loggedUI();one.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();one.requests.at(-1).reply({ok:true,data:data('一人')});await flush();assert.equal(one.el('fa-child'),undefined);
- const ui=loggedUI();ui.requests[0].reply(home());await flush();ui.requests.at(-1).reply({ok:true,data:data('子Aを保持')});await flush();ui.requests.at(-1).fail();await flush();ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>(?![^]*子どもの情報を再読み込み[^]*<h2>【テスト】子B)/);assert.match(ui.html(),/<h2>【テスト】子B<\/h2>[^]*data-action="fa-refresh" data-child="child-b"/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
+ const ui=loggedUI();ui.requests[0].reply(home());await flush();ui.requests.at(-1).reply({ok:true,data:data('子Aを保持')});await flush();
+ // 読み取りは Worker へ行く。落ちると Apps Script に回るので、そちらも落とす
+ var sent=ui.requests.length;ui.requests.at(-1).fail();await flush();
+ if(ui.requests.length>sent){ui.requests.at(-1).fail();await flush();}
+ ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>(?![^]*子どもの情報を再読み込み[^]*<h2>【テスト】子B)/);assert.match(ui.html(),/<h2>【テスト】子B<\/h2>[^]*data-action="fa-refresh" data-child="child-b"/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
 });
 
 

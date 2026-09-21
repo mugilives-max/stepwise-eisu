@@ -216,7 +216,9 @@
            そのまま Apps Script に回す(READ_API が空なら最初から回す＝今までどおり)。
            書き込みは常に Apps Script。Worker は台帳に書けない。 */
         var READ_API = "https://stepwise-api.stepwise-edu.workers.dev";
-        var READ_ACTIONS = { state: 1 };
+        // 保護者ページの読み取りも Worker へ。書き込みを伴うもの（familyNoticeRead・
+        // メール設定・ログイン/登録）は入れない。
+        var READ_ACTIONS = { state: 1, familyHome: 1, familyNotices: 1, familyData: 1, familyStudentState: 1 };
         var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
         function readable(body) {
           if (!READ_API || !body) return false;

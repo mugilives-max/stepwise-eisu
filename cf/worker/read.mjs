@@ -38,9 +38,42 @@ const ADMIN_READS = {
   },
 };
 
+// 保護者ページの読み取り。GAS の familyDispatch_ と同じ関数を同じ順で呼ぶ。
+// ログインの確認（familyRequire_ / familyChildRequire_）も GAS のものをそのまま使う。
+// 書き込みを伴うもの（familyNoticeRead・メール設定・ログイン/登録）は載せない。
+const FAMILY_READS = {
+  familyHome: (gas, req) => {
+    const h = gas.familyRequire_(req);
+    if (h.error) return h;
+    return {
+      ok: true,
+      family: gas.familyPublic_(h.account),
+      children: gas.familyChildren_(h.account, false),
+      billing: gas.familyBilling_(h.account, false),
+      emailPrefs: gas.familyEmailPrefs_(h.account.id),
+    };
+  },
+  familyNotices: (gas, req) => {
+    const n = gas.familyRequire_(req);
+    return n.error ? n : gas.familyNotices_(n.account, req);
+  },
+  familyData: (gas, req) => {
+    const d = gas.familyChildRequire_(req);
+    return d.error ? d : gas.parentDataForStudent_(d.student);
+  },
+  familyStudentState: (gas, req) => {
+    const fs = gas.familyChildRequire_(req);
+    if (fs.error) return fs;
+    const st = gas.studentState_(String((fs.student && fs.student.code) || ''));
+    if (st && typeof st === 'object') { delete st.emailStatus; st.viewer = 'family'; }
+    return st;
+  },
+};
+
 export function isReadAction(body) {
   const action = String((body && body.action) || '');
   if (action === 'state') return true;
+  if (Object.prototype.hasOwnProperty.call(FAMILY_READS, action)) return true;
   if (action === 'admin') return Object.prototype.hasOwnProperty.call(ADMIN_READS, String(body.op || ''));
   return false;
 }
@@ -58,6 +91,14 @@ export async function handleRead(body, env, options = {}) {
 
   // 生徒マイページ。専用リンクのコードだけで引く（GAS の doGet と同じ）
   if (action === 'state') return gas.studentState_(String(body.k || ''));
+
+  // 保護者ページ。ログインの確認は GAS の familyRequire_ が行う
+  const family = FAMILY_READS[action];
+  if (family) {
+    const res = family(gas, body);
+    if (res && typeof res === 'object') res.ms = Date.now() - started;
+    return res;
+  }
 
   const handler = ADMIN_READS[String(body.op || '')];
 

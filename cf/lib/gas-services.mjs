@@ -5,7 +5,16 @@
 // （GAS には ensureSchema_ や一度きりの移行処理のように、読みながら書く経路がある。
 //   Worker ではそれらを呼ばない。呼んでしまったらここで落ちる。）
 
+import { Buffer } from 'node:buffer';
+import { createHash, createHmac } from 'node:crypto';
+
 class ReadOnlyLedger extends Error {}
+
+// GAS は 0〜255 ではなく符号付き（-128〜127）のバイトを返す。同じ形にそろえる
+const signedBytes = buffer => Array.from(buffer, v => (v > 127 ? v - 256 : v));
+// GAS の引数は文字列か符号付きバイト列
+const toBytes = value => (typeof value === 'string' ? Buffer.from(value, 'utf8') : Buffer.from(value.map(v => (v + 256) % 256)));
+const algorithmName = algorithm => (String(algorithm || 'sha256').toLowerCase().includes('256') ? 'sha256' : String(algorithm).toLowerCase());
 
 function refuse(what) {
   throw new ReadOnlyLedger('Worker の読み取りでは台帳に書き込めません: ' + what);
@@ -106,14 +115,15 @@ export function createServices({ books, properties = {}, now = null }) {
       DigestAlgorithm: { SHA_256: 'sha256' },
       MacAlgorithm: { HMAC_SHA_256: 'sha256' },
       Charset: { UTF_8: 'utf8' },
-      // 読み取りの経路では使わない。使う経路（保護者のログインなど）を移すときに実装する
-      computeDigest: () => refuse('Utilities.computeDigest'),
-      computeHmacSha256Signature: () => refuse('Utilities.computeHmacSha256Signature'),
-      computeHmacSignature: () => refuse('Utilities.computeHmacSignature'),
-      base64Encode: () => refuse('Utilities.base64Encode'),
-      base64EncodeWebSafe: () => refuse('Utilities.base64EncodeWebSafe'),
-      base64Decode: () => refuse('Utilities.base64Decode'),
-      newBlob: () => refuse('Utilities.newBlob'),
+      // 保護者ページの読み取りは、セッションの照合で SHA-256 を使う（parentDigest_ → hashPass_）。
+      // GAS は符号付きのバイト列を返すので、そこまで同じ形にそろえる。
+      computeDigest: (algorithm, data) => signedBytes(createHash(algorithmName(algorithm)).update(toBytes(data)).digest()),
+      computeHmacSha256Signature: (data, key) => signedBytes(createHmac('sha256', toBytes(key)).update(toBytes(data)).digest()),
+      computeHmacSignature: (algorithm, data, key) => signedBytes(createHmac(algorithmName(algorithm), toBytes(key)).update(toBytes(data)).digest()),
+      base64Encode: data => toBytes(data).toString('base64'),
+      base64EncodeWebSafe: data => toBytes(data).toString('base64url'),
+      base64Decode: data => signedBytes(Buffer.from(String(data), 'base64')),
+      newBlob: data => ({ getBytes: () => signedBytes(toBytes(data)) }),
     },
     CacheService: {
       getScriptCache: () => ({

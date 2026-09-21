@@ -68,8 +68,12 @@ test('ログインしていない読み取りは断る。書き込みは Worker 
     { action: 'offer', token: TEACHER_TOKEN },
     { action: 'admin', op: 'planLineSave', token: TEACHER_TOKEN },
     { action: 'accept', k: 'synthetic-link-a' },
-    { action: 'familyData' },
+    { action: 'familyNoticeRead', ftoken: 'x', noticeId: 'y' },
   ]) assert.equal(await p.worker(body), null, JSON.stringify(body) + ' は Worker が引き受けない');
+
+  // 保護者の読み取りは引き受けるが、ログインしていなければ断る
+  const family = await p.worker({ action: 'familyData', studentId: 'test-a' });
+  assert.ok(family && family.error, '保護者の読み取りが素通りしている');
 
   // 生徒の専用コードが違えば中身は返らない
   const unknown = await p.worker({ action: 'state', k: 'not-a-real-code' });
