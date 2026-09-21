@@ -731,3 +731,10 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - 生徒ページの見出し右に「生徒ページを見る」「保護者ページを見る」。別タブで `/yoyaku/?preview=student:<生徒ID>#home` ／ `/yoyaku/?preview=parent:<生徒ID>#family/home` を開く。同じオリジンなので、ポータルは管理画面のログイン（localStorage `sw_admt`）をそのまま使う。
 - ポータル側は `PREVIEW` を検出すると、表示に必要な読み取り（`state` / `familyStudentState` → 生徒の状態、`familyData` → 保護者向けデータ、`familyHome` → 家族の枠）だけを `action:'preview'`（`token`, `studentId`, `view`）に置き換えて送り、通知は空、それ以外の送信（登録・変更・メール設定など）は**送らずに**「先生のプレビューでは表示だけできます」を返す。上部に琥珀色のバナー「〇〇さんのマイページ／保護者ページを表示中（先生のプレビュー・表示のみ）」と管理画面へのリンク。文章入力・メール設定などは既存の `previewK` 判定で無効化される。
 - GAS `previewOp_`: 先生トークン（`tokenOk_`）を確認し、`studentState_`（`emailStatus` を除き `viewer:'preview'`）／`parentDataForStudent_`／家族の枠（`familyBilling_` に子どもリストを直接渡す）を返す。書き込みは一切ない。生徒の専用コードや保護者の認証情報は返さない。旧プレビューURL（`k` 形式）は引き続き受け付けない。
+
+### D1 移行用の台帳書き出し（2026-09-22、GAS `2026-09-22-ledger-export`）
+
+- `gas/Export.gs` を追加。台帳2冊（`ss_()` と `LEDGER_ID`）の中身を JSON にしてドライブへ書き出す、**読み取りだけ**の移行用機能。D1 への初回コピーに使う（`docs/D1_MIGRATION.md`）。
+- **`doPost` には載せていない**。外から叩ける口は増えず、スクリプトエディタで実行できる人だけが使える。関数は `exportLedgerForMigration`（開始）/ `exportLedgerResume`（続き）/ `exportLedgerStatus`（進捗）/ `exportLedgerReset`（記録だけ消す）。
+- 書き出し先は新しく作る本人だけのフォルダ。共有されていたら `backupPrivate_` が止める。日付セルは `Asia/Tokyo` で読み、時刻を持つものは `yyyy-MM-dd HH:mm:ss`、持たないものは `yyyy-MM-dd`。1ファイル2000行で分割し（`<book>.<シート>.p<N>.json`）、6分の実行制限に当たったら状態を Script Properties に残して `exportLedgerResume` で続けられる。空のシートも0件のファイルを作り、取り込み側で件数を突き合わせられるようにする。
+- 出力フォルダをダウンロードして展開し、`node scripts/ledger-to-d1.mjs --bundle <フォルダ>` に渡すと D1 に入る。書き出したファイルには生徒・保護者の個人情報が入るので手元から外へ出さない。
