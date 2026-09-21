@@ -38,7 +38,7 @@ MCP サーバー ────────────▶ 同じ Worker（token �
    - 外部キーは宣言しない。台帳には参照先が消えた行が残る（取消済みの授業など）ため。整合は取り込み後の検査で報告する。
 3. **取り込み**は `cf/lib/import.mjs`（本体）と `scripts/ledger-to-d1.mjs`（CLI）。Sheets API は使わない（新しい OAuth 権限が要る）。代わりに「書き出しの束」を読む形にして、書き出しの手段を後から選べるようにした。何度流しても同じ結果になる（主キーで置き換え）。件数はシートと突き合わせて表示する。
 
-### 段階 B: 読み取りを Worker へ（最初の体感改善）
+### 段階 B: 読み取りを Worker へ（最初の体感改善）— **途中（2026-09-22）**。8 節も見る
 1. Worker に読み取り系 action を実装: `state`, `familyStudentState`, `familyData`, `familyHome`, `familyNotices`, `kanriStudent`, `kanriDashboard`, `data`（管理画面の一覧）, `billingPreview`, `preview`。GAS の対応関数（`studentState_`, `kanriStudentOp_`, `kanriDashboard_`, `familyView_`, `billingPreview_`, `previewOp_`）の**返す JSON をそのまま再現**する。
 2. 同期: GAS 側の書き込み後に Worker の `/sync` へ「変わったシート名と id」を UrlFetch で通知し、Worker が Sheets API で該当行だけ取り直す（全量取り込みは段階 A のスクリプトで日次）。GAS の書き込み関数は `ledgerAppend_/ledgerUpdate_` 系に集約されているので、そこに 1 か所フックを足す。
 3. フロント: `assets/portal.js` と `kanri/index.html` の `apiPost` で「読み取り action は Worker、それ以外は GAS」に振り分ける表を持つ。失敗時は GAS にフォールバック。
@@ -183,3 +183,58 @@ C は段階 B の差分同期でいずれ必要になるが、「台帳を丸ご
 2. `wrangler d1 create stepwise` で本番 D1 を作り、`cf/wrangler.jsonc` の `database_id` を差し替える。
 3. `npm run cf:migrate:local` / `npm run cf:migrate:remote` でスキーマを当てる。
 4. 並走テスト（`test/parity/`）の受け皿を作る。D1 側は `test/helpers/d1-harness.cjs` をそのまま使えるので、GAS ハーネスと同じ台帳を両方に入れて action ごとに比べる形にする。
+
+## 8. 段階 B の途中経過（2026-09-22）
+
+### 方針を変えた: 作り直さず、同じコードをデータ層だけ差し替えて動かす
+
+当初は「GAS の関数が返す JSON を Worker 側で再現する」つもりだった。実際に読んでみると
+`studentState_` だけでも 20 近い補助関数にぶら下がっていて、請求や承認の判定を写し間違えると
+お金と保護者への表示に直接ひびく。
+
+一方で GAS の計算は素の JavaScript で、Google に依存しているのは**シートを読む所だけ**だった。
+そこで `gas/*.gs` をそのまま Worker に載せ、シートの代わりに D1 を読ませる形にした。
+作り直していないので「返す JSON が同じ」ことを比べて確かめるまでもなく、コードが同一である
+ことで担保できる。実際に 8 つの読み取り経路で 1 文字も違わないことを確認した。
+
+```
+cf/worker/read.mjs ─ createGas(サービス一式) ← scripts/build-gas-bundle.mjs が gas/*.gs から生成
+                       └ SpreadsheetApp の代わり ← cf/lib/sheet-view.mjs が D1 をシートの形に戻す
+```
+
+### できたもの
+
+| 置き場所 | 中身 |
+|---|---|
+| `scripts/build-gas-bundle.mjs` | `gas/*.gs` を Worker から呼べる 1 モジュールに。`cf/migrations` から表ごとの列も生成。wrangler の `build.command` で dev / deploy のたびに走る |
+| `cf/lib/gas-services.mjs` | Google サービスの代わり。**読み取り専用**で、書き込み・メール・カレンダー・外部通信はその場で例外。時計も差し替えられる（並走テスト用） |
+| `cf/lib/sheet-view.mjs` | D1 → シートの形。真偽値は列ごとの書き方に戻す |
+| `cf/worker/read.mjs` | `state`（生徒マイページ）と管理画面の `kanriDashboard` / `kanriStudent` / `billingPreview` / `state`。引き受けない操作は null |
+| `test/parity-reads.test.cjs` / `test/parity-worker.test.cjs` | 並走テスト。GAS と Worker が同じ JSON を返すこと、ログイン不可を断ること、読み取り中に書こうとしたら止まることを確認 |
+
+### 測ったもの（実台帳 372 行、`wrangler dev` のローカル D1）
+
+| 処理 | 時間 |
+|---|---|
+| 台帳の読み込み（45 表） | 9 ms |
+| 読み取り 2 件の計算 | 2 ms |
+| 参考: 同じ画面の GAS 側 | 3,700〜5,500 ms |
+
+### D1 で引っかかった制約
+
+- **PRAGMA を実行できない**（`pragma table_info` も表関数の `pragma_table_info(...)` も `SQLITE_AUTH`）。列の一覧は `cf/migrations` から生成した表（`cf/worker/generated/schema.mjs`）を使う。
+- `sqlite_%` `d1_%` に加えて **`_cf_%` の内部表も読めない**。表の一覧から外す。
+- **表ごとに問い合わせると遅い**。45 表を順に読むと 180ms。`db.batch()` で 1 回にまとめて 9ms。
+
+### 守っている安全側の作り
+
+- Worker は `doPost` / `doGet` を通さず、必要な関数だけ直に呼ぶ。あちらは実行のたびに排他を取り、`ensureSchema_` から一度きりの移行処理まで走らせる（＝読みながら書く）ため。
+- 台帳は読み取り専用。書こうとしたら黙って進まず例外にする。`ANTHROPIC_API_KEY` は Worker に置かず、「設定済みかどうか」の印だけを渡す。
+- 引き受けない操作は `null`（HTTP では 501）を返すので、呼び出し側はそのまま GAS に回せる。
+
+### 残り（次にやること）
+
+1. **同期**: GAS が書き込んだあとに変わった行を Worker へ送る。これが無いと D1 が古いままになる。
+2. **振り分け**: `assets/portal.js` と `kanri/index.html` で読み取りだけ Worker に向け、失敗したら GAS に戻す。
+3. 1 と 2 は**必ず同時に入れる**。同期の無いまま画面を切り替えると、先生が登録した直後の予定が画面に出ない。
+4. そのあと保護者ページの読み取り（`familyData` など）。こちらは認証で digest を使うので、`Utilities.computeDigest` の実装が要る。
