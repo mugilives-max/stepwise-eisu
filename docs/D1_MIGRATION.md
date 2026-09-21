@@ -232,9 +232,39 @@ cf/worker/read.mjs ─ createGas(サービス一式) ← scripts/build-gas-bundl
 - 台帳は読み取り専用。書こうとしたら黙って進まず例外にする。`ANTHROPIC_API_KEY` は Worker に置かず、「設定済みかどうか」の印だけを渡す。
 - 引き受けない操作は `null`（HTTP では 501）を返すので、呼び出し側はそのまま GAS に回せる。
 
-### 残り（次にやること）
+### 同期と振り分け（2026-09-22、GAS `2026-09-22-worker-sync`）
 
-1. **同期**: GAS が書き込んだあとに変わった行を Worker へ送る。これが無いと D1 が古いままになる。
-2. **振り分け**: `assets/portal.js` と `kanri/index.html` で読み取りだけ Worker に向け、失敗したら GAS に戻す。
-3. 1 と 2 は**必ず同時に入れる**。同期の無いまま画面を切り替えると、先生が登録した直後の予定が画面に出ない。
-4. そのあと保護者ページの読み取り（`familyData` など）。こちらは認証で digest を使うので、`Utilities.computeDigest` の実装が要る。
+**同期**（`gas/Sync.gs` → `cf/worker/sync.mjs`）
+
+- 書き込み用にシートを取った時点で目印を付け（`sheet_` / `ledgerSheet_`）、`doPost` の最後に
+  変わったシートだけを Worker の `/sync` へ送る。1 回の書き込みで送るのは 3 シートほど（台帳は 34 シート）。
+- **丸ごと置き換える**ので、消えた行（断られた案内など）も D1 から消える。
+- 共有の鍵（24 文字以上）を知っている呼び出しだけ受け付ける。設定が無ければ何も送らない。
+- 送信に失敗しても応答は壊さず、取りこぼしたシートを覚えて次の書き込みでまとめて送り直す。
+- `resyncLedgerToWorker`（エディタから手で実行）で台帳ぜんぶを送り直せる。
+
+**振り分け**（`assets/portal.js` / `kanri/index.html`）
+
+- `READ_API` を設定したときだけ、読み取りを Worker に向ける。引き受けない（501）・失敗・通信不能
+  なら、中身を変えずにそのまま Apps Script へ回す。**書き込みは常に Apps Script**。
+- 既定は `READ_API=""` で**無効**。本番の動きは今と変わらない。
+
+### 本番で有効にする手順（まだ実施していない）
+
+1. `npx wrangler d1 create stepwise` を実行し、出た `database_id` を `cf/wrangler.jsonc` に書く。
+2. `npm run cf:migrate:remote` でスキーマを当てる。
+3. 台帳を入れる。`node scripts/ledger-to-d1.mjs --bundle <書き出しフォルダ> --sql out.sql` で SQL を作り、
+   `npx wrangler d1 execute DB --config cf/wrangler.jsonc --remote --file out.sql` で流す。
+4. 同期の鍵を決める（24 文字以上のランダムな文字列を 1 つ）。**先生が作って、次の 2 か所に同じ値を入れる**。
+   - `npx wrangler secret put SYNC_KEY --config cf/wrangler.jsonc`
+   - Apps Script のプロジェクトの設定 → スクリプト プロパティ → `WORKER_SYNC_KEY`
+5. `npm run cf:deploy` で Worker を公開し、URL を確認する。
+6. Apps Script のスクリプト プロパティに `WORKER_SYNC_URL`（Worker の URL + `/sync`）を入れる。
+7. Apps Script から `resyncLedgerToWorker` を実行し、台帳ぜんぶを D1 に送る。
+8. `assets/portal.js` と `kanri/index.html` の `READ_API` に Worker の URL を入れて公開する。
+   ここで初めて画面が速くなる。おかしければ `READ_API` を空に戻すだけで元に戻る。
+
+### 残り
+
+- 保護者ページの読み取り（`familyData` など）。認証でハッシュを使うので `Utilities.computeDigest` の実装が要る。
+- 段階 C（書き込みの移行）。メール・カレンダー・ドライブが絡むので、当面 GAS に残す方針は変えない。

@@ -743,3 +743,9 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 
 - スプレッドシートの「時刻だけ」のセルは **1899-12-30 を基準日**にした日時として保存される。`exportCell_` はこれを `normTime_` と同じく `HH:mm` で出す（実台帳の取り込みで `slots.start` が `1899-12-30 07:30:00` になって判明）。`cf/lib/import.mjs` も同じ形を受けたら基準日を落とすので、直す前に作った書き出しでも取り込み直せば正しく入る。
 - GAS が読まない「一覧」シート（授業を人が見るための並べ替え表）は取り込みの対象外として扱う（`VIEW_SHEETS`）。移行後はスプレッドシート側を D1 から作り直す対象。
+
+### D1 への同期と読み取りの振り分け（2026-09-22、GAS `2026-09-22-worker-sync`）
+
+- `gas/Sync.gs` を追加。`sheet_()` / `ledgerSheet_()` で書き込み対象になったシートを覚え、`doPost` の最後に変わったシートだけを Worker の `/sync` へ送る（`syncPush_`）。送信は一方通行で、Worker から台帳へは書かない。失敗しても応答は壊さず、取りこぼしは次の書き込みで送り直す。`resyncLedgerToWorker` で台帳ぜんぶを送り直せる。
+- 設定は Script Properties の `WORKER_SYNC_URL` と `WORKER_SYNC_KEY`（24文字以上）。どちらか無ければ何もしない＝従来どおり。鍵は Worker 側の secret `SYNC_KEY` と同じ値にする。
+- 画面側（`assets/portal.js` / `kanri/index.html`）に `READ_API` を追加。設定したときだけ読み取りを Worker へ向け、引き受けない（501）・失敗・通信不能ならそのまま Apps Script へ回す。書き込みは常に Apps Script。**既定は空で無効**なので、今の本番の動きは変わらない。有効にする手順は `docs/D1_MIGRATION.md` の 8 節。
