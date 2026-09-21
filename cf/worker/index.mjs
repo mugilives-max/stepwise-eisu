@@ -4,6 +4,7 @@
 // 呼び出し側（assets/portal.js / kanri/index.html）が GAS へ回せるようにする。
 // 本番の GAS と同じ入出力の形（{action,...} -> {ok|error,...}）を保つことが移行の安全弁。
 import { health } from "./health.mjs";
+import { handleRead } from "./read.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -29,6 +30,24 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: head });
 
     const url = new URL(request.url);
+    // 生徒マイページは GET で読む（GAS の doGet と同じ）
+    if (request.method === "GET" && url.searchParams.get("action") === "state") {
+      try {
+        return reply(await handleRead({ action: "state", k: url.searchParams.get("k") || "" }, env), 200, head);
+      } catch (e) {
+        return reply({ error: "読み取りに失敗しました", errorCode: "workerError" }, 500, head);
+      }
+    }
+    // 開発時（AUTH_MODE=mock）だけの調査用。D1 は PRAGMA や内部の表を断るので、
+    // どの問い合わせで止まるのかを順に試せるようにしてある。本番では出さない。
+    if (request.method === "GET" && url.searchParams.get("debug") === "d1" && env.AUTH_MODE === "mock") {
+      const steps = [];
+      const run = async (label, fn) => { try { steps.push({ label, ok: true, value: await fn() }); } catch (e) { steps.push({ label, ok: false, error: String((e && e.message) || e).slice(0, 120) }); } };
+      await run("表の一覧", async () => { const { results } = await env.DB.prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like 'd1_%' and name not like '_cf_%'").all(); return results.length; });
+      await run("台帳の読み込みms", async () => { const { createRuntime } = await import("./read.mjs"); const t0 = Date.now(); await createRuntime(env); return Date.now() - t0; });
+      await run("読み取りms", async () => { const { createRuntime } = await import("./read.mjs"); const gas = await createRuntime(env); const t0 = Date.now(); gas.studentState_("no-such-code"); gas.kanriDashboard_(); return Date.now() - t0; });
+      return reply({ steps }, 200, head);
+    }
     // 疎通確認。GAS の doGet と同じ形を返す（release だけは worker 版と分かる文字列）。
     if (request.method === "GET") return reply(await health(env), 200, head);
 
@@ -43,7 +62,20 @@ export default {
     const action = String((body && body.action) || "");
     if (!action) return reply({ error: "action がありません" }, 400, head);
 
-    // 段階 B で読み取り action を足す。ここに載るまでは呼び出し側が GAS を使う。
+    // 読み取りは D1 から返す。GAS のコードをそのまま動かすので応答は同じ（cf/worker/read.mjs）。
+    // 書き込みと、まだ載せていない読み取りは 501 を返し、呼び出し側が GAS に回す。
+    // 開発時（AUTH_MODE=mock）だけ、失敗した問い合わせを控えて原因を追えるようにする。
+    // 本番では中身を返さない（台帳の構造を外に出さないため）。
+    const dev = env.AUTH_MODE === "mock";
+    let lastSql = "";
+    const scope = dev ? { ...env, DB: { ...env.DB, prepare: (sql) => { lastSql = sql; return env.DB.prepare(sql); }, batch: (s) => env.DB.batch(s) } } : env;
+    try {
+      const res = await handleRead(body, scope);
+      if (res !== null) return reply(res, 200, head);
+    } catch (e) {
+      const detail = dev ? { detail: String((e && e.message) || e).slice(0, 200), sql: lastSql.slice(0, 200) } : {};
+      return reply({ error: "読み取りに失敗しました", errorCode: "workerError", ...detail }, 500, head);
+    }
     return reply({ error: "この操作はまだ Worker にありません", errorCode: "notImplemented", action: action }, 501, head);
   },
 };

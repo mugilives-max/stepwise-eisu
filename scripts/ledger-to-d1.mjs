@@ -78,6 +78,12 @@ function d1Over(db) {
     async first() { const r = db.prepare(sql).get(...bound); return r ? { ...r } : null; },
     async all() { return { results: db.prepare(sql).all(...bound).map(r => ({ ...r })), success: true, meta: {} }; },
     async run() { const r = db.prepare(sql).run(...bound); return { success: true, meta: { changes: Number(r.changes || 0) } }; },
+    async raw(options) {
+      const rows = db.prepare(sql).all(...bound);
+      const names = rows.length ? Object.keys(rows[0]) : [];
+      const body = rows.map(r => names.map(n => r[n]));
+      return options && options.columnNames ? (names.length ? [names, ...body] : []) : body;
+    },
   });
   return {
     prepare: sql => stmt(sql, []),

@@ -72,7 +72,34 @@ async function createParity(source) {
     return true;
   }
 
-  return { d1, mirror, source, compare, diffs, imported };
+  // Worker と同じ入口（cf/worker/read.mjs）を、この D1 の上で呼べるようにする
+  const env = { DB: d1, NL_ENABLED: '0' };
+  // 台帳側のハーネスは時刻を固定しているので、Worker 側も同じ時刻に合わせる
+  const options = { now: source.now() };
+  async function worker(body) {
+    const { handleRead } = await import('../../cf/worker/read.mjs');
+    return handleRead(body, env, options);
+  }
+
+  /** GAS（台帳）の結果と Worker（D1）の結果を比べる。 */
+  async function compareWorker(label, gasFn, body) {
+    let a, b;
+    try { a = JSON.stringify(JSON.parse(JSON.stringify(gasFn(source)))); } catch (e) { a = '例外: ' + (e && e.message || e); }
+    try { b = JSON.stringify(JSON.parse(JSON.stringify(await worker(body)))); } catch (e) { b = '例外: ' + (e && e.message || e); }
+    // 処理時間は毎回変わるので比較から外す
+    const strip = s => s.replace(/,?"ms":\d+/g, '').replace(/,?"timings":\{[^}]*\}/g, '');
+    if (strip(a) !== strip(b)) {
+      const sa = strip(a), sb = strip(b);
+      let i = 0;
+      while (i < sa.length && i < sb.length && sa[i] === sb[i]) i++;
+      diffs.push(`${label}\n  GAS   : ${sa.slice(Math.max(0, i - 60), i + 80)}\n  Worker: ${sb.slice(Math.max(0, i - 60), i + 80)}`);
+      return false;
+    }
+    if (strip(a).length < 3) diffs.push(`${label}: 中身のない結果を比べている（${a}）`);
+    return true;
+  }
+
+  return { d1, mirror, source, compare, compareWorker, worker, env, diffs, imported };
 }
 
 module.exports = { createParity, bundleOf };

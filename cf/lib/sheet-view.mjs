@@ -50,24 +50,57 @@ function cellOf(table, column, value) {
 }
 
 export async function tableNames(db) {
+  // sqlite_% / d1_% / _cf_% は仕組み側の表。D1 では中身を読もうとすると断られる（SQLITE_AUTH）
   const { results } = await db.prepare(
-    "select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like 'd1_%' order by name").all();
+    "select name from sqlite_master where type='table'" +
+    " and name not like 'sqlite_%' and name not like 'd1_%' and name not like '_cf_%'" +
+    ' order by name').all();
   return results.map(r => String(r.name)).filter(n => !NOT_A_SHEET.includes(n));
 }
 
-/** 1 つの表を、見出し行つきの二次元配列（シートの getValues と同じ形）にする。 */
-export async function sheetValues(db, table) {
-  const info = await db.prepare(`pragma table_info(${quoteIdent(table)})`).all();
-  const columns = info.results.map(r => String(r.name)).filter(c => !HIDDEN_COLUMNS.includes(c));
-  if (!columns.length) return [];
-  const hasSheetRow = info.results.some(r => String(r.name) === '_sheetRow');
-  const order = hasSheetRow ? 'order by _sheetRow' : '';
-  const { results } = await db.prepare(`select * from ${quoteIdent(table)} ${order}`).all();
-  return [columns].concat(results.map(row => columns.map(c => cellOf(table, c, row[c]))));
+/** 1 つの表を、見出し行つきの二次元配列（シートの getValues と同じ形）にする。
+ *
+ * D1 は PRAGMA を実行できない（`pragma table_info` も `pragma_table_info(...)` も
+ * SQLITE_AUTH で断られる）ので、列は呼び出し側から渡してもらう
+ * （cf/worker/generated/schema.mjs。cf/migrations から自動生成している）。
+ * 渡されなければ問い合わせの結果に付いてくる列名を使う（0 件の表でも取れる）。 */
+export async function sheetValues(db, table, knownColumns) {
+  const rows = knownColumns
+    ? [knownColumns].concat((await db.prepare(orderedSelect(table)).raw()))
+    : await db.prepare(orderedSelect(table)).raw({ columnNames: true });
+  return shapeRows(table, rows);
+}
+
+// _sheetRow はシート上の行番号。並びを元のシートと同じにするために使う
+function orderedSelect(table) {
+  return `select * from ${quoteIdent(table)} order by _sheetRow`;
+}
+
+function shapeRows(table, rows) {
+  if (!rows.length) return [];
+  const all = rows[0].map(String);
+  const keep = all.map((name, i) => [name, i]).filter(([name]) => !HIDDEN_COLUMNS.includes(name));
+  if (!keep.length) return [];
+  return [keep.map(([name]) => name)]
+    .concat(rows.slice(1).map(row => keep.map(([name, i]) => cellOf(table, name, row[i]))));
 }
 
 /** 台帳2冊ぶんをまとめて作る。GAS のハーネスや Worker にそのまま渡せる。 */
-export async function books(db) {
+export async function books(db, tableColumns) {
+  // 列が分かっているときは 1 回のまとめ問い合わせで全部読む。
+  // 表ごとに問い合わせると D1 では 1 回ごとの往復が効いて、45 表で 180ms ほどかかる。
+  if (tableColumns) {
+    const names = Object.keys(tableColumns).filter(n => !NOT_A_SHEET.includes(n));
+    const answers = await db.batch(names.map(n => db.prepare(orderedSelect(n))));
+    const app = {}, ledger = {};
+    names.forEach((name, i) => {
+      const columns = tableColumns[name];
+      const body = (answers[i].results || []).map(row => columns.map(c => row[c]));
+      const values = shapeRows(name, [columns].concat(body));
+      if (values.length) (LEDGER_TABLES.includes(name) ? ledger : app)[name] = values;
+    });
+    return { app, ledger };
+  }
   const app = {}, ledger = {};
   for (const name of await tableNames(db)) {
     const values = await sheetValues(db, name);

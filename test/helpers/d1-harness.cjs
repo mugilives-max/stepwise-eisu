@@ -18,10 +18,19 @@ function meta(started, changes) {
   return { duration: Date.now() - started, changes: changes || 0, last_row_id: 0, rows_read: 0, rows_written: 0 };
 }
 
+// 0 件のときでも列名を返せるように、問い合わせ先の表から列名を引く
+function columnsOf(db, sql) {
+  const m = /from\s+"?([^\s"]+)"?/i.exec(sql);
+  if (!m) return [];
+  try { return db.prepare(`pragma table_info(${JSON.stringify(m[1]).replace(/"/g, '')})`).all().map(r => r.name); }
+  catch (e) { return []; }
+}
+
 function statement(db, sql, bound) {
   const withArgs = args => statement(db, sql, args);
   const prep = () => db.prepare(sql);
   return {
+    _isSelect: /^\s*select/i.test(sql),
     bind: (...args) => withArgs(args),
     async first(column) {
       const row = prep().get(...bound) || null;
@@ -38,8 +47,12 @@ function statement(db, sql, bound) {
       const r = prep().run(...bound);
       return { results: [], success: true, meta: { ...meta(started, Number(r.changes || 0)), last_row_id: Number(r.lastInsertRowid || 0) } };
     },
-    async raw() {
-      return prep().all(...bound).map(r => Object.values(r));
+    // D1 と同じく、columnNames を指定すると 1 行目が列名になる
+    async raw(options) {
+      const rows = prep().all(...bound);
+      const names = rows.length ? Object.keys(rows[0]) : columnsOf(db, sql);
+      const body = rows.map(r => names.map(n => r[n]));
+      return options && options.columnNames ? (names.length ? [names, ...body] : []) : body;
     },
   };
 }
@@ -54,7 +67,14 @@ function createD1(opts) {
   }
   const binding = {
     prepare: sql => statement(db, sql, []),
-    async batch(stmts) { const out = []; db.exec('begin'); try { for (const s of stmts) out.push(await s.run()); db.exec('commit'); } catch (e) { db.exec('rollback'); throw e; } return out; },
+    // D1 と同じく、select は結果を返し、それ以外は実行結果を返す
+    async batch(stmts) {
+      const out = [];
+      db.exec('begin');
+      try { for (const s of stmts) out.push(s._isSelect ? await s.all() : await s.run()); db.exec('commit'); }
+      catch (e) { db.exec('rollback'); throw e; }
+      return out;
+    },
     async exec(sql) { db.exec(sql); return { count: 0, duration: 0 }; },
     _sqlite: db,
     _applied: applied,

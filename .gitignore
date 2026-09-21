@@ -7,3 +7,4 @@ node_modules/
 .wrangler/
 *.sqlite
 *.sqlite-journal
+cf/worker/generated/

@@ -5,10 +5,14 @@
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "stepwise-api",
   "main": "worker/index.mjs",
+  // gas/*.gs を Worker から呼べる形にまとめ直す（cf/worker/generated/gas.mjs）。
+  // dev と deploy の前に必ず走るので、GAS を直したら Worker 側にも自動で反映される。
+  // 走るのはリポジトリの直下から（npm run cf:dev / cf:deploy を使うこと）
+  "build": { "command": "node scripts/build-gas-bundle.mjs" },
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  "vars": { "ALLOW_ORIGIN": "https://www.stepwise-education.jp" },
+  "vars": { "ALLOW_ORIGIN": "https://www.stepwise-education.jp", "NL_ENABLED": "1" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,7 +24,7 @@
   ],
   "env": {
     "local": {
-      "vars": { "ALLOW_ORIGIN": "*", "AUTH_MODE": "mock" },
+      "vars": { "ALLOW_ORIGIN": "*", "AUTH_MODE": "mock", "NL_ENABLED": "0" },
       "d1_databases": [
         {
           "binding": "DB",
