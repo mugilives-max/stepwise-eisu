@@ -276,6 +276,15 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 2026-09-09 13:16 JST、既存URL・デプロイIDを維持して GAS v54 へ更新。`release: 2026-09-09-mcp-inbox`。変更は `Code.gs` のみ(MCP 連絡欄 op と処理ジャーナル、登録 op の紐づけ検証)。公開前にエディタ7ファイルのハッシュが Git HEAD(`3d67852`)と一致することを確認し、置換適用後・保存・再読み込み後にローカルと全文ハッシュ一致を確認した。新規シート `contactProcessing` は初回の claim 時に作成される(既存シートの変更なし)。
 - ローカル検証: `test/mcp-inbox.test.cjs` 6件を追加し全体 416件が通過(`npm run check` 通過)。本番は health の release、`mcpPing` の readOps / writeOps、`mcpInboxList` の応答、存在しないメッセージへの claim / resolve / 紐づけ登録の拒否を確認。実在の連絡は処理していない。MCP サーバー側は `stepwise-mcp` 0.3.0。
 
+### 6-9. v89・ensureSchema_ の呼び出し順
+
+- 2026-09-21 23:58 JST、既存URL・デプロイIDを維持して GAS v89 へ更新（前は v88）。`release: 2026-09-21-schema-order`、コードは `b03018d`。変更は `Code.gs` のみ。
+- `ensureSchema_` が `ensureEventKindCol_` を `ensureEventsSheet_` より先に呼んでいた。列を足すだけのヘルパーは対象シートが無いと黙って何もしないので、`events` シートを新規に作った台帳では `kind` 列が付かないまま6時間キャッシュされる。本番の台帳には以前から列があるため実害は出ていないが、**台帳を作り直す・複製すると生徒画面のテスト日カウントダウン（`kind === 'test'`）が静かに消える**。
+- `ensureSchema_` を「1. シートを作る」→「2. 既存シートへ列を足す」の2段に整理した。`students` / `slots` を作る `ensureSchedulingSchema_` も、その2シートへ列を足すヘルパー群より前へ移した（`planLinesMigrate_` が `students` を読む順も揃う）。本番のように全シートが揃った台帳では呼び出し順に関係なく結果は同じで、スキーマ版キー（`schemaOk23`）は据え置き。台帳の移行・列追加はない。
+- 検証: `npm run check` と `npm test` 501件が通過（`test/schema-bootstrap.test.cjs` 4件を追加）。新テストは修正前のコードでは2件が落ちることを確認済み。`gas:plan` で本番エディタが Git 基準（`aef48fe`）と全8ファイル一致することを確認してから反映した。
+- 反映時、`update-deployment` 直後の版の読み直しが古い値を返して `Deployment verification failed` で停止した。公開版・エディタ・v89 の内容を確認したうえで同じ release ID で `gas:apply` を再実行し、`Published v89` と公開 health の `2026-09-21-schema-order` を確認した。二重に版を作っていない。
+- 記録は Git 対象外の `.verification/releases/2026-09-21T14-57-50-998Z/`。画面の変更はないため Pages の再確認は不要。
+
 ## 7. 運用メモ
 
 <a id="calendar-parent-ui"></a>
