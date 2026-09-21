@@ -41,7 +41,7 @@ function createUI(hash=href()) {
   let nextId=0;
   const context={document:{getElementById:id=>elements.get(id)||null,addEventListener:(name,fn)=>on('document:'+name,fn),querySelectorAll:()=>[]},window:{scrollTo(){},addEventListener:(name,fn)=>on('window:'+name,fn),crypto:{randomUUID:()=> 'test-ui-request-'+(++nextId)}},location:{hash,search:'',href:'https://example.invalid/kanri/',pathname:'/kanri/'},history:{replaceState(){}},URL,URLSearchParams,navigator:{},localStorage:storage(local),sessionStorage:storage(session),console:{log(){}},confirm:()=>true,setTimeout:()=>0,clearTimeout(){},fetch(url,options){
     const body=options?JSON.parse(options.body):Object.fromEntries(new URL(url).searchParams);
-    return new Promise((resolve,reject)=>requests.push({body,reply:value=>resolve({json:()=>Promise.resolve(value)}),fail:()=>reject(new Error('network failed'))}));
+    return new Promise((resolve,reject)=>requests.push({url:String(url),body,reply:(value,init)=>{const status=(init&&init.status)||200;resolve({status,ok:status>=200&&status<400,json:()=>Promise.resolve(value)});},fail:()=>reject(new Error('network failed'))}));
   }};
   const source=fs.readFileSync(path.resolve(__dirname,'../kanri/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
   context.window.StepwiseBoard=require('../assets/schedule-board.js');

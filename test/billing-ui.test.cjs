@@ -78,7 +78,10 @@ test('late responses for another student cannot supply a line save student or re
 
 test('a failed student switch cannot save the previous student card still on screen', async () => {
   const ui = await ready(); ui.navigate('#s=test-b&tab=billing');
+  // 読み取りは Worker へ行く。落ちると Apps Script に回るので、そちらも落とす
+  const sent = ui.requests.length;
   ui.requests.at(-1).fail(); await flush();
+  if (ui.requests.length > sent) { ui.requests.at(-1).fail(); await flush(); }
   const before = ui.requests.length; setPlan(ui);
   assert.equal(ui.requests.length, before);
   assert.match(ui.el('toast').textContent, /画面を更新して生徒/);

@@ -215,7 +215,7 @@
            読み取りだけ Worker(D1) に向ける。速いが、まだ載っていない操作や失敗のときは
            そのまま Apps Script に回す(READ_API が空なら最初から回す＝今までどおり)。
            書き込みは常に Apps Script。Worker は台帳に書けない。 */
-        var READ_API = "";
+        var READ_API = "https://stepwise-api.stepwise-edu.workers.dev";
         var READ_ACTIONS = { state: 1 };
         var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
         function readable(body) {

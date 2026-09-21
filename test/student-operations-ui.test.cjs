@@ -79,8 +79,12 @@ test('stale offer review performs one refresh, blocks old selections, then requi
 });
 
 test('failed stale refresh leaves an explicit reload action and never confirms the outdated offer', async () => {
-  const ui = await studentReady(); await staleBatch(ui); ui.requests.at(-1).fail(); await flush();
-  assert.match(ui.html(), /最新の案内を読み込めません/); ui.click('batchall'); ui.click('batchreview'); assert.equal(ui.requests.length, 3);
+  const ui = await studentReady(); await staleBatch(ui);
+  // 読み取りは Worker へ行く。落ちると Apps Script に回るので、そちらも落とす
+  const sent = ui.requests.length;
+  ui.requests.at(-1).fail(); await flush();
+  if (ui.requests.length > sent) { ui.requests.at(-1).fail(); await flush(); }
+  assert.match(ui.html(), /最新の案内を読み込めません/); ui.click('batchall'); ui.click('batchreview');
   ui.click('batchrefresh'); assert.equal(ui.requests.at(-1).body.action, 'state'); ui.requests.at(-1).reply(state([])); await flush();
   assert.equal(ui.html().includes('data-action="batchrefresh"'), false); assert.equal(ui.html().includes('slot-a'), false);
 });

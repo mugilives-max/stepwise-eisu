@@ -7,18 +7,33 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createUI, flush } = require('./helpers/operations-ui-harness.cjs');
 
+// 出荷している画面には Worker の URL が入っている。テストでは差し替えて振る舞いを見る
 const WORKER = 'https://api.example.invalid';
+const SHIPPED = /var READ_API = "[^"]*";/;
 
-// 画面のコードは READ_API = "" で出荷する。テストではそこだけ差し替えて振る舞いを見る
 function withWorker(kind, options = {}) {
-  return createUI(kind, { ...options, source: src => src.replace('var READ_API = "";', 'var READ_API = "' + WORKER + '";') });
+  return createUI(kind, { ...options, source: src => src.replace(SHIPPED, 'var READ_API = "' + WORKER + '";') });
+}
+// 振り分けを切った状態（不具合が出たときに戻す設定）
+function withoutWorker(kind, options = {}) {
+  return createUI(kind, { ...options, source: src => src.replace(SHIPPED, 'var READ_API = "";') });
 }
 
-test('振り分けが無効なら、読み取りも今までどおり Apps Script へ行く', async () => {
-  const ui = createUI('student');
+test('出荷している画面には Worker の宛先が入っている', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  for (const rel of ['../assets/portal.js', '../kanri/index.html']) {
+    const src = fs.readFileSync(path.join(__dirname, rel), 'utf8');
+    const m = SHIPPED.exec(src);
+    assert.ok(m, rel + ' に READ_API がない');
+    assert.match(m[0], /https:\/\/[a-z0-9.-]+workers\.dev/, rel + ' の宛先が Worker ではない: ' + m[0]);
+  }
+});
+
+test('振り分けを切れば、読み取りも今までどおり Apps Script へ行く', async () => {
+  const ui = withoutWorker('student');
   await flush();
   assert.equal(ui.requests.length, 1);
-  assert.match(ui.requests[0].url, /script\.google\.com/);
+  assert.match(ui.requests[0].url, /script\.google\.com/, '空にすれば元の経路に戻る');
 });
 
 test('生徒マイページの読み取りは Worker へ行き、書き込みは Apps Script へ行く', async () => {
