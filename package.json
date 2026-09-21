@@ -10,11 +10,17 @@
     "gas:apply": "node scripts/gas-release.cjs apply",
     "gas:stage": "node scripts/gas-release.cjs stage",
     "gas:rollback": "node scripts/gas-release.cjs rollback",
-    "test:backup-release": "node --test test/backup-release.test.cjs"
+    "test:backup-release": "node --test test/backup-release.test.cjs",
+    "cf:import": "node scripts/ledger-to-d1.mjs",
+    "cf:dev": "wrangler dev --config cf/wrangler.jsonc --env local --persist-to .wrangler/state --port 8787",
+    "cf:migrate:local": "wrangler d1 migrations apply DB --config cf/wrangler.jsonc --local --env local --persist-to .wrangler/state",
+    "cf:migrate:remote": "wrangler d1 migrations apply DB --config cf/wrangler.jsonc --remote",
+    "cf:deploy": "wrangler deploy --config cf/wrangler.jsonc"
   },
   "devDependencies": {
     "@google/clasp": "3.4.1",
     "@noble/hashes": "1.8.0",
-    "esbuild": "0.25.9"
+    "esbuild": "0.25.9",
+    "wrangler": "4.136.0"
   }
 }

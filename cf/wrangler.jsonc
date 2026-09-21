@@ -1,0 +1,34 @@
+{
+  // ステップワイズの API Worker。画面は GitHub Pages のまま、ここは JSON API だけを返す。
+  // 最上位が本番、env.local が開発用。Time Hub / Money Hub と同じ形にしてある。
+  // 秘密（TEACHER_TOKEN 等）は `wrangler secret put` で登録し、このファイルには書かない。
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "stepwise-api",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": { "ALLOW_ORIGIN": "https://www.stepwise-education.jp" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stepwise",
+      // 本番 D1。`wrangler d1 create stepwise` の出力で置き換える（docs/D1_MIGRATION.md 段階 A）。
+      "database_id": "PLACEHOLDER-CREATE-WITH-WRANGLER-D1-CREATE",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "env": {
+    "local": {
+      "vars": { "ALLOW_ORIGIN": "*", "AUTH_MODE": "mock" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "stepwise-local",
+          "database_id": "00000000-0000-4000-8000-000000000001",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}

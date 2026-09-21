@@ -29,10 +29,14 @@ MCP サーバー ────────────▶ 同じ Worker（token �
 
 各段階の終わりに `npm test` fail 0、【テスト】生徒での実操作、`docs/SYSTEM.md` への追記を行う。
 
-### 段階 A: 準備（半日）
-1. `cf/` ディレクトリを新設（Workers プロジェクト、wrangler、D1 バインディング、`migrations/`）。Task Hub の構成をコピーして命名だけ変える。
-2. D1 スキーマ（3 節）を `migrations/0001_init.sql` に起こす。日付は `TEXT 'YYYY-MM-DD'`、時刻は `TEXT 'HH:MM'`、真偽は `INTEGER 0/1`、金額は `INTEGER 円`。すべての表に `updated_at TEXT` を持たせる。
-3. **取り込みスクリプト** `scripts/sheets-to-d1.mjs`: スプレッドシートを Sheets API（既存の `gas-release.cjs` のログイン資格を流用）で読み、D1 に upsert。何度流しても同じ結果になること（冪等）。まずテスト用 D1 に流し、行数がシートと一致することを確認する。
+### 段階 A: 準備（半日）— **ほぼ完了（2026-09-21）**。結果と残りは 7 節
+
+1. `cf/` を新設（`wrangler.jsonc` / `worker/` / `lib/` / `migrations/`）。Time Hub・Money Hub と同じ設定の形（最上位が本番・`env.local` が開発用、D1 バインディングは `DB`、秘密は `wrangler secret`）にした。ただし**中身は素の JavaScript**。Time Hub は TypeScript + drizzle + React だが、このリポジトリは build 無し・`node --test`・CommonJS なので、そちらへ合わせた方が移行中の並走テストが書きやすい。
+2. D1 スキーマは `cf/migrations/0001_init.sql`。**45 表**（当初の想定 38 + 7。7 節）。日付 `TEXT 'YYYY-MM-DD'`、時刻 `TEXT 'HH:MM'`、年月 `TEXT 'YYYY-MM'`、真偽 `INTEGER 0/1`、金額・分数 `INTEGER`。
+   - 表名・列名は**シートの見出しそのまま**。GAS の `readRows_` / `ledgerRows_` が返すキーと 1 対 1 になり、並走テストが機械的に書ける。塾管理台帳の 5 シートは日本語のまま。
+   - 「すべての表に `updated_at`」は取りやめ。業務列の `updatedAt` と紛らわしいので、取り込み用は `_syncedAt`（最後に台帳から入れた時刻）と `_sheetRow`（シート上の行番号）にした。
+   - 外部キーは宣言しない。台帳には参照先が消えた行が残る（取消済みの授業など）ため。整合は取り込み後の検査で報告する。
+3. **取り込み**は `cf/lib/import.mjs`（本体）と `scripts/ledger-to-d1.mjs`（CLI）。Sheets API は使わない（新しい OAuth 権限が要る）。代わりに「書き出しの束」を読む形にして、書き出しの手段を後から選べるようにした。何度流しても同じ結果になる（主キーで置き換え）。件数はシートと突き合わせて表示する。
 
 ### 段階 B: 読み取りを Worker へ（最初の体感改善）
 1. Worker に読み取り系 action を実装: `state`, `familyStudentState`, `familyData`, `familyHome`, `familyNotices`, `kanriStudent`, `kanriDashboard`, `data`（管理画面の一覧）, `billingPreview`, `preview`。GAS の対応関数（`studentState_`, `kanriStudentOp_`, `kanriDashboard_`, `familyView_`, `billingPreview_`, `previewOp_`）の**返す JSON をそのまま再現**する。
@@ -54,7 +58,9 @@ MCP サーバー ────────────▶ 同じ Worker（token �
 
 ## 3. シート → 表の対応
 
-GAS が読む 38 シート（列は各 `ensure*_` 関数と `readRows_` の利用箇所が正）。同名で D1 の表にする。
+台帳は**2冊**ある。予約・管理の台帳（GAS の `ss_()`）と塾管理台帳（`LEDGER_ID`）。同名で D1 の表にする。列の正本は各 `ensure*_` 関数と `*_COLS_` 定数（`docs/SYSTEM.md` の一覧は一部古い）。
+
+**予約・管理の台帳（40 表）**
 
 | 群 | シート |
 |---|---|
@@ -62,12 +68,22 @@ GAS が読む 38 シート（列は各 `ensure*_` 関数と `readRows_` の利�
 | 予定 | slots, blocked, teacherOff, wishes, events, tasks, plans, planComments |
 | 案内・編集 | offerEdits, acceptWrites, cancellationRequests, slotChangeNotices |
 | 授業計画・請求 | planLines, monthAgreements, approvalEvents |
-| 授業記録 | lessonRecords, lessonWrites, lessonReportDrafts, lessonPublicSnapshots, lessonReadReceipts, examReports |
+| 授業記録 | lessonRecords, lessonPreparations, lessonPrivateNotes, lessonWrites, lessonReportDrafts, lessonPublicSnapshots, lessonReadReceipts, examReports |
 | 保護者 | familyAccounts, familyChallenges, familyLinks, familyEmailPrefs, familyNoticeReads, familyOutbox |
 | 生徒メール | studentEmails, studentEmailPrefs, studentEmailOutbox |
 | 連絡・MCP・監査 | contactMessages, contactProcessing, mcpLog, log |
 
-索引の最低限: `slots(studentId,date)`, `events(studentId,dateTo)`, `planLines(studentId,status)`, `familyLinks(accountId)`, `lessonRecords(slotId)`, `log(createdAt)`。
+**塾管理台帳（5 表）** — 表名・列名は日本語のまま。読むときの別名は次のとおり。
+
+| シート | 中身 | 別名（コード内で使う定数名） |
+|---|---|---|
+| 入金管理 | 請求と入金。`請求ID` が主キー | `LEDGER_INVOICES` |
+| 生徒台帳 | 生徒の基本情報。`生徒ID` が主キー | `LEDGER_STUDENTS` |
+| 成績推移 | 定期テストの点数 | `LEDGER_GRADES` |
+| 模試 | 模試の成績 | `LEDGER_MOCKS` |
+| 面談記録 | 面談の記録 | `LEDGER_MEETINGS` |
+
+索引は `cf/migrations/0001_init.sql` に 44 本。最低限として挙げていた `slots(studentId,date)`, `events(studentId,dateTo)`, `planLines(studentId,status)`, `familyLinks(studentId)`, `lessonRecords(slotId)`, `log(time)` は入っている（`familyLinks` の親側の列名は `accountId` ではなく `familyId`、`log` の時刻列は `createdAt` ではなく `time`）。
 
 ## 4. テストの方針
 
@@ -92,3 +108,56 @@ GAS が読む 38 シート（列は各 `ensure*_` 関数と `readRows_` の利�
 | D 仕上げ | 1〜2 日 |
 
 段階 B が終わった時点で体感の大半は改善する。C は action 単位で少しずつ進められ、途中で止めても GAS が動き続ける。
+
+## 7. 段階 A の結果（2026-09-21）
+
+### できたもの
+
+| 置き場所 | 中身 |
+|---|---|
+| `cf/wrangler.jsonc` | API Worker の設定。本番と `env.local`。D1 バインディングは `DB`。本番の `database_id` は `wrangler d1 create stepwise` の出力で差し替える |
+| `cf/worker/index.mjs` | 骨組み。CORS と `{action}` の受け口、GET は疎通確認。読み取り action は段階 B で足す。未実装の action は `errorCode:'notImplemented'` を返すので、呼び出し側が GAS に回せる |
+| `cf/migrations/0001_init.sql` | 45 表と 44 索引 |
+| `cf/lib/import.mjs` | 書き出しの束を D1 に入れる本体。値の直し方は D1 のスキーマ自身から決める（型表を二重に持たない） |
+| `scripts/ledger-to-d1.mjs` | 取り込みの CLI。手元のフォルダを読み、手元の SQLite に書くだけ。ネットワークへは何も送らない |
+| `test/helpers/d1-harness.cjs` | `node:sqlite` で D1 と同じ形を作るシム。wrangler を起動せずにスキーマと Worker を検証できる |
+| `test/d1-migration.test.cjs` | 5 件。`npm test` に含まれる |
+
+### 取り込みの使い方
+
+書き出しフォルダに `<app|ledger>.<シート名>.<json|csv>` を置く。CSV はスプレッドシートの「CSV をダウンロード」そのままでよい。JSON は `{sheet, headers, rows, offset}`。
+
+```bash
+node scripts/ledger-to-d1.mjs --bundle <書き出しフォルダ> --db .wrangler/test-d1.sqlite --reset
+```
+
+表ごとに「書き出しの件数 / D1 の件数 / 判定」が出る。`--sql <ファイル>` を足すと本番 D1 用の SQL も書き出す（流すのは `npx wrangler d1 execute DB --config cf/wrangler.jsonc --remote --file <ファイル>`）。
+
+検証済み: 合成台帳（【テスト】生徒のみ）35 シートを JSON と CSV の両方の経路で取り込み、件数がすべて一致。二度流しても増えない。`slots(studentId,date)` の索引が使われることも確認した。実在の台帳はまだ取り込んでいない（下記）。
+
+### 分かったこと
+
+- **表は 38 ではなく 45**。計画の一覧に無かったのは `lessonPreparations`、`lessonPrivateNotes`（`gas/LessonCycle.gs` が作る）と、塾管理台帳の 5 シート。
+- **真偽の書き方が 3 通り混在**している。native の TRUE/FALSE（`students.active`、`slots.done`）、文字列の `'true'`/`'false'`（`familyLinks.active`、`lessonKinds.active`）、文字列の `'1'`/`'0'`（`familyEmailPrefs`、`studentEmailPrefs`）。取り込みで `INTEGER 0/1` に寄せる。`familyLinks.active` は GAS 側が `=== 'true'` で厳密比較しているので、シートに native TRUE が入ると無効扱いになる。D1 では起きない。
+- **`''` と `0` を区別する列**が 3 つある（`planLines.approvedCount`、`lessonKinds.standardMin` / `standardFee`）。ここだけ NULL 可にした。
+- **`ensureSchema_` の呼び出し順に小さな不具合**。`ensureEventKindCol_` が `ensureEventsSheet_` より先に呼ばれるので、`events` シートを新規に作った直後は `kind` 列が付かない（次にスキーマ版が上がるまで）。本番の台帳には既にあるため実害は出ていない。順序を入れ替えれば直る。
+- `docs/SYSTEM.md` の列一覧は一部古い（`wishes` は 8 列ではなく 11、`planLines` は 20 列ではなく 24、`plans` は 10 列ではなく 11）。正本は `*_COLS_` 定数。
+
+### 残っている判断: 実在の台帳をどう書き出すか
+
+取り込みの仕組みはできているが、**本番の台帳からの書き出し経路は未決**。ここは先生が決める。
+
+| 案 | 手間 | 増える露出 |
+|---|---|---|
+| A. スプレッドシートから CSV を手で落とす | 45 シート分の手作業。初回だけなら現実的 | なし |
+| B. Apps Script エディタから手で実行する書き出し関数を足す（Drive に JSON を出す） | 関数を 1 つ足して 1 回押す | エディタに入れる人だけ。HTTP の口は増えない |
+| C. GAS に鍵付きの読み出し専用エンドポイントを足す | 自動化できる。段階 B の差分同期にも使える | 台帳を丸ごと読める口が 1 つ増える（Script Properties の鍵で保護） |
+
+C は段階 B の差分同期でいずれ必要になるが、「台帳を丸ごと読める口」を増やす判断なので、先生の指示を待つ。B は HTTP の口を増やさずに初回取り込みができるので、まず B で始めて、段階 B に入るときに C を検討するのが無難。
+
+### 段階 B に入る前にやること
+
+1. 書き出し経路を決めて、実在の台帳を一度取り込み、件数と主キーの重複を確認する。
+2. `wrangler d1 create stepwise` で本番 D1 を作り、`cf/wrangler.jsonc` の `database_id` を差し替える。
+3. `npm run cf:migrate:local` / `npm run cf:migrate:remote` でスキーマを当てる。
+4. 並走テスト（`test/parity/`）の受け皿を作る。D1 側は `test/helpers/d1-harness.cjs` をそのまま使えるので、GAS ハーネスと同じ台帳を両方に入れて action ごとに比べる形にする。
