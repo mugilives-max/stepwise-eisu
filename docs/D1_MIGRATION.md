@@ -38,7 +38,7 @@ MCP サーバー ────────────▶ 同じ Worker（token �
    - 外部キーは宣言しない。台帳には参照先が消えた行が残る（取消済みの授業など）ため。整合は取り込み後の検査で報告する。
 3. **取り込み**は `cf/lib/import.mjs`（本体）と `scripts/ledger-to-d1.mjs`（CLI）。Sheets API は使わない（新しい OAuth 権限が要る）。代わりに「書き出しの束」を読む形にして、書き出しの手段を後から選べるようにした。何度流しても同じ結果になる（主キーで置き換え）。件数はシートと突き合わせて表示する。
 
-### 段階 B: 読み取りを Worker へ（最初の体感改善）— **一部完了（2026-09-22）**。8 節も見る
+### 段階 B: 読み取りを Worker へ（最初の体感改善）— **完了（2026-09-22）**。8 節も見る
 1. Worker に読み取り系 action を実装: `state`, `familyStudentState`, `familyData`, `familyHome`, `familyNotices`, `kanriStudent`, `kanriDashboard`, `data`（管理画面の一覧）, `billingPreview`, `preview`。GAS の対応関数（`studentState_`, `kanriStudentOp_`, `kanriDashboard_`, `familyView_`, `billingPreview_`, `previewOp_`）の**返す JSON をそのまま再現**する。
 2. 同期: GAS 側の書き込み後に Worker の `/sync` へ「変わったシート名と id」を UrlFetch で通知し、Worker が Sheets API で該当行だけ取り直す（全量取り込みは段階 A のスクリプトで日次）。GAS の書き込み関数は `ledgerAppend_/ledgerUpdate_` 系に集約されているので、そこに 1 か所フックを足す。
 3. フロント: `assets/portal.js` と `kanri/index.html` の `apiPost` で「読み取り action は Worker、それ以外は GAS」に振り分ける表を持つ。失敗時は GAS にフォールバック。
@@ -189,7 +189,7 @@ C は段階 B の差分同期でいずれ必要になるが、「台帳を丸ご
 | 段階 | 状態 |
 |---|---|
 | A 準備・取り込み | **完了** |
-| B 読み取りを Worker へ | **一部完了**。生徒マイページと管理画面は本番で動作中。保護者ページは未対応 |
+| B 読み取りを Worker へ | **完了**。生徒・保護者・管理画面の読み取りが本番で Worker から返る |
 | C 書き込みを Worker へ | 未着手 |
 | D 仕上げ（Sheets への書き出し・MCP の向き先・PWA） | 未着手 |
 
@@ -202,7 +202,7 @@ C は段階 B の差分同期でいずれ必要になるが、「台帳を丸ご
 | `kanriDashboard`（管理画面のホーム） | Worker |
 | `billingPreview`（請求の下書き） | Worker |
 | `admin state`（管理画面の全体） | Worker |
-| `familyStudentState` / `familyData` / `familyHome` / `familyNotices`（保護者ページ） | Apps Script。認証でハッシュ（`Utilities.computeDigest`）を使うため未実装 |
+| `familyHome` / `familyData` / `familyStudentState` / `familyNotices`（保護者ページ） | Worker（2026-09-22 追加）|
 | `preview`（先生のプレビュー） | Apps Script |
 | `learningService` / `parentData` など | Apps Script |
 
@@ -290,5 +290,6 @@ cf/worker/read.mjs ─ createGas(サービス一式) ← scripts/build-gas-bundl
 
 ### 残り
 
-- 保護者ページの読み取り（`familyData` など）。認証でハッシュを使うので `Utilities.computeDigest` の実装が要る。
 - 段階 C（書き込みの移行）。メール・カレンダー・ドライブが絡むので、当面 GAS に残す方針は変えない。
+- 段階 D（Sheets への書き出し・MCP の向き先・PWA）。
+- 残っている読み取り: 先生のプレビュー（`preview`）と成績票などの `learningService`。どちらも使う頻度が低く、Apps Script のままでも困らない。

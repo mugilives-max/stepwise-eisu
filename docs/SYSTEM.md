@@ -759,4 +759,6 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - **戻し方**: `assets/portal.js` と `kanri/index.html` の `READ_API` を `""` にして公開する。これだけで全ての読み取りが Apps Script に戻る。Worker や D1 を消す必要はない。
 - **落ちても止まらない**: Worker が引き受けない操作（501）・エラー・通信不能のときは、画面が中身を変えずに Apps Script へ回す。
 - 実測（日本から、往復の中央値）: 読み取り 300〜370ms（内訳は通信 123ms + D1 の往復 1 回 + 計算 12ms）。従来の Apps Script は同じ画面で 3,700〜5,500ms。
-- 対応している読み取り: 生徒マイページ（`state`）、管理画面の `kanriDashboard` / `kanriStudent` / `billingPreview` / `state`。保護者ページの読み取りは未対応（認証でハッシュを使うため）で、Apps Script に回る。
+- 対応している読み取り: 生徒マイページ（`state`）、管理画面の `kanriDashboard` / `kanriStudent` / `billingPreview` / `state`、保護者ページの `familyHome` / `familyData` / `familyStudentState` / `familyNotices`。
+- 保護者のログインの確認は GAS の `familyRequire_` / `familyChildRequire_` をそのまま使う。セッションの照合に SHA-256（`parentDigest_`）を使うので、Worker 側は `node:crypto` で GAS と同じ符号付きバイト列を返す実装にしてある（`cf/lib/gas-services.mjs`）。値が 1 文字でも違うと保護者がログインできなくなるため、並走テストで突き合わせている。
+- 書き込みを伴う保護者の操作（`familyNoticeRead`・メール設定・ログイン/登録）は Worker に載せず、Apps Script に回る。先生のプレビュー（`preview`）と `learningService` も同様。
