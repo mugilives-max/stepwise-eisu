@@ -46,6 +46,10 @@ test('Worker の読み取りは GAS と同じ JSON を返す', async () => {
     h => h.admin('kanriStudent', { studentId: 'test-a', section: 'billing', from: 'kanri', view: 'students' }),
     { action: 'admin', op: 'kanriStudent', token: TEACHER_TOKEN, studentId: 'test-a', section: 'billing', from: 'kanri', view: 'students' });
 
+  await p.compareWorker('管理画面の生徒ページ（全部）',
+    h => h.admin('kanriStudent', { studentId: 'test-a', section: 'all', from: 'kanri', view: 'students' }),
+    { action: 'admin', op: 'kanriStudent', token: TEACHER_TOKEN, studentId: 'test-a', section: 'all', from: 'kanri', view: 'students' });
+
   await p.compareWorker('請求の下書き',
     h => h.admin('billingPreview', { studentId: 'test-a', ym: '2026-09', from: 'kanri', view: 'students' }),
     { action: 'admin', op: 'billingPreview', token: TEACHER_TOKEN, studentId: 'test-a', ym: '2026-09', from: 'kanri', view: 'students' });

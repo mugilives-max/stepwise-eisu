@@ -20,7 +20,7 @@ function ledgerWithContent() {
   h.seedPayment({ '年月': '2026-08' }); // 当月に請求を立てると確定が止まるので前月にする
   const accepted = h.accept(offered.id);
   assert.ok(!accepted.error, '見本の確定が通らない: ' + (accepted.error || ''));
-  h.admin('teacherOffAdd', { date: '2026-09-30', start: '', end: '', note: '見本' });
+  h.admin('addOff', { date: '2026-09-30', start: '', end: '', note: '見本' });
   return h;
 }
 
@@ -29,10 +29,11 @@ test('生徒マイページと管理画面の読み取りは D1 の上でも同�
 
   p.compare('生徒マイページ（state）', h => h.context().studentState_('synthetic-link-a'));
   p.compare('管理画面の生徒ページ（概要）', h => h.admin('kanriStudent', { studentId: 'test-a', section: 'overview' }));
-  p.compare('管理画面の生徒ページ（予定）', h => h.admin('kanriStudent', { studentId: 'test-a', section: 'schedule' }));
+  p.compare('管理画面の生徒ページ（設定）', h => h.admin('kanriStudent', { studentId: 'test-a', section: 'settings' }));
+  p.compare('管理画面の生徒ページ（学習）', h => h.admin('kanriStudent', { studentId: 'test-a', section: 'progress' }));
+  p.compare('管理画面の生徒ページ（全部）', h => h.admin('kanriStudent', { studentId: 'test-a', section: 'all' }));
   p.compare('管理画面の生徒ページ（請求）', h => h.admin('kanriStudent', { studentId: 'test-a', section: 'billing' }));
   p.compare('管理画面のホーム（dashboard）', h => h.context().kanriDashboard_());
-  p.compare('管理画面の全体データ（data）', h => h.admin('data'));
   p.compare('請求の下書き（billingPreview）', h => h.context().billingPreview_('test-a', '2026-09'));
   p.compare('先生のプレビュー（生徒ページ）', h => h.request({ action: 'preview', token: 'synthetic-teacher-token-only-for-test', studentId: 'test-a', view: 'student' }));
 
@@ -47,7 +48,7 @@ test('停止中の生徒・実施済みの授業など、真偽値の書き方�
 
   // 台帳では TRUE / 'true' / '1' の 3 通りが混在する。D1 は 0/1 に揃えてあるので、
   // 戻すときに列ごとの書き方へ直せていないと、ここで在籍や実施済みの判定が食い違う。
-  p.compare('生徒の一覧（在籍の判定）', hh => hh.admin('data'));
+  p.compare('生徒の一覧（在籍の判定）', hh => hh.admin('state'));
   p.compare('生徒の行（在籍の書き方そのもの）', hh => hh.context().readRows_('students').map(s => [s.id, s.active]));
   // 数値列は D1 では数値として持つので、台帳に「文字列の数字」で入っていた値は数値で戻る
   // （台帳の実データでは tokenExpiresAt などがこの形）。GAS 側はこれらを必ず Number() を

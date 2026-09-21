@@ -68,7 +68,8 @@ async function createParity(source) {
       diffs.push(`${label}\n  台帳側: ${a.slice(Math.max(0, i - 60), i + 80)}\n  D1側  : ${b.slice(Math.max(0, i - 60), i + 80)}`);
       return false;
     }
-    if (a === 'undefined' || a === 'null' || a.length < 3) diffs.push(`${label}: 中身のない結果を比べている（${a}）`);
+    // 両側とも同じエラーを返しただけ、というのは「一致した」ことにならない
+    if (a === 'undefined' || a === 'null' || a.length < 3 || /^\{"error"/.test(a)) diffs.push(`${label}: 中身のない結果を比べている（${a.slice(0, 80)}）`);
     return true;
   }
 
@@ -95,7 +96,7 @@ async function createParity(source) {
       diffs.push(`${label}\n  GAS   : ${sa.slice(Math.max(0, i - 60), i + 80)}\n  Worker: ${sb.slice(Math.max(0, i - 60), i + 80)}`);
       return false;
     }
-    if (strip(a).length < 3) diffs.push(`${label}: 中身のない結果を比べている（${a}）`);
+    if (strip(a).length < 3 || /^\{"error"/.test(strip(a))) diffs.push(`${label}: 中身のない結果を比べている（${strip(a).slice(0, 80)}）`);
     return true;
   }
 
