@@ -749,3 +749,14 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - `gas/Sync.gs` を追加。`sheet_()` / `ledgerSheet_()` で書き込み対象になったシートを覚え、`doPost` の最後に変わったシートだけを Worker の `/sync` へ送る（`syncPush_`）。送信は一方通行で、Worker から台帳へは書かない。失敗しても応答は壊さず、取りこぼしは次の書き込みで送り直す。`resyncLedgerToWorker` で台帳ぜんぶを送り直せる。
 - 設定は Script Properties の `WORKER_SYNC_URL` と `WORKER_SYNC_KEY`（24文字以上）。どちらか無ければ何もしない＝従来どおり。鍵は Worker 側の secret `SYNC_KEY` と同じ値にする。
 - 画面側（`assets/portal.js` / `kanri/index.html`）に `READ_API` を追加。設定したときだけ読み取りを Worker へ向け、引き受けない（501）・失敗・通信不能ならそのまま Apps Script へ回す。書き込みは常に Apps Script。**既定は空で無効**なので、今の本番の動きは変わらない。有効にする手順は `docs/D1_MIGRATION.md` の 8 節。
+
+### 読み取りを Worker（D1）へ（2026-09-22、GAS `2026-09-22-sync-default-url`）
+
+- 本番の Cloudflare 構成を作成し、読み取りの振り分けを**有効化**した。画面の読み取りは `https://stepwise-api.stepwise-edu.workers.dev` が D1 から返す。書き込みは従来どおり Apps Script。
+  - D1: `stepwise`（APAC）。スキーマは `cf/migrations/0001_init.sql`。台帳は GAS の `resyncLedgerToWorker` が全シートを送って同期する。
+  - Worker: `stepwise-api`。`gas/*.gs` をそのまま載せ、シートの代わりに D1 を読む（`cf/worker/read.mjs`）。台帳は読み取り専用で、書こうとすると例外になる。
+  - 鍵: Worker の secret `SYNC_KEY` と Apps Script の `WORKER_SYNC_KEY` に同じ値。送り先の URL は `gas/Sync.gs` の既定値。
+- **戻し方**: `assets/portal.js` と `kanri/index.html` の `READ_API` を `""` にして公開する。これだけで全ての読み取りが Apps Script に戻る。Worker や D1 を消す必要はない。
+- **落ちても止まらない**: Worker が引き受けない操作（501）・エラー・通信不能のときは、画面が中身を変えずに Apps Script へ回す。
+- 実測（日本から、往復の中央値）: 読み取り 300〜370ms（内訳は通信 123ms + D1 の往復 1 回 + 計算 12ms）。従来の Apps Script は同じ画面で 3,700〜5,500ms。
+- 対応している読み取り: 生徒マイページ（`state`）、管理画面の `kanriDashboard` / `kanriStudent` / `billingPreview` / `state`。保護者ページの読み取りは未対応（認証でハッシュを使うため）で、Apps Script に回る。
