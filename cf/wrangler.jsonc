@@ -18,7 +18,7 @@
       "binding": "DB",
       "database_name": "stepwise",
       // 本番 D1。`wrangler d1 create stepwise` の出力で置き換える（docs/D1_MIGRATION.md 段階 A）。
-      "database_id": "PLACEHOLDER-CREATE-WITH-WRANGLER-D1-CREATE",
+      "database_id": "889ff9cf-4bb0-4ef9-ba0e-b4ce2105f039",
       "migrations_dir": "migrations"
     }
   ],

@@ -4,9 +4,10 @@
  * GAS が続けるため、書いたら D1 にも伝えないと画面が古いままになる。送るのは一方通行で、
  * Worker から台帳へ書き戻すことはない。
  *
- * 設定（両方そろって初めて動く。どちらか無ければ何もしない＝今までどおり）
- *   Script Properties の WORKER_SYNC_URL … Worker の /sync の URL
- *   Script Properties の WORKER_SYNC_KEY … 24文字以上の共有の鍵（Worker 側の secret と同じ値）
+ * 設定（鍵を入れて初めて動く。入れるまでは何もしない＝今までどおり）
+ *   Script Properties の WORKER_SYNC_KEY … 24文字以上の共有の鍵（Worker 側の secret SYNC_KEY と同じ値）
+ *   Script Properties の WORKER_SYNC_URL … 送り先。未設定なら下の既定値を使う。
+ *     URL は秘密ではない（画面にも載る公開の口で、中身は鍵で守る）ので既定値を持たせてある。
  *
  * 失敗したときは記録だけ残し、応答は壊さない（授業の登録が失敗扱いになると困るため）。
  * 次の書き込みのときに、取りこぼしたシートもまとめて送り直す。
@@ -15,7 +16,8 @@ var SYNC_TOUCHED_ = {};      // この実行で書き込み対象になったシ
 var SYNC_PENDING_KEY_ = 'WORKER_SYNC_PENDING';
 var SYNC_MAX_SHEETS_ = 40;   // 1 回に送るシート数の上限（取りこぼしが溜まったとき用）
 
-function syncUrl_() { return String(PropertiesService.getScriptProperties().getProperty('WORKER_SYNC_URL') || '').trim(); }
+var SYNC_DEFAULT_URL_ = 'https://stepwise-api.stepwise-edu.workers.dev/sync';
+function syncUrl_() { return String(PropertiesService.getScriptProperties().getProperty('WORKER_SYNC_URL') || SYNC_DEFAULT_URL_).trim(); }
 function syncKey_() { return String(PropertiesService.getScriptProperties().getProperty('WORKER_SYNC_KEY') || '').trim(); }
 function syncEnabled_() { return !!syncUrl_() && syncKey_().length >= 24; }
 
@@ -97,7 +99,7 @@ function syncPush_() {
 
 /** 台帳ぜんぶを送り直す（エディタから手で実行する。取りこぼしが疑わしいときの復旧用）。 */
 function resyncLedgerToWorker() {
-  if (!syncEnabled_()) return { ok: false, message: 'WORKER_SYNC_URL と WORKER_SYNC_KEY を設定してください' };
+  if (!syncEnabled_()) return { ok: false, message: 'スクリプト プロパティに WORKER_SYNC_KEY（24文字以上）を設定してください' };
   var all = {};
   ss_().getSheets().forEach(function (sh) { all[sh.getName()] = 'app'; });
   ledger_().getSheets().forEach(function (sh) { all[sh.getName()] = 'ledger'; });

@@ -48,7 +48,6 @@ async function connected(build) {
   const envRef = {};
   const sink = collector(envRef);
   const h = createBillingHarness({ urlFetch: sink.urlFetch });
-  h.properties.set('WORKER_SYNC_URL', SYNC_URL);
   h.properties.set('WORKER_SYNC_KEY', SYNC_KEY);
   if (build) build(h);
   const p = await createParity(h);
@@ -60,12 +59,24 @@ async function connected(build) {
   return { p, sink };
 }
 
-test('設定が無ければ何も送らない（今までどおり動く）', async () => {
+test('鍵が無ければ何も送らない（今までどおり動く）', async () => {
   const sink = collector({ env: {} });
   const h = createBillingHarness({ urlFetch: sink.urlFetch });
   const p = await createParity(h);
   p.source.admin('addOff', { date: '2026-09-30', start: '', end: '', note: '見本' });
-  assert.deepEqual(sink.calls, [], 'URL と鍵が未設定なら送信しない');
+  // 送り先の URL には既定値があるが、鍵が無ければ送らない（切り替えは鍵ひとつ）
+  assert.deepEqual(sink.calls, [], '鍵が未設定なら送信しない');
+});
+
+test('鍵だけ入れれば送り先は既定値で動く', async () => {
+  const sink = collector({ env: {} });
+  const h = createBillingHarness({ urlFetch: sink.urlFetch });
+  h.properties.set('WORKER_SYNC_KEY', SYNC_KEY); // URL は設定しない
+  const p = await createParity(h);
+  sink.calls.length = 0;
+  p.source.admin('addOff', { date: '2026-09-30', start: '', end: '', note: '見本' });
+  assert.equal(sink.calls.length, 1, '鍵だけで送信が始まる');
+  assert.match(sink.calls[0].url, /\/sync$/, '既定の送り先に送る');
 });
 
 test('書き込むと、変わったシートだけが Worker に届く', async () => {
