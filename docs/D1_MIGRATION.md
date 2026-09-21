@@ -38,7 +38,7 @@ MCP サーバー ────────────▶ 同じ Worker（token �
    - 外部キーは宣言しない。台帳には参照先が消えた行が残る（取消済みの授業など）ため。整合は取り込み後の検査で報告する。
 3. **取り込み**は `cf/lib/import.mjs`（本体）と `scripts/ledger-to-d1.mjs`（CLI）。Sheets API は使わない（新しい OAuth 権限が要る）。代わりに「書き出しの束」を読む形にして、書き出しの手段を後から選べるようにした。何度流しても同じ結果になる（主キーで置き換え）。件数はシートと突き合わせて表示する。
 
-### 段階 B: 読み取りを Worker へ（最初の体感改善）— **途中（2026-09-22）**。8 節も見る
+### 段階 B: 読み取りを Worker へ（最初の体感改善）— **一部完了（2026-09-22）**。8 節も見る
 1. Worker に読み取り系 action を実装: `state`, `familyStudentState`, `familyData`, `familyHome`, `familyNotices`, `kanriStudent`, `kanriDashboard`, `data`（管理画面の一覧）, `billingPreview`, `preview`。GAS の対応関数（`studentState_`, `kanriStudentOp_`, `kanriDashboard_`, `familyView_`, `billingPreview_`, `previewOp_`）の**返す JSON をそのまま再現**する。
 2. 同期: GAS 側の書き込み後に Worker の `/sync` へ「変わったシート名と id」を UrlFetch で通知し、Worker が Sheets API で該当行だけ取り直す（全量取り込みは段階 A のスクリプトで日次）。GAS の書き込み関数は `ledgerAppend_/ledgerUpdate_` 系に集約されているので、そこに 1 か所フックを足す。
 3. フロント: `assets/portal.js` と `kanri/index.html` の `apiPost` で「読み取り action は Worker、それ以外は GAS」に振り分ける表を持つ。失敗時は GAS にフォールバック。
@@ -184,7 +184,31 @@ C は段階 B の差分同期でいずれ必要になるが、「台帳を丸ご
 3. `npm run cf:migrate:local` / `npm run cf:migrate:remote` でスキーマを当てる。
 4. 並走テスト（`test/parity/`）の受け皿を作る。D1 側は `test/helpers/d1-harness.cjs` をそのまま使えるので、GAS ハーネスと同じ台帳を両方に入れて action ごとに比べる形にする。
 
-## 8. 段階 B の途中経過（2026-09-22）
+## 8. 進み具合（2026-09-22 時点）
+
+| 段階 | 状態 |
+|---|---|
+| A 準備・取り込み | **完了** |
+| B 読み取りを Worker へ | **一部完了**。生徒マイページと管理画面は本番で動作中。保護者ページは未対応 |
+| C 書き込みを Worker へ | 未着手 |
+| D 仕上げ（Sheets への書き出し・MCP の向き先・PWA） | 未着手 |
+
+段階 B で Worker に載せた読み取りと、まだ Apps Script に回っているもの:
+
+| 読み取り | 状態 |
+|---|---|
+| `state`（生徒マイページ） | Worker |
+| `kanriStudent`（管理画面の生徒ページ、全タブ） | Worker |
+| `kanriDashboard`（管理画面のホーム） | Worker |
+| `billingPreview`（請求の下書き） | Worker |
+| `admin state`（管理画面の全体） | Worker |
+| `familyStudentState` / `familyData` / `familyHome` / `familyNotices`（保護者ページ） | Apps Script。認証でハッシュ（`Utilities.computeDigest`）を使うため未実装 |
+| `preview`（先生のプレビュー） | Apps Script |
+| `learningService` / `parentData` など | Apps Script |
+
+計画当初に挙げていた `data` という読み取りは存在しなかった（`admin` にその op は無い）。
+
+## 9. 段階 B の記録（2026-09-22）
 
 ### 方針を変えた: 作り直さず、同じコードをデータ層だけ差し替えて動かす
 
