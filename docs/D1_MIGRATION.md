@@ -141,7 +141,7 @@ node scripts/ledger-to-d1.mjs --bundle <書き出しフォルダ> --db .wrangler
 - **真偽の書き方が 3 通り混在**している。native の TRUE/FALSE（`students.active`、`slots.done`）、文字列の `'true'`/`'false'`（`familyLinks.active`、`lessonKinds.active`）、文字列の `'1'`/`'0'`（`familyEmailPrefs`、`studentEmailPrefs`）。取り込みで `INTEGER 0/1` に寄せる。`familyLinks.active` は GAS 側が `=== 'true'` で厳密比較しているので、シートに native TRUE が入ると無効扱いになる。D1 では起きない。
 - **`''` と `0` を区別する列**が 3 つある（`planLines.approvedCount`、`lessonKinds.standardMin` / `standardFee`）。ここだけ NULL 可にした。
 - **`planComments` は凍結済み**。書き込む関数（`ensurePlanCommentsSheet_` / `planCommentSave_`）は既に `gas/*.gs` から消えていて、残っているのは読み取りの `planComment_`（`gas/Code.gs:597`）だけ。使い道も `planLinesMigrate_`（`gas/PlanLines.gs:323`）が過去分を `planLines.comment` に移すときだけ。**段階 C で書き込み経路を作らない**。主キーは `(studentId, ym)` の組で、`ym` は `plans` と違って `'default'` を取らない。
-- **`ensureSchema_` の呼び出し順に小さな不具合**。`ensureEventKindCol_` が `ensureEventsSheet_` より先に呼ばれるので、`events` シートを新規に作った直後は `kind` 列が付かない（次にスキーマ版が上がるまで）。本番の台帳には既にあるため実害は出ていない。順序を入れ替えれば直る。
+- **`ensureSchema_` の呼び出し順に小さな不具合があった（修正済み）**。`ensureEventKindCol_` が `ensureEventsSheet_` より先に呼ばれていたので、`events` シートを新規に作った直後は `kind` 列が付かなかった（次にスキーマ版が上がるまで）。本番の台帳には既にあったため実害は出ていない。`ensureSchema_` を「シートを作る」→「列を足す」の2段に整理し、`test/schema-bootstrap.test.cjs` で並び順を固定した。
 - `docs/SYSTEM.md` の列一覧は一部古い（`wishes` は 8 列ではなく 11、`planLines` は 20 列ではなく 24、`plans` は 10 列ではなく 11）。正本は `*_COLS_` 定数。
 
 ### 残っている判断: 実在の台帳をどう書き出すか

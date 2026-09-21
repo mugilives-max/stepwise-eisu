@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-20-teacher-preview' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-21-schema-order' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1716,32 +1716,36 @@ function sheetValues_(name) {
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
   if (cache.get('schemaOk23')) return;
+  // 1. シートを作る。列を足すだけのヘルパー(2.)は対象シートが無いと黙って何もしないので、
+  //    作成より先に呼ぶと列が欠けたまま6時間キャッシュされる。新しいヘルパーもこの順で足す。
   ensureParentAuthSheet_();
   ensureMcpLogSheet_();
   ensureTeacherOffSheet_();
   ensureTasksSheet_();
-  ensureEventKindCol_();
-  ensurePlansSheet_();
-  ensurePlanStatusCols_();
-  ensureParentHeaders_();
   ensureEventsSheet_();
-  ensureReqHeader_();
+  ensurePlansSheet_();
   ensureWishesSheet_();
-  ensureWishKindHeader_();
-  ensureEmailHeader_();
-  ensureMeetHeader_();
-  ensureCodeHeader_();
-  ensureFeeHeaders_();
   ensureBlockedSheet_();
-  ensureSubjectHeader_();
+  if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_(); // students/slots はここで生まれる
   ensureLessonSchema_();
   ensureSlotChangeNotices_();
   ensureBillingSchema_();
-  if (typeof ensurePlanLinesSheet_ === 'function') ensurePlanLinesSheet_();
-  if (typeof ensureSchedulingSchema_ === 'function') ensureSchedulingSchema_();
+  if (typeof ensurePlanLinesSheet_ === 'function') ensurePlanLinesSheet_(); // 移行が students/plans/monthAgreements を読む
   if (typeof ensureFamilySchema_ === 'function') ensureFamilySchema_();
   if (typeof ensureStudentEmailSchema_ === 'function') ensureStudentEmailSchema_();
-  if (typeof ensureLessonKindsSheet_ === 'function') { ensureLessonKindsSheet_(); ensureKindColumns_(); }
+  if (typeof ensureLessonKindsSheet_ === 'function') ensureLessonKindsSheet_();
+  // 2. 既存シートへ列を足す。ここに書くものは対象シートが 1. で作られていること
+  ensureEventKindCol_();       // events
+  ensurePlanStatusCols_();     // plans
+  ensureWishKindHeader_();     // wishes
+  ensureParentHeaders_();      // students
+  ensureEmailHeader_();        // students
+  ensureCodeHeader_();         // students
+  ensureFeeHeaders_();         // students
+  ensureReqHeader_();          // slots
+  ensureMeetHeader_();         // slots
+  ensureSubjectHeader_();      // slots
+  if (typeof ensureKindColumns_ === 'function') ensureKindColumns_(); // slots/plans
   cache.put('schemaOk23', '1', 21600);
 }
 

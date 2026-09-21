@@ -69,7 +69,9 @@ const MCP_KEY = 'synthetic-mcp-key-only-for-test';
 function createHarness(options = {}) {
   let now = Date.parse('2026-09-07T04:00:00Z');
   const teacherSalt = 'synthetic-teacher-salt';
-  const spreadsheet = new Spreadsheet({
+  // 台帳の初期状態。omitSheets を渡すと、そのシートが無いところから始める
+  // (作り直し・複製直後の台帳で ensureSchema_ が列を揃えるかを見るため)。
+  const initialSheets = {
     config: [['key', 'value'], ['passSalt', teacherSalt], ['passHash', crypto.createHash('sha256').update(teacherSalt + ':' + TEACHER_PASSWORD).digest('hex')],
       ['adminToken', TEACHER_TOKEN], ['adminTokenExp', String(now + 90 * 86400000)], ['teacherEmail', 'teacher@example.invalid'],
       ['calendarSync', 'off'], ['emailNotify', 'off'], ['pin', '0000']],
@@ -77,7 +79,9 @@ function createHarness(options = {}) {
     slots: [['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl', 'subject', 'req']],
     blocked: [['id', 'studentId', 'date', 'note', 'start', 'end']],
     log: [['time', 'message']]
-  });
+  };
+  for (const name of options.omitSheets || []) delete initialSheets[name];
+  const spreadsheet = new Spreadsheet(initialSheets);
   const ledger = new Spreadsheet();
   const cacheValues = new Map();
   const properties = new Map([['MCP_KEY', MCP_KEY]]);

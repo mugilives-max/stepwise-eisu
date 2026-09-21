@@ -14,12 +14,9 @@ const d1h = require('./helpers/d1-harness.cjs');
 
 const lib = () => import('../cf/lib/import.mjs');
 
-// 見出しはあるが D1 にだけある列と、その理由
-const D1_ONLY = {
-  // ensureSchema_ は ensureEventKindCol_ を ensureEventsSheet_ より先に呼ぶので、
-  // 新規に作った直後の events には kind が付かない（次のスキーマ更新で付く）。本番の台帳にはある。
-  events: ['kind'],
-};
+// 見出しはあるが D1 にだけある列と、その理由。
+// 空のときは、作り直した台帳の見出しが D1 の列と過不足なく一致している。
+const D1_ONLY = {};
 
 // 台帳の 2 冊を「書き出しの束」にする。実際の書き出し経路（手作業でも GAS からでも）と同じ形。
 function bundleOf(h) {
