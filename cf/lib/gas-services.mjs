@@ -20,50 +20,79 @@ function refuse(what) {
   throw new ReadOnlyLedger('Worker の読み取りでは台帳に書き込めません: ' + what);
 }
 
-function range(sheet, row, column, rows, columns) {
-  const values = () => Array.from({ length: rows }, (_, r) =>
+// 書き込みを許すかどうかは本ごとに決める。許した場合は値を書き換え、
+// 触ったシートの名前を控える（あとでその分だけ D1 へ流す）。
+function range(sheet, row, column, rows, columns, write) {
+  const read = () => Array.from({ length: rows }, (_, r) =>
     Array.from({ length: columns }, (_, c) => sheet.values[row + r - 1]?.[column + c - 1] ?? ''));
+  const put = values => {
+    if (!write) return refuse('Range.setValues');
+    if (values.length !== rows || values.some(r => r.length !== columns)) throw new Error('Range dimensions do not match values');
+    values.forEach((r, ri) => r.forEach((value, ci) => {
+      const target = row + ri - 1;
+      sheet.values[target] ||= [];
+      // Sheets は文字列化の目印にした先頭の ' を取り込む
+      sheet.values[target][column + ci - 1] = typeof value === 'string' && value.startsWith("'") ? value.slice(1) : value;
+    }));
+    write();
+    return null;
+  };
   return {
-    getValues: values,
-    getDisplayValues: () => values().map(r => r.map(v => (v === null || v === undefined ? '' : String(v)))),
-    getValue: () => values()[0][0],
+    getValues: read,
+    getDisplayValues: () => read().map(r => r.map(v => (v === null || v === undefined ? '' : String(v)))),
+    getValue: () => read()[0][0],
     getNumRows: () => rows,
     getNumColumns: () => columns,
-    getFormulas: () => values().map(r => r.map(() => '')),
-    setValues: () => refuse('Range.setValues'),
-    setValue: () => refuse('Range.setValue'),
-    setNumberFormat: () => refuse('Range.setNumberFormat'),
-    setNumberFormats: () => refuse('Range.setNumberFormats'),
-    clearContent: () => refuse('Range.clearContent'),
+    getFormulas: () => read().map(r => r.map(() => '')),
+    setValues(values) { put(values); return this; },
+    setValue(value) { put(Array.from({ length: rows }, () => Array(columns).fill(value))); return this; },
+    setNumberFormat() { return write ? this : refuse('Range.setNumberFormat'); },
+    setNumberFormats() { return write ? this : refuse('Range.setNumberFormats'); },
+    clearContent() { put(Array.from({ length: rows }, () => Array(columns).fill(''))); return this; },
   };
 }
 
-function sheetOf(name, values) {
+function sheetOf(name, values, write) {
   const sheet = {
     values,
     getName: () => name,
     getLastRow: () => values.length,
     getLastColumn: () => Math.max(0, ...values.map(r => r.length)),
     getMaxColumns: () => Math.max(26, sheet.getLastColumn()),
-    getRange: (row, column, rows = 1, columns = 1) => range(sheet, row, column, rows, columns),
-    getDataRange: () => range(sheet, 1, 1, Math.max(1, values.length), Math.max(1, sheet.getLastColumn())),
-    appendRow: () => refuse('Sheet.appendRow'),
-    deleteRow: () => refuse('Sheet.deleteRow'),
-    insertColumnsAfter: () => refuse('Sheet.insertColumnsAfter'),
-    setFrozenRows: () => refuse('Sheet.setFrozenRows'),
+    getRange: (row, column, rows = 1, columns = 1) => range(sheet, row, column, rows, columns, write),
+    getDataRange: () => range(sheet, 1, 1, Math.max(1, values.length), Math.max(1, sheet.getLastColumn()), write),
+    appendRow(row) { if (!write) return refuse('Sheet.appendRow'); values.push([...row]); write(); return sheet; },
+    deleteRow(row) { if (!write) return refuse('Sheet.deleteRow'); values.splice(row - 1, 1); write(); return sheet; },
+    insertColumnsAfter() { return write ? sheet : refuse('Sheet.insertColumnsAfter'); },
+    setFrozenRows() { return write ? sheet : refuse('Sheet.setFrozenRows'); },
   };
   return sheet;
 }
 
-export function readOnlyBook(sheets) {
-  const map = new Map(Object.entries(sheets).map(([name, values]) => [name, sheetOf(name, values)]));
+/**
+ * 台帳 1 冊。onWrite を渡すと書き込みを許し、触ったシート名をその関数へ知らせる。
+ * 渡さなければ読み取り専用（書こうとしたら例外）。
+ */
+export function bookOf(sheets, onWrite) {
+  const map = new Map();
+  const touch = name => (onWrite ? () => onWrite(name) : null);
+  for (const [name, values] of Object.entries(sheets)) map.set(name, sheetOf(name, values, touch(name)));
   return {
-    getId: () => 'read-only',
+    getId: () => 'ledger',
     getSheetByName: name => map.get(name) || null,
     getSheets: () => [...map.values()],
-    insertSheet: name => refuse('Spreadsheet.insertSheet(' + name + ')'),
+    insertSheet(name) {
+      if (!onWrite) return refuse('Spreadsheet.insertSheet(' + name + ')');
+      if (map.has(name)) throw new Error('Sheet already exists: ' + name);
+      const sheet = sheetOf(name, [], touch(name));
+      map.set(name, sheet);
+      onWrite(name);
+      return sheet;
+    },
   };
 }
+
+export const readOnlyBook = sheets => bookOf(sheets, null);
 
 // 触られたら、どのサービスの何を呼んだのかを名指しで止める
 function forbidden(service) {
@@ -91,16 +120,35 @@ function formatDate(date, timezone, format) {
  *   books      … { app: {シート名: 値}, ledger: {…} }（cf/lib/sheet-view.mjs の books()）
  *   properties … 台帳に入らない設定値。読み取りだけ。書こうとしたら止める
  */
-export function createServices({ books, properties = {}, now = null }) {
+/**
+ * GAS に渡すサービス一式を作る。
+ *   mutable … true にすると台帳に書ける。触ったシート名は戻り値の touched に入る
+ *   record  … true にすると Google のサービス（メール・カレンダー等）を止めずに、
+ *             呼ばれた記録だけ残す。「この書き込みは Google を使うか」の調査に使う
+ */
+export function createServices({ books, properties = {}, now = null, mutable = false, record = false }) {
   const cache = new Map();
   // 時計。既定は実時刻。now を渡すとその時刻で固定する（並走テスト用）
   const Clock = now === null ? Date : class extends Date {
     constructor(...args) { super(...(args.length ? args : [now])); }
     static now() { return now; }
   };
-  const app = readOnlyBook(books.app || {});
-  const ledger = readOnlyBook(books.ledger || {});
+  const touched = new Set();
+  const calls = [];
+  const onWrite = mutable ? name => touched.add(name) : null;
+  const app = bookOf(books.app || {}, onWrite);
+  const ledger = bookOf(books.ledger || {}, onWrite);
+  // record のときは、止める代わりに「何が呼ばれたか」を残す
+  const external = service => (record
+    ? new Proxy({}, { get(_t, prop) {
+        if (prop === 'then' || typeof prop === 'symbol') return undefined;
+        return (...args) => { calls.push({ service, method: String(prop), args: args.length }); return externalResult(service, String(prop)); };
+      } })
+    : forbidden(service));
   return {
+    _touched: touched,
+    _calls: calls,
+    _books: books,
     Date: Clock,
     SpreadsheetApp: {
       getActive: () => app,
@@ -150,13 +198,26 @@ export function createServices({ books, properties = {}, now = null }) {
     Session: { getEffectiveUser: () => ({ getEmail: () => '' }) },
     Logger: { log() {} },
     console: { log() {}, warn() {}, error() {} },
-    MailApp: forbidden('MailApp'),
-    CalendarApp: forbidden('CalendarApp'),
-    DriveApp: forbidden('DriveApp'),
-    ScriptApp: forbidden('ScriptApp'),
-    UrlFetchApp: forbidden('UrlFetchApp'),
-    HtmlService: forbidden('HtmlService'),
+    MailApp: external('MailApp'),
+    CalendarApp: external('CalendarApp'),
+    Calendar: record
+      ? { Events: { insert: (...a) => { calls.push({ service: 'Calendar', method: 'Events.insert', args: a.length }); return { id: 'recorded-event', iCalUID: 'recorded-event@google.com' }; },
+                    get: () => { calls.push({ service: 'Calendar', method: 'Events.get', args: 0 }); return {}; },
+                    patch: () => { calls.push({ service: 'Calendar', method: 'Events.patch', args: 0 }); return {}; },
+                    remove: () => { calls.push({ service: 'Calendar', method: 'Events.remove', args: 0 }); return {}; } } }
+      : forbidden('Calendar'),
+    DriveApp: external('DriveApp'),
+    ScriptApp: external('ScriptApp'),
+    UrlFetchApp: external('UrlFetchApp'),
+    HtmlService: external('HtmlService'),
   };
+}
+
+// record のときに返す、当たり障りのない値
+function externalResult(service, method) {
+  if (service === 'MailApp' && method === 'getRemainingDailyQuota') return 100;
+  if (service === 'Session') return { getEmail: () => '' };
+  return undefined;
 }
 
 export { ReadOnlyLedger };

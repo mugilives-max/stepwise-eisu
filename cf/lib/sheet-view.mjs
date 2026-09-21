@@ -37,6 +37,9 @@ const NOT_A_SHEET = ['_importRuns'];
 const HIDDEN_COLUMNS = ['_syncedAt', '_sheetRow', 'rowid_'];
 
 function cellOf(table, column, value) {
+  // 空欄は空欄のまま戻す。真偽の列でも「未設定」と「false」は別物
+  // （slots.done は未実施なら空欄。false を書き戻すと台帳と形が変わる）
+  if (value === null || value === undefined) return '';
   const kind = BOOLEAN_CELLS[table + '.' + column];
   if (kind) {
     const on = Number(value) === 1;
@@ -44,8 +47,6 @@ function cellOf(table, column, value) {
     if (kind === 'text') return on ? 'true' : 'false';
     return on ? '1' : '0';
   }
-  // '' と 0 を区別する列は NULL で入っている。シート上は空欄だった
-  if (value === null || value === undefined) return '';
   return value;
 }
 

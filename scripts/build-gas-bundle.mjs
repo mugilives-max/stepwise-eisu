@@ -22,6 +22,8 @@ export const SERVICE_NAMES = [
   'SpreadsheetApp', 'Utilities', 'CacheService', 'PropertiesService', 'LockService',
   'ContentService', 'MimeType', 'Session', 'MailApp', 'CalendarApp', 'DriveApp',
   'ScriptApp', 'UrlFetchApp', 'Logger', 'HtmlService', 'console',
+  // 高度なサービス。カレンダー登録は Calendar.Events.insert を使う
+  'Calendar',
   // 時計も差し替えられるようにする（並走テストで GAS 側と同じ時刻に固定するため）
   'Date',
 ];
