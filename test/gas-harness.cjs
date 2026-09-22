@@ -45,6 +45,9 @@ class Sheet {
   deleteRow(row) { this.values.splice(row - 1, 1); return this; }
   setFrozenRows() { return this; }
   insertColumnsAfter() { return this; }
+  // 実物のシートは既定で 1000 行ある。行を足す操作は、この二重帳では書き込みが伸ばすので何もしない
+  getMaxRows() { return Math.max(1000, this.values.length); }
+  insertRowsAfter() { return this; }
 }
 
 class Spreadsheet {

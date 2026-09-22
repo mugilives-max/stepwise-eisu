@@ -55,6 +55,9 @@ function syncSheetPayload_(name, book) {
 
 /** この実行で変わったシートを送る。呼び出しの最後に 1 回だけ実行する。 */
 function syncPush_() {
+  // 正本が Worker に移ったあとは押し戻さない。Worker 側も /sync を断る（409）ので、
+  // 送っても無駄に時間がかかり、取りこぼしの控えだけが溜まっていく
+  if (workerOwnsLedger_()) { SYNC_TOUCHED_ = {}; syncSavePending_({}); return null; }
   if (!syncEnabled_()) { SYNC_TOUCHED_ = {}; return null; }
   var targets = {};
   var pending = syncPending_();
@@ -205,29 +208,9 @@ function effectsDeleteEvent_(item) {
 }
 
 /** Worker の台帳をシートへ写す（エディタから手で実行）。切り替え後の控えづくりと、戻すときの道。 */
-function pullLedgerFromWorker() {
-  var url = syncUrl_().replace(/\/sync$/, '/export');
-  if (!syncKey_() || syncKey_().length < 24) return { ok: false, message: 'WORKER_SYNC_KEY を設定してください' };
-  var res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json',
-    payload: JSON.stringify({ key: syncKey_() }), muteHttpExceptions: true, followRedirects: true });
-  if (res.getResponseCode() !== 200) return { ok: false, message: '取り寄せに失敗しました', status: res.getResponseCode() };
-  var data = JSON.parse(res.getContentText());
-  var wrote = 0;
-  [['app', ss_()], ['ledger', ledger_()]].forEach(function (pair) {
-    var sheets = data[pair[0]] || {};
-    Object.keys(sheets).forEach(function (name) {
-      var values = sheets[name];
-      if (!values || !values.length) return;
-      var sh = pair[1].getSheetByName(name) || pair[1].insertSheet(name);
-      sh.clear();
-      sh.getRange(1, 1, values.length, values[0].length).setValues(values.map(function (row) {
-        return values[0].map(function (_, i) { return row[i] === undefined ? '' : row[i]; });
-      }));
-      wrote++;
-    });
-  });
-  return { ok: true, sheets: wrote, exportedAt: data.exportedAt, message: 'Worker の台帳をシートへ写しました' };
-}
+// 旧・取り寄せ。安全確認のある mirrorLedgerFromWorker（gas/Mirror.gs）に寄せる。
+// 手で実行したときに、確認なしの全面上書きが走らないようにするため。
+function pullLedgerFromWorker() { return mirrorLedgerFromWorker(); }
 
 // 予定を「あれば取る、無ければ作る」。できた予定をそのまま返す（Worker がその中身で判定する）
 function effectsEnsureEvents_(wanted) {
