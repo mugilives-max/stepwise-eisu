@@ -317,8 +317,15 @@
            書き込みは常に Apps Script。Worker は台帳に書けない。 */
         var READ_API = "https://stepwise-api.stepwise-edu.workers.dev";
         var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
+        // 台帳の正本が Worker に移ったら true にする。書き込みも Worker へ送る
+        var WRITE_TO_WORKER = false;
+        function routedToWorker(body) {
+          if (!READ_API || !body) return false;
+          if (WRITE_TO_WORKER) return true;
+          return body.action === "admin" && !!READ_ADMIN_OPS[String(body.op || "")];
+        }
         function readFirst(body) {
-          if (!READ_API || !body || body.action !== "admin" || !READ_ADMIN_OPS[String(body.op || "")]) return Promise.resolve(null);
+          if (!routedToWorker(body)) return Promise.resolve(null);
           return fetch(READ_API, { method: "POST", body: JSON.stringify(body) }).then(function (r) {
             if (r.status === 501 || !r.ok) return null;
             return r.json().then(function (res) { return res && res.errorCode === "workerError" ? null : res; });
@@ -327,7 +334,7 @@
         function post(body) {
           var started = Date.now();
           var fallback = function () { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); };
-          var routed = READ_API && body && body.action === "admin" && READ_ADMIN_OPS[String(body.op || "")];
+          var routed = routedToWorker(body);
           var first = routed ? readFirst(body).then(function (r) { return r === null ? fallback() : r; }) : fallback();
           return first.then(function (res) {
             try { console.log('[kanri timing]', body.op || body.action, { totalMs: Date.now() - started, serverMs: res.ms, stages: res.timings }); } catch (e) {}

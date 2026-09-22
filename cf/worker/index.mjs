@@ -64,6 +64,29 @@ export default {
       const r = await handleSync(payload, env);
       return reply(r.payload, r.status, head);
     }
+    // Apps Script からの中継（MCP など）。鍵を知っている呼び出しだけ。
+    // MCP の鍵は Worker に置かず、中継のたびに Apps Script から渡してもらう
+    if (url.pathname === "/proxy") {
+      let payload;
+      try { payload = await request.json(); } catch (e) { return reply({ error: "不正なリクエストです" }, 400, head); }
+      const { syncAuthorized } = await import("./sync.mjs");
+      if (!syncAuthorized(env, payload && payload.key)) return reply({ error: "鍵が正しくありません" }, 403, head);
+      const inner = payload.request || {};
+      const scoped = { ...env, MCP_KEY: String(payload.mcpKey || "") };
+      try {
+        const readOnly = await handleRead(inner, scoped);
+        if (readOnly !== null) return reply(readOnly, 200, head);
+        const done = await runWrite(inner, scoped);
+        if (done.effects.length) {
+          const ids = await recordEffects(env.DB, done.effects);
+          const finish = deliverEffects(env, done.effects, ids);
+          if (ctx && ctx.waitUntil) ctx.waitUntil(finish); else await finish;
+        }
+        return reply(done.result, 200, head);
+      } catch (e) {
+        return reply({ error: "中継の処理に失敗しました", errorCode: "workerError" }, 500, head);
+      }
+    }
     // 台帳ぜんぶの取り出し（Apps Script がシートへ写す・戻すため）。鍵を知っている呼び出しだけ
     if (url.pathname === "/export") {
       let payload;

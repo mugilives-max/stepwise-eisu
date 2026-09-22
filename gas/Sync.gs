@@ -136,8 +136,27 @@ function syncWriteBlocked_(req) {
   if (action === 'admin') {
     var op = String(req.op || '');
     if (['state', 'kanriDashboard', 'kanriStudent', 'billingPreview', 'login', 'lessonKinds'].indexOf(op) >= 0) return null;
+    // MCP からの呼び出しは Worker へ中継する。MCP の鍵は Worker に置かず、ここから渡すので
+    // MCP サーバーの設定を変えずに使い続けられる
+    if (req.mcpKey !== undefined) return workerProxy_(req);
   }
   return { error: 'この操作は新しい仕組みで受け付けています。画面を再読み込みしてください', errorCode: 'ledgerMoved', refresh: true };
+}
+
+// Worker へそのまま渡して、返ってきたものをそのまま返す
+function workerProxy_(req) {
+  if (!syncKey_() || syncKey_().length < 24) return { error: '中継の設定がありません（WORKER_SYNC_KEY）', badAuth: true };
+  try {
+    var res = UrlFetchApp.fetch(syncUrl_().replace(/\/sync$/, '/proxy'), {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({ key: syncKey_(), mcpKey: mcpKey_(), request: req }),
+      muteHttpExceptions: true, followRedirects: true,
+    });
+    if (res.getResponseCode() < 200 || res.getResponseCode() >= 300) return { error: '中継先が応答しません（' + res.getResponseCode() + '）' };
+    return JSON.parse(res.getContentText());
+  } catch (e) {
+    return { error: '中継に失敗しました: ' + String(e && e.message || e).slice(0, 120) };
+  }
 }
 
 // 付随処理の代行。Worker からだけ呼ばれる（鍵が要る）
