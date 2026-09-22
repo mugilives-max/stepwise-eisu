@@ -93,3 +93,45 @@ test('中継の鍵が無ければ中継しない', async () => {
   assert.deepEqual(relayed, [], '鍵が無いのに外へ送っている');
   assert.match(String(r.error), /中継の設定がありません/);
 });
+
+// ---- 段階 D: MCP を Worker へ直接つなぐ ----
+// これまで MCP は GAS を入口にして Worker へ中継していた（上の試験）。
+// 中継のぶん GAS の待ち時間（約 1.8 秒）が毎回乗るので、MCP サーバーの向き先を
+// Worker に変える。鍵は Worker の Secret（MCP_KEY）と突き合わせる。
+
+test('MCP を Worker へ直接送っても通る', async () => {
+  const { env } = await afterCutover();
+  const worker = (await import('../cf/worker/index.mjs')).default;
+  const scoped = { ...env, MCP_KEY, ALLOW_ORIGIN: 'https://www.stepwise-education.jp' };
+  const call = body => worker.fetch(new Request('https://api.invalid/', {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body),
+  }), scoped, { waitUntil() {} });
+
+  const res = await call({ action: 'admin', op: 'mcpStudents', mcpKey: MCP_KEY, client: 'remote', query: '' });
+  assert.equal(res.status, 200, 'HTTP が 200 でない: ' + res.status);
+  const out = await res.json();
+  assert.ok(Array.isArray(out.students), '生徒の一覧が返らない: ' + JSON.stringify(out).slice(0, 160));
+});
+
+test('鍵が違う MCP の呼び出しは、Worker が断る', async () => {
+  const { env } = await afterCutover();
+  const worker = (await import('../cf/worker/index.mjs')).default;
+  const scoped = { ...env, MCP_KEY, ALLOW_ORIGIN: 'https://www.stepwise-education.jp' };
+  const res = await worker.fetch(new Request('https://api.invalid/', {
+    method: 'POST', body: JSON.stringify({ action: 'admin', op: 'mcpStudents', mcpKey: 'wrong-key', query: '' }),
+  }), scoped, { waitUntil() {} });
+  const out = await res.json();
+  assert.ok(!out.students, '鍵が違うのに中身を返している: ' + JSON.stringify(out).slice(0, 160));
+  assert.equal(out.badAuth, true, '鍵の不一致として断っていない: ' + JSON.stringify(out).slice(0, 160));
+});
+
+test('Worker に鍵が入っていなければ、MCP は通らない', async () => {
+  const { env } = await afterCutover();
+  const worker = (await import('../cf/worker/index.mjs')).default;
+  const res = await worker.fetch(new Request('https://api.invalid/', {
+    method: 'POST', body: JSON.stringify({ action: 'admin', op: 'mcpStudents', mcpKey: MCP_KEY, query: '' }),
+  }), { ...env, ALLOW_ORIGIN: 'https://www.stepwise-education.jp' }, { waitUntil() {} });
+  const out = await res.json();
+  assert.ok(!out.students, '鍵未設定なのに中身を返している: ' + JSON.stringify(out).slice(0, 160));
+  assert.equal(out.badAuth, true, '鍵の不一致として断っていない: ' + JSON.stringify(out).slice(0, 160));
+});
