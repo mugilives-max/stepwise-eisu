@@ -74,6 +74,22 @@
         function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
         function deliveryLabel(mode) { return mode === "in_person" ? "対面" : mode === "online" ? "オンライン" : "形式は先生に確認"; }
+        // Meet は授業を確定したあと Google 側で少し遅れて発行される。確定を止めて待つと
+        // その待ち時間がそのまま利用者の待ち時間になるので、届くまでは「準備中」と出し、
+        // 少し置いてもう一度読みに行く（読みに行くと Worker 側が取り直す）
+        function meetWaiting(s) { return s.deliveryMode === 'online' && !s.meet; }
+        function meetControl(s, primary) {
+          if (s.meet) return '<a class="btn-' + (primary ? 'primary' : 'ghost') + ' btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meet' + (primary ? 'に参加' : '') + '</a>';
+          if (!meetWaiting(s)) return '';
+          return '<span class="small muted" data-meet-waiting="' + esc(s.id) + '" role="status">Meetのリンクを準備しています…</span>';
+        }
+        var meetTimer = null, meetTries = 0;
+        function meetWatch() {
+          if (meetTimer || meetTries >= 5 || route() === 'family') return;
+          if (!((S && S.slots) || []).some(function (s) { return s.st === 'mine' && meetWaiting(s); })) { meetTries = 0; return; }
+          meetTries++;
+          meetTimer = setTimeout(function () { meetTimer = null; loadState().catch(function () {}); }, 6000);
+        }
         function deliveryTag(s) { if (route() !== 'family' && s.deliveryMode === 'in_person') return ''; return ' <span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>'; }
         function slotSnapshot(s) { return { id: String(s.id), date: s.date, start: s.start, min: Number(s.min), subject: s.subject || '', deliveryMode: s.deliveryMode || '' }; }
         function taskDueText(t) {
@@ -485,7 +501,7 @@
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
-              if (s.st === "mine") html += dayRow('<span class="tag green">確定</span>', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), cancelControl(s, true));
+              if (s.st === "mine") html += dayRow('<span class="tag green">確定</span>', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
@@ -529,7 +545,7 @@
             html += '<div class="card next"><div class="in">' + untilTxt + '</div><div class="when">' + fmtDateW(next.date) + " " + next.start + "〜" + endTime(next.start, next.min) + '</div>';
             html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + deliveryTag(next) + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">キャンセル申請中</span>' : "") + '</div>';
             html += '<div class="row" style="margin-top:10px">';
-            if (next.meet) html += '<a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(next.meet) + '">Meetに参加</a>';
+            html += meetControl(next, true);
             html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
             html += cancelControl(next) + '</div></div>';
           } else {
@@ -617,7 +633,7 @@
             upcoming.forEach(function (s) {
               html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s)) : "") + (s.req ? ' <span class="tag red">キャンセル申請中</span>' : "") + "</span>";
               html += deliveryTag(s);
-              if (s.meet) html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(s.meet) + '">Meet</a>';
+              html += meetControl(s, false);
               html += cancelControl(s) + "</div>";
             });
             html += '</div>';
@@ -1349,6 +1365,7 @@
           if(parentHeaderActions){var count=notices.items.filter(function(n){return n.required||!n.read;}).length;parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" data-action="fa-notices" aria-label="お知らせ '+count+'件" aria-expanded="'+notices.open+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(count?' <span class="tag red">'+count+'</span>':'')+(notices.error?' !':'')+'</button>':'';}
           if(parentHeaderActions&&route()!=='family'&&S&&S.me){var required=studentNoticeItems().filter(function(x){return x.required;}).length;parentHeaderActions.innerHTML='<button class="btn-quiet btn-sm" data-action="student-notices" aria-label="お知らせ 要確認'+required+'件" aria-expanded="'+studentNoticesOpen+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(required?' <span class="tag red">'+required+'</span>':'')+'</button>';}
           renderStudent(); if(studentNoticesOpen&&route()!=='family'&&S&&S.me)app.innerHTML=studentNoticesHTML()+app.innerHTML;
+          meetWatch();
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].services.clear();familyPanels[key].reads.clear();});

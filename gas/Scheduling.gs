@@ -313,10 +313,13 @@ function schedulingConferenceStatus_(event) {
 function schedulingConferenceRequest_(id,event) {
   return {createRequest:{requestId:'st'+schedulingHash_(id+'|online|'+String(event.etag||event.updated||'')),conferenceSolutionKey:{type:'hangoutsMeet'}}};
 }
-function schedulingRequireMeet_(event) {
+// Meet は予定を作ったあと Google 側で少し遅れて発行される（作った直後は pending のことが多い）。
+// 発行を待って画面を止めると、その待ち時間がそのまま生徒・先生の待ち時間になるので、
+// 「まだ無い」を正当な状態として扱い、空を返す。URL は付随処理があとから台帳に書き戻す。
+// 画面は URL が空のオンライン授業を「準備中」として見せる。
+function schedulingMeetIfReady_(event) {
   var meet=schedulingCalendarMeet_(event),status=schedulingConferenceStatus_(event);
-  if(!meet||status==='pending'||status==='failure')throw new Error('オンライン授業のMeetを確認できませんでした。同じ操作で再試行してください');
-  return meet;
+  return (!meet||status==='pending'||status==='failure')?'':meet;
 }
 function schedulingCalendarMissing_(err) { return /\b404\b|not found/i.test(String(err)); }
 function schedulingCalendarConflict_(err) { return /\b409\b|already exists|identifier.*exists/i.test(String(err)); }
@@ -335,7 +338,7 @@ function schedulingCalendarFor_(write,slot,student) {
     // an ambiguous patch is recovered by reading that same event on the next try.
     event=Calendar.Events.patch({conferenceData:schedulingConferenceRequest_(id,event)},'primary',id,{conferenceDataVersion:1,sendUpdates:'none'});
   }
-  return {eventId:String(event.iCalUID||event.id+'@google.com'),meetUrl:slot.deliveryMode==='online'?schedulingRequireMeet_(event):''};
+  return {eventId:String(event.iCalUID||event.id+'@google.com'),meetUrl:slot.deliveryMode==='online'?(schedulingMeetIfReady_(event)||String(slot.meetUrl||'')):''};
 }
 function schedulingUpdateCalendarMode_(slot,student) {
   if(!slot.eventId||isTestStudent_(student))return slot.deliveryMode==='online'?String(slot.meetUrl||''):'';
@@ -348,7 +351,8 @@ function schedulingUpdateCalendarMode_(slot,student) {
   }
   else if(current.conferenceData||current.hangoutLink)body.conferenceData=null;
   var event=Object.keys(body).length?Calendar.Events.patch(body,'primary',id,{conferenceDataVersion:1,sendUpdates:'none'}):current;
-  return slot.deliveryMode==='online'?schedulingRequireMeet_(event):'';
+  // まだ発行されていないだけのときに、すでにある URL を空で上書きしない
+  return slot.deliveryMode==='online'?(schedulingMeetIfReady_(event)||String(slot.meetUrl||'')):'';
 }
 
 function schedulingWrite_(w) {

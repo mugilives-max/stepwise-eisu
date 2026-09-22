@@ -153,54 +153,108 @@ test('対面の確定はその場で完結し、予定IDが台帳に入る', asy
   assert.deepEqual(done.effects.map(e => e.kind).sort(), ['calendarCreate', 'mail'], 'カレンダー登録と通知は控えに回る');
 });
 
-test('オンラインの確定は Apps Script に会議室を作ってもらってから通る', async () => {
+// Meet は Google 側で少し遅れて発行される。以前は発行を待ってから確定していたが、
+// その待ち時間はそのまま生徒・先生の待ち時間になっていた。今は待たずに確定し、
+// URL は付随処理が書き戻す。届くまで画面は「準備中」を出す。
+
+async function onlineLedger() {
   const { h, slot } = ledger();
   h.setRow('students', 'id', 'test-a', { deliveryMode: 'online' });
   h.setRow('slots', 'id', slot.id, { deliveryMode: 'online' });
   const p = await createParity(h);
+  const env = { DB: p.d1, NL_ENABLED: '0', WRITE_MODE: 'worker', GAS_URL: 'https://gas.example.invalid/exec', SYNC_KEY: 'x'.repeat(30) };
+  const accept = { action: 'acceptMany', k: K, requestId: 'parity-accept-online1', slotIds: [slot.id],
+    expectedSnapshots: [{ id: slot.id, date: slot.date, start: slot.start, min: slot.min, subject: slot.subject, deliveryMode: 'online' }] };
+  return { h, p, slot, env, accept };
+}
+
+test('オンラインの確定は、Meet を待たずにその場で通る', async () => {
+  const { h, p, slot, env, accept } = await onlineLedger();
   const { runWrite } = await import('../cf/worker/write.mjs');
 
-  // Apps Script の代わり。頼まれた予定を Meet つきで返す
+  const asked = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { asked.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+  let done;
+  try { done = await runWrite(accept, env, { now: h.now() }); } finally { globalThis.fetch = original; }
+
+  assert.ok(!done.result.error, done.result.error || '');
+  assert.deepEqual(asked, [], '応答を返す前に Apps Script を待っている');
+  const row = await p.d1.prepare('select status, eventId, meetUrl from slots where id = ?').bind(slot.id).first();
+  assert.equal(row.status, 'booked', 'その場で確定していない');
+  assert.match(row.eventId, /^st[0-9a-f]+@google\.com$/, '予定 ID は計算で決まる');
+  assert.equal(row.meetUrl || '', '', 'まだ出ていない URL を入れている');
+  const created = done.effects.filter(e => e.kind === 'calendarCreate');
+  assert.equal(created.length, 1);
+  assert.equal(created[0].wantMeet, true, 'オンラインなのに会議室を頼んでいない');
+});
+
+test('Meet が届いたら、確定済みの授業に書き戻される', async () => {
+  const { h, p, slot, env, accept } = await onlineLedger();
+  const { runWrite, recordEffects, deliverEffects } = await import('../cf/worker/write.mjs');
+  const done = await runWrite(accept, env, { now: h.now() });
+  const marker = done.effects.find(e => e.kind === 'calendarCreate').marker;
+
+  const meet = 'https://meet.example.invalid/abc-defg-hij';
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true, done: 2, failed: [],
+    writebacks: [{ marker, eventId: marker + '@google.com', meetUrl: meet }] }) });
+  try {
+    const ids = await recordEffects(p.d1, done.effects);
+    await deliverEffects(env, done.effects, ids);
+  } finally { globalThis.fetch = original; }
+
+  const row = await p.d1.prepare('select meetUrl from slots where id = ?').bind(slot.id).first();
+  assert.equal(row.meetUrl, meet, '届いた URL が台帳に入っていない');
+});
+
+test('Apps Script に届かなくても、確定は成立する', async () => {
+  const { h, p, slot, accept } = await onlineLedger();
+  const { runWrite } = await import('../cf/worker/write.mjs');
+  // 頼む先がない状態
+  const done = await runWrite(accept, { DB: p.d1, NL_ENABLED: '0', WRITE_MODE: 'worker' }, { now: h.now() });
+  assert.ok(!done.result.error, '付随処理の都合で確定を断っている: ' + JSON.stringify(done.result).slice(0, 160));
+  const row = await p.d1.prepare('select status, meetUrl from slots where id = ?').bind(slot.id).first();
+  assert.equal(row.status, 'booked');
+  assert.equal(row.meetUrl || '', '');
+});
+
+test('URL がまだ無いオンライン授業は、次に画面を見たときに取り直す', async () => {
+  const { h, p, slot, env, accept } = await onlineLedger();
+  const { runWrite, backfillMeet } = await import('../cf/worker/write.mjs');
+  await runWrite(accept, { DB: p.d1, NL_ENABLED: '0', WRITE_MODE: 'worker' }, { now: h.now() });
+  const stored = await p.d1.prepare('select eventId from slots where id = ?').bind(slot.id).first();
+
+  const meet = 'https://meet.example.invalid/zzz-zzzz-zzz';
   const asked = [];
   const original = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    const body = JSON.parse(init.body);
-    asked.push(body);
-    const events = {};
-    for (const want of body.ensure || []) {
-      events[want.id] = { ...want.body, status: 'confirmed', hangoutLink: 'https://meet.example.invalid/' + want.id.slice(2, 8),
-        conferenceData: { createRequest: { status: { statusCode: 'success' } }, entryPoints: [{ entryPointType: 'video', uri: 'https://meet.example.invalid/x' }] } };
-    }
-    return { ok: true, json: async () => ({ ok: true, events }) };
+    asked.push(JSON.parse(init.body));
+    return { ok: true, status: 200, json: async () => ({ ok: true, done: 1, failed: [],
+      writebacks: [{ marker: stored.eventId, eventId: stored.eventId, meetUrl: meet }] }) };
   };
+  let second;
   try {
-    const req = { action: 'acceptMany', k: K, requestId: 'parity-accept-online1', slotIds: [slot.id],
-      expectedSnapshots: [{ id: slot.id, date: slot.date, start: slot.start, min: slot.min, subject: slot.subject, deliveryMode: 'online' }] };
-    const done = await runWrite(req, { DB: p.d1, NL_ENABLED: '0', GAS_URL: 'https://gas.example.invalid/exec', SYNC_KEY: 'x'.repeat(30) }, { now: h.now() });
-    assert.ok(!done.result.error, done.result.error || '');
-    assert.equal(asked.length, 1, 'Apps Script に一度だけ頼む');
-    assert.ok(Array.isArray(asked[0].ensure) && asked[0].ensure.length === 1, '作ってほしい予定を渡す');
-    assert.ok(asked[0].ensure[0].body.conferenceData, 'オンラインなので会議室つきで頼む');
-    const row = await p.d1.prepare('select status, eventId, meetUrl from slots where id = ?').bind(slot.id).first();
-    assert.equal(row.status, 'booked');
-    assert.match(row.meetUrl, /^https:\/\/meet\./, '会議室の URL が台帳に入る: ' + row.meetUrl);
+    const first = await backfillMeet(env);
+    assert.equal(first.asked, 1, '取り直しを頼んでいない');
+    assert.deepEqual(asked[0].items.map(i => i.kind), ['calendarMeet']);
+    second = await backfillMeet(env);
   } finally { globalThis.fetch = original; }
+
+  const row = await p.d1.prepare('select meetUrl from slots where id = ?').bind(slot.id).first();
+  assert.equal(row.meetUrl, meet, '取り直した URL が入っていない');
+  assert.equal(second.asked, 0, '入ったあとも頼みつづけている');
 });
 
-test('会議室を用意できないときは、台帳を一切変えずに断る', async () => {
-  const { h, slot } = ledger();
-  h.setRow('students', 'id', 'test-a', { deliveryMode: 'online' });
-  h.setRow('slots', 'id', slot.id, { deliveryMode: 'online' });
-  const p = await createParity(h);
-  const { runWrite } = await import('../cf/worker/write.mjs');
-  const before = await p.d1.prepare('select status from slots where id = ?').bind(slot.id).first();
-  // GAS_URL を渡さない＝頼む先がない
-  const done = await runWrite({ action: 'acceptMany', k: K, requestId: 'parity-accept-online2', slotIds: [slot.id],
-    expectedSnapshots: [{ id: slot.id, date: slot.date, start: slot.start, min: slot.min, subject: slot.subject, deliveryMode: 'online' }] },
-    { DB: p.d1, NL_ENABLED: '0' }, { now: h.now() });
-  assert.equal(done.result.errorCode, 'calendarUnavailable');
-  const after = await p.d1.prepare('select status from slots where id = ?').bind(slot.id).first();
-  assert.deepEqual(after, before, '失敗したのに台帳が変わっている');
-  const journal = await p.d1.prepare('select count(*) as n from acceptWrites').first();
-  assert.equal(Number(journal.n), 0, '中途半端な確定の記録も残さない');
+test('取り直しは、間を置かずに同じ予定を頼み直さない', async () => {
+  const { h, p, env, accept } = await onlineLedger();
+  const { runWrite, backfillMeet } = await import('../cf/worker/write.mjs');
+  await runWrite(accept, { DB: p.d1, NL_ENABLED: '0', WRITE_MODE: 'worker' }, { now: h.now() });
+  const original = globalThis.fetch;
+  // 取れなかったことにする（書き戻し無し）
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true, done: 1, failed: [], writebacks: [] }) });
+  try {
+    assert.equal((await backfillMeet(env)).asked, 1);
+    assert.equal((await backfillMeet(env)).asked, 0, '立て続けに頼み直している');
+  } finally { globalThis.fetch = original; }
 });

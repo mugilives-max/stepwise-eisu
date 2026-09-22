@@ -175,6 +175,8 @@ function effectsOp_(req) {
     try {
       if (item.kind === 'mail') { effectsSendMail_(item); done++; }
       else if (item.kind === 'calendarCreate') { var w = effectsCreateEvent_(item); if (w) writebacks.push(w); done++; }
+      else if (item.kind === 'calendarPatch') { var wp = effectsPatchEvent_(item); if (wp) writebacks.push(wp); done++; }
+      else if (item.kind === 'calendarMeet') { var wm = effectsMeetOnly_(item); if (wm) writebacks.push(wm); done++; }
       else if (item.kind === 'calendarDelete') { effectsDeleteEvent_(item); done++; }
     } catch (e) {
       failed.push({ kind: String(item && item.kind || ''), error: String(e && e.message || e).slice(0, 200) });
@@ -192,13 +194,43 @@ function effectsSendMail_(item) {
   MailApp.sendEmail(options);
 }
 
+// Meet は発行までに少し間がある。ここは利用者を待たせていない場所なので、
+// 何度か取りに行く。それでも取れなければ空のまま返し、画面は「準備中」を出しつづける
+function effectsMeetUrl_(eventId, tries) {
+  var meet = '';
+  for (var i = 0; i < (tries || 5) && !meet; i++) {
+    if (i) Utilities.sleep(1200);
+    try { meet = addMeet_(eventId); } catch (e) { meet = ''; }
+  }
+  return meet;
+}
+
 function effectsCreateEvent_(item) {
   if (getConfig_('calendarSync') !== 'on') return null;
   var ev = Calendar.Events.insert(item.body, 'primary', { sendUpdates: 'none' });
   var eventId = String(ev.iCalUID || ev.id + '@google.com');
-  var meetUrl = '';
-  if (item.wantMeet) { try { meetUrl = addMeet_(eventId); } catch (e) { meetUrl = ''; } }
-  return { marker: String(item.marker || ''), eventId: eventId, meetUrl: meetUrl };
+  return { marker: String(item.marker || ''), eventId: eventId, meetUrl: item.wantMeet ? effectsMeetUrl_(eventId) : '' };
+}
+
+// 発行が間に合わなかった Meet の取り直し。取れたときだけ書き戻す
+function effectsMeetOnly_(item) {
+  if (getConfig_('calendarSync') !== 'on') return null;
+  var eventId = String(item.eventId || '');
+  if (!eventId) return null;
+  var meet = effectsMeetUrl_(eventId, 2);
+  return meet ? { marker: eventId, eventId: eventId, meetUrl: meet } : null;
+}
+
+// 既にある予定の書き換え（題名の変更、対面⇔オンラインの切り替え）
+function effectsPatchEvent_(item) {
+  if (getConfig_('calendarSync') !== 'on') return null;
+  var id = String(item.marker || '').split('@')[0];
+  if (!id) return null;
+  var event;
+  try { event = Calendar.Events.patch(item.body || {}, 'primary', id, { conferenceDataVersion: 1, sendUpdates: 'none' }); }
+  catch (e) { if (!schedulingCalendarMissing_(e)) throw e; return null; }
+  var eventId = String(event.iCalUID || event.id + '@google.com');
+  return { marker: String(item.marker || ''), eventId: eventId, meetUrl: item.wantMeet ? effectsMeetUrl_(eventId) : '' };
 }
 
 function effectsDeleteEvent_(item) {

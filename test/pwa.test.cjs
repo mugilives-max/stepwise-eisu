@@ -101,3 +101,32 @@ test('ひらけないリンクなら、その旨を知らせる', async () => {
   await flush();
   assert.match(ui.html(), /ひらけませんでした/, '失敗を知らせていない: ' + ui.html().slice(0, 200));
 });
+
+// ---- Meet のリンクは、届くまで「準備中」 ----
+// 確定は Meet の発行を待たない。届くまで画面は準備中を出し、リンクが入ったら差し替わる。
+
+const { studentReady } = require('./helpers/operations-ui-harness.cjs');
+
+function onlineSlot(extra) {
+  return Object.assign({ id: 'slot-online', date: '2026-09-10', start: '17:00', min: 60, subject: '英語',
+    deliveryMode: 'online', st: 'mine' }, extra || {});
+}
+
+test('URL がまだ無いオンライン授業は、準備中と出す', async () => {
+  const ui = await studentReady(state([onlineSlot()]));
+  const html = ui.html();
+  assert.match(html, /Meetのリンクを準備しています/, '準備中が出ていない');
+  assert.doesNotMatch(html, /href="[^"]*meet/i, '空のリンクを出している');
+});
+
+test('URL が届いたら、参加のリンクになる', async () => {
+  const ui = await studentReady(state([onlineSlot({ meet: 'https://meet.google.com/abc-defg-hij' })]));
+  const html = ui.html();
+  assert.match(html, /https:\/\/meet\.google\.com\/abc-defg-hij/, 'リンクになっていない');
+  assert.doesNotMatch(html, /準備しています/, 'リンクがあるのに準備中を出している');
+});
+
+test('対面の授業には、準備中を出さない', async () => {
+  const ui = await studentReady(state([onlineSlot({ deliveryMode: 'in_person' })]));
+  assert.doesNotMatch(ui.html(), /準備しています/, '対面に Meet の案内を出している');
+});

@@ -126,7 +126,7 @@ function formatDate(date, timezone, format) {
  *   record  … true にすると Google のサービス（メール・カレンダー等）を止めずに、
  *             呼ばれた記録だけ残す。「この書き込みは Google を使うか」の調査に使う
  */
-export function createServices({ books, properties = {}, now = null, mutable = false, record = false, effects = false, primedEvents = {} }) {
+export function createServices({ books, properties = {}, now = null, mutable = false, record = false, effects = false }) {
   const cache = new Map();
   // 時計。既定は実時刻。now を渡すとその時刻で固定する（並走テスト用）
   const Clock = now === null ? Date : class extends Date {
@@ -140,7 +140,6 @@ export function createServices({ books, properties = {}, now = null, mutable = f
   // 本物の ID は付随処理が終わってから書き戻す（cf/worker/write.mjs）。
   const queued = [];
   // Google に実際に問い合わせないと先へ進めないもの（オンライン授業の Meet）
-  const needsGoogle = [];
   const onWrite = mutable ? name => touched.add(name) : null;
   const app = bookOf(books.app || {}, onWrite);
   const ledger = bookOf(books.ledger || {}, onWrite);
@@ -155,7 +154,6 @@ export function createServices({ books, properties = {}, now = null, mutable = f
     _touched: touched,
     _calls: calls,
     _effects: queued,
-    _needsGoogle: needsGoogle,
     _books: books,
     Date: Clock,
     SpreadsheetApp: {
@@ -219,28 +217,26 @@ export function createServices({ books, properties = {}, now = null, mutable = f
     CalendarApp: external('CalendarApp'),
     // カレンダー。予定の ID は GAS 側が決める（生徒・処理番号・授業から算出）ので、
     // Worker は「作る予定」を控えるだけで台帳に正しい ID を書ける。
-    //   対面  … その場で完結する（控えた予定はあとで Apps Script が作る）
-    //   オンライン … Meet の URL が要る。Worker では作れないので、
-    //                primedEvents（Apps Script に先に作ってもらった予定）を渡して二度目で通す
+    // 対面もオンラインも同じ扱いで、Google への実際の反映は応答を返したあと。
+    // オンラインの Meet の URL は、発行できしだい台帳に書き戻される（それまで画面は「準備中」）。
     Calendar: effects
       ? { Events: {
-            get(_cal, id) {
-              const primed = primedEvents[String(id)];
-              if (primed) return primed;
-              // 無い扱いにして insert へ進ませる（GAS 側の判定と同じ文言）
-              throw new Error('404 not found');
-            },
+            // 無い扱いにして insert へ進ませる（GAS 側の判定と同じ文言）
+            get() { throw new Error('404 not found'); },
             insert(body) {
               const id = String((body && body.id) || '');
-              const primed = primedEvents[id];
-              if (primed) return primed;
+              // Meet の発行は Google 側で少し遅れる。ここで待つと利用者の待ち時間になるので、
+              // 予定づくりも Meet の発行も控えに回す。URL は届いてから台帳に書き戻す
               const wantMeet = !!(body && body.conferenceData);
               queued.push({ kind: 'calendarCreate', marker: id, body, wantMeet });
-              if (wantMeet) needsGoogle.push({ id, body });
               // 作ったことにして返す。中身は渡された body そのもの（本人確認の印を含む）
               return { ...body, status: 'confirmed' };
             },
-            patch(body, _cal, id) { needsGoogle.push({ id: String(id), body, patch: true }); return { ...(primedEvents[String(id)] || {}), id: String(id) }; },
+            patch(body, _cal, id) {
+              // 題名の書き換えも、対面⇔オンラインの切り替えも控えに回す
+              queued.push({ kind: 'calendarPatch', marker: String(id), body, wantMeet: !!(body && body.conferenceData) });
+              return { id: String(id) };
+            },
             remove(_cal, id) {
               const at = queued.findIndex(e => e.kind === 'calendarCreate' && e.marker === String(id));
               if (at >= 0) queued.splice(at, 1); else queued.push({ kind: 'calendarDelete', eventId: String(id) });

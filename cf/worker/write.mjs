@@ -83,27 +83,14 @@ function fastParentCrypto() {
  */
 export async function runWrite(body, env, options = {}) {
   let last = null;
-  let primedEvents = options.primedEvents || {};
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const version = await currentVersion(env.DB);
     const view = await books(env.DB, TABLE_COLUMNS);
-    const services = createServices({ books: view, properties: propertiesFor(env), now: options.now ?? null, mutable: true, effects: true, primedEvents });
+    const services = createServices({ books: view, properties: propertiesFor(env), now: options.now ?? null, mutable: true, effects: true });
     const gas = createGas(services);
     gas.StepwiseParentCrypto = fastParentCrypto();
     const out = gas.doPost({ postData: { contents: JSON.stringify(body) } });
     const result = JSON.parse(out.getContent());
-
-    // オンライン授業の Meet は Worker では作れない。Apps Script に先に作ってもらい、
-    // その結果を持ってもう一度実行する（台帳にはまだ何も書いていないのでやり直せる）
-    const pending = services._needsGoogle.filter(x => !primedEvents[x.id]);
-    if (pending.length) {
-      const made = await ensureEvents(env, pending);
-      if (!made.ok) {
-        return { result: { error: 'オンライン授業の会議室を用意できませんでした。もう一度お試しください', errorCode: 'calendarUnavailable' }, effects: [], attempts: attempt };
-      }
-      primedEvents = { ...primedEvents, ...made.events };
-      continue; // 台帳は書かずにやり直す
-    }
 
     if (!services._touched.size) return { result, effects: services._effects, version, attempts: attempt };
     try {
@@ -115,24 +102,6 @@ export async function runWrite(body, env, options = {}) {
     }
   }
   return { result: { error: '他の操作と重なりました。もう一度お試しください', errorCode: 'conflict' }, effects: [], attempts: MAX_ATTEMPTS, conflict: String(last && last.message) };
-}
-
-// Apps Script に予定を作ってもらい、できた予定をそのまま受け取る（Meet を含む）
-async function ensureEvents(env, wanted) {
-  if (!env.GAS_URL || !env.SYNC_KEY) return { ok: false };
-  try {
-    const res = await fetch(env.GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'effects', key: env.SYNC_KEY, ensure: wanted }),
-      redirect: 'follow',
-    });
-    const payload = await res.json().catch(() => null);
-    if (!res.ok || !payload || payload.error || !payload.events) return { ok: false };
-    return { ok: true, events: payload.events };
-  } catch (e) {
-    return { ok: false };
-  }
 }
 
 // ---- 付随処理（メール・カレンダー）を Apps Script に頼む ----
@@ -175,9 +144,39 @@ export async function deliverEffects(env, effects, ids) {
   // 素の ID なので、どちらの形でも当たるように照合する（片方だけだと書き戻しが空振りする）
   const writebacks = (payload && Array.isArray(payload.writebacks)) ? payload.writebacks : [];
   if (writebacks.length) {
+    // meetUrl は「取れたときだけ」書く。題名だけを直した書き換えの応答で、
+    // すでに発行済みの Meet を消してしまわないようにする
     await env.DB.batch(writebacks.map(w => env.DB
-      .prepare("update slots set eventId = ?, meetUrl = ? where eventId = ? or eventId = ? || '@google.com'")
-      .bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.marker), String(w.marker))));
+      .prepare("update slots set eventId = ?, meetUrl = case when ? <> '' then ? else meetUrl end where eventId = ? or eventId = ? || '@google.com'")
+      .bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.meetUrl || ''), String(w.marker), String(w.marker))));
   }
   return { sent: error ? 0 : effects.length, error, writebacks: writebacks.length };
+}
+
+// ---- Meet の取り直し ----
+//
+// オンライン授業の Meet は Google 側で少し遅れて発行される。台帳は待たずに確定し、
+// URL は付随処理が書き戻す。その書き戻しが間に合わなかった授業をここで拾う。
+// 定期実行で探し回るのではなく、画面が読みに来たときに合わせて取り直す
+// （誰も見ていないなら急ぐ必要はない）。
+
+const MEET_RETRY_MS = 120000; // 同じ予定を立て続けに頼まない
+
+/** URL がまだ無いオンライン授業について、Apps Script に Meet を取り直してもらう。 */
+export async function backfillMeet(env, limit = 5) {
+  if (!env.GAS_URL || !env.SYNC_KEY) return { asked: 0 };
+  const since = new Date(Date.now() - MEET_RETRY_MS).toISOString();
+  const rows = await env.DB.prepare(
+    `select s.eventId as eventId from slots s
+      where s.deliveryMode = 'online' and s.status = 'booked'
+        and s.eventId <> '' and (s.meetUrl is null or s.meetUrl = '')
+        and not exists (select 1 from _effects e
+                         where e.kind = 'calendarMeet' and e.createdAt > ?
+                           and e.payload like '%' || s.eventId || '%')
+      limit ?`).bind(since, limit).all();
+  const wanted = (rows.results || []).map(r => ({ kind: 'calendarMeet', eventId: String(r.eventId) }));
+  if (!wanted.length) return { asked: 0 };
+  const ids = await recordEffects(env.DB, wanted);
+  await deliverEffects(env, wanted, ids);
+  return { asked: wanted.length };
 }

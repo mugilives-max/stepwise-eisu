@@ -129,90 +129,84 @@ test('test students skip Calendar and Mail even with integration settings enable
   assert.equal(h.calls.get + h.calls.insert + h.calls.mail, 0);
 });
 
-test('online confirmation remains offered while Meet is pending and retries read the same event', () => {
+// Meet は Google 側で少し遅れて発行される。以前はそれが済むまで確定を保留していたが、
+// その待ち時間はそのまま生徒・先生の待ち時間になっていた。今は台帳を先に確定し、
+// URL は発行されしだい書き戻す（画面はそれまで「準備中」と出す）。
+
+test('Meet がまだでも、オンライン授業はその場で確定する', () => {
   const h = fixture(), slot = h.seedSlot({ deliveryMode: 'online' }); h.nextConferenceResult('pending');
   const first = h.batch([slot.id]);
-  assert.equal(first.ok, false); assert.equal(first.pending, true); assert.equal(first.completed, 0);
-  assert.equal(h.rows('slots')[0].status, 'offered'); assert.equal(h.rows('slots')[0].eventId, ''); assert.equal(h.calls.mail, 0);
-  assert.equal(h.batch([slot.id]).pending, true);
-  assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 0, 'pending Meet does not issue another createRequest');
-  h.finishConference([...h.events.keys()][0]);
-  const resumed = h.batch([slot.id]);
-  assert.equal(resumed.ok, true, JSON.stringify(resumed)); assert.equal(h.rows('slots')[0].meetUrl, 'https://meet.google.com/synthetic');
-  assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 0); assert.equal(h.calls.mail, 1);
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal(first.pending, false, '確定を保留している');
+  assert.equal(h.rows('slots')[0].status, 'booked');
+  assert.match(h.rows('slots')[0].eventId, /@google\.com$/, 'カレンダーの予定が結びついていない');
+  assert.equal(h.rows('slots')[0].meetUrl, '', 'まだ出ていない URL を入れている');
+  assert.equal(h.calls.mail, 1, '確定の知らせが出ていない');
+  assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 0, '発行待ちのまま作り直している');
 });
 
-test('a failed Meet request gets a fresh etag-derived request on the same event', () => {
+test('発行し直しが要る失敗のときも、確定は止めない', () => {
   const h = fixture(), slot = h.seedSlot({ deliveryMode: 'online' }); h.nextConferenceResult('failure');
-  assert.equal(h.batch([slot.id]).pending, true); assert.equal(h.calls.patch, 0);
-  h.nextConferenceResult('success');
-  const resumed = h.batch([slot.id]);
-  assert.equal(resumed.ok, true, JSON.stringify(resumed));
-  assert.equal(h.events.size, 1); assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 1);
-  assert.equal(h.calls.conferenceRequests.length, 2); assert.notEqual(h.calls.conferenceRequests[0], h.calls.conferenceRequests[1]);
-  assert.equal(h.calls.mail, 1);
+  const out = h.batch([slot.id]);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(h.rows('slots')[0].status, 'booked');
+  assert.equal(h.rows('slots')[0].meetUrl, '', '失敗した会議室の URL を入れている');
+  assert.equal(h.events.size, 1); assert.equal(h.calls.insert, 1);
 });
 
-test('a lost response to failed-Meet replacement converges without another conference request', () => {
-  const h = fixture(), slot = h.seedSlot({ deliveryMode: 'online' }); h.nextConferenceResult('failure');
-  assert.equal(h.batch([slot.id]).pending, true);
-  h.nextConferenceResult('pending'); h.losePatch();
-  assert.equal(h.batch([slot.id]).pending, true); assert.equal(h.calls.patch, 1);
-  assert.equal(h.batch([slot.id]).pending, true); assert.equal(h.calls.patch, 1);
+test('Meet が出たあとに同じ処理を送り直しても、予定は増えない', () => {
+  const h = fixture(), slot = h.seedSlot({ deliveryMode: 'online' }); h.nextConferenceResult('pending');
+  assert.equal(h.batch([slot.id]).ok, true);
   h.finishConference([...h.events.keys()][0]);
-  assert.equal(h.batch([slot.id]).ok, true); assert.equal(h.calls.conferenceRequests.length, 2);
-  assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 1); assert.equal(h.calls.mail, 1);
+  const again = h.batch([slot.id]);
+  assert.equal(again.ok, true, JSON.stringify(again));
+  assert.equal(h.events.size, 1, 'カレンダーの予定が増えている');
+  assert.equal(h.calls.insert, 1); assert.equal(h.calls.mail, 1, '知らせを二度出している');
 });
 
-test('mode changes keep the original mode until an asynchronously generated Meet is usable', () => {
+test('対面からオンラインへの切り替えも、Meet を待たずに通る', () => {
   const h = fixture(), slot = h.seedSlot(); assert.equal(h.batch([slot.id]).ok, true);
   const req = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'in_person', deliveryMode: 'online' });
   h.nextConferenceResult('pending');
-  assert.equal(h.send(req).errorCode, 'pending'); assert.equal(h.rows('slots')[0].deliveryMode, 'in_person');
-  assert.equal(h.send(req).errorCode, 'pending'); assert.equal(h.calls.patch, 1);
+  const out = h.send(req);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(h.rows('slots')[0].deliveryMode, 'online', '切り替わっていない');
+  assert.equal(h.rows('slots')[0].meetUrl, '', 'まだ出ていない URL を入れている');
+});
+
+test('すでに出ている Meet を、空で上書きしない', () => {
+  const h = fixture(), slot = h.seedSlot({ deliveryMode: 'online' });
+  assert.equal(h.batch([slot.id]).ok, true);
   h.finishConference([...h.events.keys()][0]);
-  assert.equal(h.send(req).ok, true); assert.equal(h.rows('slots')[0].deliveryMode, 'online');
-  assert.equal(h.rows('slots')[0].meetUrl, 'https://meet.google.com/synthetic'); assert.equal(h.calls.patch, 1);
+  // いちど URL が入った状態を作る
+  const mode = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'online', deliveryMode: 'online' });
+  h.send(mode);
+  const saved = h.rows('slots')[0].meetUrl;
+  assert.match(String(saved), /^https:\/\//, '前提が崩れている（URL が入っていない）');
+  // 題名だけが変わるような書き換えのあとも、URL は残る
+  h.send(h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'online', deliveryMode: 'online' }));
+  assert.equal(h.rows('slots')[0].meetUrl, saved, 'URL が消えている');
 });
 
-test('mode changes recreate a failed conference with a new request and do not save a blank Meet', () => {
-  const h = fixture(), slot = h.seedSlot(); assert.equal(h.batch([slot.id]).ok, true);
-  const req = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'in_person', deliveryMode: 'online' });
-  h.nextConferenceResult('failure');
-  assert.equal(h.send(req).errorCode, 'pending'); assert.equal(h.rows('slots')[0].deliveryMode, 'in_person');
-  h.nextConferenceResult('success');
-  assert.equal(h.send(req).ok, true); assert.equal(h.rows('slots')[0].deliveryMode, 'online');
-  assert.equal(h.calls.conferenceRequests.length, 2); assert.notEqual(h.calls.conferenceRequests[0], h.calls.conferenceRequests[1]);
-  assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 2);
-});
-
-test('legacy booking without a Calendar event repairs online mode only after Meet is ready', () => {
+test('カレンダーの予定が無い古い予約も、切り替えでその場で直る', () => {
   const h = fixture(), slot = h.seedSlot({ status: 'booked', eventId: '', meetUrl: '' });
   const req = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'in_person', deliveryMode: 'online' });
   h.nextConferenceResult('pending');
-  assert.equal(h.send(req).errorCode, 'pending');
-  assert.equal(h.rows('slots')[0].deliveryMode, 'in_person'); assert.equal(h.rows('slots')[0].eventId, '');
-  assert.equal(h.send(req).errorCode, 'pending'); assert.equal(h.calls.insert, 1); assert.equal(h.calls.patch, 0);
-  h.finishConference([...h.events.keys()][0]);
-  const resumed = h.send(req); assert.equal(resumed.ok, true, JSON.stringify(resumed));
-  assert.equal(h.rows('slots')[0].deliveryMode, 'online'); assert.equal(h.rows('slots')[0].meetUrl, 'https://meet.google.com/synthetic');
-  assert.match(h.rows('slots')[0].eventId, /@google\.com$/); assert.equal(h.events.size, 1); assert.equal(h.calls.mail, 0);
+  const out = h.send(req);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(h.rows('slots')[0].deliveryMode, 'online');
+  assert.match(h.rows('slots')[0].eventId, /@google\.com$/, 'カレンダーの予定が作られていない');
+  assert.equal(h.events.size, 1); assert.equal(h.calls.mail, 0);
 });
 
-test('legacy mode repair reuses its event after the Calendar insert response is lost', () => {
+test('同じ処理番号で内容を変えた送り直しは断る。新しい処理番号なら戻せる', () => {
   const h = fixture(), slot = h.seedSlot({ status: 'booked', eventId: '', meetUrl: '' });
   const req = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'in_person', deliveryMode: 'online' });
-  h.loseInsert(); assert.equal(h.send(req).errorCode, 'pending');
-  assert.equal(h.rows('slots')[0].deliveryMode, 'in_person');
-  assert.equal(h.send(req).ok, true); assert.equal(h.calls.insert, 1); assert.equal(h.events.size, 1);
-});
-
-test('pending mode edits require the original payload; a later new request can change back', () => {
-  const h = fixture(), slot = h.seedSlot({ status: 'booked', eventId: '', meetUrl: '' });
-  const req = h.teacherRequest('setSlotDeliveryMode', { studentId: 'test-a', slotId: slot.id, expectedMode: 'in_person', deliveryMode: 'online' });
-  h.nextConferenceResult('pending'); assert.equal(h.send(req).errorCode, 'pending');
+  h.nextConferenceResult('pending');
+  assert.equal(h.send(req).ok, true, 'Meet を待たずに通らない');
+  // 同じ処理番号で中身だけ変えた送り直しは、取り違えになるので断る
   assert.equal(h.send({ ...req, deliveryMode: 'in_person' }).errorCode, 'conflict');
-  h.finishConference([...h.events.keys()][0]); assert.equal(h.send(req).ok, true);
+  // 新しい処理番号なら、対面に戻せる
   assert.equal(h.send({ ...req, requestId: 'synthetic-mode-back', expectedMode: 'online', deliveryMode: 'in_person' }).ok, true);
   assert.equal(h.rows('slots')[0].deliveryMode, 'in_person'); assert.equal(h.rows('slots')[0].meetUrl, '');
   const event = [...h.events.values()][0]; assert.equal(event.conferenceData, undefined); assert.match(event.summary, /対面/);

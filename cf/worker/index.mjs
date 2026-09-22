@@ -6,7 +6,7 @@
 import { health } from "./health.mjs";
 import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
-import { runWrite, recordEffects, deliverEffects } from "./write.mjs";
+import { runWrite, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -134,7 +134,11 @@ export default {
     // 書き込みと、まだ載せていない読み取りは 501 を返し、呼び出し側が GAS に回す。
     try {
       const res = await handleRead(body, scope);
-      if (res !== null) return reply(res, 200, head);
+      if (res !== null) {
+        // 画面を返したあとで、URL がまだ無いオンライン授業の Meet を取り直す（待たせない）
+        if (env.WRITE_MODE === "worker" && ctx && ctx.waitUntil) ctx.waitUntil(backfillMeet(env).catch(() => {}));
+        return reply(res, 200, head);
+      }
     } catch (e) {
       const detail = dev ? { detail: String((e && e.message) || e).slice(0, 200), sql: lastSql.slice(0, 200) } : {};
       return reply({ error: "読み取りに失敗しました", errorCode: "workerError", ...detail }, 500, head);
