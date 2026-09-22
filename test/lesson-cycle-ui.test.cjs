@@ -17,13 +17,14 @@ function savedRecord(input={},revision=1,student='test-a',slot='slot-a') {
 }
 function createUI(hash=href()) {
   const elements=new Map(),events=new Map(),requests=[],local=new Map([['sw_admt','test-teacher-token']]),session=new Map(),storageWrites=[];
+  let focused='';
   const decode=s=>String(s).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
   function on(key,handler) { if (!events.has(key)) events.set(key,[]); events.get(key).push(handler); }
   function emit(key,event={}) { for (const fn of events.get(key)||[]) fn(event); }
   function element(id,attrs={}) {
     let html=''; const childIds=new Set();
     const e={id,value:'',textContent:'',disabled:Object.hasOwn(attrs,'disabled'),attrs,
-      getAttribute:k=>Object.hasOwn(attrs,k)?attrs[k]:null,hasAttribute:k=>Object.hasOwn(attrs,k),focus(){},scrollIntoView(){},classList:{add(){},remove(){}},
+      getAttribute:k=>Object.hasOwn(attrs,k)?attrs[k]:null,hasAttribute:k=>Object.hasOwn(attrs,k),focus(){focused=id;},scrollIntoView(){},classList:{add(){},remove(){}},
       addEventListener:(name,fn)=>on(id+':'+name,fn),
       clear(){for (const child of childIds) {elements.get(child)?.clear();elements.delete(child);}childIds.clear();}};
     Object.defineProperty(e,'innerHTML',{get:()=>html,set(value){
@@ -53,6 +54,10 @@ function createUI(hash=href()) {
     input(id,value){const el=elements.get(id);assert.ok(el,'input visible: '+id);el.value=value;emit('document:input',{target:el});},
     click(action,attrs={}){const combined=ui.html()+elements.get('nav').innerHTML;const match=[...combined.matchAll(/<[^>]+\bdata-action="([^"]+)"[^>]*>/g)].find(x=>x[1]===action);assert.ok(match,'action visible: '+action);const btn={disabled:/\sdisabled(?:\s|>)/.test(match[0]),getAttribute:key=>key==='data-action'?action:attrs[key]??null};emit('document:click',{target:{closest:()=>btn},preventDefault(){}});},
     navigate(nextHash){context.location.hash=nextHash;emit('window:hashchange');},
+    // キー操作。composing は日本語入力の変換中（Enter が変換の確定に使われる場面）
+    key(id,name,options={}){const el=elements.get(id);assert.ok(el,'input visible: '+id);
+      emit('document:keydown',{key:name,target:el,preventDefault(){},shiftKey:false,ctrlKey:false,altKey:false,metaKey:false,isComposing:!!options.composing,keyCode:options.composing?229:13,...options});},
+    focused:()=>focused,
     beforeUnload(){let prevented=false;const event={preventDefault(){prevented=true;}};emit('window:beforeunload',event);return prevented;},
     noPrivateStorage(){assert.equal(JSON.stringify(storageWrites).includes(privateSentinel),false);assert.equal(JSON.stringify([...local,...session]).includes(privateSentinel),false);}
   };return ui;
@@ -130,4 +135,67 @@ test('generated report excludes private notes and escaping preserves literal HTM
   const ui=await createUI().ready(lessonContext('test-a','slot-a',r));assert.equal(ui.html().includes('<img src=x'),false);
   ui.click('lc-generate');assert.equal(ui.el('lc-body').value.includes(privateSentinel),false);assert.ok(ui.el('lc-body').value.includes('<img src=x'));
   ui.click('lc-report');const req=ui.requests.at(-1).body;assert.equal(req.op,'lessonReportDraftSave');assert.equal(req.body.includes(privateSentinel),false);ui.noPrivateStorage();
+});
+
+// 宿題の欄で Enter を押したら、同じ種類の次の欄へ移る。
+// 実際の授業のあと、宿題を続けて打ち込めるようにするため（毎回マウスに戻らない）。
+// 日本語入力の変換確定の Enter と取り違えないことが要。
+//
+// 欄の id は「宿題・持ち物・メモ」をまとめた並びの番号。最初は各種類 1 つずつなので
+// lc-title-0=宿題1 / 1=持ち物1 / 2=メモ1 で、増やした宿題 2 つ目は lc-title-3 になる。
+
+test('Enter で次の宿題の欄へ移り、最後なら欄が増える',async()=>{
+  const ui=await createUI().ready();
+  assert.equal(ui.el('lc-title-3'),undefined,'前提: 宿題は 1 つだけ');
+  ui.input('lc-title-0','4-1 Excercise');
+  ui.key('lc-title-0','Enter');
+  assert.equal(ui.focused(),'lc-title-3','次の宿題の欄へ移っていない');
+  assert.ok(ui.el('lc-title-3'),'欄が増えていない');
+  assert.equal(ui.el('lc-title-3').value,'','増えた欄に中身が入っている');
+
+  ui.input('lc-title-3','4-2 Excercise');
+  ui.key('lc-title-3','Enter');
+  assert.equal(ui.focused(),'lc-title-4','続けて増えない');
+});
+
+test('持ち物の欄からは、持ち物の欄が増える（種類をまたがない）',async()=>{
+  const ui=await createUI().ready();
+  ui.input('lc-title-1','英単語帳');
+  ui.key('lc-title-1','Enter');
+  assert.equal(ui.focused(),'lc-title-3','増えた欄へ移っていない');
+  // 増えたのが持ち物であること（宿題は増えていない）
+  assert.match(ui.html(),/持ち物 2/,'持ち物が増えていない');
+  assert.doesNotMatch(ui.html(),/宿題 2/,'種類をまたいで増えている');
+});
+
+test('すでに次の欄があれば、増やさずそこへ移る',async()=>{
+  const ui=await createUI().ready();
+  ui.input('lc-title-0','1つ目');
+  ui.key('lc-title-0','Enter');
+  ui.input('lc-title-3','2つ目');
+  ui.key('lc-title-0','Enter');
+  assert.equal(ui.focused(),'lc-title-3');
+  assert.equal(ui.el('lc-title-3').value,'2つ目','既にある欄が消えている');
+  assert.equal(ui.el('lc-title-4'),undefined,'欄を増やしている');
+});
+
+test('空欄のまま Enter を押しても、欄は増えない',async()=>{
+  const ui=await createUI().ready();
+  ui.key('lc-title-0','Enter');
+  assert.equal(ui.el('lc-title-3'),undefined,'空欄で増えている');
+});
+
+test('日本語入力の変換中の Enter では、欄を移らない',async()=>{
+  const ui=await createUI().ready();
+  ui.input('lc-title-0','かんじ');
+  ui.key('lc-title-0','Enter',{composing:true});
+  assert.equal(ui.focused(),'','変換の確定で欄を移っている');
+  assert.equal(ui.el('lc-title-3'),undefined,'変換の確定で欄が増えている');
+});
+
+test('Shift+Enter では欄を移らない',async()=>{
+  const ui=await createUI().ready();
+  ui.input('lc-title-0','1つ目');
+  ui.key('lc-title-0','Enter',{shiftKey:true});
+  assert.equal(ui.focused(),'');
 });

@@ -1906,6 +1906,34 @@
           }
           lessonRender(e);
         }
+        // 宿題・持ち物・メモの欄で Enter を押したら、同じ種類の次の欄へ移る。
+        // 最後の欄なら新しい欄を足してそこへ移るので、続けて打ち込める。
+        // 日本語入力の変換中の Enter は「変換の確定」なので、欄を移らない。
+        document.addEventListener("keydown", function (ev) {
+          if (ev.key !== "Enter" || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+          if (ev.isComposing || ev.keyCode === 229) return;
+          if (route().page !== "lesson" && route().page !== 'lessonPair') return;
+          var el = ev.target;
+          if (!el || !el.getAttribute || el.getAttribute("data-lc-prop") !== "title") return;
+          var e = lessonEditors[el.getAttribute('data-lc-editor')] || lessonEditor();
+          if (e.busy || e.pending || !e.form) return;
+          var items = e.form.homework, itemId = el.getAttribute("data-lc-item"), at = -1;
+          for (var i = 0; i < items.length; i++) if (items[i].itemId === itemId) at = i;
+          if (at < 0) return;
+          ev.preventDefault();
+          var type = items[at].type || "宿題";
+          var same = items.filter(function (x) { return (x.type || "宿題") === type; });
+          var next = same[same.indexOf(items[at]) + 1];
+          if (!next) {
+            // 空欄のまま増やさない。上限（10 件）も「＋ 追加」と同じに合わせる
+            if (!String(items[at].title || "").trim() || items.length >= 10) return;
+            next = { itemId: lessonId(), title: "", due: "", dueMode: type === "メモ" ? "none" : "nextLesson", type: type };
+            items.push(next); e.dirty = true; e.preview = false;
+            lessonRender(e);
+          }
+          var field = document.getElementById("lc-title-" + items.indexOf(next));
+          if (field) field.focus();
+        });
         document.addEventListener("input", function (ev) {
           if (route().page !== "lesson" && route().page !== 'lessonPair') return;
           var el = ev.target, e = lessonEditors[el.getAttribute('data-lc-editor')] || lessonEditor(), field = el.getAttribute("data-lc-field"), itemId = el.getAttribute("data-lc-item");

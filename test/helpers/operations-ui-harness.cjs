@@ -16,7 +16,7 @@ function createUI(kind = 'student', options = {}) {
   function element(id, a = {}) {
     let html = ''; const children = new Set();
     const e = { id, attrs: a, value: a.value || '', textContent: '', checked: Object.hasOwn(a, 'checked'), disabled: Object.hasOwn(a, 'disabled'),
-      getAttribute: k => Object.hasOwn(a, k) ? a[k] : null, hasAttribute: k => Object.hasOwn(a, k), focus() {}, scrollIntoView() {},
+      getAttribute: k => Object.hasOwn(a, k) ? a[k] : null, hasAttribute: k => Object.hasOwn(a, k), focus() { focused = id; }, scrollIntoView() {},
       classList: { add() {}, remove() {} }, addEventListener: (k, f) => on(id + ':' + k, f),
       clear() { for (const child of children) { elements.get(child)?.clear(); elements.delete(child); } children.clear(); } };
     Object.defineProperty(e, 'innerHTML', { get: () => html, set(value) {
@@ -31,7 +31,7 @@ function createUI(kind = 'student', options = {}) {
   }
   ['app', 'nav', 'tabs', 'toast', 'parent-header-actions'].forEach(id => elements.set(id, element(id)));
   const storage = map => ({ getItem: k => map.get(k) ?? null, setItem(k, v) { writes.push([k, String(v)]); map.set(k, String(v)); }, removeItem: k => map.delete(k) });
-  let requestId = 0, confirmCount = 0;
+  let requestId = 0, confirmCount = 0, focused = '';
   const location = { hash: options.hash || (kind === 'admin' ? '#s=test-a' : '#home'), search: options.search || '', pathname: kind === 'admin' ? '/kanri/' : '/yoyaku/', href: 'https://example.invalid/' + (kind === 'admin' ? 'kanri/' : 'yoyaku/') };
   const context = { Date: options.now ? class extends Date { constructor(...args) { super(...(args.length ? args : [options.now])); } static now() { return new Date(options.now).getTime(); } } : Date, crypto: require('node:crypto').webcrypto, document: { getElementById: id => elements.get(id) || null, addEventListener: (k, f) => on('document:' + k, f), querySelector: () => null, querySelectorAll: () => [] },
     window: { scrollTo() {}, addEventListener: (k, f) => on('window:' + k, f), crypto: { randomUUID: () => 'test-request-' + (++requestId) } }, location,
@@ -63,6 +63,12 @@ function createUI(kind = 'student', options = {}) {
     click(action, wanted = {}) { const tags = [...(ui.html() + [...elements.values()].map(e => e.innerHTML).join('')).matchAll(/<[^>]+\bdata-action="([^"]+)"[^>]*>/g)]; const tag = tags.find(m => m[1] === action && Object.keys(wanted).every(k => attrs(m[0])[k] === wanted[k])); assert.ok(tag, 'visible action: ' + action); const btn = element('', attrs(tag[0])); if (!btn.disabled) emit((kind === 'admin' ? 'document' : action==='fa-notices' && elements.get('parent-header-actions').innerHTML.includes('fa-notices') ? 'parent-header-actions' : 'app') + ':click', { target: { closest: () => btn }, preventDefault() {} }); },
     submit(id) { assert.ok(elements.has(id), 'visible form: ' + id); emit('app:submit', { target: elements.get(id), preventDefault() {} }); },
     navigate(hash) { location.hash = hash; emit('window:hashchange', {}); },
+    // キー操作。composing は日本語入力の変換中（Enter が変換の確定に使われる場面）
+    key(id, name, options = {}) {
+      const el = elements.get(id); assert.ok(el, 'visible input: ' + id);
+      emit('document:keydown', { key: name, target: el, preventDefault() {}, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, isComposing: !!options.composing, keyCode: options.composing ? 229 : 13, ...options });
+    },
+    focused: () => focused,
     switchStudent(k) { const oldValue = local.get('sw_k'); local.set('sw_k', k); emit('window:storage', { key: 'sw_k', oldValue, newValue: k }); },
     beforeUnload() { let blocked = false; emit('window:beforeunload', { preventDefault() { blocked = true; } }); return blocked; }
   }; return ui;
