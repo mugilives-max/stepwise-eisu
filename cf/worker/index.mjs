@@ -107,6 +107,12 @@ export default {
     const action = String((body && body.action) || "");
     if (!action) return reply({ error: "action がありません" }, 400, head);
 
+    // 開発時（AUTH_MODE=mock）だけ、失敗した問い合わせを控えて原因を追えるようにする。
+    // 本番では中身を返さない（台帳の構造を外に出さないため）。
+    const dev = env.AUTH_MODE === "mock";
+    let lastSql = "";
+    const scope = dev ? { ...env, DB: { ...env.DB, prepare: (sql) => { lastSql = sql; return env.DB.prepare(sql); }, batch: (s) => env.DB.batch(s) } } : env;
+
     // 書き込み。WRITE_MODE=worker のときだけ受ける（それまでは Apps Script が正本）。
     // 台帳を書いたら応答を返し、そのあとでメール・カレンダーを Apps Script に頼む。
     if (env.WRITE_MODE === "worker" && !isReadAction(body)) {
@@ -126,11 +132,6 @@ export default {
 
     // 読み取りは D1 から返す。GAS のコードをそのまま動かすので応答は同じ（cf/worker/read.mjs）。
     // 書き込みと、まだ載せていない読み取りは 501 を返し、呼び出し側が GAS に回す。
-    // 開発時（AUTH_MODE=mock）だけ、失敗した問い合わせを控えて原因を追えるようにする。
-    // 本番では中身を返さない（台帳の構造を外に出さないため）。
-    const dev = env.AUTH_MODE === "mock";
-    let lastSql = "";
-    const scope = dev ? { ...env, DB: { ...env.DB, prepare: (sql) => { lastSql = sql; return env.DB.prepare(sql); }, batch: (s) => env.DB.batch(s) } } : env;
     try {
       const res = await handleRead(body, scope);
       if (res !== null) return reply(res, 200, head);

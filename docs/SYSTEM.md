@@ -762,3 +762,12 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - 対応している読み取り: 生徒マイページ（`state`）、管理画面の `kanriDashboard` / `kanriStudent` / `billingPreview` / `state`、保護者ページの `familyHome` / `familyData` / `familyStudentState` / `familyNotices`。
 - 保護者のログインの確認は GAS の `familyRequire_` / `familyChildRequire_` をそのまま使う。セッションの照合に SHA-256（`parentDigest_`）を使うので、Worker 側は `node:crypto` で GAS と同じ符号付きバイト列を返す実装にしてある（`cf/lib/gas-services.mjs`）。値が 1 文字でも違うと保護者がログインできなくなるため、並走テストで突き合わせている。
 - 書き込みを伴う保護者の操作（`familyNoticeRead`・メール設定・ログイン/登録）は Worker に載せず、Apps Script に回る。先生のプレビュー（`preview`）と `learningService` も同様。
+
+### 台帳の正本を D1 へ（2026-09-22、GAS `2026-09-22-mcp-relay`）
+
+- **書き込みも Worker が担当する**。台帳の正本は D1。Apps Script は台帳に書かない（スクリプト プロパティ `WORKER_OWNS_LEDGER=1`）。
+- Apps Script に残る役割は 3 つ。(1) 読み取り（画面が Worker に届かないときの回り道）、(2) メール送信とカレンダー登録の代行（`effectsOp_`）、(3) MCP からの呼び出しを Worker へ中継（`workerProxy_` → Worker の `/proxy`）。MCP の鍵は Worker に置かず、中継のたびに Apps Script が渡すので、MCP サーバーの設定は変えていない。
+- **全体ロックの置き換え**: 台帳ぜんぶに版番号（`_ledger`）を持たせ、書き込みは「読んだときの版」を持ち込む。変わっていたら何も反映せずやり直す（最大3回）。`_guard` の CHECK でまとめ書きごと取り消す。
+- **付随処理は応答のあと**: メールとカレンダーは `_effects` に控え、応答を返してから Apps Script に頼む（`ctx.waitUntil`）。カレンダーは仮の予定ID（`pending-…`）を台帳に入れ、登録後に本物へ書き戻す。先生のメールアドレスは Worker に置かず `TEACHER` の目印を Apps Script が置き換える。
+- 保護者のパスワード検証（PBKDF2 60万回）は Worker では `node:crypto` を使う（1204ms→133ms）。GAS と同じ値になることは `test/parity-writes.test.cjs` で確認する。
+- 戻し方と見張り方は `docs/D1_MIGRATION.md` の 10 節。

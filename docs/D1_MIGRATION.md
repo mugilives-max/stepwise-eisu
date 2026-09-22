@@ -190,7 +190,7 @@ C は段階 B の差分同期でいずれ必要になるが、「台帳を丸ご
 |---|---|
 | A 準備・取り込み | **完了** |
 | B 読み取りを Worker へ | **完了**。生徒・保護者・管理画面の読み取りが本番で Worker から返る |
-| C 書き込みを Worker へ | **仕組みは完成・切り替え待ち**。10 節 |
+| C 書き込みを Worker へ | **完了（2026-09-22 切り替え済み）**。10 節 |
 | D 仕上げ（Sheets への書き出し・MCP の向き先・PWA） | 未着手 |
 
 段階 B で Worker に載せた読み取りと、まだ Apps Script に回っているもの:
@@ -333,7 +333,19 @@ Apps Script に頼む（Cloudflare の `ctx.waitUntil`）。利用者は待た�
 PBKDF2 60万回は純 JS だと 1204ms かかる。同じ値を返す `node:crypto` に差し替えて 133ms。
 値が一致することはテストで突き合わせている（違うと保護者がログインできなくなる）。
 
-### 切り替えの手順（未実施）
+### 切り替え（2026-09-22 実施済み）
+
+台帳の正本は D1。書き込みも Worker が担当する。Apps Script は読み取り・付随処理の代行・
+MCP の中継だけを担い、台帳には書かない（`WORKER_OWNS_LEDGER=1`）。
+
+切り替え直後に 1 件不具合を出した。`cf/worker/index.mjs` で変数を定義する前に使っており、
+数分間すべての書き込みが失敗した。本番の設定（`WRITE_MODE=worker`）でのみ通る経路だったため
+テストで検出できなかった。**設定で分岐する経路は、その設定を入れた状態でも確かめる**こと。
+
+切り替え後の確認（先生の実操作）: 台帳の版が 8 まで進み、`planLines` と `slots` と `log` に
+反映された。仮のまま残ったカレンダー予定 0 件、未送信のメール 0 件。
+
+### 切り替えの手順（実施済み・再掲）
 
 1. `npx wrangler secret put GAS_URL --config cf/wrangler.jsonc`（Apps Script の /exec の URL）
    と `MCP_KEY`（MCP を使う場合）を登録する。
@@ -343,8 +355,23 @@ PBKDF2 60万回は純 JS だと 1204ms かかる。同じ値を返す `node:cryp
 4. 画面の振り分けを「読み取りだけ」から「全部 Worker」に変える。
 5. 確認後、`pullLedgerFromWorker` を実行してシートを最新の控えにする。
 
-**戻すとき**: 3 を戻して deploy、2 を消す。D1 側の変更は `pullLedgerFromWorker` でシートへ
-写してから戻す（この順を守らないと、切り替え後に書かれた分が失われる）。
+**戻すとき（順番が大事）**
+
+1. Apps Script で `pullLedgerFromWorker` を実行し、D1 の内容をシートへ写す。
+2. `cf/wrangler.jsonc` の `WRITE_MODE` を空にして deploy、画面の `WRITE_TO_WORKER` を false にして公開。
+3. Apps Script のスクリプト プロパティから `WORKER_OWNS_LEDGER` を消す。
+
+この順でないと、切り替え後に書かれた分が失われる。
+
+### 切り替え後の見張り
+
+次が 0 でなければ、付随処理のどこかが滞っている。
+
+```sql
+select (select count(*) from slots where eventId like 'pending-%') as 仮のまま残った予定,
+       (select count(*) from _effects where status = 'failed') as 送信に失敗した付随処理,
+       (select count(*) from _effects where status = 'pending') as 送られていない付随処理;
+```
 
 ### 残り
 
