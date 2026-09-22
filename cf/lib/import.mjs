@@ -31,8 +31,18 @@ export function unepochTime(value) {
   return m ? m[1] : value;
 }
 
+// 日付そのもの（GAS のコードが new Date() で書いた値）は、書き出しと同じ形にそろえる。
+// そのまま String() にすると地域表記（Mon Sep 07 2026 ...）になり、取り込んだ台帳と形が変わる。
+const TOKYO = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+export function dateCell(value) {
+  const p = Object.fromEntries(TOKYO.formatToParts(value).map(x => [x.type, x.value]));
+  const day = `${p.year}-${p.month}-${p.day}`, time = `${p.hour}:${p.minute}:${p.second}`;
+  if (day === '1899-12-30') return `${p.hour}:${p.minute}`;       // 時刻だけのセル
+  return time === '00:00:00' ? day : `${day} ${time}`;
+}
+
 export function normalizeCell(value, column) {
-  const raw = unquoteCell(value);
+  const raw = value instanceof Date ? dateCell(value) : unquoteCell(value);
   if (column.type === 'INTEGER') {
     if (raw === '' || raw === null || raw === undefined) return column.notNull ? column.defaultValue : null;
     if (raw === true) return 1;

@@ -115,3 +115,95 @@ function resyncLedgerToWorker() {
   }
   return { ok: true, sheets: done, message: '台帳ぜんぶを Worker へ送りました' };
 }
+
+/* ================= Worker が正本になったあとの役割 =================
+ * 台帳の正本が D1 に移ったら、この Apps Script は次の 2 つだけを担当する。
+ *   1. 付随処理の代行: Worker はメールもカレンダーも直接扱えないので、頼まれて実行する
+ *   2. 台帳の書き出し: Worker から取り寄せてシートへ写す（先生が眺める控え、戻すときの道）
+ * 台帳への書き込みは受け付けない（doPost が断る）。二重に書くと正本が 2 つになるため。
+ */
+
+// Worker が正本かどうか。スクリプト プロパティ WORKER_OWNS_LEDGER が '1' のとき
+function workerOwnsLedger_() { return String(PropertiesService.getScriptProperties().getProperty('WORKER_OWNS_LEDGER') || '') === '1'; }
+
+// 台帳を変える操作か（読み取りと認証だけのものは通す）
+var SYNC_READ_ONLY_ACTIONS_ = ['state', 'authmode', 'preview', 'export', 'effects', 'familyHome', 'familyData',
+  'familyStudentState', 'familyNotices', 'familyVerificationInfo'];
+function syncWriteBlocked_(req) {
+  if (!workerOwnsLedger_()) return null;
+  var action = String(req && req.action || '');
+  if (SYNC_READ_ONLY_ACTIONS_.indexOf(action) >= 0) return null;
+  if (action === 'admin') {
+    var op = String(req.op || '');
+    if (['state', 'kanriDashboard', 'kanriStudent', 'billingPreview', 'login', 'lessonKinds'].indexOf(op) >= 0) return null;
+  }
+  return { error: 'この操作は新しい仕組みで受け付けています。画面を再読み込みしてください', errorCode: 'ledgerMoved', refresh: true };
+}
+
+// 付随処理の代行。Worker からだけ呼ばれる（鍵が要る）
+function effectsOp_(req) {
+  var key = syncKey_();
+  if (!key || key.length < 24 || String(req.key || '') !== key) { Utilities.sleep(300); return { error: '鍵が正しくありません', badAuth: true }; }
+  var items = Array.isArray(req.items) ? req.items : [];
+  var writebacks = [], done = 0, failed = [];
+  for (var i = 0; i < items.length && i < 50; i++) {
+    var item = items[i];
+    try {
+      if (item.kind === 'mail') { effectsSendMail_(item); done++; }
+      else if (item.kind === 'calendarCreate') { var w = effectsCreateEvent_(item); if (w) writebacks.push(w); done++; }
+      else if (item.kind === 'calendarDelete') { effectsDeleteEvent_(item); done++; }
+    } catch (e) {
+      failed.push({ kind: String(item && item.kind || ''), error: String(e && e.message || e).slice(0, 200) });
+    }
+  }
+  return { ok: true, done: done, writebacks: writebacks, failed: failed };
+}
+
+// 宛先 'TEACHER' は先生自身のアドレス（Worker には実アドレスを置かない）
+function effectsSendMail_(item) {
+  var to = String(item.to || '') === 'TEACHER' ? Session.getEffectiveUser().getEmail() : String(item.to || '');
+  if (!to) return;
+  var options = { to: to, subject: String(item.subject || ''), body: String(item.body || '') };
+  if (item.name) options.name = String(item.name);
+  MailApp.sendEmail(options);
+}
+
+function effectsCreateEvent_(item) {
+  if (getConfig_('calendarSync') !== 'on') return null;
+  var ev = Calendar.Events.insert(item.body, 'primary', { sendUpdates: 'none' });
+  var eventId = String(ev.iCalUID || ev.id + '@google.com');
+  var meetUrl = '';
+  if (item.wantMeet) { try { meetUrl = addMeet_(eventId); } catch (e) { meetUrl = ''; } }
+  return { marker: String(item.marker || ''), eventId: eventId, meetUrl: meetUrl };
+}
+
+function effectsDeleteEvent_(item) {
+  if (getConfig_('calendarSync') !== 'on') return;
+  try { Calendar.Events.remove('primary', String(item.eventId).split('@')[0], { sendUpdates: 'none' }); }
+  catch (e) { if (!/\b404\b|\b410\b|not found|already deleted/i.test(String(e))) throw e; }
+}
+
+/** Worker の台帳をシートへ写す（エディタから手で実行）。切り替え後の控えづくりと、戻すときの道。 */
+function pullLedgerFromWorker() {
+  var url = syncUrl_().replace(/\/sync$/, '/export');
+  if (!syncKey_() || syncKey_().length < 24) return { ok: false, message: 'WORKER_SYNC_KEY を設定してください' };
+  var res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({ key: syncKey_() }), muteHttpExceptions: true, followRedirects: true });
+  if (res.getResponseCode() !== 200) return { ok: false, message: '取り寄せに失敗しました', status: res.getResponseCode() };
+  var data = JSON.parse(res.getContentText());
+  var wrote = 0;
+  [['app', ss_()], ['ledger', ledger_()]].forEach(function (pair) {
+    var sheets = data[pair[0]] || {};
+    Object.keys(sheets).forEach(function (name) {
+      var values = sheets[name];
+      if (!values || !values.length) return;
+      var sh = pair[1].getSheetByName(name) || pair[1].insertSheet(name);
+      sh.clear();
+      sh.getRange(1, 1, values.length, values[0].length).setValues(values.map(function (row) {
+        return values[0].map(function (_, i) { return row[i] === undefined ? '' : row[i]; });
+      }));
+      wrote++;
+    });
+  });
+  return { ok: true, sheets: wrote, exportedAt: data.exportedAt, message: 'Worker の台帳をシートへ写しました' };
+}

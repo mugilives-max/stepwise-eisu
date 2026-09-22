@@ -4,8 +4,9 @@
 // 呼び出し側（assets/portal.js / kanri/index.html）が GAS へ回せるようにする。
 // 本番の GAS と同じ入出力の形（{action,...} -> {ok|error,...}）を保つことが移行の安全弁。
 import { health } from "./health.mjs";
-import { handleRead } from "./read.mjs";
+import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
+import { runWrite, recordEffects, deliverEffects } from "./write.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -26,7 +27,7 @@ function cors(env, request) {
 const reply = (data, status, extra) => new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...extra } });
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const head = cors(env, request);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: head });
 
@@ -54,12 +55,24 @@ export default {
 
     if (request.method !== "POST") return reply({ error: "POST only" }, 405, head);
 
-    // GAS からの同期。鍵を知っている呼び出しだけ（画面からは来ない）
+    // GAS からの同期。鍵を知っている呼び出しだけ（画面からは来ない）。
+    // Worker が正本になったら（WRITE_MODE=worker）受け付けない。受けると D1 を古い台帳で上書きしてしまう
     if (url.pathname === "/sync") {
       let payload;
       try { payload = await request.json(); } catch (e) { return reply({ error: "不正なリクエストです" }, 400, head); }
+      if (env.WRITE_MODE === "worker") return reply({ error: "Worker が正本のため、Apps Script からの同期は受け付けません", errorCode: "ledgerOwnedByWorker" }, 409, head);
       const r = await handleSync(payload, env);
       return reply(r.payload, r.status, head);
+    }
+    // 台帳ぜんぶの取り出し（Apps Script がシートへ写す・戻すため）。鍵を知っている呼び出しだけ
+    if (url.pathname === "/export") {
+      let payload;
+      try { payload = await request.json(); } catch (e) { return reply({ error: "不正なリクエストです" }, 400, head); }
+      const { syncAuthorized } = await import("./sync.mjs");
+      if (!syncAuthorized(env, payload && payload.key)) return reply({ error: "鍵が正しくありません" }, 403, head);
+      const { books } = await import("../lib/sheet-view.mjs");
+      const { TABLE_COLUMNS } = await import("./generated/schema.mjs");
+      return reply({ ok: true, exportedAt: new Date().toISOString(), ...(await books(env.DB, TABLE_COLUMNS)) }, 200, head);
     }
 
     let body;
@@ -70,6 +83,23 @@ export default {
     }
     const action = String((body && body.action) || "");
     if (!action) return reply({ error: "action がありません" }, 400, head);
+
+    // 書き込み。WRITE_MODE=worker のときだけ受ける（それまでは Apps Script が正本）。
+    // 台帳を書いたら応答を返し、そのあとでメール・カレンダーを Apps Script に頼む。
+    if (env.WRITE_MODE === "worker" && !isReadAction(body)) {
+      try {
+        const done = await runWrite(body, scope);
+        if (done.effects.length) {
+          const ids = await recordEffects(env.DB, done.effects);
+          const finish = deliverEffects(env, done.effects, ids);
+          if (ctx && ctx.waitUntil) ctx.waitUntil(finish); else await finish;
+        }
+        return reply(done.result, 200, head);
+      } catch (e) {
+        const detail = dev ? { detail: String((e && e.message) || e).slice(0, 200) } : {};
+        return reply({ error: "処理に失敗しました。もう一度お試しください", errorCode: "workerError", ...detail }, 500, head);
+      }
+    }
 
     // 読み取りは D1 から返す。GAS のコードをそのまま動かすので応答は同じ（cf/worker/read.mjs）。
     // 書き込みと、まだ載せていない読み取りは 501 を返し、呼び出し側が GAS に回す。

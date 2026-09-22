@@ -126,7 +126,7 @@ function formatDate(date, timezone, format) {
  *   record  … true にすると Google のサービス（メール・カレンダー等）を止めずに、
  *             呼ばれた記録だけ残す。「この書き込みは Google を使うか」の調査に使う
  */
-export function createServices({ books, properties = {}, now = null, mutable = false, record = false }) {
+export function createServices({ books, properties = {}, now = null, mutable = false, record = false, effects = false }) {
   const cache = new Map();
   // 時計。既定は実時刻。now を渡すとその時刻で固定する（並走テスト用）
   const Clock = now === null ? Date : class extends Date {
@@ -135,6 +135,11 @@ export function createServices({ books, properties = {}, now = null, mutable = f
   };
   const touched = new Set();
   const calls = [];
+  // effects: メール・カレンダーを「あとで Apps Script に頼む」ために控える。
+  // GAS のコードは同期的に結果を待つので、カレンダーには仮の予定 ID（pending-…）を返し、
+  // 本物の ID は付随処理が終わってから書き戻す（cf/worker/write.mjs）。
+  const queued = [];
+  const pendingId = () => 'pending-' + crypto.randomUUID().replace(/-/g, '');
   const onWrite = mutable ? name => touched.add(name) : null;
   const app = bookOf(books.app || {}, onWrite);
   const ledger = bookOf(books.ledger || {}, onWrite);
@@ -148,6 +153,7 @@ export function createServices({ books, properties = {}, now = null, mutable = f
   return {
     _touched: touched,
     _calls: calls,
+    _effects: queued,
     _books: books,
     Date: Clock,
     SpreadsheetApp: {
@@ -195,12 +201,28 @@ export function createServices({ books, properties = {}, now = null, mutable = f
       createTextOutput: text => ({ text, setMimeType() { return this; }, getContent() { return this.text; } }),
     },
     MimeType: { PLAIN_TEXT: 'text/plain' },
-    Session: { getEffectiveUser: () => ({ getEmail: () => '' }) },
+    // 先生宛ての通知は Session の自分のメールに送る。Worker はそのアドレスを持たないので目印を返し、
+    // Apps Script 側が自分の実アドレスに置き換える（先生のメールを Worker に置かない）
+    Session: { getEffectiveUser: () => ({ getEmail: () => (effects ? 'TEACHER' : '') }) },
     Logger: { log() {} },
     console: { log() {}, warn() {}, error() {} },
-    MailApp: external('MailApp'),
+    MailApp: effects
+      ? { sendEmail(...args) {
+            // (to, subject, body[, options]) と ({to,subject,body,name}) の両方の形がある
+            const m = typeof args[0] === 'object' ? args[0] : { to: args[0], subject: args[1], body: args[2], ...(args[3] || {}) };
+            queued.push({ kind: 'mail', to: String(m.to || ''), subject: String(m.subject || ''), body: String(m.body || ''), name: String(m.name || '') });
+          },
+          getRemainingDailyQuota: () => 100 }
+      : external('MailApp'),
     CalendarApp: external('CalendarApp'),
-    Calendar: record
+    Calendar: effects
+      ? { Events: {
+            insert(body) { const id = pendingId(); queued.push({ kind: 'calendarCreate', marker: id + '@google.com', body, wantMeet: false }); return { id, iCalUID: id + '@google.com' }; },
+            get(_cal, id) { return { id }; },
+            patch(body, _cal, id) { const q = queued.find(e => e.kind === 'calendarCreate' && e.marker.startsWith(id + '@')); if (q && body && body.conferenceData) q.wantMeet = true; return {}; },
+            remove(_cal, id) { const q = queued.findIndex(e => e.kind === 'calendarCreate' && e.marker.startsWith(id + '@')); if (q >= 0) queued.splice(q, 1); else queued.push({ kind: 'calendarDelete', eventId: String(id) }); return {}; },
+          } }
+      : record
       ? { Events: { insert: (...a) => { calls.push({ service: 'Calendar', method: 'Events.insert', args: a.length }); return { id: 'recorded-event', iCalUID: 'recorded-event@google.com' }; },
                     get: () => { calls.push({ service: 'Calendar', method: 'Events.get', args: 0 }); return {}; },
                     patch: () => { calls.push({ service: 'Calendar', method: 'Events.patch', args: 0 }); return {}; },

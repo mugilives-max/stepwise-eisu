@@ -73,11 +73,14 @@ function doPost(e) {
       var fp = familyChildRequire_(req);
       if (fp.error) proxyErr = fp; else { req.k = String(fp.student && fp.student.code || ''); req.familyProxy = true; }
     }
-    if (proxyErr) res = proxyErr;
+    var moved = typeof syncWriteBlocked_ === 'function' ? syncWriteBlocked_(req) : null;
+    if (moved) res = moved;                       // 台帳の正本が Worker にある間は書かせない(Sync.gs)
+    else if (proxyErr) res = proxyErr;
     else if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
     else if (String(req.action || '').indexOf('studentEmail') === 0) res = studentEmailDispatch_(req);
     else switch (req.action) {
       case 'preview': res = previewOp_(req); break;
+      case 'effects': res = effectsOp_(req); break; // Worker に頼まれたメール・カレンダーの代行(Sync.gs)
       case 'learningService': res = servicePublic_(req); break;
       case 'accept':  res = accept_(req.slotId, req.k, req.expectedSnapshot); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;
