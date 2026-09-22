@@ -771,3 +771,11 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 - **付随処理は応答のあと**: メールとカレンダーは `_effects` に控え、応答を返してから Apps Script に頼む（`ctx.waitUntil`）。カレンダーは仮の予定ID（`pending-…`）を台帳に入れ、登録後に本物へ書き戻す。先生のメールアドレスは Worker に置かず `TEACHER` の目印を Apps Script が置き換える。
 - 保護者のパスワード検証（PBKDF2 60万回）は Worker では `node:crypto` を使う（1204ms→133ms）。GAS と同じ値になることは `test/parity-writes.test.cjs` で確認する。
 - 戻し方と見張り方は `docs/D1_MIGRATION.md` の 10 節。
+
+### 授業の確定とカレンダー（2026-09-22、GAS `2026-09-22-calendar-ensure`）
+
+- 切り替え直後、生徒が授業を確定すると「未完了の確定処理があります」と出て確定できなかった。原因は Worker のカレンダー模擬実装。`schedulingCalendarFor_` は予定の `extendedProperties.private`（生徒と授業の id）を照合して他人の予定を書き換えないようにしているが、模擬の `Events.get` が印のない空の予定を返していたため `Calendar event identity mismatch` で例外になっていた。
+- 直したあとの作り。予定の ID は `schedulingEventId_`（生徒・処理番号・授業から算出）で**計算で決まる**ので、Worker は Google を待たずに台帳へ書ける。
+  - **対面**: その場で完結する。`Events.get` は「無い」を返し、`insert` は渡された内容をそのまま返す。実際の予定は応答のあとに Apps Script が作る（`_effects`）。
+  - **オンライン**: Meet の URL が要る。Worker では作れないので、Apps Script に先に予定を作ってもらい（`effects` の `ensure` → `effectsEnsureEvents_`）、その結果を持って**もう一度最初から実行する**。用意できなければ台帳を一切変えずに断る（`calendarUnavailable`）。中途半端な確定の記録も残さない。
+- 画面は、正本が Worker に移ったあとは失敗しても Apps Script に回り道しない。Apps Script は台帳への書き込みを断るので回っても意味がなく、失敗の見え方だけが変わってしまうため。
