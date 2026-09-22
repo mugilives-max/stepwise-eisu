@@ -882,7 +882,7 @@
             dayL.forEach(function (l) {
               var time = l.start + '〜' + endTime(l.start, l.min), who = nm(l.studentId, l.studentName) + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + (l.req ? ' <span class="tag red">取消依頼中</span>' : ''), meet = l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : '';
               var when = fmtD(l.date) + ' ' + l.start, sidAttr = ' data-sid="' + esc(l.studentId) + '"';
-              if (l.status === "offered") h += dayRowHtml('<span class="tag amber">案内</span>', time, who, canEdit ? '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '"' + sidAttr + '>取り下げ</button>' : '');
+              if (l.status === "offered") h += dayRowHtml('<span class="tag amber">案内</span>', time, who, canEdit ? finishRecordButton(l, tdy, l.studentId) + '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '"' + sidAttr + '>取り下げ</button>' : '');
               else if (l.done) h += dayRowHtml('<span class="tag gray">実施済</span>', time, who, (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="0"' + sidAttr + '>未実施に戻す</button>' : ''), lessonHref(l.studentId, l.id), true);
               else h += dayRowHtml('<span class="tag green">確定</span>', time, who, meet + (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="1"' + sidAttr + '>実施済にする</button><button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-name="' + esc(l.studentName) + '" data-when="' + esc(when) + '"' + sidAttr + '>解除</button>' : ''), lessonHref(l.studentId, l.id));
             });
@@ -923,7 +923,7 @@
             dayL.forEach(function (l) {
               var time = l.start + '〜' + endTime(l.start, l.min), who = (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + (l.req ? ' <span class="tag red">取消依頼中</span>' : ''), meet = l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : '';
               var when = fmtD(l.date) + ' ' + l.start;
-              if (l.status === "offered") h += dayRow('<span class="tag amber">案内</span>', time, who, canEdit ? '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取り下げ</button>' : '');
+              if (l.status === "offered") h += dayRow('<span class="tag amber">案内</span>', time, who, canEdit ? finishRecordButton(l, tdy, s.id) + '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取り下げ</button>' : '');
               else if (l.done) h += dayRow('<span class="tag gray">実施済</span>', time, who, (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="0">未実施に戻す</button>' : ''), lessonHref(s.id, l.id), true);
               else h += dayRow('<span class="tag green">確定</span>', time, who, meet + (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="1">実施済にする</button><button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-name="' + esc(s.name) + '" data-when="' + esc(when) + '">解除</button>' : ''), lessonHref(s.id, l.id));
             });
@@ -1600,6 +1600,12 @@
         function lessonHref(studentId, slotId, recordId) {
           return "#lesson?student=" + encodeURIComponent(studentId) + "&slot=" + encodeURIComponent(slotId || "") + (recordId ? "&record=" + encodeURIComponent(recordId) : "");
         }
+        // 返事がないまま授業の時間が終わった案内に出す。確定・実施済みの行と同じ「記録へ進む」入口。
+        // 授業の記録は確定済みの授業にしか付けられないので、実施済みにしてから記録へ移る
+        function finishRecordButton(l, tdy, studentId) {
+          if (!offerEnded(l, tdy)) return '';
+          return '<button class="btn-primary btn-sm" data-action="finishandrecord" data-id="' + esc(l.id) + '" data-sid="' + esc(studentId || l.studentId) + '">実施済みにして記録</button>';
+        }
         function lessonEntry(s, studentId) {
           if (s.status !== "booked" && s.lessonRecordStatus !== "active" && s.lessonRecordStatus !== "void") return "";
           var page = route().page, day = (page === 'student' && cur ? cur.today : page === 'lessons' ? A.today : D && D.today) || today();
@@ -2161,7 +2167,7 @@
 
         /* ---------- 操作 ---------- */
         // 書き込み: optimistic(画面を先に書き換える関数)があれば即反映し、裏で保存。サーバーの返した最新データで置き換える
-        function act(op, extra, okMsg, optimistic) {
+        function act(op, extra, okMsg, optimistic, after) {
           if (busy) return;
           var r = route();
           if (optimistic) { try { optimistic(); } catch (e) {} }
@@ -2170,6 +2176,7 @@
             busy = false; syncMsg = "";
             if (okMsg) toast(okMsg);
             if (!applyResult(res, r)) load(true); else render();
+            if (after) { try { after(res); } catch (e) {} }   // 記録の入力へ進むなど、成功したあとの移動
           }).catch(function (e) { busy = false; syncMsg = ""; toast(e.message); load(true); });
         }
         // サーバーが返した最新データを画面に反映。反映できたら true
@@ -2445,6 +2452,14 @@
                 if (D && D.expired) D.expired = D.expired.filter(function (x) { return String(x.id) !== String(did); });
                 if (cur && cur.lessons) cur.lessons = cur.lessons.filter(function (x) { return String(x.id) !== String(did); });
               }); break;
+            case "finishandrecord": {
+              var rid = btn.getAttribute("data-id"), rsid = sid || btn.getAttribute("data-sid") || "";
+              if (!confirm("この授業を「実施済み」として登録し、続けて授業記録を入力しますか?\n\n生徒の承認を待たずに確定します。授業料と月の回数に数えられます。")) return;
+              act("finishOffered", { slotId: rid, studentId: rsid }, "実施済みとして登録しました", null, function () {
+                location.hash = lessonHref(rsid, rid);
+              });
+              break;
+            }
             case "finishoffered":
               var fsid = sid || btn.getAttribute("data-sid") || "", fid = btn.getAttribute("data-id");
               if (!confirm("この案内を「確定・実施済み」として記録しますか?\n生徒の承認なしで記録され、授業料と月の回数に数えられます。")) return;
