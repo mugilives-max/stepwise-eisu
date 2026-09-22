@@ -7,6 +7,7 @@ import { health } from "./health.mjs";
 import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
 import { runWrite, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
+import { handlePush, deliverNotice, pushEnabled, PUSH_ACTIONS } from "./push.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -107,6 +108,15 @@ export default {
     const action = String((body && body.action) || "");
     if (!action) return reply({ error: "action がありません" }, 400, head);
 
+    // 通知の登録・解除。台帳は変えないので、書き込みの経路には入れない
+    if (PUSH_ACTIONS.indexOf(action) >= 0) {
+      try {
+        return reply(await handlePush(body, env), 200, head);
+      } catch (e) {
+        return reply({ error: "通知の登録に失敗しました", errorCode: "workerError" }, 500, head);
+      }
+    }
+
     // 開発時（AUTH_MODE=mock）だけ、失敗した問い合わせを控えて原因を追えるようにする。
     // 本番では中身を返さない（台帳の構造を外に出さないため）。
     const dev = env.AUTH_MODE === "mock";
@@ -118,11 +128,16 @@ export default {
     if (env.WRITE_MODE === "worker" && !isReadAction(body)) {
       try {
         const done = await runWrite(body, scope);
-        if (done.effects.length) {
-          const ids = await recordEffects(env.DB, done.effects);
-          const finish = deliverEffects(env, done.effects, ids);
-          if (ctx && ctx.waitUntil) ctx.waitUntil(finish); else await finish;
-        }
+        const after = async () => {
+          if (done.effects.length) {
+            const ids = await recordEffects(env.DB, done.effects);
+            await deliverEffects(env, done.effects, ids);
+          }
+          // 通知は気づきの経路を増やすだけ。送れなくても操作は成功したまま
+          if (pushEnabled(env)) await deliverNotice(env, body, done.result).catch(() => {});
+        };
+        const finish = after();
+        if (ctx && ctx.waitUntil) ctx.waitUntil(finish); else await finish;
         return reply(done.result, 200, head);
       } catch (e) {
         const detail = dev ? { detail: String((e && e.message) || e).slice(0, 200) } : {};

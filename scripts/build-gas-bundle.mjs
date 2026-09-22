@@ -89,7 +89,9 @@ export function schemaMap() {
         defaultValue: def ? Number(def[1]) : 0,
       });
     }
-    if (columns.length) out[name] = columns;
+    // シートの写しである表だけを載せる。Worker 自身の表（_ledger, _effects, pushSubs …）は
+    // 台帳の読み書きの対象ではないので外す。目印は写しの管理列 _sheetRow
+    if (columns.length && columns.some(c => c.name === '_sheetRow')) out[name] = columns;
   }
   return out;
 }

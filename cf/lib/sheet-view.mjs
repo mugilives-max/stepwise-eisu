@@ -32,7 +32,8 @@ export const BOOLEAN_CELLS = {
 export const LEDGER_TABLES = ['入金管理', '生徒台帳', '成績推移', '模試', '面談記録'];
 
 // 取り込みの記録など、台帳には無い表
-const NOT_A_SHEET = ['_importRuns', '_ledger', '_guard', '_effects'];
+// シートの写しではない、Worker 自身の表。台帳の読み書きの対象にしない
+const NOT_A_SHEET = ['_importRuns', '_ledger', '_guard', '_effects', 'pushSubs'];
 
 const HIDDEN_COLUMNS = ['_syncedAt', '_sheetRow', 'rowid_'];
 

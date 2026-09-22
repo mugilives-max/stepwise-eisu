@@ -8,3 +8,6 @@ node_modules/
 *.sqlite
 *.sqlite-journal
 cf/worker/generated/
+
+# 通知の鍵の一時ファイル（登録したら消す）
+.vapid/

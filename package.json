@@ -15,7 +15,8 @@
     "cf:dev": "wrangler dev --config cf/wrangler.jsonc --env local --persist-to .wrangler/state --port 8787",
     "cf:migrate:local": "wrangler d1 migrations apply DB --config cf/wrangler.jsonc --local --env local --persist-to .wrangler/state",
     "cf:migrate:remote": "wrangler d1 migrations apply DB --config cf/wrangler.jsonc --remote",
-    "cf:deploy": "wrangler deploy --config cf/wrangler.jsonc"
+    "cf:deploy": "wrangler deploy --config cf/wrangler.jsonc",
+    "vapid": "node scripts/vapid-keys.mjs"
   },
   "devDependencies": {
     "@google/clasp": "3.4.1",

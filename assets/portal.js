@@ -74,6 +74,90 @@
         function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
         function deliveryLabel(mode) { return mode === "in_person" ? "対面" : mode === "online" ? "オンライン" : "形式は先生に確認"; }
+        /* ---------- アプリの通知（プッシュ） ---------- */
+        // 端末に通知を出すには、常駐プログラム（sw.js）と端末ごとの登録が要る。
+        // 本文は端末の鍵で暗号化して送られるので、中継する配信サービスは中身を読めない。
+        // iPhone では、ホーム画面に追加したアプリからでないと受け取れない。
+        var PUSH = { supported: false, ready: false, enabled: false, busy: false, message: '', publicKey: '', denied: false };
+
+        function pushSupported() {
+          try { return !!(navigator.serviceWorker && window.PushManager && window.Notification); } catch (e) { return false; }
+        }
+        function pushKeyBytes(value) {
+          var s = String(value).replace(/-/g, '+').replace(/_/g, '/');
+          var bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4));
+          var out = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+          return out;
+        }
+        function pushAuth() { return route() === 'family' ? { ftoken: familyToken() } : { k: myKey() }; }
+        function pushScope() { return route() === 'family' ? '/hogosha/' : '/yoyaku/'; }
+
+        function pushBoot() {
+          if (!pushSupported() || previewK) return;
+          PUSH.supported = true;
+          PUSH.denied = window.Notification.permission === 'denied';
+          navigator.serviceWorker.register(pushScope() + 'sw.js', { scope: pushScope() })
+            .then(function (reg) { return reg.pushManager.getSubscription(); })
+            .then(function (sub) { PUSH.enabled = !!sub; return apiPost({ action: 'pushInfo' }); })
+            .then(function (res) {
+              PUSH.publicKey = (res && res.publicKey) || '';
+              PUSH.ready = !!(res && res.enabled && PUSH.publicKey);
+              render();
+            })
+            .catch(function () { PUSH.supported = false; });
+        }
+
+        function pushToggle() {
+          if (PUSH.busy || !PUSH.ready) return;
+          PUSH.busy = true; PUSH.message = ''; render();
+          var done = function (message) { PUSH.busy = false; PUSH.message = message || ''; render(); };
+          navigator.serviceWorker.register(pushScope() + 'sw.js', { scope: pushScope() }).then(function (reg) {
+            if (PUSH.enabled) {
+              return reg.pushManager.getSubscription().then(function (sub) {
+                if (!sub) { PUSH.enabled = false; return done('通知を止めました'); }
+                var body = Object.assign({ action: 'pushUnsubscribe', subscription: { endpoint: sub.endpoint, p256dh: 'x', auth: 'x' } }, pushAuth());
+                var keys = pushKeysOf(sub); if (keys) body.subscription = Object.assign({ endpoint: sub.endpoint }, keys);
+                return apiPost(body).then(function () { return sub.unsubscribe(); }).then(function () { PUSH.enabled = false; done('通知を止めました'); });
+              });
+            }
+            return window.Notification.requestPermission().then(function (permission) {
+              PUSH.denied = permission === 'denied';
+              if (permission !== 'granted') return done('端末の設定で通知が許可されていません');
+              return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(PUSH.publicKey) })
+                .then(function (sub) {
+                  var keys = pushKeysOf(sub);
+                  if (!keys) return done('この端末では通知を登録できませんでした');
+                  return apiPost(Object.assign({ action: 'pushSubscribe', subscription: Object.assign({ endpoint: sub.endpoint }, keys) }, pushAuth()))
+                    .then(function (res) {
+                      if (!res || res.error) { return sub.unsubscribe().then(function () { done((res && res.error) || '通知を登録できませんでした'); }); }
+                      PUSH.enabled = true; done('通知を受け取ります');
+                    });
+                });
+            });
+          }).catch(function () { done('通知の設定を変更できませんでした'); });
+        }
+        function pushKeysOf(sub) {
+          try {
+            var json = sub.toJSON ? sub.toJSON() : null;
+            var keys = json && json.keys;
+            return keys && keys.p256dh && keys.auth ? { p256dh: keys.p256dh, auth: keys.auth } : null;
+          } catch (e) { return null; }
+        }
+
+        function pushSection() {
+          if (!PUSH.supported) return '<h2>アプリの通知</h2><p class="sub">この端末では通知を受け取れません。ホーム画面に追加したアプリから開くと受け取れることがあります。</p>';
+          if (!PUSH.ready) return '';
+          var h = '<h2>アプリの通知</h2><p class="sub">授業の案内などを、この端末の通知で受け取れます。メールと違って見落としにくくなります。</p><div class="card">';
+          h += '<p>' + (PUSH.enabled ? 'この端末で通知を受け取ります。' : 'この端末では通知を受け取りません。') + '</p>';
+          if (PUSH.denied && !PUSH.enabled) h += '<p class="note">端末の設定で通知が拒否されています。ブラウザまたは端末の設定から許可してください。</p>';
+          h += '<button class="btn-' + (PUSH.enabled ? 'quiet' : 'primary') + '" data-action="pushtoggle"' + (PUSH.busy ? ' disabled' : '') + '>'
+            + (PUSH.busy ? '変更しています…' : PUSH.enabled ? '通知を止める' : 'この端末で通知を受け取る') + '</button>';
+          if (PUSH.message) h += '<p role="status" style="margin-top:8px">' + esc(PUSH.message) + '</p>';
+          h += '<p class="note">iPhone では、ホーム画面に追加したアプリから開いたときだけ通知を受け取れます。</p>';
+          return h + '</div>';
+        }
+
         // Meet は授業を確定したあと Google 側で少し遅れて発行される。確定を止めて待つと
         // その待ち時間がそのまま利用者の待ち時間になるので、届くまでは「準備中」と出し、
         // 少し置いてもう一度読みに行く（読みに行くと Worker 側が取り直す）
@@ -154,6 +238,7 @@
           h += '<form id="student-email-form"><label for="se-email">自分のメールアドレス</label><input type="email" id="se-email" autocomplete="email" maxlength="254" required value="' + esc(SE.email || s.pendingEmail || s.email || '') + '"' + dis + '><p class="note">確認メールのリンクを開くと通知先になります。変更の確認が終わるまでは、現在の確認済みアドレスを使います。</p><button class="btn-primary" type="submit"' + dis + '>確認メールを送る</button></form>';
           if (s.email || s.pendingEmail) h += SE.removeConfirm ? '<p>メール通知を解除します。</p><button class="btn-quiet" data-action="se-remove"' + dis + '>解除する</button> <button class="btn-quiet" data-action="se-cancel"' + dis + '>やめる</button>' : '<p><button class="btn-quiet" data-action="se-askremove"' + dis + '>通知先を解除する</button></p>';
           h += '</div>';
+          h += pushSection();
           var prefs = s.prefs || {}, kinds = [['offered', '授業の案内（新しい授業の日時）'], ['changed', '授業の変更（日時・科目・形式）'], ['cancelled', '授業の取消'], ['cancelDeclined', '取消依頼への回答（予定どおり実施）']];
           h += '<div class="card" style="margin-top:14px"><h2 style="margin:0 0 6px;font-size:16px">メールで受け取る項目</h2>';
           kinds.forEach(function (kv) { h += '<label style="display:block;padding:6px 0"><input type="checkbox" data-action="se-pref" data-kind="' + kv[0] + '"' + (prefs[kv[0]] === false ? '' : ' checked') + dis + '> ' + kv[1] + '</label>'; });
@@ -1460,6 +1545,7 @@
           switch (act) {
             case "batchall": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); acceptBatch().review = null; schedData().offers.slice(0, 31).forEach(function (s) { acceptBatch().selected[s.id] = true; }); render(); } break;
             case "batchclear": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); render(); } break;
+            case "pushtoggle": pushToggle(); break;
             case "guardopen": guardOpen(); break;
             case "batchreview": batchReview(); break;
             case "batchcancel": if (!acceptBatch().pending) { acceptBatch().review = null; render(); } break;
@@ -1613,6 +1699,7 @@
           app.innerHTML = '<div class="loading"><div class="spinner"></div>専用リンクを確認しています…</div>';
           loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。再読み込みしてください。</div>'; });
         });
+        pushBoot();
         if (route() === 'family') { render(); if (!F.challenge && F.step==='login' && familyToken()) familyLoadHome(); }
         else if (route() === 'student-email' && SE.challenge) render();
         // 鍵が無いときは問い合わせない。ホーム画面のアプリから開くと ?k= が付かないので、
