@@ -171,9 +171,13 @@ export async function deliverEffects(env, effects, ids) {
     await env.DB.batch(ids.map(id => env.DB.prepare('update _effects set status = ?, attempts = attempts + 1, error = ?, sentAt = ? where id = ?').bind(status, error.slice(0, 300), error ? '' : now, id)));
   }
   // カレンダーの仮 ID → 本物の ID・Meet の URL
+  // 台帳には iCalUID の形（<marker>@google.com）で入っている。Apps Script が返す marker は
+  // 素の ID なので、どちらの形でも当たるように照合する（片方だけだと書き戻しが空振りする）
   const writebacks = (payload && Array.isArray(payload.writebacks)) ? payload.writebacks : [];
   if (writebacks.length) {
-    await env.DB.batch(writebacks.map(w => env.DB.prepare('update slots set eventId = ?, meetUrl = ? where eventId = ?').bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.marker))));
+    await env.DB.batch(writebacks.map(w => env.DB
+      .prepare("update slots set eventId = ?, meetUrl = ? where eventId = ? or eventId = ? || '@google.com'")
+      .bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.marker), String(w.marker))));
   }
   return { sent: error ? 0 : effects.length, error, writebacks: writebacks.length };
 }

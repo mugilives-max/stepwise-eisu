@@ -83,3 +83,28 @@ test('対面の授業の確定で、カレンダーの予定が控えに積ま�
   assert.equal(created.length, 1, 'カレンダーの予定が控えに積まれていない: ' + JSON.stringify(out.effects.map(e => e.kind)));
   assert.equal(created[0].wantMeet, false, '対面なのに会議室を作ろうとしている');
 });
+
+test('カレンダーの本物の ID が、確定した授業に書き戻される', async () => {
+  const { p, slot, env } = await stuckLedger();
+  const { runWrite, recordEffects, deliverEffects } = await import('../cf/worker/write.mjs');
+  const out = await runWrite({ action: 'acceptMany', k: K, slotIds: [slot.id], requestId: REQUEST_ID }, env, { now: p.source.now() });
+
+  // 台帳に入るのは iCalUID の形（<marker>@google.com）。Apps Script が返す marker は素の ID で、
+  // 形が違う。ここが合っていないと書き戻しが黙って空振りする（本番で実際に起きた）
+  const marker = out.effects.find(e => e.kind === 'calendarCreate').marker;
+  const before = await p.d1.prepare('select eventId from slots where id = ?').bind(String(slot.id)).first();
+  assert.notEqual(before.eventId, marker, '前提が変わった（台帳の ID と marker が同じ形になった）');
+
+  // Apps Script の代わりに、本物の予定を作った体で応答を返す
+  const real = 'real-event-0001@google.com';
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true, done: 1, writebacks: [{ marker: marker, eventId: real, meetUrl: '' }], failed: [] }) });
+  try {
+    const ids = await recordEffects(p.d1, out.effects);
+    const sent = await deliverEffects({ ...env, GAS_URL: 'https://example.invalid/exec', SYNC_KEY: 'k' }, out.effects, ids);
+    assert.equal(sent.writebacks, 1, '書き戻しが届いていない');
+  } finally { globalThis.fetch = saved; }
+
+  const after = await p.d1.prepare('select eventId from slots where id = ?').bind(String(slot.id)).first();
+  assert.equal(after.eventId, real, 'カレンダーの本物の ID に置き換わっていない（書き戻しの空振り）');
+});
