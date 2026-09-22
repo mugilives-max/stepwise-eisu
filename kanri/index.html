@@ -318,7 +318,7 @@
         var READ_API = "https://stepwise-api.stepwise-edu.workers.dev";
         var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
         // 台帳の正本が Worker に移ったら true にする。書き込みも Worker へ送る
-        var WRITE_TO_WORKER = false;
+        var WRITE_TO_WORKER = true;
         function routedToWorker(body) {
           if (!READ_API || !body) return false;
           if (WRITE_TO_WORKER) return true;

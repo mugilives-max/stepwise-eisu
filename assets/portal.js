@@ -221,7 +221,7 @@
         var READ_ACTIONS = { state: 1, familyHome: 1, familyNotices: 1, familyData: 1, familyStudentState: 1 };
         var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
         // 台帳の正本が Worker に移ったら true にする。書き込みも Worker へ送る
-        var WRITE_TO_WORKER = false;
+        var WRITE_TO_WORKER = true;
         function readable(body) {
           if (!READ_API || !body) return false;
           if (WRITE_TO_WORKER) return true;   // 正本が Worker なら全部そちら

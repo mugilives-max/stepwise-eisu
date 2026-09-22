@@ -18,7 +18,7 @@
     // 付随処理（メール・カレンダー）を頼む先。秘密ではない（画面にも載る公開の口で、中身は鍵で守る）
     "GAS_URL": "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec",
     // 書き込みの正本。"worker" にすると Worker が台帳を書く。空なら今までどおり Apps Script
-    "WRITE_MODE": ""
+    "WRITE_MODE": "worker"
   },
   "d1_databases": [
     {
