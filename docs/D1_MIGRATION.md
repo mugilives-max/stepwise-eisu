@@ -388,3 +388,40 @@ select (select count(*) from slots where eventId like 'pending-%') as 仮のま�
 
 - 切り替えそのもの（上の手順）。先生の操作が 2 か所（secret 1 つ、スクリプト プロパティ 1 つ）。
 - 段階 D（Sheets への定期書き出し・MCP の向き先・PWA）。
+
+## 11. 段階 D（仕上げ）実施 2026-09-22
+
+### D-1 シートへの写し（GAS v97）
+正本が D1 に移ったあと、シートは切り替え時点で止まっていた。既存の週次バックアップ
+（`gas/Backup.gs`・日曜 3:00 に Drive へ複製）はシートを写す作りなので、そのままでは
+**古い内容を保存しつづける**。毎日 2:00 に D1 からシートへ写し直し、それを週次バックアップが拾う。
+
+- `gas/Mirror.gs` の `mirrorLedgerFromWorker`（毎日のトリガー）。`/export` から取り寄せて全面上書き。
+- 書かない条件: 取り寄せ失敗 / 形が違う / 表の数が前回より減った / `students`・`slots` が空。
+  引っかかったらシートはそのままにして先生に知らせる（初回と 7 回ごと）。
+- `pullLedgerFromWorker` は、確認なしの上書きが手で走らないよう `mirrorLedgerFromWorker` に寄せた。
+- 正本が Worker にあるあいだ、`syncPush_` は何もしない（Worker は `/sync` を 409 で断るため）。
+
+**先生の操作（1 回だけ）**: スクリプトエディタで `setupLedgerMirror` を実行。
+初回は、先に `startStepwiseBackup` を手で走らせて今のシートを Drive に残してから行う。
+
+### D-2 MCP の向き先
+これまで MCP は GAS を入口にして Worker へ中継していたため、呼び出しごとに GAS の
+待ち時間（約 1.8 秒）が乗っていた。`stepwise-mcp` 0.4.0 で `STEPWISE_API_URL` を見るようにし、
+設定されていれば Worker へ直接送る（無ければ従来どおり GAS）。送る中身も応答の形も同じ。
+
+**必要な設定**: `stepwise-api` に Secret `MCP_KEY`（未設定なら Worker は MCP を断る）、
+`stepwise-mcp` に `STEPWISE_API_URL`。どちらも本人が入れる。中継の経路は残してあるので、
+問題があれば `STEPWISE_API_URL` を外すだけで戻せる。
+
+### D-3 ホーム画面のアプリ
+`yoyaku/` `hogosha/` に manifest とアイコンを追加（管理画面と同じ作り）。
+ホーム画面から開くと専用リンクの `?k=` が付かないので、鍵を覚えていない端末では
+今まで「読み込みに失敗しました」という見当違いの案内になっていた。鍵が無いときは
+問い合わせず案内を出し、その画面でリンクを貼り直せるようにした。
+
+プッシュ通知は未着手。VAPID 鍵と購読の保存先（D1）が要るので、別に立てる。
+
+### 残り
+- 読み取りで Apps Script のままのもの: 先生のプレビュー（`preview`）と成績票などの `learningService`。
+- オンライン授業の確定だけは、Meet の URL を返すため今も GAS を待つ（`cf/worker/write.mjs` の `ensureEvents`）。
