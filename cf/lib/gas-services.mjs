@@ -126,7 +126,7 @@ function formatDate(date, timezone, format) {
  *   record  … true にすると Google のサービス（メール・カレンダー等）を止めずに、
  *             呼ばれた記録だけ残す。「この書き込みは Google を使うか」の調査に使う
  */
-export function createServices({ books, properties = {}, now = null, mutable = false, record = false, effects = false }) {
+export function createServices({ books, properties = {}, now = null, mutable = false, record = false, effects = false, primedEvents = {} }) {
   const cache = new Map();
   // 時計。既定は実時刻。now を渡すとその時刻で固定する（並走テスト用）
   const Clock = now === null ? Date : class extends Date {
@@ -139,7 +139,8 @@ export function createServices({ books, properties = {}, now = null, mutable = f
   // GAS のコードは同期的に結果を待つので、カレンダーには仮の予定 ID（pending-…）を返し、
   // 本物の ID は付随処理が終わってから書き戻す（cf/worker/write.mjs）。
   const queued = [];
-  const pendingId = () => 'pending-' + crypto.randomUUID().replace(/-/g, '');
+  // Google に実際に問い合わせないと先へ進めないもの（オンライン授業の Meet）
+  const needsGoogle = [];
   const onWrite = mutable ? name => touched.add(name) : null;
   const app = bookOf(books.app || {}, onWrite);
   const ledger = bookOf(books.ledger || {}, onWrite);
@@ -154,6 +155,7 @@ export function createServices({ books, properties = {}, now = null, mutable = f
     _touched: touched,
     _calls: calls,
     _effects: queued,
+    _needsGoogle: needsGoogle,
     _books: books,
     Date: Clock,
     SpreadsheetApp: {
@@ -215,19 +217,44 @@ export function createServices({ books, properties = {}, now = null, mutable = f
           getRemainingDailyQuota: () => 100 }
       : external('MailApp'),
     CalendarApp: external('CalendarApp'),
+    // カレンダー。予定の ID は GAS 側が決める（生徒・処理番号・授業から算出）ので、
+    // Worker は「作る予定」を控えるだけで台帳に正しい ID を書ける。
+    //   対面  … その場で完結する（控えた予定はあとで Apps Script が作る）
+    //   オンライン … Meet の URL が要る。Worker では作れないので、
+    //                primedEvents（Apps Script に先に作ってもらった予定）を渡して二度目で通す
     Calendar: effects
       ? { Events: {
-            insert(body) { const id = pendingId(); queued.push({ kind: 'calendarCreate', marker: id + '@google.com', body, wantMeet: false }); return { id, iCalUID: id + '@google.com' }; },
-            get(_cal, id) { return { id }; },
-            patch(body, _cal, id) { const q = queued.find(e => e.kind === 'calendarCreate' && e.marker.startsWith(id + '@')); if (q && body && body.conferenceData) q.wantMeet = true; return {}; },
-            remove(_cal, id) { const q = queued.findIndex(e => e.kind === 'calendarCreate' && e.marker.startsWith(id + '@')); if (q >= 0) queued.splice(q, 1); else queued.push({ kind: 'calendarDelete', eventId: String(id) }); return {}; },
+            get(_cal, id) {
+              const primed = primedEvents[String(id)];
+              if (primed) return primed;
+              // 無い扱いにして insert へ進ませる（GAS 側の判定と同じ文言）
+              throw new Error('404 not found');
+            },
+            insert(body) {
+              const id = String((body && body.id) || '');
+              const primed = primedEvents[id];
+              if (primed) return primed;
+              const wantMeet = !!(body && body.conferenceData);
+              queued.push({ kind: 'calendarCreate', marker: id, body, wantMeet });
+              if (wantMeet) needsGoogle.push({ id, body });
+              // 作ったことにして返す。中身は渡された body そのもの（本人確認の印を含む）
+              return { ...body, status: 'confirmed' };
+            },
+            patch(body, _cal, id) { needsGoogle.push({ id: String(id), body, patch: true }); return { ...(primedEvents[String(id)] || {}), id: String(id) }; },
+            remove(_cal, id) {
+              const at = queued.findIndex(e => e.kind === 'calendarCreate' && e.marker === String(id));
+              if (at >= 0) queued.splice(at, 1); else queued.push({ kind: 'calendarDelete', eventId: String(id) });
+              return {};
+            },
           } }
       : record
-      ? { Events: { insert: (...a) => { calls.push({ service: 'Calendar', method: 'Events.insert', args: a.length }); return { id: 'recorded-event', iCalUID: 'recorded-event@google.com' }; },
-                    get: () => { calls.push({ service: 'Calendar', method: 'Events.get', args: 0 }); return {}; },
-                    patch: () => { calls.push({ service: 'Calendar', method: 'Events.patch', args: 0 }); return {}; },
-                    remove: () => { calls.push({ service: 'Calendar', method: 'Events.remove', args: 0 }); return {}; } } }
-      : forbidden('Calendar'),
+        ? { Events: {
+              insert: (...a) => { calls.push({ service: 'Calendar', method: 'Events.insert', args: a.length }); return { id: 'recorded-event', iCalUID: 'recorded-event@google.com' }; },
+              get: () => { calls.push({ service: 'Calendar', method: 'Events.get', args: 0 }); return {}; },
+              patch: () => { calls.push({ service: 'Calendar', method: 'Events.patch', args: 0 }); return {}; },
+              remove: () => { calls.push({ service: 'Calendar', method: 'Events.remove', args: 0 }); return {}; },
+            } }
+        : forbidden('Calendar'),
     DriveApp: external('DriveApp'),
     ScriptApp: external('ScriptApp'),
     UrlFetchApp: external('UrlFetchApp'),

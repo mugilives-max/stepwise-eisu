@@ -14,6 +14,13 @@ const SHIPPED = /var READ_API = "[^"]*";/;
 function withWorker(kind, options = {}) {
   return createUI(kind, { ...options, source: src => src.replace(SHIPPED, 'var READ_API = "' + WORKER + '";') });
 }
+// 正本が Apps Script にあった頃の状態（読み取りだけ Worker、失敗したら Apps Script に回る）。
+// 台帳が Worker に移ったあとは回り道をしない（Apps Script が書き込みを断るため意味がない）
+function beforeCutover(kind, options = {}) {
+  return createUI(kind, { ...options, source: src => src
+    .replace(SHIPPED, 'var READ_API = "' + WORKER + '";')
+    .replace('var WRITE_TO_WORKER = true;', 'var WRITE_TO_WORKER = false;') });
+}
 // 振り分けを切った状態（不具合が出たときに戻す設定）
 function withoutWorker(kind, options = {}) {
   return createUI(kind, { ...options, source: src => src.replace(SHIPPED, 'var READ_API = "";') });
@@ -44,8 +51,8 @@ test('生徒マイページの読み取りは Worker へ行き、書き込みは
   assert.equal(ui.requests[0].body.action, 'state');
 });
 
-test('Worker が引き受けない読み取りは Apps Script に回る', async () => {
-  const ui = withWorker('student');
+test('切り替え前は、Worker が引き受けない読み取りが Apps Script に回る', async () => {
+  const ui = beforeCutover('student');
   await flush();
   ui.requests[0].reply({ error: 'この操作はまだ Worker にありません', errorCode: 'notImplemented' }, { status: 501 });
   await flush();
@@ -54,13 +61,13 @@ test('Worker が引き受けない読み取りは Apps Script に回る', async 
   assert.deepEqual(ui.requests[1].body, ui.requests[0].body, '中身は変えずにそのまま渡す');
 });
 
-test('Worker が落ちていても Apps Script に回るので画面は動く', async () => {
+test('切り替え前は、Worker が落ちても Apps Script に回るので画面は動く', async () => {
   for (const breakIt of [
     r => r.fail(),
     r => r.reply({ error: '読み取りに失敗しました', errorCode: 'workerError' }, { status: 500 }),
     r => r.reply({}, { status: 502 }),
   ]) {
-    const ui = withWorker('student');
+    const ui = beforeCutover('student');
     await flush();
     breakIt(ui.requests[0]);
     await flush();
@@ -82,4 +89,15 @@ test('先生のログインの札は Worker にもそのまま送る（Worker �
   const ui = withWorker('admin', { hash: '#home' });
   await flush();
   assert.equal(ui.requests[0].body.token, 'test-teacher-token');
+});
+
+test('切り替え後は、書き込みも読み取りも Worker へ行く（回り道はしない）', async () => {
+  const ui = withWorker('student');   // 出荷している状態（WRITE_TO_WORKER = true）
+  await flush();
+  assert.equal(ui.requests.length, 1);
+  assert.ok(ui.requests[0].url.startsWith(WORKER), '最初の読み取りが Worker: ' + ui.requests[0].url);
+  // 落ちても Apps Script には回さない。Apps Script は台帳への書き込みを断るので回っても意味がない
+  ui.requests[0].fail();
+  await flush();
+  assert.equal(ui.requests.length, 1, '回り道の追加要求を出さない');
 });

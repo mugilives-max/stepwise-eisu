@@ -83,14 +83,28 @@ function fastParentCrypto() {
  */
 export async function runWrite(body, env, options = {}) {
   let last = null;
+  let primedEvents = options.primedEvents || {};
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const version = await currentVersion(env.DB);
     const view = await books(env.DB, TABLE_COLUMNS);
-    const services = createServices({ books: view, properties: propertiesFor(env), now: options.now ?? null, mutable: true, effects: true });
+    const services = createServices({ books: view, properties: propertiesFor(env), now: options.now ?? null, mutable: true, effects: true, primedEvents });
     const gas = createGas(services);
     gas.StepwiseParentCrypto = fastParentCrypto();
     const out = gas.doPost({ postData: { contents: JSON.stringify(body) } });
     const result = JSON.parse(out.getContent());
+
+    // オンライン授業の Meet は Worker では作れない。Apps Script に先に作ってもらい、
+    // その結果を持ってもう一度実行する（台帳にはまだ何も書いていないのでやり直せる）
+    const pending = services._needsGoogle.filter(x => !primedEvents[x.id]);
+    if (pending.length) {
+      const made = await ensureEvents(env, pending);
+      if (!made.ok) {
+        return { result: { error: 'オンライン授業の会議室を用意できませんでした。もう一度お試しください', errorCode: 'calendarUnavailable' }, effects: [], attempts: attempt };
+      }
+      primedEvents = { ...primedEvents, ...made.events };
+      continue; // 台帳は書かずにやり直す
+    }
+
     if (!services._touched.size) return { result, effects: services._effects, version, attempts: attempt };
     try {
       await flush(env.DB, view, services._touched, version);
@@ -101,6 +115,24 @@ export async function runWrite(body, env, options = {}) {
     }
   }
   return { result: { error: '他の操作と重なりました。もう一度お試しください', errorCode: 'conflict' }, effects: [], attempts: MAX_ATTEMPTS, conflict: String(last && last.message) };
+}
+
+// Apps Script に予定を作ってもらい、できた予定をそのまま受け取る（Meet を含む）
+async function ensureEvents(env, wanted) {
+  if (!env.GAS_URL || !env.SYNC_KEY) return { ok: false };
+  try {
+    const res = await fetch(env.GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'effects', key: env.SYNC_KEY, ensure: wanted }),
+      redirect: 'follow',
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload || payload.error || !payload.events) return { ok: false };
+    return { ok: true, events: payload.events };
+  } catch (e) {
+    return { ok: false };
+  }
 }
 
 // ---- 付随処理（メール・カレンダー）を Apps Script に頼む ----

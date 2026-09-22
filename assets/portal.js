@@ -242,6 +242,8 @@
           var pv = previewRoute(params); if (pv) return pv;
           var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
           var fallback = function () { return fetch(API + "?" + q).then(function (r) { return r.json(); }); };
+          // 正本が Worker なら、そちらが全部を扱う（Apps Script は書き込みを断るので回り道は意味がない）
+          if (WRITE_TO_WORKER && READ_API) return fetch(READ_API + "?" + q).then(function (r) { return r.json(); });
           if (!readable(params)) return fallback(); // 振り分けが無効なら今までと同じ経路のまま
           return readFirst(params).then(function (res) { return res === null ? fallback() : res; });
         }
@@ -263,7 +265,9 @@
           if (route() === 'family' && F.home && body && body.k !== undefined && !body.ftoken) { var pc = familyMypageChild(); body = Object.assign({}, body); delete body.k; body.ftoken = familyToken(); body.studentId = pc ? pc.studentId : ''; proxied = pc ? pc.studentId : ''; }
           var sent = body;
           var fallback = function () { return fetch(API, { method: "POST", body: JSON.stringify(sent) }).then(function (r) { return r.json(); }); };
-          var first = readable(sent) ? readFirst(sent).then(function (res) { return res === null ? fallback() : res; }) : fallback();
+          var first = (WRITE_TO_WORKER && READ_API)
+            ? fetch(READ_API, { method: "POST", body: JSON.stringify(sent) }).then(function (r) { return r.json(); })
+            : (readable(sent) ? readFirst(sent).then(function (res) { return res === null ? fallback() : res; }) : fallback());
           return first.then(function (res) { if (proxied && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
         }
         function myKey() { return previewK || lsGet("sw_k") || ""; }

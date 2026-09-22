@@ -334,8 +334,10 @@
         function post(body) {
           var started = Date.now();
           var fallback = function () { return fetch(API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); }); };
-          var routed = routedToWorker(body);
-          var first = routed ? readFirst(body).then(function (r) { return r === null ? fallback() : r; }) : fallback();
+          // 正本が Worker なら、そちらが全部を扱う（Apps Script は書き込みを断るので回り道は意味がない）
+          var first = (WRITE_TO_WORKER && READ_API)
+            ? fetch(READ_API, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); })
+            : (routedToWorker(body) ? readFirst(body).then(function (r) { return r === null ? fallback() : r; }) : fallback());
           return first.then(function (res) {
             try { console.log('[kanri timing]', body.op || body.action, { totalMs: Date.now() - started, serverMs: res.ms, stages: res.timings }); } catch (e) {}
             return res;

@@ -136,3 +136,71 @@ test('保護者のパスワード検証は GAS と同じ値になる（速い実
   }
   assert.ok(p);
 });
+
+test('対面の確定はその場で完結し、予定IDが台帳に入る', async () => {
+  const { h, slot } = ledger();
+  h.setRow('students', 'id', 'test-a', { deliveryMode: 'in_person' });
+  const p = await createParity(h);
+  const { runWrite } = await import('../cf/worker/write.mjs');
+  const req = { action: 'acceptMany', k: K, requestId: 'parity-accept-inperson', slotIds: [slot.id],
+    expectedSnapshots: [{ id: slot.id, date: slot.date, start: slot.start, min: slot.min, subject: slot.subject, deliveryMode: 'in_person' }] };
+  const done = await runWrite(req, { DB: p.d1, NL_ENABLED: '0' }, { now: h.now() });
+  assert.ok(!done.result.error, done.result.error || '');
+  const row = await p.d1.prepare('select status, eventId, meetUrl from slots where id = ?').bind(slot.id).first();
+  assert.equal(row.status, 'booked');
+  assert.match(row.eventId, /^st[0-9a-f]+@google\.com$/, '予定IDは計算で決まる（Google を待たない）');
+  assert.equal(row.meetUrl, '', '対面に会議室は要らない');
+  assert.deepEqual(done.effects.map(e => e.kind).sort(), ['calendarCreate', 'mail'], 'カレンダー登録と通知は控えに回る');
+});
+
+test('オンラインの確定は Apps Script に会議室を作ってもらってから通る', async () => {
+  const { h, slot } = ledger();
+  h.setRow('students', 'id', 'test-a', { deliveryMode: 'online' });
+  h.setRow('slots', 'id', slot.id, { deliveryMode: 'online' });
+  const p = await createParity(h);
+  const { runWrite } = await import('../cf/worker/write.mjs');
+
+  // Apps Script の代わり。頼まれた予定を Meet つきで返す
+  const asked = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    asked.push(body);
+    const events = {};
+    for (const want of body.ensure || []) {
+      events[want.id] = { ...want.body, status: 'confirmed', hangoutLink: 'https://meet.example.invalid/' + want.id.slice(2, 8),
+        conferenceData: { createRequest: { status: { statusCode: 'success' } }, entryPoints: [{ entryPointType: 'video', uri: 'https://meet.example.invalid/x' }] } };
+    }
+    return { ok: true, json: async () => ({ ok: true, events }) };
+  };
+  try {
+    const req = { action: 'acceptMany', k: K, requestId: 'parity-accept-online1', slotIds: [slot.id],
+      expectedSnapshots: [{ id: slot.id, date: slot.date, start: slot.start, min: slot.min, subject: slot.subject, deliveryMode: 'online' }] };
+    const done = await runWrite(req, { DB: p.d1, NL_ENABLED: '0', GAS_URL: 'https://gas.example.invalid/exec', SYNC_KEY: 'x'.repeat(30) }, { now: h.now() });
+    assert.ok(!done.result.error, done.result.error || '');
+    assert.equal(asked.length, 1, 'Apps Script に一度だけ頼む');
+    assert.ok(Array.isArray(asked[0].ensure) && asked[0].ensure.length === 1, '作ってほしい予定を渡す');
+    assert.ok(asked[0].ensure[0].body.conferenceData, 'オンラインなので会議室つきで頼む');
+    const row = await p.d1.prepare('select status, eventId, meetUrl from slots where id = ?').bind(slot.id).first();
+    assert.equal(row.status, 'booked');
+    assert.match(row.meetUrl, /^https:\/\/meet\./, '会議室の URL が台帳に入る: ' + row.meetUrl);
+  } finally { globalThis.fetch = original; }
+});
+
+test('会議室を用意できないときは、台帳を一切変えずに断る', async () => {
+  const { h, slot } = ledger();
+  h.setRow('students', 'id', 'test-a', { deliveryMode: 'online' });
+  h.setRow('slots', 'id', slot.id, { deliveryMode: 'online' });
+  const p = await createParity(h);
+  const { runWrite } = await import('../cf/worker/write.mjs');
+  const before = await p.d1.prepare('select status from slots where id = ?').bind(slot.id).first();
+  // GAS_URL を渡さない＝頼む先がない
+  const done = await runWrite({ action: 'acceptMany', k: K, requestId: 'parity-accept-online2', slotIds: [slot.id],
+    expectedSnapshots: [{ id: slot.id, date: slot.date, start: slot.start, min: slot.min, subject: slot.subject, deliveryMode: 'online' }] },
+    { DB: p.d1, NL_ENABLED: '0' }, { now: h.now() });
+  assert.equal(done.result.errorCode, 'calendarUnavailable');
+  const after = await p.d1.prepare('select status from slots where id = ?').bind(slot.id).first();
+  assert.deepEqual(after, before, '失敗したのに台帳が変わっている');
+  const journal = await p.d1.prepare('select count(*) as n from acceptWrites').first();
+  assert.equal(Number(journal.n), 0, '中途半端な確定の記録も残さない');
+});

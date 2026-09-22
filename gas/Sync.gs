@@ -163,6 +163,8 @@ function workerProxy_(req) {
 function effectsOp_(req) {
   var key = syncKey_();
   if (!key || key.length < 24 || String(req.key || '') !== key) { Utilities.sleep(300); return { error: '鍵が正しくありません', badAuth: true }; }
+  // Worker が先に作ってほしい予定（オンライン授業の Meet はここでしか作れない）
+  if (Array.isArray(req.ensure)) return { ok: true, events: effectsEnsureEvents_(req.ensure) };
   var items = Array.isArray(req.items) ? req.items : [];
   var writebacks = [], done = 0, failed = [];
   for (var i = 0; i < items.length && i < 50; i++) {
@@ -225,4 +227,30 @@ function pullLedgerFromWorker() {
     });
   });
   return { ok: true, sheets: wrote, exportedAt: data.exportedAt, message: 'Worker の台帳をシートへ写しました' };
+}
+
+// 予定を「あれば取る、無ければ作る」。できた予定をそのまま返す（Worker がその中身で判定する）
+function effectsEnsureEvents_(wanted) {
+  var out = {};
+  for (var i = 0; i < wanted.length && i < 31; i++) {
+    var want = wanted[i], id = String(want.id || '');
+    if (!id) continue;
+    var event = null;
+    try { event = Calendar.Events.get('primary', id); }
+    catch (e) { if (!schedulingCalendarMissing_(e)) throw e; }
+    if (!event) {
+      try { event = Calendar.Events.insert(want.body, 'primary', { conferenceDataVersion: 1, sendUpdates: 'none' }); }
+      catch (e) {
+        if (!schedulingCalendarConflict_(e)) throw e;
+        event = Calendar.Events.get('primary', id);
+      }
+    }
+    // 会議室がまだなら作り直す（schedulingCalendarFor_ と同じ考え方）
+    if (want.body && want.body.conferenceData && (!event.conferenceData || !schedulingCalendarMeet_(event))) {
+      try { event = Calendar.Events.patch({ conferenceData: schedulingConferenceRequest_(id, event) }, 'primary', id, { conferenceDataVersion: 1, sendUpdates: 'none' }); }
+      catch (e) { /* 次の試行で取り直す */ }
+    }
+    out[id] = JSON.parse(JSON.stringify(event));
+  }
+  return out;
 }
