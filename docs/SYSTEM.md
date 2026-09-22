@@ -4,7 +4,7 @@
 
 現行の構成・台帳・API・反映手順の正本。作業対象に関係する節を参照する。共通の制約と資料案内は [AGENTS.md](../AGENTS.md)、未完了事項は [FUTURE_WORK.md](FUTURE_WORK.md)。
 
-**2026-09-22・本番反映、確認残あり**: 授業記録UI・省スペースの宿題入力・任意の計画内訳をD1、Worker、GAS v100、Pagesへ反映した。共通releaseは `2026-09-22-lesson-record-outline`。[仕様・検証範囲](LESSON_CYCLE_PHASE1_SPEC.md#local-plan-outline)、[公開記録・復旧先・未完了確認](D1_MIGRATION.md#plan-outline-release) を参照。本番のテスト用保護者ログインでエラーを検出しており、家族経路の最終確認は完了扱いにしない。
+**2026-09-22・本番反映済み**: 授業記録UI・省スペースの宿題入力・任意の計画内訳をD1、Worker、GAS v100、Pagesへ反映。その後、本番環境の暗号計算上限による保護者ログインのエラーを修正し、GAS v101／Workerの現行releaseは `2026-09-22-family-crypto-fallback`。既存パスワードと60万回の強度を維持し、本番テスト家族による報告・既読まで確認した。[仕様・検証範囲](LESSON_CYCLE_PHASE1_SPEC.md#local-plan-outline)、[認証修正・復旧先](D1_MIGRATION.md#family-crypto-release) を参照。本番mirror／週次バックアップの新3表確認は引き続き残る。
 
 GAS現行版はv100（直前v99）。以下はv60までの機能概要で、9月22日のD1正本化・Worker対応は [D1移行記録](D1_MIGRATION.md) に集約する。授業記録と月間承認・請求、授業形式と同時人数、案内の一括確定、兄弟姉妹の家族アカウント、保護者メール通知に加え、授業情報の集約・実施分請求の家族明細・保護者の既読を公開した。版ごとの反映範囲と確認結果は [6章](#6-更新デプロイ手順)、運用上の残件はFUTURE_WORKを参照する。
 
