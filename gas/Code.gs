@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-meet-async' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-expired-today' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1931,9 +1931,15 @@ function kanriDashboard_() {
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var lessonsWeek = slots.filter(function (s) { return s.date > today && s.date < weekEnd && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var pending = slots.filter(function (s) { return s.date >= today && s.status === 'offered'; }).map(slim).sort(slotSort_);
-  // 返事がないまま日付が過ぎた案内(直近90日)。ホームで「実施済み/未実施」を選んでもらう
+  // 返事がないまま授業の時間が終わった案内(直近90日)。ホームで「実施済み/未実施」を選んでもらう。
+  // 翌日まで待たせると、実施した授業をその日のうちに記録できない（記録は確定済みの授業にしか付けられない）
   var expSince = addDays_(today, -90);
-  var expired = slots.filter(function (s) { return s.status === 'offered' && s.date < today && s.date >= expSince; }).map(slim).sort(slotSort_);
+  var expired = slots.filter(function (s) {
+    if (s.status !== 'offered' || s.date < expSince) return false;
+    if (s.date < today) return true;
+    // 終了時刻ではなく「開始まで + 授業の長さ」で見る（終了が日付をまたぐと文字の比較が壊れる）
+    return s.date === today && hoursUntil_(s.date, s.start) + (Number(s.min) || 0) / 60 <= 0;
+  }).map(slim).sort(slotSort_);
   // ホームの全体予定表用: 保存済みの過去の授業と今後70日の確定・承認待ち
   var horizon = addDays_(today, 70);
   var upcomingAll = slots.filter(function (s) { return s.date < horizon && (s.status === 'booked' || s.status === 'offered'); }).map(slim).sort(slotSort_);

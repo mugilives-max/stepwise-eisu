@@ -227,6 +227,16 @@
         function fmtD(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return (+p[1]) + "/" + (+p[2]) + "(" + WD[wdOf(ds)] + ")"; }
         function fmtDY(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return p[0] + "/" + (+p[1]) + "/" + (+p[2]); }
         function endTime(start, min) { var p = start.split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
+        // 返事がないまま授業の時間が終わった案内か。終わった時点で「実施済みにする」を出す
+        // （翌日まで待たせると、実施した授業をその日のうちに記録できない）
+        function offerEnded(l, tdy) {
+          if (!l || l.status !== "offered") return false;
+          if (l.date < tdy) return true;
+          if (l.date !== tdy) return false;
+          // 終了が日付をまたぐことがあるので、文字ではなく分で比べる
+          var p = String(l.start).split(":"), now = new Date();
+          return now.getHours() * 60 + now.getMinutes() >= (+p[0]) * 60 + (+p[1]) + (Number(l.min) || 0);
+        }
         function yen(n) { return (Number(n) || 0).toLocaleString() + "円"; }
         function today() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
         function taskDueText(t) { if (t.dueMode === "nextLesson") return '次の' + esc(t.dueSubject || '同じ科目') + '授業：' + (t.due ? fmtDY(t.due) + (t.dueStart ? ' ' + esc(t.dueStart) : '') : '予定未定'); return t.due ? fmtDY(t.due) : '期限なし'; }
@@ -1061,7 +1071,7 @@
           // 今後の予定(確定・承認待ち)と案内
           var tdy = s.today || today();
           var upcoming = (s.lessons || []).filter(function (l) { return l.date >= tdy && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
-          html += expiredCard((s.lessons || []).filter(function (l) { return l.status === "offered" && l.date < tdy; }).map(function (l) { return Object.assign({ studentId: s.id, studentName: s.name }, l); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }), false);
+          html += expiredCard((s.lessons || []).filter(function (l) { return offerEnded(l, tdy); }).map(function (l) { return Object.assign({ studentId: s.id, studentName: s.name }, l); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }), false);
           html += foldHead('upcoming', '今後の予定', upcoming.length + '件') + '<div class="card">';
           if (upcoming.length) {
             upcoming.forEach(function (l) {
@@ -1142,9 +1152,9 @@
         }
         function expiredCard(list, withName) {
           if (!list.length) return "";
-          var h = '<h2 style="margin-top:16px">日付が過ぎた案内 <span class="cnt">' + list.length + '件・実施したか選んでください</span></h2><div class="card" style="border-color:var(--amber)">';
+          var h = '<h2 style="margin-top:16px">返事がないまま終わった案内 <span class="cnt">' + list.length + '件・実施したか選んでください</span></h2><div class="card" style="border-color:var(--amber)">';
           list.forEach(function (s) { h += expiredRow(s, withName); });
-          h += '<div class="note">生徒から返事がないまま日付が過ぎた案内です。実際に授業をした場合は「実施済みにする」(確定・実施済みになり、授業料と月の回数に数えます)。しなかった場合は「未実施」で取り下げます。</div></div>';
+          h += '<div class="note">生徒から返事がないまま、授業の時間が終わった案内です。実際に授業をした場合は「実施済みにする」(確定・実施済みになり、授業料と月の回数に数えます)。しなかった場合は「未実施」で取り下げます。</div></div>';
           return h;
         }
         function lessonRow(s, withDate) {
@@ -1211,7 +1221,7 @@
           var offered = upcoming.filter(function (s) { return s.status === "offered"; });
           html += '<h2>承認待ちの案内 <span class="cnt">' + offered.length + '件</span></h2>';
           html += offered.length ? '<div class="card">' + offered.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">返事待ちの案内はありません</div>';
-          html += expiredCard(past.filter(function (s) { return s.status === "offered"; }).slice().reverse(), true);
+          html += expiredCard(slots.filter(function (s) { return offerEnded(s, today); }).slice().reverse(), true);
 
           // 予定表
           html += '<details><summary>月間予定表・選択日の詳細</summary>';
