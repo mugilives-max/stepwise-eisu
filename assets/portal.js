@@ -391,10 +391,38 @@
         }
 
         /* ---------- 画面: 専用リンクなし ---------- */
+        // ホーム画面に追加したアプリから開くと、専用リンクの ?k= が付いていない。
+        // 端末に覚えていればそのまま入れるが、覚えていないこともある（端末を替えた・
+        // 保存領域が分かれている など）。そのときのために、リンクを貼り直せる入口を出す。
+        var guardMessage = "";
+        function guardKeyFrom(text) {
+          var value = String(text || '').trim();
+          if (!value) return '';
+          if (/^https?:\/\//i.test(value)) {
+            try { value = new URLSearchParams(new URL(value).search).get('k') || ''; } catch (e) { return ''; }
+            value = value.trim();
+          }
+          return /^[A-Za-z0-9_-]{6,100}$/.test(value) ? value : '';
+        }
+        function guardOpen() {
+          var field = document.getElementById('guard-link');
+          var key = guardKeyFrom(field && field.value);
+          if (!key) { guardMessage = 'リンクを読み取れませんでした。先生から届いたリンクをそのまま貼り付けてください'; render(); return; }
+          lsSet('sw_k', key);
+          S = null; P = null; guardMessage = '読み込んでいます…'; render();
+          loadState().catch(function () { guardMessage = 'このリンクではひらけませんでした。先生に確認してください'; render(); });
+        }
         function renderGuard() {
           app.innerHTML = '<div class="card" style="margin-top:26px;text-align:center;padding:28px 20px">' +
             '<div style="font-weight:700;font-size:16px;margin-bottom:8px">専用リンクからひらいてください</div>' +
-            '<div style="font-size:13.5px;color:var(--muted)">このページは、先生からLINEで送られた<br>あなた専用のリンクからひらく必要があります。<br>リンクが分からないときは、LINEで先生に連絡してください。</div></div>' +
+            '<div style="font-size:13.5px;color:var(--muted)">このページは、先生からLINEで送られた<br>あなた専用のリンクからひらく必要があります。<br>リンクが分からないときは、LINEで先生に連絡してください。</div>' +
+            '<div style="margin-top:18px;text-align:left">' +
+              '<label for="guard-link" style="display:block;font-size:13px;margin-bottom:6px">リンクを貼り付けてひらくこともできます</label>' +
+              '<input id="guard-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box" placeholder="https://www.stepwise-education.jp/yoyaku/?k=...">' +
+              '<button class="btn-primary" data-action="guardopen" style="margin-top:10px;width:100%">このリンクでひらく</button>' +
+              (guardMessage ? '<p class="parent-error" role="status" style="margin-top:8px">' + esc(guardMessage) + '</p>' : '') +
+            '</div>' +
+            '</div>' +
             '<footer class="app"><span></span><span></span></footer>';
         }
 
@@ -1415,6 +1443,7 @@
           switch (act) {
             case "batchall": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); acceptBatch().review = null; schedData().offers.slice(0, 31).forEach(function (s) { acceptBatch().selected[s.id] = true; }); render(); } break;
             case "batchclear": if (!acceptBatch().pending) { acceptBatch().selected = Object.create(null); render(); } break;
+            case "guardopen": guardOpen(); break;
             case "batchreview": batchReview(); break;
             case "batchcancel": if (!acceptBatch().pending) { acceptBatch().review = null; render(); } break;
             case "batchsend": batchSend(); break;
@@ -1569,5 +1598,8 @@
         });
         if (route() === 'family') { render(); if (!F.challenge && F.step==='login' && familyToken()) familyLoadHome(); }
         else if (route() === 'student-email' && SE.challenge) render();
+        // 鍵が無いときは問い合わせない。ホーム画面のアプリから開くと ?k= が付かないので、
+        // ここで通信を試すと「読み込みに失敗しました」という見当違いの案内になる
+        else if (!myKey()) render();
         else loadState().catch(function () { app.innerHTML = '<div class="loading">読み込みに失敗しました。<br>電波の良いところで再読み込みしてください。</div>'; });
       })();
