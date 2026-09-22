@@ -9,9 +9,8 @@
 //      カレンダーの本物の予定 ID を書き戻す
 //
 // 保護者のパスワード検証（PBKDF2 60万回）は純 JS だと 1.2 秒かかるので、同じ結果を出す
-// node:crypto の実装に差し替える（133ms）。値が同じことはテストで突き合わせる。
-import { pbkdf2Sync } from 'node:crypto';
-import { Buffer } from 'node:buffer';
+// node:crypto を優先し、本番の上限に当たった場合はGASへ計算だけを依頼する（60万回を維持）。
+import { parentCryptoSession } from '../lib/parent-crypto.mjs';
 import { books } from '../lib/sheet-view.mjs';
 import { createServices } from '../lib/gas-services.mjs';
 import { normalizeCell, quoteIdent, VIEW_SHEETS } from '../lib/import.mjs';
@@ -73,24 +72,37 @@ async function flush(db, view, touched, version) {
   }
 }
 
-// 保護者のパスワード検証を native に差し替える（同じ 16 進の値を返す）
-function fastParentCrypto() {
-  return { derive: (pass, salt, iterations) => pbkdf2Sync(Buffer.from(pass), Buffer.from(salt), iterations, 32, 'sha256').toString('hex') };
-}
-
 /**
  * 書き込みを 1 件処理する。戻り値は { result, effects }。result は GAS と同じ形。
  */
 export async function runWrite(body, env, options = {}) {
   let last = null;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  const crypto = parentCryptoSession(env, options.parentCrypto);
+  // Request-local secure entropy is replayed only for discarded attempts.
+  // Registration/reset must keep the freshly generated salt while the KDF is
+  // awaited. Nothing is reused across HTTP requests or successful commits.
+  const uuids = [];
+  let computations = 0, attempt = 1;
+  while (attempt <= MAX_ATTEMPTS) {
     const version = await currentVersion(env.DB);
     const view = await books(env.DB, TABLE_COLUMNS);
     const services = createServices({ books: view, properties: propertiesFor(env), now: options.now ?? null, mutable: true, effects: true });
+    const randomUuid = services.Utilities.getUuid;
+    let uuidIndex = 0;
+    services.Utilities.getUuid = () => uuids[uuidIndex++] ||= randomUuid();
     const gas = createGas(services);
-    gas.StepwiseParentCrypto = fastParentCrypto();
+    gas.StepwiseParentCrypto = crypto.crypto;
     const out = gas.doPost({ postData: { contents: JSON.stringify(body) } });
     const result = JSON.parse(out.getContent());
+
+    if (crypto.pending) {
+      // Nothing from this run (including failures, new IDs or queued mail) is
+      // persisted. The next run reads fresh D1 state and rechecks lockouts,
+      // password changes, expired challenges and concurrent account changes.
+      if (++computations > MAX_ATTEMPTS) throw Error('Password computation changed repeatedly');
+      await crypto.resolve();
+      continue;
+    }
 
     if (!services._touched.size) return { result, effects: services._effects, version, attempts: attempt };
     try {
@@ -99,6 +111,7 @@ export async function runWrite(body, env, options = {}) {
     } catch (e) {
       if (!(e instanceof LedgerConflict)) throw e;
       last = e;
+      attempt++;
     }
   }
   return { result: { error: '他の操作と重なりました。もう一度お試しください', errorCode: 'conflict' }, effects: [], attempts: MAX_ATTEMPTS, conflict: String(last && last.message) };

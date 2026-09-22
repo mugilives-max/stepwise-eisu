@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-lesson-record-outline' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-family-crypto-fallback' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -57,12 +57,15 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   var locked = false;
   try {
+    var req = JSON.parse(e.postData.contents);
+    // Authenticated computation only: no ledger, schema changes or global lock.
+    // Login decisions and mutations remain exclusively on the D1 Worker.
+    if (req && req.action === 'parentCrypto') return json_(parentCryptoOp_(req));
     lock.waitLock(10000); locked = true;
     var afterLock=Date.now();
     memoClear_();
     ensureSchema_();
     var afterSchema=Date.now();
-    var req = JSON.parse(e.postData.contents);
     Object.defineProperty(req, '_receivedAt', {value:t0, enumerable:false}); // Server entry time, before lock/schema waits; never trust a client timestamp.
     var res;
     // 保護者ページから子どもの操作を代行: ログイン済みの保護者(ftoken)と、その家族に紐付く子ども(studentId)を確認できたときだけ、
