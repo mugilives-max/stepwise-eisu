@@ -131,7 +131,7 @@ function planSuggest_(student, req, short) {
 function planLineView_(l) {
   return { id: l.id, subject: l.subject, kind: l.kind, count: l.count, approvedCount: l.approvedCount, startDate: l.startDate, endDate: l.endDate, period: planPeriodLabel_(l), month: planLineIsMonth_(l) ? l.startDate.slice(0, 7) : '',
     lessonMin: l.lessonMin, rate30: l.rate30, lessonFee: planLineFee_(l), comment: l.comment, status: l.status, revision: l.revision, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedVia: l.approvedVia, consentDate: l.consentDate, memo: l.memo, updatedAt: l.updatedAt, parentId: l.parentId || '', addon: !!l.parentId,
-    teacherRecorded: l.status === 'approved' && !!l.approvedVia && l.approvedVia !== PLAN_VIA_PARENT_, parentAck: l.parentAck || '', parentAckAt: l.parentAckAt || '', parentAckMemo: l.parentAckMemo || '' };
+    outline:planOutlinePublic_(l),teacherRecorded: l.status === 'approved' && !!l.approvedVia && l.approvedVia !== PLAN_VIA_PARENT_, parentAck: l.parentAck || '', parentAckAt: l.parentAckAt || '', parentAckMemo: l.parentAckMemo || '' };
 }
 function planLineSort_(a, b) { return a.startDate === b.startDate ? (a.subject + a.kind).localeCompare(b.subject + b.kind) : (a.startDate < b.startDate ? 1 : -1); }
 // 監査(approvalEvents)は月間承認と同じ列に書く: ym には期間、planJson には行の内容

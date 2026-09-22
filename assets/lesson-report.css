@@ -1,4 +1,50 @@
 .sw-report-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:14px; }
 .sw-report-grid > label { display:flex; flex-direction:column; gap:6px; min-width:0; }
 .sw-report-grid input, .sw-report-grid textarea { width:100%; min-width:0; box-sizing:border-box; }
-.sw-report-grid dd { overflow-wrap:anywhere; }
+.sw-report-grid dd { overflow-wrap:anywhere; margin:0; white-space:pre-wrap; }
+.sw-report-body { grid-template-columns:minmax(0,1fr); }
+.sw-position { padding:14px; background:var(--soft,#f0f6f8); border-radius:10px; overflow-wrap:anywhere; }
+.sw-position p { margin:8px 0 0; }
+.sw-position-count { font-size:1.15rem; font-weight:700; }
+.sw-outline { margin:12px 0; }
+.sw-outline summary { cursor:pointer; padding:8px 0; }
+.sw-outline ol { padding:0; list-style:none; }
+.sw-outline li { display:flex; justify-content:space-between; gap:16px; padding:8px 0; border-bottom:1px solid var(--line,#dde5e9); overflow-wrap:anywhere; }
+.sw-outline li span:last-child { flex-shrink:0; }
+.sw-outline-notice { padding:12px; border-left:3px solid #a77718; background:#fff8e8; }
+.lc-compose { display:grid; grid-template-columns:minmax(0,2fr) minmax(240px,1fr); gap:20px; align-items:start; }
+.lc-compose > *, .po-row > * { min-width:0; }
+.lc-main > input, .lc-main > textarea, .lc-plan select { width:100%; box-sizing:border-box; }
+.lc-main input, .lc-main textarea, .lc-plan select { font-size:16px; }
+.lc-main input, .lc-plan select, .lc-hwgroup button { min-height:44px; }
+.lc-main > textarea { min-height:160px; }
+.lc-hwgroup { margin-top:16px; }
+.lc-hwhead { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin-bottom:8px; }
+.lc-hwhead h3 { margin:0; font-size:15px; }
+.lc-homework { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 44px; align-items:start; gap:4px 6px; margin-top:8px; }
+.lc-homework > input { width:100%; min-width:0; }
+.lc-hw-more { display:flex; align-items:center; justify-content:center; width:44px; height:44px; padding:0; border:1px solid var(--line,#dde5e9); border-radius:8px; background:var(--white,#fff); color:var(--muted,#64717f); font:inherit; font-size:22px; list-style:none; cursor:pointer; }
+.lc-hw-more::-webkit-details-marker { display:none; }
+.lc-hw-more:hover, .lc-hw-menu[open] > summary { background:var(--soft,#f0f6f8); color:var(--ink,#19212a); }
+.lc-hw-more:focus-visible { outline:2px solid var(--primary,#246a82); outline-offset:2px; }
+.lc-hw-actions { position:absolute; z-index:5; right:0; top:48px; width:min(100%,220px); padding:6px; display:grid; gap:4px; background:var(--white,#fff); border:1px solid var(--line,#dde5e9); border-radius:10px; box-shadow:0 6px 20px #19212a20; }
+.lc-hw-actions button { width:100%; text-align:left; }
+.lc-hw-deadline { grid-column:1/-1; padding-left:2px; overflow-wrap:anywhere; }
+.lc-hw-due { grid-column:1/-1; display:flex; align-items:end; flex-wrap:wrap; gap:8px; padding:10px; background:var(--soft,#f0f6f8); border-radius:8px; }
+.lc-hw-due label { display:flex; flex-direction:column; gap:4px; flex:1 1 180px; min-width:0; font-size:13px; }
+.lc-hw-due select, .lc-hw-due input { width:100%; min-width:0; min-height:44px; font-size:16px; }
+.lc-hw-due > button { margin-left:auto; }
+.lc-plan { background:var(--soft,#f5f8fa); border-radius:12px; padding:16px; }
+.lc-plan h3 { margin-top:0; }
+.lc-plan select { margin:8px 0 12px; }
+.lc-secondary { margin-top:20px; }
+.lc-secondary > summary { padding:12px 0; cursor:pointer; }
+.lc-share-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; align-items:center; }
+.lc-share-actions button, .po-editor button, .lc-plan button { min-height:44px; }
+.lc-share-preview { padding:16px; border:2px solid var(--primary,#246a82); border-radius:12px; margin:16px 0; }
+.po-editor { border:1px solid var(--line,#dde5e9); border-radius:12px; padding:16px; margin:12px 0; }
+.po-row { display:grid; grid-template-columns:minmax(120px,1fr) 82px auto; gap:10px; align-items:end; margin:12px 0; }
+.po-row label { display:flex; flex-direction:column; gap:4px; }
+.po-row input { width:100%; box-sizing:border-box; min-height:44px; font-size:16px; }
+.lesson-pair-pane .lc-compose { grid-template-columns:minmax(0,1fr); }
+@media(max-width:760px) { .lc-compose { grid-template-columns:minmax(0,1fr); } .po-row { grid-template-columns:minmax(0,1fr) 76px; } .po-row .row { grid-column:1/-1; } .lc-share-actions > button { flex:1 1 100%; } }

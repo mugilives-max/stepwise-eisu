@@ -20,7 +20,7 @@
 const { createHarness } = require('../gas-harness.cjs');
 const d1h = require('./d1-harness.cjs');
 
-const SCHEMA_CACHE_KEYS = ['schemaOk4', 'schemaOk21', 'schemaOk23'];
+const SCHEMA_CACHE_KEYS = ['schemaOk4', 'schemaOk21', 'schemaOk23', 'schemaOk24'];
 
 // 台帳2冊を「書き出しの束」にする（gas/Export.gs が作るものと同じ形）
 function bundleOf(harness) {

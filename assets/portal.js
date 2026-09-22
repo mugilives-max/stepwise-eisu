@@ -208,8 +208,10 @@
         }
         function publishedRecordItem(r, editable) {
           var rep = r.report || {};
-          var h = '<details class="card"' + (!editable ? ' data-parent-record="' + esc(r.recordId) + '" data-record-revision="' + esc(r.revision) + '"' : '') + '><summary>' + (!editable ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + (rep.actualUnit ? ' <span class="small muted">' + esc(rep.actualUnit) + '</span>' : '') + '</summary>';
-          h += '<dl class="sw-report-grid">' + (rep.actualUnit ? '<div><dt>単元</dt><dd style="margin:0;white-space:pre-wrap">' + esc(rep.actualUnit) + '</dd></div>' : '') + '<div><dt>コメント</dt><dd style="margin:0;white-space:pre-wrap">' + esc(r.content) + '</dd></div>' + (!editable && rep.parentMessage ? '<div><dt>保護者への連絡</dt><dd style="margin:0;white-space:pre-wrap">' + esc(rep.parentMessage) + '</dd></div>' : '') + '</dl>';
+          var trackRead = !editable && !PREVIEW;
+          var h = '<details class="card"' + (trackRead ? ' data-parent-record="' + esc(r.recordId) + '" data-record-revision="' + esc(r.revision) + '"' : '') + '><summary>' + (trackRead ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + (rep.actualUnit ? ' <span class="small muted">' + esc(rep.actualUnit) + '</span>' : '') + '</summary>';
+          h += window.StepwiseReport.position(r.outline);
+          h += window.StepwiseReport.body(r,!editable);
           if ((r.homework || []).length) h += '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="' + esc(x.title) + 'の完了" data-action="taskdone" data-id="' + esc(x.taskId) + '"' + (x.done ? ' checked' : '') + '>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({ dueSubject: r.subject }, x))) + '</span></li>'; }).join('') + '</ul>';
           return h + '</details>';
         }
@@ -670,6 +672,7 @@
           proposed.forEach(function (l) {
             html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + ' ' + (l.addon ? '<span class="tag gray">追加</span> ＋' : '') + esc(l.count) + '回' + (planFee(l) ? '<span class="muted">・' + esc(planFee(l)) + '</span>' : '') + '</span><span class="tag amber">保護者の承認待ち</span></div>';
             if (l.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(l.comment) + '</div>';
+            html += window.StepwiseReport.outline(l.outline);
             if (famChild) {
               var fl = famLines.filter(function (x) { return x.id === l.id; })[0], famDis = F.busy ? ' disabled' : '';
               if (fl && fl.status === 'proposed' && Number.isSafeInteger(fl.revision)) html += '<div class="row" style="margin:8px 0 4px;gap:8px"><button class="btn-primary btn-sm" data-action="fa-planok" data-child="' + esc(famChild.studentId) + '" data-line="' + esc(l.id) + '"' + famDis + '>承認する</button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="' + esc(famChild.studentId) + '" data-line="' + esc(l.id) + '"' + famDis + '>回数を調整・見送る</button></div>';
@@ -686,6 +689,7 @@
             var n = lessonsOf(l), goal = planLimit(l) + extraGoal, remain = Math.max(0, goal - n.done - n.plan); remainTotal += remain; shown++;
             html += '<div class="slotline"><span class="tag green">承認済み</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + (l.addon ? ' <span class="tag gray">追加</span>' : '') + ' 実施 ' + n.done + '・予定 ' + n.plan + '<span class="muted">／計画 ' + planLimit(l) + '回' + (extraGoal ? '＋追加 ' + extraGoal + '回' : '') + '</span></span>' + (remain ? '<span class="small" style="color:var(--primary)">あと ' + remain + ' 回</span>' : '<span class="tag green">日程確定</span>') + '</div>';
             if (l.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(l.comment) + '</div>';
+            html += window.StepwiseReport.outline(l.outline);
             html += famAckBlock(l);
             addons.forEach(function (a) { if (a.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>追加（' + esc(planShort(a)) + '・＋' + esc(planLimit(a)) + '回）：</strong>' + esc(a.comment) + '</div>'; html += famAckBlock(a); });
           });
@@ -1128,6 +1132,7 @@
             pls.forEach(function (l) {
               html += '<div style="padding:12px 0;border-bottom:1px solid var(--line)"><strong>'+esc(planPeriod(l))+'</strong>'+(l.status==='approved'?' <span class="tag green">承認済み</span>':l.status==='declined'?' <span class="tag gray">見送り</span>':' <span class="tag amber">承認待ち</span>');
               html += '<p>'+esc(planName(l))+(l.addon?' <span class="tag gray">追加</span>':'')+'　'+(l.lessonMin?esc(l.lessonMin)+'分 × ':'')+(l.addon?'＋':'')+esc(planLimit(l))+'回まで</p>'+(l.comment?'<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>'+esc(l.comment)+'</p>':'')+'<p><strong>'+(planFee(l)?'1回 '+yen(l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30)):'授業時間・料金は先生に確認してください')+'</strong></p>';
+              html += window.StepwiseReport.outline(l.outline);
               if(l.status==='proposed'&&l.revision!=null)html+='<div class="row"><button class="btn-primary btn-sm" data-action="'+(family?'fa-planok':'planok')+'" data-line="'+esc(l.id)+'"'+(activeBusy?' disabled':'')+'>承認する</button><button class="btn-quiet btn-sm" data-action="'+(family?'fa-planng':'planng')+'" data-line="'+esc(l.id)+'"'+(activeBusy?' disabled':'')+'>'+(family?'回数を調整・見送る':'見送る')+'</button></div>';
               if(l.memo)html+='<p class="note">'+esc(l.memo)+'</p>';
               html += '</div>';
@@ -1205,7 +1210,7 @@
           if (!st || !st.me) { familyLoadChildState(c.studentId); return h + '<div class="loading"><div class="spinner"></div>' + esc(c.name) + 'さんのページを読み込んでいます…</div>'; }
           S = st;
           var tab = fixedTab || 'home';
-          h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : tab === 'history' ? '授業の記録（開くと既読になります）' : 'マイページ') + '（保護者が代わりに操作できます）</p>';
+          h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : tab === 'history' ? (PREVIEW ? '授業の記録（プレビューでは既読を付けません）' : '授業の記録（開くと既読になります）') : 'マイページ') + (PREVIEW ? '（表示のみ）' : '（保護者が代わりに操作できます）') + '</p>';
           if (tab === 'grades') h += renderGradesPage() + '<section id="family-grades-panel" data-family-child="' + esc(c.studentId) + '" style="margin-top:18px"></section>';
           else if (tab === 'history') h += '<section id="family-records-host" data-family-child="' + esc(c.studentId) + '">' + renderHistoryPage() + '</section>';
           else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
@@ -1389,7 +1394,7 @@
           (F.home.children||[]).forEach(function(c){active[JSON.stringify([familyToken(),c.studentId])]=true;});
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].reads.clear();});
           var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild(), recHost=document.getElementById('family-records-host');
-          if(section==='records'&&recHost&&gc){
+          if(!PREVIEW&&section==='records'&&recHost&&gc){
             var rkey=JSON.stringify([familyToken(),gc.studentId]);active[rkey]=true;
             var rpanel=familyPanels[rkey] || (familyPanels[rkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
             var rtoken=familyToken();rpanel.reads.mount(recHost,function(op,payload){return apiPost(Object.assign({},payload,{ftoken:rtoken,studentId:gc.studentId,action:'learningService',op:op}));},rkey);

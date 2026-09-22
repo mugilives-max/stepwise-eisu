@@ -146,23 +146,24 @@ test('generated report excludes private notes and escaping preserves literal HTM
 
 test('Enter で次の宿題の欄へ移り、最後なら欄が増える',async()=>{
   const ui=await createUI().ready();
-  assert.equal(ui.el('lc-title-3'),undefined,'前提: 宿題は 1 つだけ');
+  assert.equal(ui.el('lc-title-1'),undefined,'前提: 宿題は 1 つだけ。持ち物・メモは必要時に追加');
   ui.input('lc-title-0','4-1 Excercise');
   ui.key('lc-title-0','Enter');
-  assert.equal(ui.focused(),'lc-title-3','次の宿題の欄へ移っていない');
-  assert.ok(ui.el('lc-title-3'),'欄が増えていない');
-  assert.equal(ui.el('lc-title-3').value,'','増えた欄に中身が入っている');
+  assert.equal(ui.focused(),'lc-title-1','次の宿題の欄へ移っていない');
+  assert.ok(ui.el('lc-title-1'),'欄が増えていない');
+  assert.equal(ui.el('lc-title-1').value,'','増えた欄に中身が入っている');
 
-  ui.input('lc-title-3','4-2 Excercise');
-  ui.key('lc-title-3','Enter');
-  assert.equal(ui.focused(),'lc-title-4','続けて増えない');
+  ui.input('lc-title-1','4-2 Excercise');
+  ui.key('lc-title-1','Enter');
+  assert.equal(ui.focused(),'lc-title-2','続けて増えない');
 });
 
 test('持ち物の欄からは、持ち物の欄が増える（種類をまたがない）',async()=>{
   const ui=await createUI().ready();
+  ui.click('lc-add',{'data-type':'持ち物'});
   ui.input('lc-title-1','英単語帳');
   ui.key('lc-title-1','Enter');
-  assert.equal(ui.focused(),'lc-title-3','増えた欄へ移っていない');
+  assert.equal(ui.focused(),'lc-title-2','増えた欄へ移っていない');
   // 増えたのが持ち物であること（宿題は増えていない）
   assert.match(ui.html(),/持ち物 2/,'持ち物が増えていない');
   assert.doesNotMatch(ui.html(),/宿題 2/,'種類をまたいで増えている');
@@ -172,17 +173,17 @@ test('すでに次の欄があれば、増やさずそこへ移る',async()=>{
   const ui=await createUI().ready();
   ui.input('lc-title-0','1つ目');
   ui.key('lc-title-0','Enter');
-  ui.input('lc-title-3','2つ目');
+  ui.input('lc-title-1','2つ目');
   ui.key('lc-title-0','Enter');
-  assert.equal(ui.focused(),'lc-title-3');
-  assert.equal(ui.el('lc-title-3').value,'2つ目','既にある欄が消えている');
-  assert.equal(ui.el('lc-title-4'),undefined,'欄を増やしている');
+  assert.equal(ui.focused(),'lc-title-1');
+  assert.equal(ui.el('lc-title-1').value,'2つ目','既にある欄が消えている');
+  assert.equal(ui.el('lc-title-2'),undefined,'欄を増やしている');
 });
 
 test('空欄のまま Enter を押しても、欄は増えない',async()=>{
   const ui=await createUI().ready();
   ui.key('lc-title-0','Enter');
-  assert.equal(ui.el('lc-title-3'),undefined,'空欄で増えている');
+  assert.equal(ui.el('lc-title-1'),undefined,'空欄で増えている');
 });
 
 test('日本語入力の変換中の Enter では、欄を移らない',async()=>{
@@ -190,7 +191,7 @@ test('日本語入力の変換中の Enter では、欄を移らない',async()=
   ui.input('lc-title-0','かんじ');
   ui.key('lc-title-0','Enter',{composing:true});
   assert.equal(ui.focused(),'','変換の確定で欄を移っている');
-  assert.equal(ui.el('lc-title-3'),undefined,'変換の確定で欄が増えている');
+  assert.equal(ui.el('lc-title-1'),undefined,'変換の確定で欄が増えている');
 });
 
 test('Shift+Enter では欄を移らない',async()=>{

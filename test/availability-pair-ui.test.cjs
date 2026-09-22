@@ -25,6 +25,10 @@ test('a failed paired save retries its own request while the other student saves
 });
 test('paired preparation and homework stay in the selected student editor',async()=>{
  const ui=await pairUI();ui.input('pair-1-lc-preparation','Bの非公開準備');ui.click('lc-prep-save',{'data-lc-editor':key('test-b')});assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.body,'Bの非公開準備');
- ui.click('lc-add',{'data-lc-editor':key('test-a')});ui.input('pair-0-lc-content','A授業');ui.input('pair-0-lc-title-0','A宿題');ui.click('lc-duetoggle',{'data-lc-editor':key('test-a')});ui.input('pair-0-lc-due-mode-0','date');ui.input('pair-0-lc-due-0','2026-09-12');ui.click('lc-save',{'data-lc-editor':key('test-a')});
+ ui.click('lc-add',{'data-lc-editor':key('test-a')});ui.input('pair-0-lc-content','A授業');ui.input('pair-0-lc-title-0','A宿題');ui.click('lc-duetoggle',{'data-lc-editor':key('test-a')});
+ assert.equal(ui.focused(),'pair-0-lc-due-mode-0');
+ ui.input('pair-0-lc-due-mode-0','date');assert.equal(ui.focused(),'pair-0-lc-due-mode-0');ui.input('pair-0-lc-due-0','2026-09-12');
+ ui.click('lc-dueclose',{'data-lc-editor':key('test-a')});assert.equal(ui.focused(),'pair-0-lc-hw-more-0');assert.equal(ui.el('pair-0-lc-due-0'),undefined);
+ ui.click('lc-save',{'data-lc-editor':key('test-a')});
  assert.equal(ui.requests.at(-1).body.record.homework[0].title,'A宿題');assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('Bの非公開準備'),false);
 });

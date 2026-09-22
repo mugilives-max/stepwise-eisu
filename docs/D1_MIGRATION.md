@@ -425,3 +425,21 @@ select (select count(*) from slots where eventId like 'pending-%') as 仮のま�
 ### 残り
 - 読み取りで Apps Script のままのもの: 先生のプレビュー（`preview`）と成績票などの `learningService`。
 - オンライン授業の確定だけは、Meet の URL を返すため今も GAS を待つ（`cf/worker/write.mjs` の `ensureEvents`）。
+
+<a id="plan-outline-release"></a>
+
+## 12. 任意の計画内訳の公開準備（2026-09-22・ローカル検証済み、本番未実施）
+
+ローカル実装は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md#local-plan-outline)。今回本番への接続・移行・デプロイは行っていない。`0004_plan_outlines.sql` は既存列に触れず、`planOutlines` / `lessonOutlineLinks` / `lessonOutlineSnapshots` の3表だけを追加する。
+
+先生の画面確認後、合成データでD1の報告・宿題・家族セッションの既読と、新3表の内容入りexport→Sheets mirrorを確認済み。全632テスト・構文確認・Workerのlocal環境向けdry-runが通過した。dry-runではlocal変数の `GAS_URL` / `WRITE_MODE` 未設定警告が出る（本番環境の疎通確認ではない）。先生用プレビューの既読エラーも解消し、プレビュー閲覧で保護者の既読を付けない。検証用アカウント・セッションはローカル合成台帳だけで、本番のアカウントを作成・変更していない。
+
+公開の承認後、次の順で差分を照合する。
+
+1. 現在のD1・適用済みmigration・Worker/GAS/Pages版と同時編集の有無を再確認。正本D1を非公開の保存先にバックアップし、件数・schema・復元方法を確認する。Sheetsの写しだけを現在のD1のバックアップとみなさない。
+2. migrationの差分が3表の追加のみであることを確認し、D1へ適用する。公開Workerの切替前に表が存在する必要がある。新しい生成schemaは読取時に新表も参照するため、順序を逆にしない。
+3. `scripts/build-gas-bundle.mjs` で共用処理とschemaを再生成しWorkerへ反映。既存のstate・授業記録と、新しい内訳読取／保存を合成データで確認する。料金・承認・実施数が変わらないことも確認。
+4. GASで残るプレビュー経路にも共用ソースを整合させる。D1→Sheetsのmirrorが新3表を含むこと、週次バックアップがその写しを含むことを確認する。正本はD1のままで、旧Sheetsを正本へ戻して書き込まない。
+5. 関連する管理画面・本人／保護者画面・共通JS/CSSをまとめて公開。内訳なし／講師専用／公開、報告→宿題反映、1/2表示、実際の家族セッションの既読を合成データだけでスモークテストする。実生徒の過去記録へ自動対応付けしない。
+
+戻す場合は旧アプリ版を再配信できるよう保存しておく。追加テーブル・スナップショット・journalを削除しない。旧Workerのexportは新表を含まない可能性があり、mirrorの表数減少チェックで停止し得る。復旧時には新表の保持とmirror／backupの内容を再照合し、保護条件を安易に解除しない。

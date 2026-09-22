@@ -61,7 +61,7 @@ test('計画中の 45 表がすべて作られ、索引が張られている', (
   const d1 = d1h.createD1();
   const tables = d1h.tables(d1);
   // 業務 45 表 + 仕組み側 5 表（取り込み記録・台帳の版・版の見張り・付随処理の控え・通知の宛先）
-  assert.equal(tables.length, 50);
+  assert.equal(tables.length, 53);
   for (const name of ['_importRuns', '_ledger', '_guard', '_effects', 'pushSubs']) assert.ok(tables.includes(name), '仕組みの表が無い: ' + name);
   for (const name of ['slots', 'planLines', 'familyAccounts', 'lessonRecords', '入金管理', '生徒台帳'])
     assert.ok(tables.includes(name), '表が無い: ' + name);

@@ -116,21 +116,20 @@ async function lessonReady(record = null, extra = {}) {
 }
 
 test('lesson save explains public content and private notes while new homework defaults to the next lesson', async () => {
-  const ui = await lessonReady(); assert.match(ui.html(), /保存して生徒・保護者へ公開/); assert.match(ui.html(), /先生だけのメモは非公開/);
+  const ui = await lessonReady(); assert.match(ui.html(), /共有する内容を確認/); assert.match(ui.html(), /先生だけのメモ.*非公開/);
   ui.input('lc-content', '化学反応式を練習'); ui.input('lc-teacherNote', 'SYNTHETIC_PRIVATE_NOTE');
   // a blank homework row is shown by default; a second one is added and left blank (ignored on save)
-  // one blank row per section (宿題 / 持ち物 / メモ) by default; the date field appears only for 日付を指定
-  assert.ok(ui.el('lc-title-0') && ui.el('lc-title-1') && ui.el('lc-title-2'), 'default rows'); assert.doesNotMatch(ui.html(), /<option[^>]*>持ち物<\/option>/);
-  // the deadline control stays hidden while the default applies; ＋ 期限を設定 reveals it
+  // Only homework starts with a blank row; supplies/memos are optional additions.
+  assert.ok(ui.el('lc-title-0') && !ui.el('lc-title-1'), 'one default row'); assert.doesNotMatch(ui.html(), /<option[^>]*>持ち物<\/option>/);
+  // The deadline editor is opened on demand from the compact actions.
   assert.equal(ui.el('lc-due-mode-0'), undefined); assert.match(ui.html(), /data-action="lc-duetoggle"/);
   ui.click('lc-duetoggle', { 'data-item': ui.html().match(/data-lc-item="([^"]+)" data-lc-prop="title"/)[1] });
   assert.equal(ui.el('lc-due-mode-0').value, 'nextLesson'); assert.equal(ui.el('lc-due-mode-2'), undefined); assert.equal(ui.el('lc-due-0'), undefined);
-  ui.click('lc-add', { 'data-type': '持ち物' }); assert.ok(ui.el('lc-title-3')); assert.match(ui.html(), /<label for="lc-title-3">持ち物 2<\/label>/);
+  ui.click('lc-add', { 'data-type': '持ち物' }); assert.ok(ui.el('lc-title-1')); assert.equal(ui.el('lc-title-1').getAttribute('aria-label'),'持ち物 1 の内容');
   ui.input('lc-title-0', '化学ワークp.10'); ui.click('lc-save'); const req = ui.requests.at(-1).body;
   assert.equal(req.op, 'lessonRecordSave'); assert.equal(req.record.homework.length, 1); assert.equal(req.record.homework[0].dueMode, 'nextLesson'); assert.equal(req.record.homework[0].due, '');
-  assert.ok(ui.html().indexOf('<h2>今回の記録<button') < ui.html().indexOf('前回の確認と現在の未完了宿題'), '今回の記録 comes first');
+  assert.ok(ui.html().indexOf('<h2>今回の記録</h2>') < ui.html().indexOf('前回の確認と現在の未完了宿題'), '今回の記録 comes first');
   assert.doesNotMatch(ui.html(), /単元とコメントだけで十分です|保存した授業記録を生徒・保護者と共有/);
-  ui.click('help-toggle', { 'data-help': 'record' }); assert.match(ui.html(), /単元とコメントだけで十分です/);
   ui.click('help-toggle', { 'data-help': 'lesson' }); assert.match(ui.html(), /<h1[^>]*>授業記録<button[^>]*data-help="lesson"[^>]*aria-expanded="true"[^>]*>\?<\/button><\/h1><\/div>[^]*?<div class="card note"[^>]*>保存した授業記録を生徒・保護者と共有します/);
   assert.equal(req.record.teacherNote, 'SYNTHETIC_PRIVATE_NOTE');
   assert.equal(JSON.stringify([...ui.local, ...ui.session]).includes('SYNTHETIC_PRIVATE_NOTE'), false);
@@ -140,6 +139,8 @@ test('lesson homework deadline changes clear stale dates and retain the chosen p
   const record = { id: 'synthetic-record', revision: 1, status: 'active', content: '保存された内容', publishedRevision: 1,
     homework: [{ itemId: 'synthetic-homework', title: '宿題', dueMode: 'date', due: '2026-09-20', type: '宿題' }] };
   const ui = await lessonReady(record); assert.match(ui.html(), /公開済み/); assert.match(ui.html(), /保存しても送信・公開されません/);
+  assert.equal(ui.el('lc-due-0'),undefined); assert.match(ui.html(),/期限：2026-09-20/);
+  ui.click('lc-duetoggle',{'data-item':'synthetic-homework'});
   assert.equal(ui.el('lc-due-0').disabled, false); ui.input('lc-due-mode-0', 'nextLesson');
   assert.equal(ui.el('lc-due-0'), undefined, 'the date field is hidden unless 日付を指定'); ui.input('lc-due-mode-0', 'date'); assert.equal(ui.el('lc-due-0').value, ''); ui.input('lc-due-mode-0', 'nextLesson');
   ui.click('lc-save'); const payload = structuredClone(ui.requests.at(-1).body); assert.equal(payload.record.homework[0].dueMode, 'nextLesson');

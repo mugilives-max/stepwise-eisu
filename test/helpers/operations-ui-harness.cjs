@@ -55,6 +55,7 @@ function createUI(kind = 'student', options = {}) {
   context.window.StepwiseBoard=require('../../assets/schedule-board.js');
   context.window.StepwiseCalendar=require('../../assets/calendar.js');
   context.window.StepwiseReport=require('../../assets/lesson-report.js');
+  Object.assign(context.window, options.window || {});
   vm.runInNewContext(source, context);
   const ui = { requests, local, session, writes, logs, replaced, location, el: id => elements.get(id), html: () => elements.get('app').innerHTML, confirms: () => confirmCount,
     input(id, value) { const el = elements.get(id); assert.ok(el, 'visible input: ' + id); el.value = value; emit('document:input', { target: el }); emit('app:input', { target: el }); },

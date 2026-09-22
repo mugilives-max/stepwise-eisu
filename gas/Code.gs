@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-expired-today' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-22-lesson-record-outline' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1223,7 +1223,7 @@ function admin_(req) {
   if (String(req.op || '').indexOf('service') === 0) return serviceAdmin_(req);
   if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
   if (String(req.op || '').indexOf('studentEmail') === 0) return studentEmailAdmin_(req);
-  if (['lessonPairContext','lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
+  if (['planOutlineGet','planOutlineSave','lessonPairContext','lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
     case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
     case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));
@@ -1721,7 +1721,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk23')) return;
+  if (cache.get('schemaOk24')) return;
   // 1. シートを作る。列を足すだけのヘルパー(2.)は対象シートが無いと黙って何もしないので、
   //    作成より先に呼ぶと列が欠けたまま6時間キャッシュされる。新しいヘルパーもこの順で足す。
   ensureParentAuthSheet_();
@@ -1752,7 +1752,7 @@ function ensureSchema_() {
   ensureMeetHeader_();         // slots
   ensureSubjectHeader_();      // slots
   if (typeof ensureKindColumns_ === 'function') ensureKindColumns_(); // slots/plans
-  cache.put('schemaOk23', '1', 21600);
+  cache.put('schemaOk24', '1', 21600);
 }
 
 function readRows_(name) {
