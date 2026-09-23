@@ -4,6 +4,8 @@
 
 現行の構成・台帳・API・反映手順の正本。作業対象に関係する節を参照する。共通の制約と資料案内は [AGENTS.md](../AGENTS.md)、未完了事項は [FUTURE_WORK.md](FUTURE_WORK.md)。
 
+**2026-09-23・宿題一覧を本番反映済み（Pagesのみ）**: 生徒・保護者ナビに「宿題」を追加。ホームは予定表を先頭に維持し、宿題ページで期限順の一覧・未完了／完了／すべて・自己追加・完了の取り消しを扱う。既存 `taskDone` と保護者の代理操作を利用し、完了履歴は既存APIの取得範囲内。`b7f6760` のPages公開、全696テスト、対象4ファイルの配信一致を確認。GAS v103・Worker・台帳の変更なし。本番ログイン後の目視はブラウザー接続不調のため未実施。[要件・検証・復旧記録](UI_UX_REVIEW.md#student-homework-list) を参照する。
+
 **2026-09-23・新ホーム本番反映済み**: 簡易カレンダー＋選択日の授業を通常表示に切り替えた。旧ホームとプレビュー分岐を整理し、`kanriDashboard_` の授業種別情報（各授業の `kind`・一覧 `lessonKinds`）とGAS v102・Worker・Pagesへ一括反映。現行releaseは `2026-09-23-teacher-home`。テーブル・認証・公開範囲の変更はない。[実装・検証・復旧記録](UI_UX_REVIEW.md#teacher-home-work-preview) を参照する。
 
 **2026-09-22・本番反映済み**: 授業記録UI・省スペースの宿題入力・任意の計画内訳をD1、Worker、GAS v100、Pagesへ反映。その後、本番環境の暗号計算上限による保護者ログインのエラーを修正し、当時のGAS v101／Workerのreleaseは `2026-09-22-family-crypto-fallback`。既存パスワードと60万回の強度を維持し、本番テスト家族による報告・既読まで確認した。[仕様・検証範囲](LESSON_CYCLE_PHASE1_SPEC.md#local-plan-outline)、[認証修正・復旧先](D1_MIGRATION.md#family-crypto-release) を参照。本番mirror／週次バックアップの新3表確認は引き続き残る。
