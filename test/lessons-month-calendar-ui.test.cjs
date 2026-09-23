@@ -30,7 +30,7 @@ test('month keeps every lesson label, time order, past/done and cancellation sta
   const todayCell = html.match(/<button[^>]*data-date="2026-09-23"[^>]*>([\s\S]*?)<\/button>/)[1];
   const starts = [...todayCell.matchAll(/class="t">(\d{2}:\d{2})/g)].map(m => m[1]);
   assert.deepEqual(starts, ['15:00','18:00','19:00']);
-  assert.match(html, /class="calbox of admin-ok"/); assert.match(html, /class="calbox needs-attention"/); assert.match(html, /class="calbox admin-ok"/);
+  assert.match(html, /class="calbox of admin-pending"/); assert.match(html, /class="calbox needs-attention"/); assert.match(html, /class="calbox admin-ok"/);
   assert.doesNotMatch(html, /SHOULD_NOT_APPEAR/);
   ui.click('calday', {'data-date':'2026-09-21'});
   assert.match(dayDetails(ui.html()), /実施済/);

@@ -285,7 +285,7 @@
     h += '</div><div class="callegend">';
     h += '<span><span class="callbl" style="display:inline">授業</span></span>';
     if (opts.adminHealth) h += '<span><span class="callbl rq" style="display:inline">要対応</span> 実施未登録・記録なし・取消依頼</span>';
-    else h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
+    h += '<span><span class="callbl of" style="display:inline">授業（未承認）</span></span>';
     h += '<span><span class="callbl ev" style="display:inline">予定</span> 重要な予定（テスト・行事など）</span>';
     h += '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
     h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';

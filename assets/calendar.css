@@ -98,3 +98,10 @@ button.calday { cursor: pointer; font-size: 13px; }
   .calday .cal-same-time .calbox { padding:0;line-height:1.2;border:0;border-radius:0;background:transparent; }
   .cal-same-time .calbox .t { display:none; }
 }
+
+.calday .calbox.admin-pending { background:var(--amber-soft);color:var(--amber);border-left-color:var(--amber); }
+@media (min-width:1100px) {
+  .calday .cal-same-time:has(.admin-pending):not(:has(.admin-ok,.needs-attention)) { background:var(--amber-soft);border-left-color:var(--amber); }
+  .cal-same-time:has(.admin-pending):not(:has(.admin-ok,.needs-attention)) .cal-shared-time { color:var(--amber); }
+  .calday .cal-same-time .calbox.admin-pending { background:transparent; }
+}
