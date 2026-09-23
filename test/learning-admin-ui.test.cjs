@@ -170,3 +170,32 @@ test('an old-token edit response cannot block recovery after another tab refresh
   assert.equal(ui.local.get('sw_admt'),'new-teacher-token'); assert.equal(ui.el('se-subject').value,'化学'); ui.click('se-retry');
   assert.deepEqual(ui.requests.at(-1).body,{...original,token:'new-teacher-token'});
 });
+
+
+test('offer editing uses a dialog and withdraws the original offer once from inside it', async () => {
+  const ui = await adminReady(card({lessons:[offered()]}));
+  assert.doesNotMatch(ui.html(), /data-action="delslot"/);
+  ui.click('slotedit', {'data-id':'slot-a'});
+  assert.match(ui.html(), /<dialog id="slot-editor" class="board-editor"/);
+  ui.input('se-date','2026-09-20');
+  ui.click('se-delete');
+  const req = ui.requests.at(-1);
+  assert.equal(req.body.op,'deleteSlot');
+  assert.equal(req.body.slotId,'slot-a');
+  assert.equal(req.body.studentId,'test-a');
+  assert.equal(ui.confirms(),1);
+  const count = ui.requests.length;
+  assert.doesNotMatch(ui.html(), /data-action="se-delete"/); ui.click('se-save'); ui.click('se-close');
+  assert.equal(ui.requests.length,count);
+  assert.match(ui.html(), /<dialog id="slot-editor"/);
+  req.reply({ok:true,data:card({lessons:[]})}); await flush();
+  assert.doesNotMatch(ui.html(), /<dialog id="slot-editor"/);
+});
+
+test('failed withdrawal keeps the offer editor and its input for correction', async () => {
+  const ui = await editing(); ui.input('se-start','18:30'); ui.click('se-delete');
+  ui.requests.at(-1).reply({error:'この案内はすでに承認されています'}); await flush();
+  assert.match(ui.html(), /すでに承認されています/);
+  assert.equal(ui.el('se-start').value,'18:30');
+  ui.click('se-close'); assert.doesNotMatch(ui.html(), /<dialog id="slot-editor"/);
+});

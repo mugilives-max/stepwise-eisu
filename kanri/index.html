@@ -335,19 +335,19 @@
           if (op === 'setSlotDeliveryMode') { slotEdit.form.deliveryMode = nextMode; slotEditSend(false); return; }
           render();
           var editFirst = document.getElementById(op === 'editOffered' ? 'se-date' : 'se-mode');
-          if (editFirst) { editFirst.focus(); editFirst.scrollIntoView({block:'center'}); }
+          if (editFirst) editFirst.focus();
         }
         function slotEditHtml() {
           var h = "", e = slotEdit, pending = slotEditPending();
           pending.forEach(function (p) { if (e && e.pending && e.pending.requestId === p.requestId) return; h += '<div class="lc-notice">確認が必要な授業変更：' + fmtDY(p.after.date) + ' ' + esc(p.after.start) + ' ' + esc(p.after.subject) + ' <button class="btn-quiet btn-sm" data-action="se-resume" data-request="' + esc(p.requestId) + '">変更の続きを確認</button></div>'; });
           if (!e || e.auth !== token()) return h;
-          var dis = e.busy || e.pending ? ' disabled' : '', modeOnly = e.op === "setSlotDeliveryMode", f = e.form;
+          var dis = busy || e.busy || e.pending ? ' disabled' : '', modeOnly = e.op === "setSlotDeliveryMode", f = e.form;
           if (modeOnly) {
             h += '<div class="lc-notice" role="status">' + (e.busy ? '授業形式を変更しています…' : esc(e.error || '変更結果を確認してください。'));
             if (!e.busy) h += ' <button class="btn-primary btn-sm" data-action="' + (e.pending ? 'se-retry' : 'se-save') + '">' + (e.pending ? '変更結果を確認' : '再試行') + '</button>' + (!e.pending ? ' <button class="btn-quiet btn-sm" data-action="se-close">閉じる</button>' : '');
             return h + '</div>';
           }
-          h += '<div class="card" role="region" aria-label="授業変更" style="margin:16px 0"><h2>' + (modeOnly ? 'この回の授業形式を変更' : '送信済みの案内を修正') + '</h2><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
+          h += '<dialog id="slot-editor" class="board-editor" aria-label="授業変更"><div class="row between"><h2>' + (modeOnly ? 'この回の授業形式を変更' : '送信済みの案内を修正') + '</h2><button class="btn-quiet" data-action="se-close"' + dis + '>閉じる</button></div><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
           if (e.error) h += '<p class="lc-notice" role="alert">' + esc(e.error) + '</p>';
           if (!modeOnly) h += '<div class="row"><label>日付<input type="date" id="se-date" data-slot-edit="date" value="' + esc(f.date) + '"' + dis + '></label><label>開始<input type="time" id="se-start" data-slot-edit="start" value="' + esc(f.start) + '"' + dis + '></label><label>授業時間（分）<input type="number" id="se-min" data-slot-edit="min" min="30" max="240" step="30" value="' + esc(f.min) + '"' + dis + '></label><label>科目<select id="se-subject" data-slot-edit="subject"' + dis + '>' + [""].concat(LESSON_SUBJECTS.indexOf(f.subject) < 0 && f.subject ? [f.subject] : [], LESSON_SUBJECTS).map(function (s) { return '<option value="' + esc(s) + '"' + (s === f.subject ? ' selected' : '') + '>' + esc(s || '選択してください') + '</option>'; }).join('') + '</select></label></div>';
           if (!modeOnly) h += '<label for="se-kind">種類</label><select id="se-kind" data-slot-edit="kind"' + dis + '>' + kindOptions(f.kind) + '</select>';
@@ -355,8 +355,22 @@
           if (e.pending) h += '<p>変更結果を確認するまで、同じ内容を保持しています。</p><button class="btn-primary" data-action="se-retry"' + (e.busy ? ' disabled' : '') + '>' + (e.busy ? '保存中…' : '同じ内容で結果を確認') + '</button>';
           else if (e.force) h += '<p class="lc-notice">上記の休み・希望時間との重なりを確認したうえで保存します。</p><button class="btn-primary" data-action="se-force">確認して保存</button> <button class="btn-quiet" data-action="se-edit">入力に戻る</button>';
           else h += '<button class="btn-primary" data-action="se-save">変更を保存</button>';
-          if (!e.pending && !e.busy) h += ' <button class="btn-quiet" data-action="se-close">閉じる</button>';
-          return h + '</div>';
+          if (!e.pending && !e.busy) h += ' <button class="btn-danger" data-action="se-delete"' + dis + '>この案内を取り下げる</button>';
+          return h + '</dialog>';
+        }
+        function slotEditDelete() {
+          var e = slotEdit;
+          if (!e || e.op !== 'editOffered' || busy || e.busy || e.pending || e.auth !== token()) return;
+          if (!confirm('この案内を取り下げますか？')) return;
+          var r = route(), auth = token(); e.busy = true; e.error = ''; render();
+          admin('deleteSlot', {slotId:e.before.id, studentId:e.studentId}).then(function(res) {
+            if (slotEdit !== e || auth !== token()) return;
+            slotEdit = null; toast('取り下げました');
+            if (applyResult(res, r)) render(); else load(true);
+          }).catch(function(err) {
+            if (slotEdit !== e || auth !== token()) return;
+            e.busy = false; e.error = err.message || '取り下げの結果を確認できませんでした。'; render();
+          });
         }
         function slotEditSend(force) {
           var e = slotEdit; if (!e || e.busy || e.auth !== token()) return;
@@ -1120,7 +1134,7 @@
                 if (l.meetUrl) html += '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>';
                 if (l.date <= tdy) html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (l.done ? "0" : "1") + '" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
                 html += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '" data-when="' + fmtD(l.date) + ' ' + l.start + '" data-name="' + esc(s.name) + '">解除</button>';
-              } else html += slotDelivery(l, s.id, false, 'actions') + '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取り下げ</button>';
+              } else html += slotDelivery(l, s.id, false, 'actions');
               html += '</div>';
             });
           } else html += '<div class="empty">今後の予定はありません</div>';
@@ -1207,7 +1221,7 @@
             if (s.date <= A.today) h += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (s.done ? "0" : "1") + '" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
             h += '<button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(s.id) + '" data-when="' + fmtD(s.date) + " " + s.start + '" data-name="' + esc(s.studentName) + '">解除</button>';
           } else {
-            h += slotDelivery(s, null, false, 'actions') + '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">' + (s.status === "offered" ? "取り下げ" : "枠を削除") + "</button>";
+            h += slotDelivery(s, null, false, 'actions') + (s.status === 'offered' ? '' : '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">' + (s.status === "offered" ? "取り下げ" : "枠を削除") + "</button>");
           }
           return h + "</div>";
         }
@@ -1448,6 +1462,7 @@
             app.innerHTML = slotEditHtml() + app.innerHTML;
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
+          var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
           var boardDialog=document.getElementById('board-editor');if(boardDialog&&boardDialog.showModal&&!boardDialog.open)boardDialog.showModal();
           if (window.StepwiseServices) {
             if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && ['overview','progress'].indexOf(r.section || 'overview') >= 0)) {
@@ -2416,7 +2431,8 @@
             ev.preventDefault();
             if (a === "se-resume") { var pendingEdit = slotEditPending().filter(function (p) { return p.requestId === btn.getAttribute("data-request"); })[0]; if (pendingEdit && !(slotEdit && (slotEdit.pending || slotEdit.busy))) slotEditResume(pendingEdit); }
             else if (a === "se-save" || a === "se-retry" || a === "se-force") slotEditSend(a === "se-force");
-            else if (slotEdit && !slotEdit.pending && !slotEdit.busy) { if (a === "se-close") slotEdit = null; else if (a === "se-edit") slotEdit.force = false; render(); }
+            else if (a === "se-delete") slotEditDelete();
+            else if (slotEdit && !busy && !slotEdit.pending && !slotEdit.busy) { if (a === "se-close") slotEdit = null; else if (a === "se-edit") slotEdit.force = false; render(); }
             return;
           }
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }
@@ -2826,6 +2842,7 @@
           render();
         });
 
+        document.addEventListener('cancel',function(ev){if(ev.target.id==='slot-editor'){ev.preventDefault();if(slotEdit&&!busy&&!slotEdit.busy&&!slotEdit.pending){slotEdit=null;render();}}},true);
         document.addEventListener('cancel',function(ev){if(ev.target.id==='board-editor'){if(busy)ev.preventDefault();else boardOpen=false;}},true);
         document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|kind|delivery|outside|extra-.*)$/.test(el.id))return;
           captureOfferDraft();updateOfferCount();
