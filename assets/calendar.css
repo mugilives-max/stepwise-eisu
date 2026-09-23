@@ -54,3 +54,9 @@ button.calday { cursor: pointer; font-size: 13px; }
 .calbox.dn { background: var(--soft); color: var(--muted); border-left-color: var(--muted); }
 .calbox.wi { background: #e6f4ea; color: #2f8a4c; border-left-color: #2f8a4c; }
 .callbl.rq { color: var(--danger); font-weight: 700; }
+
+/* Holiday names stay readable on narrow screens and selected days. */
+.calday.holiday:not(.sel), .home-calendar-day.holiday .home-calendar-number { color: var(--danger); }
+.calholiday { display: block; font-size: 10px; line-height: 1.35; color: var(--danger); white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+.calday.sel .calholiday { color: var(--white); }
+.home-calendar-day.holiday[aria-pressed="true"] .home-calendar-number { color: white; }

@@ -111,7 +111,7 @@ test('compact month uses counts, separates booking meanings in accessible labels
   const ui=await ready({slots:[s,o],lessonsToday:[s],pending:[o]});
   assert.match(ui.html(),/aria-label="日付を選ぶカレンダー"/);
   const cell=ui.html().match(/<button[^>]*id="home-day-2026-09-23"[^]*?<\/button>/)[0];
-  assert.match(cell,/aria-label="2026\/9\/23、今日、確定1件、案内中1件"/);
+  assert.match(cell,/aria-label="2026\/9\/23、秋分の日、今日、確定1件、案内中1件"/);
   assert.match(cell,/aria-pressed="true" aria-current="date"/);
   assert.match(cell,/home-calendar-count">2件/);
 });
