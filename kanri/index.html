@@ -1123,10 +1123,10 @@
               html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
               html += slotDelivery(l, s.id, false, 'mode') + ' ';
               html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
-              html += lessonRecordTag(l) + '</span>';
+              html += lessonRecordTag(l, s.id) + '</span>';
               if (l.status === "booked") {
                 html += slotDelivery(l, s.id, false, 'actions');
-                html += lessonEntry(l, s.id);
+                if (!l.done) html += lessonEntry(l, s.id);
                 if (l.req) html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取消を承認</button><button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">予定どおり</button>';
                 if (!l.done && l.date <= tdy) html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (l.done ? "0" : "1") + '" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
               } else html += slotDelivery(l, s.id, false, 'actions');
@@ -1201,9 +1201,10 @@
           h += '<div class="note">生徒から返事がないまま、授業の時間が終わった案内です。実際に授業をした場合は「実施済みにする」(確定・実施済みになり、授業料と月の回数に数えます)。しなかった場合は「未実施」で取り下げます。</div></div>';
           return h;
         }
-        function lessonRecordTag(s) {
+        function lessonRecordTag(s, studentId) {
           if (!s.done) return '';
-          return s.lessonRecordStatus === 'active' ? ' <span class="tag blue">記入済</span>' : ' <span class="tag red">未記入</span>';
+          var recorded = s.lessonRecordStatus === 'active';
+          return ' <a class="tag ' + (recorded ? 'blue' : 'red') + '" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '" title="授業記録を開く">' + (recorded ? '記入済' : '未記入') + '</a>';
         }
         function lessonRow(s, withDate) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
@@ -1216,7 +1217,7 @@
           h += "</span>";
           if (s.status === "booked") {
             h += slotDelivery(s, null, false, 'actions');
-            h += lessonEntry(s);
+            if (!s.done) h += lessonEntry(s);
             if (!s.done && s.date <= A.today) h += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (s.done ? "0" : "1") + '" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
           } else {
             h += slotDelivery(s, null, false, 'actions') + (s.status === 'offered' ? '' : '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">' + (s.status === "offered" ? "取り下げ" : "枠を削除") + "</button>");
