@@ -128,3 +128,12 @@ test('attention pending range includes today through two days later and groups c
  assert.match(section,/<details class="card"/);
  assert.doesNotMatch(section,/<details[^>]*open/);
 });
+
+test('AI schedule registration parses for the selected student before applying', async()=>{
+ const ui=await ready(); ui.click('ai-open');ui.input('ai-student','test-a');
+ ui.input('tnl-text','明日17時から60分、数学');ui.click('tnl-parse');
+ const req=ui.requests.at(-1);assert.equal(req.body.op,'scheduleParseTeacher');assert.equal(req.body.studentId,'test-a');
+ req.reply({items:[{kind:'offer',dates:['2026-09-24'],start:'17:00',min:60,subject:'数学'}]});await flush();
+ assert.match(ui.html(),/チェックした内容で登録する/);
+ ui.click('tnl-register');const apply=ui.requests.at(-1);assert.equal(apply.body.op,'nlApplyTeacher');assert.equal(apply.body.studentId,'test-a');assert.equal(apply.body.items[0].subject,'数学');
+});

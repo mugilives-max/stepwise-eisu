@@ -867,6 +867,13 @@
         var sInputMode = 'text'; // 生徒ページの＋の中: text=文章で予定を登録(既定) / manual=手動で入力
         var sDayAddOpen = false, sBlockOpen = false, sOfferOpen = false; // ＋の中の「授業を案内」で案内フォームを開く(カルテ内の案内はここに集約)
         // 文章で自動入力(先生版)。文章 → scheduleParseTeacher で候補 → 確認・修正 → nlApplyTeacher で登録(案内・授業不可・予定)
+        var aiScheduleOpen = false, aiStudentId = '';
+        function tnlStudent() { return route().page === 'lessons' ? (A.students || []).filter(function(s){return sameId(s.id,aiStudentId);})[0] : cur; }
+        function aiScheduleHtml() {
+          if (!aiScheduleOpen) return '';
+          var student=tnlStudent(), dis=busy || TNL.busy ? ' disabled' : '';
+          return '<dialog id="ai-schedule" class="board-editor" aria-label="AIで予定登録"><div class="row between"><h2>AIで予定登録</h2><button class="btn-quiet" data-action="ai-close"'+dis+'>閉じる</button></div><label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+A.students.filter(function(s){return s.active;}).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')+'</dialog>';
+        }
         var TNL = { text: "", busy: false, proposal: null, error: "" };
         var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "予定の共有" };
         function tnlDates(dates) { var out = [], cur = null; (dates || []).forEach(function (d) { if (cur && addDaysStr(cur.to, 1) === d) cur.to = d; else { cur = { from: d, to: d }; out.push(cur); } }); return out.map(function (g) { return g.from === g.to ? fmtD(g.from) : fmtD(g.from) + "〜" + fmtD(g.to); }).join("、"); }
@@ -908,17 +915,17 @@
           return h + '</div>';
         }
         function tnlParse() {
-          if (TNL.busy || busy || !cur) return;
+          if (TNL.busy || busy || !tnlStudent()) return;
           var text = String(TNL.text || '').trim(); if (!text) { toast('予定の文章を入れてください'); return; }
-          var sid = cur.id; TNL.busy = true; TNL.error = ''; TNL.proposal = null; render();
+          var sid = tnlStudent().id; TNL.busy = true; TNL.error = ''; TNL.proposal = null; render();
           admin('scheduleParseTeacher', { studentId: sid, text: text, subjects: LESSON_SUBJECTS }).then(function (res) {
-            if (!cur || !sameId(cur.id, sid)) return; TNL.busy = false;
+            if (!tnlStudent() || !sameId(tnlStudent().id, sid)) return; TNL.busy = false;
             (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'offer') { if (!it.start) it.start = '17:00'; if (!it.min) it.min = 90; } });
             TNL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; render();
-          }).catch(function (er) { if (!cur || !sameId(cur.id, sid)) return; TNL.busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
+          }).catch(function (er) { if (!tnlStudent() || !sameId(tnlStudent().id, sid)) return; TNL.busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
         }
         function tnlRegister(planForce) {
-          var p = TNL.proposal; if (!p || busy || TNL.busy || !cur) return;
+          var p = TNL.proposal; if (!p || busy || TNL.busy || !tnlStudent()) return;
           var items = [], idx = [];
           for (var i = 0; i < p.items.length; i++) {
             var it = p.items[i]; if (!it.sel || it.done) continue;
@@ -932,16 +939,16 @@
             idx.push(i);
           }
           if (!items.length) { toast('登録する項目にチェックを入れてください'); return; }
-          var sid = cur.id, r = route(); busy = true; render();
-          admin('nlApplyTeacher', { studentId: sid, deliveryMode: cur.deliveryMode || 'in_person', items: items, planForce: !!planForce }).then(function (res) {
-            busy = false; if (!cur || !sameId(cur.id, sid)) return;
+          var sid = tnlStudent().id, r = route(); busy = true; render();
+          admin('nlApplyTeacher', { studentId: sid, deliveryMode: tnlStudent().deliveryMode || 'in_person', items: items, planForce: !!planForce }).then(function (res) {
+            busy = false; if (!tnlStudent() || !sameId(tnlStudent().id, sid)) return;
             (res.results || []).forEach(function (x) { var it = p.items[idx[x.i]]; if (!it) return; it.errors = x.errors || []; if (x.status === 'added' || x.status === 'partial') { it.done = true; it.sel = false; } });
             var left = p.items.some(function (it) { return it.sel && !it.done; });
             if (!left && !(res.results || []).some(function (x) { return x.status === 'error'; })) { TNL.text = ''; TNL.proposal = null; TNL.error = ''; }
             toast((res.added || 0) + '件を登録しました' + ((res.results || []).some(function (x) { return x.status !== 'added'; }) ? '（登録できなかった項目があります）' : ''));
             cacheClear(); if (!applyResult(res, r)) load(true); else render();
           }).catch(function (er) {
-            busy = false; if (!cur || !sameId(cur.id, sid)) return;
+            busy = false; if (!tnlStudent() || !sameId(tnlStudent().id, sid)) return;
             // 授業計画の枠を超える案内: 何も登録されていないので、計画の案内を送ってから同じ内容を planForce で登録し直す
             if (er.res && er.res.needPlan) { TNL.error = ''; planPromptOpen('tnl', er.res, function () { tnlRegister(true); }); render(); return; }
             TNL.error = er.message || '通信に失敗しました'; render();
@@ -1288,7 +1295,7 @@
           var past = slots.filter(function (s) { return s.date < today; }).reverse();
           var active = A.students.filter(function (x) { return x.active; });
           var html = '<div class="head"><div><h1>授業の案内と予定</h1><p class="sub">生徒に授業を案内し、承認されると確定します(カレンダー登録・Meet発行・通知は自動)</p></div>' +
-            '<div class="row"><button class="btn-quiet btn-sm" data-action="copyweek">今後7日をコピー</button><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+            '<div class="row"><button class="btn-primary btn-sm" data-action="ai-open">AIで予定登録</button><button class="btn-quiet btn-sm" data-action="copyweek">今後7日をコピー</button><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
           // ホームと同じ月間予定表。過去・実施済みも含め、選んだ日を再描画時に戻さない。
           var calendarSlots = slots.filter(function (s) { return s.status === "booked" || s.status === "offered"; }), byDate = {};
@@ -1325,7 +1332,7 @@
             html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">授業できない</span>' + ngWhen(b) + ' <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
           }
 
-          html += lessonOfferDialogHTML();
+          html += lessonOfferDialogHTML() + aiScheduleHtml();
 
           html += lessonAttention(slots, today);
 
@@ -1488,6 +1495,7 @@
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
+          var aiDialog=document.getElementById('ai-schedule');if(aiDialog&&aiDialog.showModal&&!aiDialog.open)aiDialog.showModal();
           var boardDialog=document.getElementById('board-editor');if(boardDialog&&boardDialog.showModal&&!boardDialog.open)boardDialog.showModal();
           if (window.StepwiseServices) {
             if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && ['overview','progress'].indexOf(r.section || 'overview') >= 0)) {
@@ -2400,9 +2408,10 @@
           f[field] = (field === "count" || field === "lessonMin" || field === "lessonFee") ? (el.value === "" ? "" : Number(el.value)) : el.value;
         }
         document.addEventListener("input", function (ev) {
-          if (route().page !== "student" || !cur) return;
           var el = ev.target;
-          if (el.id === "tnl-text") TNL.text = el.value;
+          if (el.id === "ai-student" && !busy && !TNL.busy) { aiStudentId=el.value;TNL={text:'',busy:false,proposal:null,error:''};render();return; }
+          if (el.id === "tnl-text") { TNL.text = el.value; return; }
+          if (route().page !== "student" || !cur) return;
           if (el.getAttribute("data-pe-field")) planEditInput(el);
           var e = billingEditor(cur), bf = el.getAttribute("data-billing-field"), id = el.getAttribute("data-invoice"), prop = el.getAttribute("data-invoice-field");
           if (bf === "ym" && !e.busy && !e.pending) { e.ym = el.value; e.preview = null; }
@@ -2468,6 +2477,8 @@
           var sid = btn.getAttribute("data-sid") || (route().page === "student" && cur ? cur.id : "");
           switch (a) {
             case "notification-dismiss": notificationNotice = ""; render(); break;
+            case 'ai-open': aiScheduleOpen=true;render();break;
+            case 'ai-close': if(!busy&&!TNL.busy){aiScheduleOpen=false;render();}break;
             case "login":
               ev.preventDefault();
               var lEmail = val("a-email"), lPass = (document.getElementById("a-pass") || {}).value || "";
@@ -2871,7 +2882,7 @@
           render();
         });
 
-        document.addEventListener('cancel',function(ev){if(ev.target.id==='slot-editor'){ev.preventDefault();if(slotEdit&&!busy&&!slotEdit.busy&&!slotEdit.pending){slotEdit=null;render();}}},true);
+        document.addEventListener('cancel',function(ev){if(ev.target.id==='ai-schedule'){if(busy||TNL.busy)ev.preventDefault();else aiScheduleOpen=false;}if(ev.target.id==='slot-editor'){ev.preventDefault();if(slotEdit&&!busy&&!slotEdit.busy&&!slotEdit.pending){slotEdit=null;render();}}},true);
         document.addEventListener('cancel',function(ev){if(ev.target.id==='board-editor'){if(busy)ev.preventDefault();else boardOpen=false;}},true);
         document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|kind|delivery|outside|extra-.*)$/.test(el.id))return;
           captureOfferDraft();updateOfferCount();
