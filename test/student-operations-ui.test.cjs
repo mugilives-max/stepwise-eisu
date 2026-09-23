@@ -9,6 +9,7 @@ const proof = 'se1.' + 'a'.repeat(32) + '.' + 'b'.repeat(64);
 
 test('self-added homework selects a next-subject deadline without sending a client anchor and retains a failed draft', async () => {
   const ui = await studentReady(state([slot('booked', { st:'mine', subject:'数学' })]));
+  ui.navigate('#tasks');
   assert.equal(ui.el('f-tdue-mode').value, 'nextLesson'); assert.equal(ui.el('f-tdue-subject').value, '数学');
   ui.input('f-ttitle', '方程式 <復習>'); ui.input('f-tdue-subject', '化学'); ui.click('taskadd');
   const first = ui.requests.at(-1);
@@ -20,7 +21,7 @@ test('self-added homework selects a next-subject deadline without sending a clie
 });
 
 test('deadline mode changes preserve input and date, no-deadline, and missing-subject requests stay distinct', async () => {
-  const ui = await studentReady(state([])); ui.input('f-ttitle', '単語を復習'); ui.click('taskadd');
+  const ui = await studentReady(state([])); ui.navigate('#tasks'); ui.input('f-ttitle', '単語を復習'); ui.click('taskadd');
   assert.equal(ui.requests.length, 1, 'next-subject mode needs a subject');
   ui.change('f-tdue-mode', 'date'); assert.equal(ui.el('f-ttitle').value, '単語を復習');
   ui.click('taskadd'); assert.equal(ui.requests.length, 1, 'date mode needs an actual date');
@@ -32,7 +33,7 @@ test('deadline mode changes preserve input and date, no-deadline, and missing-su
 });
 
 test('homework drafts are scoped to the dedicated student link and late saves cannot clear another draft', async () => {
-  const ui = await studentReady(); ui.input('f-ttitle', 'Aの宿題'); ui.input('f-tdue-subject', '数学'); ui.click('taskadd'); const old = ui.requests.at(-1);
+  const ui = await studentReady(); ui.navigate('#tasks'); ui.input('f-ttitle', 'Aの宿題'); ui.input('f-tdue-subject', '数学'); ui.click('taskadd'); const old = ui.requests.at(-1);
   ui.switchStudent('test-link-b'); ui.requests.at(-1).reply(state([], '【テスト】B')); await flush();
   assert.equal(ui.el('f-ttitle').value, ''); ui.input('f-ttitle', 'Bのメモ');
   old.reply({ ok:true, state:state([], '古いA') }); await flush();
@@ -182,7 +183,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const s = { ...state(), blocked:[{ id:'b1', date:'2026-09-16', note:'部活' }], events:[{ id:'e1', date:'2026-09-17', dateTo:'2026-09-17', title:'大会', kind:'event' }] };
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
-  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /homework-summary[^]*取り組む宿題[^]*<h2>予定表[^]*<h2>予定の編集<\/h2>[^]*<details class="fold offers" data-fold="offers"><summary>/);
+  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"|homework-summary/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /^<h2>予定表[^]*<h2>予定の編集<\/h2>[^]*<details class="fold offers" data-fold="offers"><summary>/);
   ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定共有</);
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);

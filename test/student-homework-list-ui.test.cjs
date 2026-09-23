@@ -133,13 +133,21 @@ test('withdrawn tasks, whether incomplete or complete, are excluded from open, d
   assert.doesNotMatch(ui.html(), /【テスト】withdrawn/);
 });
 
-test('home summarizes the first three pending items and links to the list, without completed history', async () => {
+test('student and parent homes prioritize the calendar and keep homework in its dedicated menu', async () => {
   const ui = await ready(initialTasks(), '#home');
-  assert.equal(toggleIds(ui).length, 3);
-  assert.deepEqual(toggleIds(ui), ['overdue', 'today', 'future']);
-  assert.doesNotMatch(ui.html(), /【テスト】完了した宿題|【テスト】次回未定|【テスト】期限なしメモ/);
-  assert.match(ui.html(), /href="#tasks(?:\?filter=open)?"/);
-  assert.ok(ui.el('f-ttitle'), 'self-add remains available on the home page');
+  const parent = await familyReady();
+  parent.navigate('#family/home');
+  for (const [view, href] of [[ui, '#tasks'], [parent, '#family/tasks']]) {
+    assert.match(view.html(), /<h2>予定表<\/h2>[^]*<h2>予定の編集<\/h2>/);
+    assert.equal(view.html().match(/<h[12][^>]*>(.*?)<\/h[12]>/)?.[1], '予定表');
+    assert.equal(toggleIds(view).length, 0);
+    assert.doesNotMatch(view.html(), /homework-summary|取り組む宿題|f-ttitle|【テスト】完了した宿題/);
+    assert.ok(view.el('tabs').innerHTML.includes(`href="${href}"`));
+    view.navigate(href);
+    assert.match(view.html(), /<h1>宿題<\/h1>/);
+    assert.equal(toggleIds(view).length, 5);
+    assert.ok(view.el('f-ttitle'), 'self-add remains on the dedicated homework page');
+  }
 });
 
 test('homework, belongings and notes remain distinct; only self-created items expose deletion', async () => {
@@ -224,6 +232,9 @@ test('the explicit retry survives filter and home navigation and resends the sam
   assert.equal(toggleIds(ui).length, 0);
   assert.match(ui.html(), /保存結果を確認できませんでした/);
   ui.navigate('#home');
+  assert.doesNotMatch(ui.html(), /data-action="taskretry"/);
+  ui.navigate('#tasks');
+  assert.match(ui.html(), /data-action="taskretry"/);
   ui.click('taskretry');
   assert.deepEqual(ui.requests.at(-1).body, payload);
   const count = ui.requests.length;
@@ -497,6 +508,8 @@ test('self-add draft survives homework filter and page navigation, then uses the
   ui.navigate('#tasks?filter=done');
   ui.navigate('#history');
   ui.navigate('#home');
+  assert.doesNotMatch(ui.html(), /id="f-ttitle"/);
+  ui.navigate('#tasks');
   assert.equal(ui.el('f-ttitle').value, '【テスト】自分のノート <確認>');
   assert.equal(ui.el('f-ttype').value, '持ち物');
   assert.equal(ui.el('f-tdue-mode').value, 'date');

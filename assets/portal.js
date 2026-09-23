@@ -218,10 +218,6 @@
           if (previewK) h += '<p class="note">先生のプレビューでは表示のみです。完了・追加・削除はできません。</p>';
           return h + '<section class="card homework-add">' + renderTaskAdd() + '</section>';
         }
-        function renderTaskSummary() {
-          var open = visibleTasks().filter(function (t) { return !t.done; });
-          return '<section class="homework-summary"><div class="row between"><h2>取り組む宿題 <span class="cnt">' + open.length + '件</span></h2><a class="homework-link" href="' + taskPageHref() + '">すべての宿題</a></div>' + taskFeedback() + '<div class="card homework-panel">' + (open.length ? renderTaskRows(open.slice(0,3)) : '<p class="empty">未完了の宿題・持ち物・メモはありません。</p>') + (open.length > 3 ? '<a class="homework-more" href="' + taskPageHref() + '">残り' + (open.length - 3) + '件を含めて確認する →</a>' : '') + '<a class="homework-more" href="' + taskPageHref('done') + '">完了した宿題を見る・未完了に戻す</a>' + renderTaskAdd() + '</div></section>';
-        }
         function taskToggle(id, done) {
           if (busy || previewK) return;
           var task = visibleTasks().filter(function (t) { return String(t.id) === String(id); })[0];
@@ -943,11 +939,10 @@
           app.innerHTML = renderHomePage();
         }
 
-        /* ---------- ホーム: 宿題3件の要約・予定表・予定の編集・授業登録・授業計画の案内 ---------- */
+        /* ---------- ホーム: 予定表を最優先に、予定の編集・授業登録・授業計画の案内。宿題は専用メニューへ ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
-          html += renderTaskSummary();
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };

@@ -57,11 +57,6 @@
       .task .due { font-size: 12px; color: var(--muted); }
       .task .due.over { color: var(--danger); font-weight: 700; }
       /* 宿題一覧：入力文字を小さくせず、状態・期限・次の操作を1件ごとにまとめる。 */
-      .homework-summary { margin: 18px 0 24px; }
-      .homework-summary h2 { margin: 0; }
-      .homework-summary > .row { margin-bottom: 10px; }
-      .homework-link, .homework-more { color: var(--primary); font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; }
-      .homework-more { margin-top: 8px; }
       .homework-list { margin: 0; padding: 0; list-style: none; }
       .homework-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
       .homework-row:first-child { padding-top: 2px; }
@@ -77,10 +72,9 @@
       .homework-filters a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; text-decoration: none; color: var(--muted); font-size: 13px; }
       .homework-filters a.on { background: var(--soft); color: var(--primary); border-color: var(--primary); font-weight: 700; }
       .homework-filters .cnt { font-variant-numeric: tabular-nums; }
-      .homework-feedback, .task-feedback { margin: 12px 0; font-size: 13px; overflow-wrap: anywhere; }
+      .task-feedback { margin: 12px 0; font-size: 13px; overflow-wrap: anywhere; }
       .homework-add { margin-top: 16px; }
       .homework-add summary { min-height: 44px; }
-      .homework-panel > details input { min-width: 0 !important; }
       @media (max-width: 420px) {
         .homework-row { flex-wrap: wrap; gap: 8px; }
         .homework-content { flex-basis: 100%; }
