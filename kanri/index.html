@@ -1429,7 +1429,7 @@
         function familyAdminRender() { var r=route(); if (r.page === "families" || r.page === "students" || r.page === "student" && r.section === "settings" && cur && sameId(cur.id,r.id)) render(); }
         function loadFamilies() {
           var seq = ++FT.seq, auth = token(); FT.busy = true; FT.error = ""; familyAdminRender();
-          admin("familyList", {view:"groups",studentId:route().page==="student"?route().id:""}).then(function (res) {
+          admin("familyList", route().page==="student" ? {view:"registration"} : {view:"groups"}).then(function (res) {
             if (seq !== FT.seq || auth !== token()) return;
             FT.data = res; FT.auth = auth; FT.busy = false; authM = "ok"; familyAdminRender();
           }).catch(function (er) { if (seq !== FT.seq || auth !== token()) return; FT.busy = false; FT.error = er.message; familyAdminRender(); });
@@ -1491,6 +1491,8 @@
           var own = studentInvite.id === String(s.id) && studentInvite.auth === token(), d = FT.auth === token() ? FT.data : null;
           var f = d ? (d.families || []).filter(function (g) { return (g.children || []).some(function (c) { return sameId(c.studentId, s.id); }); })[0] : null;
           var h = '<h2>保護者</h2><div class="card">';
+          if (FT.busy) return h + '<p role="status">保護者の登録状況を確認しています…</p>' + (own && studentInvite.regMsg ? '<p role="status">' + esc(studentInvite.regMsg) + '</p>' : '') + (own && studentInvite.regError ? '<p role="alert">' + esc(studentInvite.regError) + '</p>' : '') + '</div>';
+          if (!d || FT.error) return h + '<p role="alert">登録状況を取得できませんでした。</p><button class="btn-quiet btn-sm" data-action="family-settings-refresh">再読み込み</button></div>';
           if (f && f.configured) h += '<p><span class="tag green">登録済み</span> ' + esc(f.email || '') + (f.lastLogin ? ' <span class="small muted">最終ログイン ' + esc(fmtAuthTime(f.lastLogin)) + '</span>' : '') + '</p><p class="note">パスワードを忘れた場合は、保護者ページのログイン画面から再設定できます（先生は再発行しません）。</p>';
           else {
             if (f && f.email) h += '<p><span class="tag amber">確認待ち</span> ' + esc(f.email) + ' <span class="small muted">' + (f.pendingVerification ? '登録メール送信済み・有効期限 ' + esc(fmtAuthTime(f.pendingVerification.expiresAt)) : '登録メールの期限切れ。再送してください') + '</span></p>';
