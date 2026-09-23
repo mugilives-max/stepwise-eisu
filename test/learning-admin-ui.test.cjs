@@ -71,7 +71,7 @@ for (const op of ['editOffered', 'setSlotDeliveryMode']) test('reload reconstruc
   const before = snapshot(offered()), after = { ...before, deliveryMode: 'online', ...(op === 'editOffered' ? { date: '2026-09-12', subject: '化学', min: 90 } : {}) };
   const pending = { requestId: 'server-pending-edit', op, studentId: 'test-a', slotId: 'slot-a', before, after };
   const ui = await adminReady(card({ lessons: [offered({ ...after, status: op === 'editOffered' ? 'offered' : 'booked' })], pendingEdits: [pending] }));
-  ui.click('se-resume', { 'data-request': pending.requestId }); if(op==='editOffered')assert.equal(ui.el('se-mode').disabled,true);else assert.equal(ui.el('se-mode'),undefined); ui.click('se-retry');
+  ui.click('se-resume', { 'data-request': pending.requestId }); assert.equal(ui.el('se-mode').disabled,true); ui.click('se-retry');
   const req = ui.requests.at(-1).body; assert.equal(req.op, op); assert.equal(req.requestId, pending.requestId); assert.equal(req.deliveryMode, 'online');
   if (op === 'editOffered') { assert.deepEqual(req.expectedSnapshot, before); assert.equal(req.subject, '化学'); assert.equal(req.date, after.date); }
   else { assert.equal(req.expectedMode, 'in_person'); assert.equal(req.expectedSnapshot, undefined); }
@@ -85,8 +85,8 @@ test('opening a lesson with an existing pending edit resumes that request instea
 
 test('a booked lesson opens a mode-only editor and carries a stable request ID through retry', async () => {
   const ui = await adminReady(card({ lessons: [offered({ status: 'booked' })] }));
-  assert.equal(ui.html().includes('data-action="slotedit"'), false); ui.click('slotmode', { 'data-id': 'slot-a' });
-  assert.equal(ui.el('se-date'), undefined); assert.equal(ui.el('se-mode'),undefined); assert.equal(ui.confirms(),1);
+  assert.doesNotMatch(ui.html(), /data-action="slotmode"/); ui.click('slotedit', { 'data-id': 'slot-a' });
+  assert.equal(ui.el('se-date'), undefined); assert.equal(ui.el('se-mode').value,'in_person'); assert.equal(ui.confirms(),0); ui.input('se-mode','online'); ui.click('se-save');
   const req = structuredClone(ui.requests.at(-1).body); assert.equal(req.expectedMode, 'in_person'); assert.equal(req.op, 'setSlotDeliveryMode');
   ui.requests.at(-1).reply({ error: 'Meetの準備中です', errorCode: 'pending' }); await flush(); ui.click('se-retry'); assert.deepEqual(ui.requests.at(-1).body, req);
 });
@@ -198,4 +198,19 @@ test('failed withdrawal keeps the offer editor and its input for correction', as
   assert.match(ui.html(), /すでに承認されています/);
   assert.equal(ui.el('se-start').value,'18:30');
   ui.click('se-close'); assert.doesNotMatch(ui.html(), /<dialog id="slot-editor"/);
+});
+
+
+test('booked lessons show plain WEB text and release only through their edit modal', async () => {
+  const ui = await adminReady(card({lessons:[offered({status:'booked',deliveryMode:'online'})]}));
+  assert.match(ui.html(), /<span class="muted small">WEB<\/span>/);
+  assert.doesNotMatch(ui.html(), /data-action="(?:slotmode|unbook)"/);
+  ui.click('slotedit', {'data-id':'slot-a'});
+  assert.match(ui.html(), /<dialog id="slot-editor"/);
+  assert.match(ui.html(), /この授業を解除する/);
+  ui.click('se-delete'); const req = ui.requests.at(-1);
+  assert.equal(req.body.op,'unbook'); assert.equal(req.body.slotId,'slot-a'); assert.equal(req.body.studentId,'test-a');
+  assert.equal(ui.confirms(),1);
+  req.reply({ok:true,data:card({lessons:[]})}); await flush();
+  assert.doesNotMatch(ui.html(), /<dialog id="slot-editor"/);
 });
