@@ -158,7 +158,9 @@
       .tbwrap { overflow-x: auto; }
       /* 案内の一覧: 表計算ソフトのような罫線つきの表(gap を罫線色で埋める) */
       .plan-summary { width:100%; border-collapse:collapse; border:1px solid #b8c4d3; font-size:14px; }
-      .plan-summary th, .plan-summary td { border:1px solid #b8c4d3; padding:10px 12px; text-align:left; vertical-align:middle; white-space:nowrap; }
+      .plan-summary th, .plan-summary td { border:1px solid #b8c4d3; padding:10px 12px; text-align:center; vertical-align:middle; white-space:nowrap; }
+      .plan-summary input, .plan-summary select { box-sizing:border-box; width:100%; min-width:65px; padding:6px 3px; text-align:center; border-radius:3px; }
+      .plan-summary input[type="date"] { min-width:130px; display:block; }
       .plan-summary th { background:#eef2f6; color:var(--text); font-weight:700; }
       .plan-summary td { background:#fff; }
       .plan-summary th:last-child, .plan-summary td:last-child { text-align:center; }
@@ -2231,7 +2233,7 @@
         // 追加案内(トッピング): 承認済みの案内と同じ科目・種類・時間・料金で、期間は元の案内の中。回数だけ足す
         function planEditAddon(s, parent) { var f = planEditOf(s, parent); f.lineId = ""; f.revision = null; f.status = ""; f.parentId = parent.id; f.parent = parent; f.count = 1; f.comment = ""; if (f.startDate < today() && today() <= f.endDate) f.startDate = today(); return f; }
         function planEditOf(s, l) { return { parentId: l.parentId || "", parent: l.parentId ? planLineById(s, l.parentId) : null, lineId: l.id, subject: l.subject, kind: l.kind || "通常", count: l.count, startDate: l.startDate, endDate: l.endDate, lessonMin: l.lessonMin || 90, lessonFee: l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * (l.lessonMin || 90) / 30), comment: l.comment || "", revision: l.revision, status: l.status, error: "" }; }
-        function renderPlanEditor(s, f) {
+        function renderPlanEditor(s, f, cells) {
           var pr = f.parentId ? (f.parent || planLineById(s, f.parentId)) : null, lock = f.parentId ? ' disabled' : '';
           var h = '<div class="card" style="margin:8px 0;background:var(--bg-soft,#f7f8fa)" id="plan-editor"><strong>' + (f.parentId ? (f.lineId ? '追加案内を編集' : '追加案内（トッピング）') : (f.lineId ? '案内を編集' : '新しい案内')) + '</strong>';
           if (f.parentId) h += '<p class="note">' + (pr ? esc(planLabel(pr)) + ' ' + esc(planPeriod(pr)) + ' ' + esc(pr.count) + '回' : '元の案内') + ' への追加です。科目・種類は同じで、期間は元の案内の中に収めます。承認済みの元の案内はそのまま有効で、追加分だけ保護者に承認してもらいます。なぜ追加が必要かをコメントに書いてください。</p>';
@@ -2250,6 +2252,10 @@
           h += '<p class="note">実施した授業の時間分だけを請求します（30分あたり ' + yen(r30) + (eff !== Number(f.lessonFee) ? '。30分単位に合わせるため1回 ' + yen(eff) + ' として扱います' : '') + '）。回数は予定であり、固定額の購入ではありません。</p>';
           h += '<label class="small" for="pe-comment">生徒・保護者へのコメント（' + (f.parentId ? 'なぜ追加が必要か' : '何のための授業か、なぜこの回数か') + '）</label><textarea id="pe-comment" data-pe-field="comment" rows="2" maxlength="500" style="width:100%;box-sizing:border-box">' + esc(f.comment || '') + '</textarea>';
           h += '<p class="note">内容ごとの予定コマ数を付けたい場合は、まず下書きを保存し「内容の内訳を設定（任意）」を開いてください。内訳なしでも送信できます。</p><div class="row" style="margin:8px 0 0"><button class="btn-quiet btn-sm" data-action="pe-draft">下書きを保存</button><button class="btn-primary btn-sm" data-action="pe-send">' + (f.status === "approved" ? "保存して案内を再送信（承認は失効）" : f.status === "proposed" ? "保存して案内を再送信" : "保存して案内を送信") + '</button><button class="btn-quiet btn-sm" data-action="pe-cancel">キャンセル</button>' + (f.lineId ? '<button class="btn-quiet btn-sm" data-action="pe-delete" style="margin-left:auto;color:var(--danger,#b00020)">この案内を削除</button>' : '') + '</div></div>';
+          if(cells) {
+            var footer=h.slice(h.indexOf('<label class="small" for="pe-comment">'));
+            return '<div id="plan-editor">'+(f.error?'<p role="alert">'+esc(f.error)+'</p>':'')+(f.status==='approved'||f.status==='proposed'?'<p class="note">変更を保存すると、再送信・再承認が必要になります。</p>':'')+footer;
+          }
           return h;
         }
         // 状態ごとの表(罫線つき)。作成カードには下書き、承認状況カードには送信済み・承認済み・見送りを出す
@@ -2276,9 +2282,9 @@
             }
             else if (l.status === "declined" && l.memo) sub += '<div class="small muted" style="margin:2px 0">保護者から: ' + esc(l.memo) + '</div>';
             if (!dis) {
-              if (controlsOnly) sub += '<div style="margin:14px 0"><button class="btn-primary" data-action="pe-open"'+attrs+'>計画を編集</button></div>';
+              if (controlsOnly && !f) sub += '<div style="margin:14px 0"><button class="btn-primary" data-action="pe-open"'+attrs+'>計画を編集</button></div>';
               if (controlsOnly && f && (f.lineId===l.id || f.parentId===l.id)) {
-                sub += renderPlanEditor(s,f);
+                sub += renderPlanEditor(s,f, f.lineId===l.id);
                 if(f.lineId===l.id) sub += '<details class="add"'+(oe&&oe.open?' open':'')+'><summary>授業内容の内訳（任意）</summary><button class="btn-quiet btn-sm" data-action="po-open"'+attrs+'>内訳を設定</button>'+(oe&&oe.open?renderOutlineEditor(oe):'')+'</details>';
               }
               if (controlsOnly) sub += '<details class="add" style="margin-top:16px"><summary>その他の操作</summary>';
@@ -2319,6 +2325,11 @@
             if(!items.length)return '<p class="empty">計画はありません</p>';
             return '<div style="overflow-x:auto"><table class="plan-summary"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th><th>1回の料金</th><th>状態</th>'+(detail?'':'<th></th>')+'</tr></thead><tbody>'+items.map(function(l){
               var fee=l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30);
+              if(detail && f && f.lineId===l.id) {
+                function input(id,field,type,label,limits){return '<input id="'+id+'" data-pe-field="'+field+'" type="'+type+'" aria-label="'+label+'" value="'+esc(f[field])+'" '+(limits||'')+(busy?' disabled':'')+'>';}
+                var lock=f.parentId||busy?' disabled':'';
+                return '<tr><td>'+input('pe-start','startDate','date','開始日','required')+'〜'+input('pe-end','endDate','date','終了日','required')+'</td><td><select id="pe-subject" data-pe-field="subject" aria-label="科目"'+lock+'>'+[f.subject].concat(LESSON_SUBJECTS.filter(function(v){return v!==f.subject;})).map(function(v){return '<option'+(v===f.subject?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></td><td><select id="pe-kind" data-pe-field="kind" aria-label="種類"'+lock+'>'+kindOptions(f.kind)+'</select></td><td>'+input('pe-count','count','number','回数','min="1" max="99"')+'</td><td>'+input('pe-min','lessonMin','number','時間（分）','min="30" max="240" step="30"')+'</td><td>'+input('pe-fee','lessonFee','number','1回の料金（円）','min="0"')+'</td><td>編集中</td></tr>';
+              }
               return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '通常')+'</td><td>'+esc(l.count)+'回</td><td>'+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td>'+ (l.status==='proposed'?'<button type="button" class="tag amber" data-action="plan-consent" data-line="'+esc(l.id)+'" aria-label="承認待ち：受けた承諾を記録">承認待ち</button>':'<span class="tag '+(l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span>')+'</td>'+(detail?'':'<td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td>')+'</tr>';
             }).join('')+'</tbody></table></div>';
           }

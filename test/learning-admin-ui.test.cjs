@@ -274,6 +274,14 @@ test('planning summary hides controls until details opens and retains editing in
  ui.click('pe-open',{'data-line':'test-plan'});
  assert.ok(ui.html().includes('id="plan-editor"'));
  assert.ok(ui.html().includes('<summary>授業内容の内訳（任意）</summary>'));
+ const modal=ui.html().split('id="plan-dialog"')[1];
+ assert.ok(modal.indexOf('id="pe-count"')<modal.indexOf('</table>'));
+ assert.equal((modal.match(/id="pe-count"/g)||[]).length,1);
+ ui.input('pe-count','7'); ui.input('pe-start','2026-09-02');
+ ui.click('pe-send');
+ assert.equal(ui.requests.at(-1).body.count,7);
+ assert.equal(ui.requests.at(-1).body.startDate,'2026-09-02');
+ ui.requests.at(-1).reply({data:card({section:'billing',plan:{lines:[line],defaultRows:[]}})});await flush();
  ui.click('plan-close');
  assert.ok(!ui.html().includes('id="plan-dialog"'));
 });
