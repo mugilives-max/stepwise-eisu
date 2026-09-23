@@ -2211,12 +2211,11 @@
         function planLabel(l) { return String(l.subject || "") + "（" + (l.kind || "通常") + "）"; }
         function planLimit(l) { return l.status === "approved" && l.approvedCount != null ? Number(l.approvedCount) : Number(l.count) || 0; }
         function planPeriod(l) { return l.period || (l.startDate + "〜" + l.endDate); }
-        // 一覧用の短い期間: 今年なら年を省く(9月 / 9/1〜10/21)。年をまたぐ・来年以降は年を付ける
+        // 一覧用の短い期間: 今年なら年を省く(9/1〜9/30 / 9/1〜10/21)。年をまたぐ・来年以降は年を付ける
         function planPeriodShort(l) {
           var y = String(today()).slice(0, 4), st = String(l.startDate || ""), en = String(l.endDate || "");
-          if (!st || !en) return planPeriod(l);
+          if (!st || !en) return (st || "開始日未設定") + "〜" + (en || "終了日未設定");
           function md(d) { return (+d.slice(5, 7)) + "/" + (+d.slice(8)); }
-          if (l.month) return (st.slice(0, 4) === y ? "" : st.slice(0, 4) + "年") + (+st.slice(5, 7)) + "月";
           return (st.slice(0, 4) === y ? "" : st.slice(0, 4) + "/") + md(st) + "〜" + (en.slice(0, 4) !== st.slice(0, 4) ? en.slice(0, 4) + "/" : "") + md(en);
         }
         function monthEnd(ym) { var p = ym.split("-"), d = new Date(+p[0], +p[1], 0); return ym + "-" + pad(d.getDate()); }
@@ -2305,9 +2304,9 @@
           var labels={draft:'下書き',proposed:'承認待ち',approved:'承認済み',declined:'見送り'};
           function table(items) {
             if(!items.length)return '<p class="empty">計画はありません</p>';
-            return '<div style="overflow-x:auto"><table><thead><tr><th>期間</th><th>科目</th><th>回数・時間</th><th>1回の料金</th><th>状態</th><th></th></tr></thead><tbody>'+items.map(function(l){
+            return '<div style="overflow-x:auto"><table><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数・時間</th><th>1回の料金</th><th>状態</th><th></th></tr></thead><tbody>'+items.map(function(l){
               var fee=l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30);
-              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject)+(l.kind&&l.kind!=='通常'?'・'+esc(l.kind):'')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td><td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td></tr>';
+              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '未設定')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td><td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td></tr>';
             }).join('')+'</tbody></table></div>';
           }
           var h='<div class="row between" style="margin:18px 0"><h2>現在の計画</h2><button class="btn-primary btn-sm" data-action="pe-new"'+(dis?' disabled':'')+'>＋ 計画を作成</button></div><div class="card">'+table(lines.filter(function(l){return !l.endDate || l.endDate>=td;}))+'</div>';
