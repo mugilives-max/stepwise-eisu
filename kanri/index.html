@@ -690,8 +690,8 @@
           if (offered) {
             h+=ended?finishRecordButton(s,day,s.studentId):slotDelivery(s,null,true);
           } else {
-            var label=s.lessonDraftStatus==='draft'?'記録を再開':record==='active'?'記録を見る':record==='void'?'記録を確認':s.date>day?'授業準備':'記録を入力';
-            h+='<a class="'+(record==='active' && s.lessonDraftStatus!=='draft'?'btn-quiet':'btn-primary')+' btn-sm" href="'+esc(lessonHref(s.studentId,s.id))+'">'+label+'</a>';
+            var label=s.lessonDraftStatus==='draft'?'記録を再開':record==='active'?'記録を見る':record==='void'?'記録を確認':'記録を入力';
+            if(s.date<=day)h+='<a class="'+(record==='active' && s.lessonDraftStatus!=='draft'?'btn-quiet':'btn-primary')+' btn-sm" href="'+esc(lessonHref(s.studentId,s.id))+'">'+label+'</a>';
             if (s.meetUrl && !s.done) h+='<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="'+esc(s.meetUrl)+'">Meet</a>';
             h+='<details><summary class="small" style="cursor:pointer;padding:8px">その他</summary>';
             if (s.date<=day) h+='<button class="btn-quiet btn-sm" data-action="toggledone" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'" data-done="'+(s.done?'0':'1')+'"'+(busy?' disabled':'')+'>'+(s.done?'未実施に戻す':'実施済みにする')+'</button>';
@@ -937,7 +937,7 @@
           });
         }
         // 予定の編集カードの1行。href があれば時刻と内容の部分を授業準備・記録ページへのリンクにする(押すとその授業の記録が書ける)
-        function dayRowHtml(lead, time, who, actions, href, tight) { var body = '<span class="time">' + time + '</span><span class="who">' + who + '</span>'; return '<div class="slotline' + (tight ? ' tight' : '') + '">' + lead + (href ? '<a class="lesson-link" href="' + esc(href) + '" title="授業準備・記録を開く">' + body + '</a>' : body) + (actions ? '<span class="acts">' + actions + '</span>' : '') + '</div>'; }
+        function dayRowHtml(lead, time, who, actions, href, tight) { var body = '<span class="time">' + time + '</span><span class="who">' + who + '</span>'; return '<div class="slotline' + (tight ? ' tight' : '') + '">' + lead + (href ? '<a class="lesson-link" href="' + esc(href) + '" title="授業記録を開く">' + body + '</a>' : body) + (actions ? '<span class="acts">' + actions + '</span>' : '') + '</div>'; }
         function dayHeading(selDate) { return Number(selDate.slice(5, 7)) + '月' + Number(selDate.slice(8, 10)) + '日（' + WD[wdOf(selDate)] + '）の予定'; }
 
         function renderStudentDayCard(s, tdy) {
@@ -1004,7 +1004,7 @@
             html += '<h2>予定の編集</h2>' + renderStudentDayCard(s, tdy);
           })();
 
-          html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業準備・記録を開く</a></p>';
+          html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業記録を開く</a></p>';
           }
           if (section === 'settings') {
           html += '<h2>授業の標準形式</h2><div class="card"><label for="student-delivery">新しい案内の初期値</label> <select id="student-delivery">' + deliveryOptions(s.deliveryMode) + '</select> <button class="btn-ghost btn-sm" data-action="studentmode"' + (busy ? ' disabled' : '') + '>標準形式を保存</button><p class="note">現在：' + deliveryLabel(s.deliveryMode) + '。登録済みの各回の形式は変わりません。</p></div>';
@@ -1623,7 +1623,7 @@
         }
         function renderLessonPair() {
           renderNav();var p=lessonPair,r=route();
-          var h='<div class="head"><div><h1>同時受講の授業記録</h1><p class="sub">保存・公開は生徒ごとに行います。準備と先生メモは非公開です。</p></div><a href="#home" class="btn-quiet btn-sm">ホームへ</a></div>';
+          var h='<div class="head"><div><h1>同時受講の授業記録</h1><p class="sub">保存・公開は生徒ごとに行います。先生メモは非公開です。</p></div><a href="#home" class="btn-quiet btn-sm">ホームへ</a></div>';
           if(!p){app.innerHTML=h;return;}
           if(p.error)h+='<p class="lc-notice" role="alert">'+esc(p.error)+'</p><button class="btn-quiet" data-action="reload">再確認</button>';
           if(p.busy)h+='<p>同時受講の予定を確認しています…</p>';
@@ -1645,7 +1645,8 @@
         function lessonEntry(s, studentId) {
           if (s.status !== "booked" && s.lessonRecordStatus !== "active" && s.lessonRecordStatus !== "void") return "";
           var page = route().page, day = (page === 'student' && cur ? cur.today : page === 'lessons' ? A.today : D && D.today) || today();
-          var label = s.date > day ? "授業準備" : s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "記録未入力" : "授業記録";
+          if (s.date > day) return "";
+          var label = s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "記録未入力" : "授業記録";
           return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>' + (s.status==='booked' && s.deliveryMode==='in_person' ? ' <a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>' : '');
         }
         function lessonEditor(r) {
@@ -1815,11 +1816,12 @@
           var field = document.getElementById((e.panePrefix || '') + id);
           if (field) field.focus();
         }
-        function renderLesson() { renderNav(); var e=lessonEditor(); e.panePrefix=""; app.innerHTML=lessonHTML(e); }
+        function renderLesson() { renderNav(); var e=lessonEditor(); if(e.context && e.context.slot && e.context.slot.date>(e.context.today||today())){location.hash="#lessons";return;} e.panePrefix=""; app.innerHTML=lessonHTML(e); }
         function lessonHTML(e) {
           var c = e.context, r = c && c.record;
           var future = c && c.slot && c.slot.date > (c.today || today());
-          var h = '<div class="head"><div><h1 style="display:inline-flex;align-items:center;gap:8px">' + (future ? '授業準備' : '授業記録') + helpButton('lesson') + '</h1></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
+          if(future)return '<p class="note">授業記録は授業当日から入力できます。</p>';
+          var h = '<div class="head"><div><h1 style="display:inline-flex;align-items:center;gap:8px">' + '授業記録' + helpButton('lesson') + '</h1></div><a class="btn-quiet btn-sm" href="#s=' + esc(encodeURIComponent(e.studentId)) + '">カルテに戻る</a></div>';
           h += helpBox('lesson', future ? '次の授業の計画を先生専用で保存します。準備の内容は自動では公開・転記されません。' : '保存した授業記録を生徒・保護者と共有します。単元とコメントを書いて保存すると、生徒・保護者のページに公開されます。宿題は保存後に「やること」へ反映できます。');
           if (e.error) h += '<div class="card lc-notice" role="alert">' + esc(e.error) + '</div>';
           if (e.message) h += '<p role="status">' + esc(e.message) + '</p>';
@@ -1889,20 +1891,10 @@
             ["content", "progress", "nextFocus", "teacherNote"].forEach(function (k) { h += '<div class="small muted">' + ({ content: "授業内容", progress: "取り組み", nextFocus: "次回の焦点", teacherNote: "先生だけのメモ" }[k]) + '</div>' + lessonText(latestForm[k]); });
             h += '<div class="small muted">宿題</div>' + lessonText(latestForm.homework.map(function (x) { return x.title + " " + x.due; }).join("\n")) + '<div class="small muted">報告下書き</div>' + lessonText(e.latest.draft && e.latest.draft.body) + '</div><div class="card"><strong>手元の入力は下の欄に保持しています</strong><p class="small">差分を確認してから選んでください。手元の入力を使う場合も、選択後に保存ボタンを押すまで更新しません。</p><div class="row">' + lessonAction("rebase", "手元の入力で編集を続ける", blocked, "btn-primary") + lessonAction("adopt", "最新の内容に入れ替える", blocked) + '</div></div></div>';
           }
-          h += future?renderPreparation(e,c,blocked):'<details class="lc-secondary"><summary>先生専用の授業準備</summary>'+renderPreparation(e,c,blocked)+'</details>';
           if (future) { return h + '<p class="note">授業記録の入力は授業当日から開けます。準備の内容は自動公開・転記しません。</p>'; }
           return h;
         }
 
-        function renderPreparation(e, c, blocked) {
-          var unavailable = blocked || !c.slot || c.slot.status !== 'booked' || (c.student || {}).active === false;
-          var h = '<h2>授業の準備 <span class="tag gray">先生専用・非公開</span></h2><div class="card">';
-          if (c.preparation && ['date','start','min','subject'].some(function(k){return String(c.preparation[k]) !== String(c.slot[k]);})) h += '<p class="lc-notice">準備を保存した後に授業の日時・科目が変わっています。内容を確認してください。</p>';
-          if (e.latest && e.prepDirty) h += '<p>サーバーの最新の準備</p>' + lessonText(e.latest.preparation && e.latest.preparation.body) + lessonAction('prep-rebase','最新の版を確認して手元の準備で編集を続ける',blocked) + ' ' + lessonAction('adopt','最新の内容に入れ替える',blocked);
-          h += '<label for="lc-preparation">授業計画・準備メモ（4,000文字まで）</label><textarea id="lc-preparation" maxlength="4000" rows="5" data-lc-preparation' + (unavailable ? ' disabled' : '') + '>' + esc(e.preparationBody || '') + '</textarea><p class="note">生徒・保護者には表示しません。公開する授業記録とは別に保存します。</p>';
-          h += lessonAction('prep-save','準備を先生専用で保存',unavailable || e.conflict,'btn-primary') + ' ' + lessonAction('refresh','最新を確認',blocked);
-          return h + '<span id="lc-preparation-status" class="small" role="status"> ' + (e.prepDirty ? '準備に未保存の変更があります' : c.preparation ? '準備保存済み・第' + esc(c.preparation.revision) + '版' : '準備はまだ保存されていません') + '</span></div>';
-        }
         function renderLessonHomework(e) {
           var labels = { new: "未反映", changed: "変更あり", applied: "反映済み", held: "完了済み・変更を保留", withdrawn: "取り下げ済み", removed: "記録から除去・やることに残存" };
           var c = e.context, blocked = e.busy || !!e.pending || !!c.pending;
