@@ -88,3 +88,9 @@ button.calday { cursor: pointer; font-size: 13px; }
   .cal-same-time .calbox { min-height:0;height:100%; }
   .cal-same-time .calbox .s { margin-top:0; }
 }
+
+/* Fill unused lane intervals without implying a bookable slot. */
+.cal-overlap-gap { display:none; }
+@media (min-width:1100px) {
+  .cal-overlap .cal-overlap-gap { display:flex;align-items:center;justify-content:center;position:absolute;top:var(--overlap-top);left:calc(var(--overlap-lane) * 50%);width:calc(50% - 2px);height:var(--overlap-size);border-radius:4px;background:var(--taken);color:var(--muted);font-size:10px;line-height:1;overflow:hidden; }
+}
