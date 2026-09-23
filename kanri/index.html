@@ -2281,10 +2281,10 @@
                 sub += renderPlanEditor(s,f);
                 if(f.lineId===l.id) sub += '<details class="add"'+(oe&&oe.open?' open':'')+'><summary>授業内容の内訳（任意）</summary><button class="btn-quiet btn-sm" data-action="po-open"'+attrs+'>内訳を設定</button>'+(oe&&oe.open?renderOutlineEditor(oe):'')+'</details>';
               }
-              if (controlsOnly) sub += '<details class="add" style="margin-top:16px"><summary>その他の操作</summary>';
+              if (controlsOnly) sub += '<details class="add" style="margin-top:16px"'+(planDetail&&planDetail.consent?' open':'')+'><summary>その他の操作</summary>';
               sub += '<div class="row" style="margin:4px 0;gap:6px">' + (l.status === "draft" ? '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">送信</button>' : '') + (controlsOnly ? '' : '<button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + ' aria-label="授業計画を編集" title="授業計画を編集">内容を編集</button>') + (l.status === "proposed" || l.status === "approved" ? '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>' : '') + (l.status === "approved" && !l.parentId ? '<button class="btn-quiet btn-sm" data-action="pe-addon"' + attrs + ' title="この案内に回数を追加する">＋追加</button>' : '') + '</div>';
               if (l.status === "proposed") {
-                sub += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pa-via-' + esc(l.id) + '">確認方法</label><select id="pa-via-' + esc(l.id) + '">' + ["LINE", "電話", "対面", "メール"].map(function (v) { return '<option>' + v + '</option>'; }).join("") + '</select><label for="pa-consent-' + esc(l.id) + '">実際の承諾日</label><input type="date" id="pa-consent-' + esc(l.id) + '" value="' + today() + '" max="' + today() + '"><label for="pa-memo-' + esc(l.id) + '">メモ（経緯など）</label><input type="text" id="pa-memo-' + esc(l.id) + '" maxlength="500"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="pl-approve"' + attrs + ' data-rev="' + esc(l.revision) + '">承諾を記録</button></div></details>';
+                sub += '<details class="add"'+(controlsOnly&&planDetail&&planDetail.consent?' open':'')+'><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pa-via-' + esc(l.id) + '">確認方法</label><select id="pa-via-' + esc(l.id) + '">' + ["LINE", "電話", "対面", "メール"].map(function (v) { return '<option>' + v + '</option>'; }).join("") + '</select><label for="pa-consent-' + esc(l.id) + '">実際の承諾日</label><input type="date" id="pa-consent-' + esc(l.id) + '" value="' + today() + '" max="' + today() + '"><label for="pa-memo-' + esc(l.id) + '">メモ（経緯など）</label><input type="text" id="pa-memo-' + esc(l.id) + '" maxlength="500"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="pl-approve"' + attrs + ' data-rev="' + esc(l.revision) + '">承諾を記録</button></div></details>';
               }
               if (controlsOnly) sub += "</details>";
               if (!controlsOnly && f && (f.lineId === l.id || (!f.lineId && f.parentId === l.id))) sub += renderPlanEditor(s, f);
@@ -2317,9 +2317,9 @@
           var labels={draft:'下書き',proposed:'承認待ち',approved:'承認済み',declined:'見送り'};
           function table(items, detail) {
             if(!items.length)return '<p class="empty">計画はありません</p>';
-            return '<div style="overflow-x:auto"><table class="plan-summary"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数・時間</th><th>1回の料金</th><th>状態</th>'+(detail?'':'<th></th>')+'</tr></thead><tbody>'+items.map(function(l){
+            return '<div style="overflow-x:auto"><table class="plan-summary"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th><th>1回の料金</th><th>状態</th>'+(detail?'':'<th></th>')+'</tr></thead><tbody>'+items.map(function(l){
               var fee=l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30);
-              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '通常')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td>'+(detail?'':'<td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td>')+'</tr>';
+              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '通常')+'</td><td>'+esc(l.count)+'回</td><td>'+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td>'+ (l.status==='proposed'?'<button type="button" class="tag amber" data-action="plan-consent" data-line="'+esc(l.id)+'" aria-label="承認待ち：受けた承諾を記録">承認待ち</button>':'<span class="tag '+(l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span>')+'</td>'+(detail?'':'<td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td>')+'</tr>';
             }).join('')+'</tbody></table></div>';
           }
           var h='<div class="row between" style="margin:18px 0"><h2>現在の計画</h2><button class="btn-primary btn-sm" data-action="pe-new"'+(dis?' disabled':'')+'>＋ 計画を作成</button></div><div class="card">'+table(lines.filter(function(l){return !l.endDate || l.endDate>=td;}))+'</div>';
@@ -2867,6 +2867,14 @@
               render();
               if (sOfferOpen) { var fd = document.getElementById("f-date"); if (fd && fd.scrollIntoView) fd.scrollIntoView({ behavior: "smooth", block: "center" }); }
               break;
+            case "plan-consent": {
+              var consentLine=btn.getAttribute("data-line");
+              if(!planLineById(cur,consentLine) || busy) return;
+              planDetail={studentId:cur.id,lineId:consentLine,consent:true};render();
+              var consentField=document.getElementById('pa-via-'+consentLine);
+              if(consentField){if(consentField.scrollIntoView)consentField.scrollIntoView({block:'nearest'});if(consentField.focus)consentField.focus();}
+              break;
+            }
             case "plan-detail": planDetail={studentId:cur.id,lineId:btn.getAttribute("data-line")};delete planEdits[cur.id];render();break;
             case "plan-close": if(busy)return;planDetail=null;delete planEdits[cur.id];render();break;
             case "pe-new": planDetail=null;planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
