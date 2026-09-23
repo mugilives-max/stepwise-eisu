@@ -1240,10 +1240,17 @@
           var missing = function(s) { return s.done && s.lessonRecordStatus !== 'active'; };
           var list = slots.filter(function(s) { return (s.status === 'booked' && (s.req || missing(s))) || (s.status === 'offered' && s.date >= day); });
           list.sort(function(a,b) { return Number(!!b.req) - Number(!!a.req) || slotCmp(a,b); });
-          var h = '<section id="lesson-attention"><h2>対応が必要な授業 <span class="cnt">' + list.length + '件</span></h2>';
-          if (!list.length) return h + '<div class="empty">対応が必要な授業はありません</div></section>';
-          if (list.length) h += '<div class="card">';
-          list.forEach(function(s) {
+          var h = '<section id="lesson-attention"><details><summary style="font-weight:700;cursor:pointer;padding:14px 0">対応が必要な授業 <span class="cnt">' + list.length + '件</span></summary>';
+          if (!list.length) return h + '<div class="empty">対応が必要な授業はありません</div></details></section>';
+          var groups = [
+            {title:'取消依頼', items:list.filter(function(s){return !!s.req;})},
+            {title:'授業記録の未記入', items:list.filter(function(s){return !s.req && s.status==='booked';})},
+            {title:'承認待ち', items:list.filter(function(s){return !s.req && s.status==='offered';})}
+          ];
+          groups.forEach(function(group) {
+            if (!group.items.length) return;
+            h += '<div class="card" style="margin:12px 0 20px;border:2px solid var(--line)"><h3 style="margin:0 0 10px;padding-bottom:12px;border-bottom:2px solid var(--line)">' + group.title + ' <span class="cnt">' + group.items.length + '件</span></h3>';
+            group.items.forEach(function(s) {
             if (s.status === "offered") { h += lessonRow(s, true); return; }
             var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '');
             h += '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + esc(s.start) + '〜' + endTime(s.start,s.min) + '</span><span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '">' + esc(s.studentName) + '</a> <span class="small muted">' + esc(lessonLabel(s)) + '</span> ';
@@ -1254,8 +1261,9 @@
             if (missing(s)) h += '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(s.studentId,s.id)) + '">' + (s.lessonDraftStatus === 'draft' ? '記録を再開' : s.lessonRecordStatus === 'void' ? '記録を確認' : '記録を入力') + '</a>';
             h += '</div>';
           });
-          if (list.length) h += '</div>';
-          return h + '</section>';
+            h += '</div>';
+          });
+          return h + '</details></section>';
         }
 
         // The weekly board is no longer displayed. Keep its offer dialog and validation helpers.
