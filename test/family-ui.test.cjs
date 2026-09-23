@@ -277,7 +277,7 @@ test('the 保護者メニュー tab combines billing, contact and settings, with
   const ui = loggedUI(); ui.requests[0].reply({ ...home(), emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: true } }); await flush();
   ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子B') }); await flush();
   ui.navigate('#family/menu');
-  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '授業の記録', '成績', '保護者メニュー']);
+  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '宿題', '授業の記録', '成績', '保護者メニュー']);
   const html = ui.html(); const order = ['<h2>請求・料金承認</h2>', '<h2>先生への連絡</h2>', '<h2>保護者の設定</h2>', 'メール通知'].map(t => html.indexOf(t));
   assert.ok(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), JSON.stringify(order));
   assert.match(html, /承認する/); assert.match(html, /メールアドレスを変更/); assert.match(html, /id="family-contact-0"/); assert.match(html, /id="family-contact-1"/);

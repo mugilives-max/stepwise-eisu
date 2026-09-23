@@ -28,10 +28,10 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function parentSection(){var part=(location.hash||'').split('/')[1]||'home';if(part==='billing'||part==='contacts'||part==='settings')return 'menu';return ['home','records','grades','menu'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts / settings は menu 扱い
+        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts'||part==='settings')return 'menu';return ['home','tasks','records','grades','menu'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts / settings は menu 扱い
         // 保護者ページ: ホームは子どもの生徒ページ(マイページ)そのもの＋最下部に「今月の授業」。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['records','授業の記録'],['grades','成績'],['menu','保護者メニュー']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
-        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['menu','保護者メニュー']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; if (h === '#tasks' || h.indexOf('#tasks?') === 0) return 'tasks'; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
           var brand = document.getElementById('site-brand'); if (!brand) return;
@@ -45,8 +45,8 @@
           if (route() === "family" || route() === 'parent') { tabs.innerHTML=parentNavigation(route()==='family');return; }
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
           var p = route();
-          tabs.innerHTML = [["#home", "home", "ホーム"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "設定"]]
-            .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '">' + t[2] + "</a>"; }).join("");
+          tabs.innerHTML = [["#home", "home", "ホーム"], ["#tasks", "tasks", "宿題"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "設定"]]
+            .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '"' + (p === t[1] ? ' aria-current="page"' : '') + '>' + t[2] + "</a>"; }).join("");
         }
 
         /* ---------- ユーティリティ ---------- */
@@ -180,9 +180,56 @@
           if (t.dueMode === 'nextLesson') return '次回の' + (t.dueSubject || '同じ科目の') + '授業' + (t.due ? '（' + fmtDY(t.due) + (t.dueStart ? ' ' + t.dueStart : '') + '）まで' : '（予定未定）');
           return t.due ? fmtDY(t.due) + 'まで' : '期限なし';
         }
-        var taskDrafts = Object.create(null);
+        function taskDoneDate(value) {
+          var s = String(value || '');
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return fmtDY(s);
+          var d = new Date(s);
+          return isNaN(d.getTime()) ? '' : d.toLocaleDateString('ja-JP', {timeZone:'Asia/Tokyo'});
+        }
+        var taskDrafts = Object.create(null), taskNotices = Object.create(null);
+        function taskScopeKey() { var c = route() === 'family' && familyMypageChild(); return c ? 'family:' + familyToken() + ':' + c.studentId : 'student:' + myKey(); }
+        function taskPageHref(filter) { return (route() === 'family' ? '#family/tasks' : '#tasks') + (filter && filter !== 'open' ? '?filter=' + filter : ''); }
+        function taskFilter() { var f = new URLSearchParams((location.hash.split('?')[1] || '')).get('filter'); return ['open','done','all'].indexOf(f) >= 0 ? f : 'open'; }
+        function visibleTasks() {
+          return ((S && S.tasks) || []).filter(function (t) { return !t.withdrawn && !t.withdrawnAt; }).slice().sort(function (a,b) {
+            return Number(!!a.done) - Number(!!b.done) || String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.dueStart || '').localeCompare(String(b.dueStart || '')) || String(a.title || '').localeCompare(String(b.title || ''), 'ja') || String(a.id).localeCompare(String(b.id));
+          });
+        }
+        function taskFeedback() {
+          var n = taskNotices[taskScopeKey()]; if (!n) return '';
+          return '<div class="task-feedback' + (n.error ? ' parent-error' : '') + '" role="' + (n.error ? 'alert' : 'status') + '">' + esc(n.message) + (n.retry ? ' <button class="btn-quiet" data-action="taskretry"' + (busy || previewK ? ' disabled' : '') + '>同じ内容で再試行</button>' : '') + '</div>';
+        }
+        function renderTaskRows(tasks) {
+          var dis = busy || previewK ? ' disabled' : '', today = S.today || '';
+          return '<ul class="homework-list">' + tasks.map(function (t) {
+            var status = t.done ? '<span class="tag green">完了</span>' : t.due && today && t.due < today ? '<span class="tag amber">期限を過ぎています</span>' : t.due && t.due === today ? '<span class="tag amber">今日まで</span>' : '';
+            var verb = t.done ? '未完了に戻す' : '完了にする';
+            return '<li class="homework-row' + (t.done ? ' is-done' : '') + '"><div class="homework-content"><div class="homework-meta"><span class="tag ' + (t.type === '持ち物' ? 'coral' : t.type === 'メモ' ? 'gray' : 'blue') + '">' + esc(t.type || '宿題') + '</span>' + status + (t.createdBy === 'teacher' ? '<span class="small muted">先生から</span>' : '') + '</div><strong class="homework-title">' + esc(t.title) + '</strong><div class="homework-due">' + esc(taskDueText(t)) + (t.done && taskDoneDate(t.doneAt) ? '・' + esc(taskDoneDate(t.doneAt)) + ' に完了' : '') + '</div></div><div class="homework-actions"><button class="' + (t.done ? 'btn-quiet' : 'btn-ghost') + '" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="' + (!t.done) + '" aria-label="' + esc(t.title + '：' + verb) + '"' + dis + '>' + verb + '</button>' + (t.createdBy === 'student' && !t.done ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" aria-label="' + esc(t.title + 'を削除') + '"' + dis + '>削除</button>' : '') + '</div></li>';
+          }).join('') + '</ul>';
+        }
+        function renderTasksPage() {
+          var filter = taskFilter(), tasks = visibleTasks(), open = tasks.filter(function (t) { return !t.done; }), done = tasks.filter(function (t) { return t.done; });
+          var shown = filter === 'done' ? done : filter === 'all' ? tasks : open;
+          var h = '<h1>宿題</h1><p class="sub">期限の近い順に確認できます。完了にしても、未完了へ戻せます。</p>' + taskFeedback();
+          h += '<nav class="homework-filters" aria-label="宿題の表示">' + [['open','未完了',open.length],['done','完了した宿題',done.length],['all','すべて',tasks.length]].map(function (x) { return '<a href="' + taskPageHref(x[0]) + '"' + (filter === x[0] ? ' class="on" aria-current="page"' : '') + '>' + x[1] + '<span class="cnt">' + x[2] + '</span></a>'; }).join('') + '</nav>';
+          h += '<section class="card homework-panel" aria-label="宿題一覧">' + (shown.length ? renderTaskRows(shown) : '<p class="empty">' + (filter === 'done' ? '表示できる完了済みの宿題はありません。' : filter === 'all' ? '登録されている宿題・持ち物・メモはありません。' : '未完了の宿題・持ち物・メモはありません。') + '</p>') + '</section>';
+          if (filter !== 'open') h += '<p class="note">完了済みは現在取得できた範囲を表示しています。過去の全履歴ではありません。</p>';
+          h += '<p class="note">持ち物・自分用メモもここで確認できます。完了は自己チェックで、理解度の判定や先生の添削完了ではありません。</p>';
+          if (previewK) h += '<p class="note">先生のプレビューでは表示のみです。完了・追加・削除はできません。</p>';
+          return h + '<section class="card homework-add">' + renderTaskAdd() + '</section>';
+        }
+        function renderTaskSummary() {
+          var open = visibleTasks().filter(function (t) { return !t.done; });
+          return '<section class="homework-summary"><div class="row between"><h2>取り組む宿題 <span class="cnt">' + open.length + '件</span></h2><a class="homework-link" href="' + taskPageHref() + '">すべての宿題</a></div>' + taskFeedback() + '<div class="card homework-panel">' + (open.length ? renderTaskRows(open.slice(0,3)) : '<p class="empty">未完了の宿題・持ち物・メモはありません。</p>') + (open.length > 3 ? '<a class="homework-more" href="' + taskPageHref() + '">残り' + (open.length - 3) + '件を含めて確認する →</a>' : '') + '<a class="homework-more" href="' + taskPageHref('done') + '">完了した宿題を見る・未完了に戻す</a>' + renderTaskAdd() + '</div></section>';
+        }
+        function taskToggle(id, done) {
+          if (busy || previewK) return;
+          var task = visibleTasks().filter(function (t) { return String(t.id) === String(id); })[0];
+          if (!task) { toast('現在の宿題一覧を確認してください'); return; }
+          studentAction({action:'taskDone',k:myKey(),taskId:id,done:done}, done ? 'できた! ✓' : '未完了に戻しました');
+        }
         function taskDraft() {
-          var k = myKey(), next = S && schedData().next;
+          var k = taskScopeKey(), next = S && schedData().next;
           if (!taskDrafts[k]) taskDrafts[k] = { type:'宿題', title:'', dueMode:'nextLesson', due:next ? next.date : '', dueSubject:next ? next.subject || '' : '', open:false };
           return taskDrafts[k];
         }
@@ -192,7 +239,7 @@
           var d = taskDraft(); d[field] = el.value; d.open = true; return true;
         }
         function renderTaskAdd() {
-          var d = taskDraft(), dis = busy ? ' disabled' : '', subjects = [];
+          var d = taskDraft(), dis = busy || previewK ? ' disabled' : '', subjects = [];
           ((S.slots || []).concat(S.history || [])).forEach(function (s) { if (s.subject && subjects.indexOf(s.subject) < 0) subjects.push(s.subject); });
           var h = '<details' + (d.open ? ' open' : '') + ' style="margin-top:8px"><summary style="cursor:pointer;color:var(--primary);font-size:13.5px">自分で追加する</summary><div class="row" style="margin-top:8px"><label>種類 <select id="f-ttype"' + dis + '>' + ['宿題','持ち物','メモ'].map(function (t) { return '<option' + (d.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></label><input type="text" id="f-ttitle" aria-label="宿題・持ち物・メモの内容" placeholder="内容(例: ワークp.12〜15、単語帳を持っていく)" maxlength="80" value="' + esc(d.title) + '" style="flex:1;min-width:180px"' + dis + '></div><div class="row" style="margin-top:8px"><label>期限 <select id="f-tdue-mode"' + dis + '>' + [['nextLesson','次回の同じ科目の授業まで'],['date','日付を指定'],['none','期限なし']].map(function (x) { return '<option value="' + x[0] + '"' + (d.dueMode === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>';
           if (d.dueMode === 'nextLesson') h += '<label>科目 <input type="text" id="f-tdue-subject" list="task-subjects" maxlength="80" placeholder="例: 英語" value="' + esc(d.dueSubject) + '"' + dis + '></label><datalist id="task-subjects">' + subjects.map(function (s) { return '<option value="' + esc(s) + '"></option>'; }).join('') + '</datalist>';
@@ -364,14 +411,14 @@
         }
         function apiPost(body) {
           var pv = previewRoute(body); if (pv) return pv;
-          var proxied = null;
-          if (route() === 'family' && F.home && body && body.k !== undefined && !body.ftoken) { var pc = familyMypageChild(); body = Object.assign({}, body); delete body.k; body.ftoken = familyToken(); body.studentId = pc ? pc.studentId : ''; proxied = pc ? pc.studentId : ''; }
+          var proxied = null, proxiedToken = '';
+          if (route() === 'family' && F.home && body && body.k !== undefined && !body.ftoken) { var pc = familyMypageChild(); body = Object.assign({}, body); delete body.k; body.ftoken = familyToken(); body.studentId = pc ? pc.studentId : ''; proxied = pc ? pc.studentId : ''; proxiedToken = body.ftoken; }
           var sent = body;
           var fallback = function () { return fetch(API, { method: "POST", body: JSON.stringify(sent) }).then(function (r) { return r.json(); }); };
           var first = (WRITE_TO_WORKER && READ_API)
             ? fetch(READ_API, { method: "POST", body: JSON.stringify(sent) }).then(function (r) { return r.json(); })
             : (readable(sent) ? readFirst(sent).then(function (res) { return res === null ? fallback() : res; }) : fallback());
-          return first.then(function (res) { if (proxied && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
+          return first.then(function (res) { if (proxied && F.home && proxiedToken === familyToken() && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
         }
         function myKey() { return previewK || lsGet("sw_k") || ""; }
         function parentSessionKey(k) { return "sw_pt_v2:" + (k === undefined ? myKey() : k); }
@@ -393,20 +440,26 @@
           if (busy) return;
           if (acceptBatch().pending) { toast("先に一括確定の結果を確認してください"); return; }
           if (acceptBatch().refreshRequired) { toast('先に最新の案内を再読み込みしてください'); return; }
-          var actionKey = myKey();
-          busy = true; render();
+          var actionKey = myKey(), actionScope = taskScopeKey(), familyAction = route() === 'family', taskWrite = body.action === 'taskDone', actionOwner = {}, actionNotice = {message:'完了状態を保存しています…'};
+          if (taskWrite) taskNotices[actionScope] = actionNotice;
+          function clearOwnPendingNotice() { if (taskWrite && taskNotices[actionScope] === actionNotice) delete taskNotices[actionScope]; }
+          // A later request or scope reset replaces this token. An old response cannot release its busy state.
+          busy = actionOwner; render();
           apiPost(body).then(function (res) {
-            if (actionKey !== myKey()) return;
+            if (busy !== actionOwner || !familyAction && actionKey !== myKey()) { clearOwnPendingNotice(); return; }
             busy = false; pending = null;
+            if (actionScope !== taskScopeKey()) { clearOwnPendingNotice(); render(); return; }
             if (res.error) {
+              if (taskWrite) taskNotices[actionScope] = {error:true,message:res.error,retry:Object.assign({},body)};
               toast(res.error);
               if (res.badCode) { S = { me: null, slots: [], today: "" }; render(); return; }
               if (res.refresh) return loadState();
               render(); return;
             }
+            if (taskWrite) taskNotices[actionScope] = {message:okMsg};
             stateKey = actionKey; S = res.state; if (onSuccess) onSuccess(); render();
             if (okMsg) toast(okMsg);
-          }).catch(function () { if (actionKey !== myKey()) return; busy = false; toast("通信に失敗しました。電波の良いところでもう一度お試しください"); render(); });
+          }).catch(function () { if (busy !== actionOwner || !familyAction && actionKey !== myKey()) { clearOwnPendingNotice(); return; } busy = false; if (actionScope !== taskScopeKey()) { clearOwnPendingNotice(); render(); return; } if (taskWrite) taskNotices[actionScope] = {error:true,message:'保存結果を確認できませんでした。通信状態を確認して、同じ内容で再試行してください。',retry:Object.assign({},body)}; toast("通信に失敗しました。電波の良いところでもう一度お試しください"); render(); });
         }
 
         function batchSessionKey(k) { return "sw_accept_v1:" + k; }
@@ -880,6 +933,7 @@
           if (page !== "home") {
             var hh = previewBanner(false);
             if (page === "grades") hh += renderGradesPage();
+            else if (page === "tasks") hh += renderTasksPage();
             else if (page === "history") hh += renderHistoryPage();
             else hh += renderParentPage();
             hh += '<footer class="app"><span></span><span></span></footer>';
@@ -889,10 +943,11 @@
           app.innerHTML = renderHomePage();
         }
 
-        /* ---------- ホーム: 予定表・予定の編集(選んだ日の内訳。登録・取消はここから)・やることリスト(折り畳み、既定は開)・授業登録(折り畳み)・授業計画の案内(折り畳み) ---------- */
+        /* ---------- ホーム: 宿題3件の要約・予定表・予定の編集・授業登録・授業計画の案内 ---------- */
         function renderHomePage() {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
+          html += renderTaskSummary();
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };
@@ -900,26 +955,6 @@
           html += renderCal(D.info, today, true);
           html += '<h2>予定の編集</h2>';
           html += renderDayDetail(D, true, true);
-
-          // テストまでのカウントダウン + やること(宿題・持ち物)
-          (function () {
-            var tests = events.filter(function (e) { return e.kind === "test" && e.dateTo >= today; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-            var tasks = (S.tasks || []).filter(function (t) { return !t.withdrawnAt && !t.withdrawn; });
-            var open = tasks.filter(function (t) { return !t.done; });
-            var doneT = tasks.filter(function (t) { return t.done; });
-            var nextL = mine.filter(function (s) { return s.date >= today; })[0];
-            html += foldHead('tasks', 'やることリスト', open.length ? open.length + '件' : '');
-            // テスト・模試までの日数の枠はやることリストから外した(2026-09-19)。テストの予定は予定表と「重要な予定」で見る
-            html += '<div class="card">';
-            if (!open.length) html += '<div class="empty">いま登録されている宿題・持ち物はありません</div>';
-            open.forEach(function (t) {
-              var over = t.due && t.due < today;
-              html += '<label class="task"><input type="checkbox" data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt"><span class="tag ' + (t.type === "持ち物" ? "coral" : t.type === "メモ" ? "gray" : "blue") + '">' + esc(t.type) + '</span> ' + esc(t.title) + ' <span class="due' + (over ? " over" : "") + '">' + esc(taskDueText(t)) + (over ? '(期限切れ)' : '') + '</span>' + (t.createdBy === "teacher" ? ' <span class="small muted">先生から</span>' : '') + '</span>' + (t.createdBy === "student" ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '">削除</button>' : '') + '</label>';
-            });
-            html += renderTaskAdd();
-            if (doneT.length) html += '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">済んだもの ' + doneT.length + '件</summary>' + doneT.slice(0, 20).map(function (t) { return '<label class="task done"><input type="checkbox" checked data-action="taskdone" data-id="' + esc(t.id) + '"><span class="tt">' + esc(t.title) + ' <span class="due">' + esc(taskDueText(t)) + '・' + esc(t.doneAt) + ' に完了</span></span></label>'; }).join("") + '</details>';
-            html += '</div></details>';
-          })();
 
           html += renderOffers(D);
           html += renderMonthSummary(D);
@@ -1212,6 +1247,7 @@
           var tab = fixedTab || 'home';
           h += '<p class="sub">' + esc(c.name) + 'さんの' + (tab === 'grades' ? '成績' : tab === 'history' ? (PREVIEW ? '授業の記録（プレビューでは既読を付けません）' : '授業の記録（開くと既読になります）') : 'マイページ') + (PREVIEW ? '（表示のみ）' : '（保護者が代わりに操作できます）') + '</p>';
           if (tab === 'grades') h += renderGradesPage() + '<section id="family-grades-panel" data-family-child="' + esc(c.studentId) + '" style="margin-top:18px"></section>';
+          else if (tab === 'tasks') h += renderTasksPage();
           else if (tab === 'history') h += '<section id="family-records-host" data-family-child="' + esc(c.studentId) + '">' + renderHistoryPage() + '</section>';
           else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
           return h;
@@ -1318,6 +1354,7 @@
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
             if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); return; }
+            if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
             // 保護者メニュー: 請求・料金承認 → 先生への連絡 → 保護者の設定(メール通知のオン/オフ)。2026-09-11 に旧3タブを統合
@@ -1626,12 +1663,14 @@
             case "delevent": { var de = (S.events || []).filter(function (e) { return String(e.id) === String(id); })[0]; pending = { kind: "remove", verb: "削除する", text: "重要な予定" + (de ? "「" + esc(de.title) + "」（" + fmtDateW(de.date) + (de.dateTo && de.dateTo !== de.date ? "〜" + fmtDateW(de.dateTo) : "") + "）" : "") + " を削除しますか?", body: { action: "eventDel", k: myKey(), eventId: id }, ok: "予定を取り消しました" }; render(); break; }
             case "doremove": if (pending && pending.kind === "remove") studentAction(pending.body, pending.ok); break;
             case "taskadd":
-              var tt = val("f-ttitle"), ty = val("f-ttype"), dm = val("f-tdue-mode"), td = dm === 'date' ? val("f-tdue") : '', ds = dm === 'nextLesson' ? val("f-tdue-subject") : '', taskKey = myKey();
+              var tt = val("f-ttitle"), ty = val("f-ttype"), dm = val("f-tdue-mode"), td = dm === 'date' ? val("f-tdue") : '', ds = dm === 'nextLesson' ? val("f-tdue-subject") : '', taskKey = taskScopeKey();
               if (!tt) { toast("内容を入れてください"); return; }
               if (['date','nextLesson','none'].indexOf(dm) < 0) { toast('期限の種類を選んでください'); return; }
               if (dm === 'date' && !td) { toast('期限の日付を入れてください'); return; }
               if (dm === 'nextLesson' && !ds) { toast('期限にする授業の科目を入れてください'); return; }
-              studentAction({ action: "taskAdd", k: taskKey, type: ty, title: tt, due: td, dueMode: dm, dueSubject: ds }, "追加しました", function () { delete taskDrafts[taskKey]; }); break;
+              studentAction({ action: "taskAdd", k: myKey(), type: ty, title: tt, due: td, dueMode: dm, dueSubject: ds }, "追加しました", function () { delete taskDrafts[taskKey]; }); break;
+            case "tasktoggle": taskToggle(id, btn.getAttribute('data-done') === 'true'); break;
+            case "taskretry": { var tn = taskNotices[taskScopeKey()]; if (tn && tn.retry && !previewK) studentAction(Object.assign({},tn.retry), tn.retry.done ? 'できた! ✓' : '未完了に戻しました'); break; }
             case "taskdel": studentAction({ action: "taskDel", k: myKey(), taskId: id }, "削除しました"); break;
             case "delblock": {
               var sids = btn.getAttribute("data-ids"), bids = sids ? sids.split(",") : [id], db = (S.blocked || []).filter(function (b) { return String(b.id) === String(bids[0]); })[0];

@@ -46,8 +46,9 @@ test('task lists show pending same-subject deadlines and the frozen deadline of 
     { id:'escaped-task', type:'メモ', title:'<img src=x>', dueMode:'nextLesson', dueSubject:'<script>x</script>', due:'' }
   ];
   const ui = await studentReady({ ...state(), tasks });
+  ui.navigate('#tasks?filter=all');
   assert.match(ui.html(), /次回の英語授業（予定未定）/);
-  assert.match(ui.html(), /次回の数学授業（2026\/9\/10 17:00）まで・2026-09-08 に完了/);
+  assert.match(ui.html(), /次回の数学授業（2026\/9\/10 17:00）まで・2026\/9\/8 に完了/);
   assert.match(ui.html(), /&lt;script&gt;x&lt;\/script&gt;/); assert.equal(ui.html().includes('<img src=x>'), false);
 });
 
@@ -181,7 +182,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const s = { ...state(), blocked:[{ id:'b1', date:'2026-09-16', note:'部活' }], events:[{ id:'e1', date:'2026-09-17', dateTo:'2026-09-17', title:'大会', kind:'event' }] };
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
-  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /<h2>予定の編集<\/h2>[^]*<details class="fold tasks" data-fold="tasks" open><summary><h2>[^]*?やることリスト[^]*<details class="fold offers" data-fold="offers"><summary>/);
+  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /homework-summary[^]*取り組む宿題[^]*<h2>予定表[^]*<h2>予定の編集<\/h2>[^]*<details class="fold offers" data-fold="offers"><summary>/);
   ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定共有</);
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
@@ -189,7 +190,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   ui.click('calday', { 'data-date':'2026-09-16' }); assert.match(ui.html(), /授業不可<\/span><span class="time">終日<\/span><span class="who">部活</); assert.match(ui.html(), /class="calday(?: sel)? ngday" data-action="calday" data-date="2026-09-16">16<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span>/); const before = ui.requests.length; ui.click('delblock', { 'data-ids':'b1' }); assert.equal(ui.requests.length, before); assert.match(ui.html(), /授業できない日 9\/16\(水\)（終日） を解除しますか\?/); ui.click('closebar'); assert.doesNotMatch(ui.html(), /解除しますか/); ui.click('delblock', { 'data-ids':'b1' }); ui.click('doremove'); assert.deepEqual(ui.requests.at(-1).body, { action:'unblock', k:'test-link-a', blockIds:['b1'] });
   ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
   ui.click('calday', { 'data-date':'2026-09-17' }); assert.match(ui.html(), /<span class="tag coral">重要な予定<\/span><span class="time"><\/span><span class="who">大会/); ui.click('delevent', { 'data-id':'e1' }); assert.match(ui.html(), /重要な予定「大会」（9\/17\(木\)） を削除しますか\?/); ui.click('doremove'); assert.deepEqual(ui.requests.at(-1).body, { action:'eventDel', k:'test-link-a', eventId:'e1' });
-  ui.navigate('#schedule'); assert.equal(ui.el('tabs').innerHTML.includes('class="on">ホーム'), true);
+  ui.navigate('#schedule'); assert.match(ui.el('tabs').innerHTML, /class="on" aria-current="page">ホーム/);
 });
 
 test('students turn a sentence into checked proposals and register them through the existing actions', async () => {
