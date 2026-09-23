@@ -76,3 +76,24 @@ test('month retains shared events and teacher breaks; next-month wish opens a da
   assert.equal(ui.el('f-date').value,'2026-10-02'); assert.equal(ui.el('f-student').value,'test-a');
   assert.equal(ui.el('f-start').value,'16:00'); assert.equal(ui.requests.length,1);
 });
+
+
+test('attention list selects missing completed records and cancellation requests without duplicates', async () => {
+  const slots = [lesson('missing',{done:true,date:'2026-09-20',lessonRecordStatus:'none'}),
+    lesson('draft',{done:true,date:'2026-09-21',lessonDraftStatus:'draft'}),
+    lesson('recorded',{done:true,lessonRecordStatus:'active'}), lesson('upcoming'),
+    lesson('cancel',{date:'2026-09-28',req:{reason:'【テスト】都合変更'}}),
+    lesson('both',{done:true,req:{reason:'【テスト】確認'}})];
+  const ui = await ready({slots});
+  const section = ui.html().match(/<section id="lesson-attention">([^]*?)<\/section>/)[1];
+  assert.match(section, /4件/); assert.match(section, /記録を再開/); assert.match(section, /【テスト】都合変更/);
+  assert.equal((section.match(/class="line"/g)||[]).length,4);
+  assert.doesNotMatch(section, /slot=recorded|slot=upcoming/);
+  assert.ok(ui.html().indexOf('承認待ちの案内') < ui.html().indexOf('id="lesson-attention"'));
+  ui.click('cancelkeep',{'data-id':'cancel'});
+  assert.equal(ui.requests.at(-1).body.op,'resolveCancel');
+  assert.equal(ui.requests.at(-1).body.slotId,'cancel');
+  assert.equal(ui.requests.at(-1).body.approve,false);
+  ui.requests.at(-1).reply({admin:data({slots:slots.map(s=>s.id==='cancel'?{...s,req:null}:s)})}); await flush();
+  assert.match(ui.html().match(/<section id="lesson-attention">([^]*?)<\/section>/)[1], /3件/);
+});
