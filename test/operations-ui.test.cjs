@@ -148,7 +148,7 @@ test('past months stay reachable for a year and past days keep their lessons and
   assert.match(html, /<span class="callabel">2026年4月<\/span>/);
   assert.match(html, /<button class="calday" data-action="calday" data-date="2026-04-10">10<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:00<\/span><span class="s">英語<\/span><\/span><\/button>/, 'a past lesson is a box on a clickable day');
   assert.match(html, /<button class="calday sat ngday" data-action="calday" data-date="2026-04-11">11<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span><\/button>/, 'past 授業不可 stays visible');
-  assert.match(html, /<button class="calday sun" data-action="calday" data-date="2026-04-12">12<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可12-13<\/span><\/button>/, 'past teacher off stays visible');
+  assert.match(html, /<button class="calday sun" data-action="calday" data-date="2026-04-12">12<span class="calmarks"><\/span><span class="calbox unavailable toff"><span class="t">12:00-<wbr>13:00<\/span><span class="s">登録不可<\/span><\/span><\/button>/, 'past teacher off stays visible');
   assert.match(html, /<span class="calday off" data-date="2026-04-13">13<span class="calmarks"><\/span><\/span>|<span class="calday off">13<span class="calmarks"><\/span><\/span>/, 'an expired 授業可 request is not shown and the empty past day is faded');
   ui.click('calday', { 'data-date': '2026-04-10' }); assert.match(ui.html(), /4月10日（金）の予定/); assert.match(ui.html(), /<span class="tag gray">実施済<\/span>/);
 });
@@ -162,7 +162,7 @@ test('the admin student page draws the same calendar as the student mypage (boxe
   assert.match(ui.html(), /class="calday ngday" data-action="calday" data-date="2026-09-17">17<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span>/);
   assert.match(ui.html(), /class="calday toff" data-action="calday" data-date="2026-09-18">18<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
   assert.match(ui.html(), /data-date="2026-09-19">19<span class="calmarks"><\/span><span class="callbl wi">授業可<\/span>/);
-  assert.match(ui.html(), /data-date="2026-09-20">20<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/); assert.match(ui.html(), /data-date="2026-09-21">21<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-20">20<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/); assert.match(ui.html(), /data-date="2026-09-21">21<span class="calholiday">敬老の日<\/span><span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/);
   assert.match(ui.html(), /<div class="callegend"><span><span class="callbl" style="display:inline">授業<\/span><\/span>[^]*登録不可<\/span> 先生の休み/);
   assert.doesNotMatch(ui.html(), /class="caldot|class="cbox/);
 });

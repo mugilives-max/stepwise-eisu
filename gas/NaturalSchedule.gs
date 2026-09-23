@@ -40,6 +40,7 @@ var NL_TOOL_ = {
 function nlError_(message, code) { return { error: message, errorCode: code || 'validation' }; }
 function nlKey_() { return String(PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY') || '').trim(); }
 function nlConfigured_() { return !!nlKey_(); }
+function nlWorkerPlaceholder_(key) { return key === 'configured-in-gas'; }
 function nlWeekday_(d) { return ['日', '月', '火', '水', '木', '金', '土'][new Date(d + 'T12:00:00Z').getUTCDay()]; }
 function nlValidDate_(d) { if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false; var t = new Date(d + 'T12:00:00Z'); return !isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d; }
 function nlTime_(v) { v = String(v || '').trim(); if (/^\d:\d{2}$/.test(v)) v = '0' + v; return /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : ''; }
@@ -60,13 +61,16 @@ function nlSystemPrompt_(today) {
   ].join('\n');
 }
 
-function nlCall_(key, text, today, teacher) {
-  var payload = {
+function nlPayload_(text, today, teacher) {
+  return {
     model: NL_MODEL_, max_tokens: 1024, temperature: 0,
     system: teacher ? nlTeacherPrompt_(today, teacher) : nlSystemPrompt_(today),
     tools: [teacher ? NL_TOOL_TEACHER_ : NL_TOOL_], tool_choice: { type: 'tool', name: 'propose_schedule' },
     messages: [{ role: 'user', content: teacher ? '<teacher_text>\n' + text + '\n</teacher_text>' : '<student_text>\n' + text + '\n</student_text>' }]
   };
+}
+function nlCall_(key, text, today, teacher) {
+  var payload = nlPayload_(text, today, teacher);
   var res = UrlFetchApp.fetch(NL_ENDPOINT_, {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { 'x-api-key': key, 'anthropic-version': NL_VERSION_ },
@@ -110,6 +114,11 @@ function scheduleParse_(req) {
   if (text.length > NL_MAX_CHARS_) return nlError_('文章は' + NL_MAX_CHARS_ + '文字以内にしてください');
   var key = nlKey_();
   if (!key) return nlError_('文章からの登録はまだ準備中です。予定表の＋から登録してください', 'notConfigured');
+  // Worker ではこの印だけを渡し、本人確認後に Worker Secret で Anthropic を呼ぶ。
+  if (nlWorkerPlaceholder_(key)) {
+    var proxyToday = todayStr_();
+    return { error: '文章解析を処理します', errorCode: 'nlNeedsWorker', nlProxy: { payload: nlPayload_(text, proxyToday), today: proxyToday, teacher: false, context: null, rateScope: 'student:' + student.id, rateLimit: NL_PER_HOUR_ } };
+  }
   var cache = CacheService.getScriptCache(), ck = 'nl:' + student.id, used = Number(cache.get(ck) || 0);
   if (used >= NL_PER_HOUR_) return nlError_('文章からの読み取りは1時間に' + NL_PER_HOUR_ + '回までです。しばらくしてからお試しください', 'rateLimited');
   cache.put(ck, String(used + 1), 3600);
@@ -216,6 +225,10 @@ function scheduleParseTeacher_(req) {
   if (text.length > NL_MAX_CHARS_) return nlError_('文章は' + NL_MAX_CHARS_ + '文字以内にしてください');
   var key = nlKey_();
   if (!key) return nlError_('文章からの登録には ANTHROPIC_API_KEY の設定が必要です', 'notConfigured');
+  if (nlWorkerPlaceholder_(key)) {
+    var proxyContext = nlTeacherContext_(req), proxyToday = todayStr_();
+    return { error: '文章解析を処理します', errorCode: 'nlNeedsWorker', nlProxy: { payload: nlPayload_(text, proxyToday, proxyContext), today: proxyToday, teacher: true, context: proxyContext, rateScope: 'teacher', rateLimit: NL_PER_HOUR_ * 3 } };
+  }
   var cache = CacheService.getScriptCache(), ck = 'nl:teacher', used = Number(cache.get(ck) || 0);
   if (used >= NL_PER_HOUR_ * 3) return nlError_('文章からの読み取りは1時間に' + (NL_PER_HOUR_ * 3) + '回までです。しばらくしてからお試しください', 'rateLimited');
   cache.put(ck, String(used + 1), 3600);
@@ -230,6 +243,7 @@ function scheduleParseTeacher_(req) {
   addLog_('scheduleParseTeacher ' + student.id + ' chars=' + text.length + ' status=200 items=' + norm.items.length + ' in=' + (out.usage.input_tokens || 0) + ' out=' + (out.usage.output_tokens || 0));
   return { ok: true, items: norm.items, questions: norm.questions, summary: norm.summary, today: today };
 }
+
 // 確認済みの候補を登録する。項目ごとに結果を返す(1つ失敗しても他は進める)
 function nlApplyTeacher_(req) {
   var student = systemStudent_(String(req.studentId || ''));

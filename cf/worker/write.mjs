@@ -15,11 +15,46 @@ import { books } from '../lib/sheet-view.mjs';
 import { createServices } from '../lib/gas-services.mjs';
 import { normalizeCell, quoteIdent, VIEW_SHEETS } from '../lib/import.mjs';
 import { createGas } from './generated/gas.mjs';
+import { createRuntime } from './read.mjs';
 import { TABLE_COLUMNS, TABLE_SCHEMA } from './generated/schema.mjs';
 
 const MAX_ATTEMPTS = 3;
 
 export class LedgerConflict extends Error {}
+
+async function takeNaturalScheduleQuota(db, scope, limit) {
+  const cutoff = new Date(Date.now() - 3600000).toISOString(), now = new Date().toISOString();
+  await db.prepare('delete from _nl_usage where createdAt < ?').bind(cutoff).run();
+  const inserted = await db.prepare('insert into _nl_usage (scope, createdAt) select ?, ? where (select count(*) from _nl_usage where scope = ? and createdAt >= ?) < ?')
+    .bind(scope, now, scope, cutoff, limit).run();
+  return Number(inserted.meta && inserted.meta.changes) === 1;
+}
+
+export async function runNaturalSchedule(result, env) {
+  if (!result || result.errorCode !== 'nlNeedsWorker') return result;
+  if (!env.ANTHROPIC_API_KEY) return { error: '文章解析のAPI設定を確認してください', errorCode: 'notConfigured' };
+  const proxy = result.nlProxy || {}, scope = String(proxy.rateScope || ''), limit = Math.max(1, Math.min(60, Number(proxy.rateLimit) || 20));
+  if (!scope || !(await takeNaturalScheduleQuota(env.DB, scope, limit))) return { error: '文章からの読み取りは1時間に' + limit + '回までです。しばらくしてからお試しください', errorCode: 'rateLimited' };
+  let response, body;
+  try {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(proxy.payload || {}), signal: AbortSignal.timeout(30000),
+    });
+    body = await response.json().catch(() => ({}));
+  } catch (e) {
+    return { error: '文章を読み取れませんでした。しばらくしてからもう一度お試しください', errorCode: 'upstream' };
+  }
+  if (!response.ok) {
+    if (response.status === 429 || response.status === 529) return { error: '読み取りが混み合っています。少し待ってからもう一度お試しください', errorCode: 'upstream' };
+    return { error: '文章を読み取れませんでした。しばらくしてからもう一度お試しください', errorCode: 'upstream' };
+  }
+  const block = (body.content || []).find(c => c && c.type === 'tool_use' && c.name === 'propose_schedule');
+  if (!block) return { error: '文章を読み取れませんでした。内容を少し具体的にしてもう一度お試しください', errorCode: 'upstream' };
+  const gas = await createRuntime(env), today = String(proxy.today || ''), context = proxy.context || {};
+  const normalized = proxy.teacher === true ? gas.nlNormalizeTeacher_(block.input, today, context) : gas.nlNormalize_(block.input, today);
+  return { ok: true, items: normalized.items, questions: normalized.questions, summary: normalized.summary, today };
+}
 
 // 台帳に入らない設定値。読み取りと同じ + 書き込みで要るもの
 function propertiesFor(env) {

@@ -181,8 +181,8 @@
 ## C: いつか・小さな改善
 
 ### 文章からの予定登録の精度・費用の確認
-- **背景**: 2026-09-11 に「文章で予定を伝える」（GAS `scheduleParse` → Anthropic API → 確認 → 既存登録）を実装。先生が `ANTHROPIC_API_KEY` を設定すると有効になる。実際の生徒の書き方での読み取り精度と費用はまだ見ていない。
-- **やること**: 鍵設定後に先生の生徒ページで数パターン試す。読み違いが多ければ `NaturalSchedule.gs` の指示文か例を調整、必要なら `claude-sonnet-5` に切り替える。platform.claude.com の使用額を月1回見る。`log` の `scheduleParse` 行で回数とトークン数を確認できる。
+- **背景**: 2026-09-23、D1移行後にGAS用の仮値をAPIキーとして送っていた不具合を修正し、認証後にWorkerからAnthropic APIを直接呼ぶ構成へ変更した。鍵はWorker Secret `ANTHROPIC_API_KEY`、回数制限はD1内部表で管理する。実際の生徒の書き方での読み取り精度と費用はまだ見ていない。
+- **やること**: Worker Secret設定後に先生の生徒ページで数パターン試す。読み違いが多ければ `NaturalSchedule.gs` の指示文か例を調整する。platform.claude.com の使用額を月1回確認する。
 - **追加日**: 2026-09-11
 
 ### 共通コードの重複
@@ -232,7 +232,7 @@
 
 ## 済み(記録用)
 
-- 2026-09-11 文章からの予定登録（Claude API）を実装（GAS `2026-09-11-nl-schedule`、`gas/NaturalSchedule.gs`）。有効化は先生の `ANTHROPIC_API_KEY` 設定待ち。仕様は [SYSTEM.md 変更履歴](SYSTEM.md#9-変更履歴要点)。
+- 2026-09-11 文章からの予定登録（Claude API）を実装。2026-09-23にWorker直結へ移行し、Worker Secret `ANTHROPIC_API_KEY` の設定後に有効化する。仕様は [SYSTEM.md 変更履歴](SYSTEM.md#9-変更履歴要点)。
 - 2026-09-11 生徒ページの「登録不可」表示は先生の判断でホーム・予定の両方に表示することで確定（`assets/portal.js` renderCal / renderDayDetail の第3引数）。2026-09-07 の「ホームでは出さない」は取り消し。
 - 2026-09-09 連絡欄の MCP 処理(list_inbox / claim_message / resolve_message、登録ツールの message_id / process_id、`contactProcessing` ジャーナル)を GAS v54 `2026-09-09-mcp-inbox` と stepwise-mcp 0.3.0 へ公開。ローカル検証 6件追加(全体 416件通過)
 - 2026-09-08 MCP 登録ツール4本(offer_lessons / add_teacher_off / add_student_unavailable / add_student_wishes)を実装・公開(GAS v52 `2026-09-08-mcp-writes`、Worker Version ec4f2bf5、stepwise-mcp 0.2.0)。日付展開(毎週/隔週/毎月/曜日/期間/除外)、項目別検証と結果、再送安全、`MCP_WRITE_SCOPE`(mcpEnableWrites / mcpRestrictWritesToTest)。ローカル検証 11件+日付展開 5件通過。詳細は MCP_DESIGN.md 合意節と MCP_OPERATIONS.md 2-2節

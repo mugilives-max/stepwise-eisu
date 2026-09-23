@@ -6,7 +6,7 @@
 import { health } from "./health.mjs";
 import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
-import { runWrite, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
+import { runWrite, runNaturalSchedule, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
 import { handlePush, deliverNotice, pushEnabled, PUSH_ACTIONS } from "./push.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
@@ -83,7 +83,7 @@ export default {
           const finish = deliverEffects(env, done.effects, ids);
           if (ctx && ctx.waitUntil) ctx.waitUntil(finish); else await finish;
         }
-        return reply(done.result, 200, head);
+        return reply(await runNaturalSchedule(done.result, env), 200, head);
       } catch (e) {
         return reply({ error: "中継の処理に失敗しました", errorCode: "workerError" }, 500, head);
       }
@@ -138,7 +138,7 @@ export default {
         };
         const finish = after();
         if (ctx && ctx.waitUntil) ctx.waitUntil(finish); else await finish;
-        return reply(done.result, 200, head);
+        return reply(await runNaturalSchedule(done.result, env), 200, head);
       } catch (e) {
         const detail = dev ? { detail: String((e && e.message) || e).slice(0, 200) } : {};
         return reply({ error: "処理に失敗しました。もう一度お試しください", errorCode: "workerError", ...detail }, 500, head);

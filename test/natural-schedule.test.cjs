@@ -32,6 +32,18 @@ test('sentence parsing is off without a key, needs the student link, and bounds 
   assert.equal(t.calls.length, 0);
 });
 
+test('the Worker placeholder returns a sanitized Claude request without calling the API', () => {
+  const t = setup();
+  t.ctx().PropertiesService.getScriptProperties().setProperty('ANTHROPIC_API_KEY', 'configured-in-gas');
+  const routed = t.parse('水曜日は授業できません');
+  assert.equal(routed.errorCode, 'nlNeedsWorker'); assert.equal(t.calls.length, 0);
+  assert.equal(routed.nlProxy.teacher, false); assert.equal(routed.nlProxy.today, '2026-09-07');
+  assert.equal(routed.nlProxy.rateScope, 'student:test-a'); assert.equal(routed.nlProxy.rateLimit, 20);
+  const sent = JSON.stringify(routed.nlProxy.payload);
+  assert.match(sent, /水曜日は授業できません/); assert.match(sent, /claude-haiku-4-5-20251001/);
+  assert.equal(sent.includes('test-a'), false); assert.equal(sent.includes('synthetic-link'), false); assert.equal(sent.includes('【テスト】'), false);
+});
+
 test('only the text and calendar go to the API, and the proposal is normalized before it reaches the page', () => {
   const t = setup({ input: {
     items: [

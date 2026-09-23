@@ -57,16 +57,16 @@ test('cf/migrations の表と列が GAS のシートの見出しと一致する'
   assert.deepEqual(diffs, [], '列の並びがシートと違う:\n' + diffs.join('\n'));
 });
 
-test('計画中の 45 表がすべて作られ、索引が張られている', () => {
+test('計画中の業務表と内部表がすべて作られ、索引が張られている', () => {
   const d1 = d1h.createD1();
   const tables = d1h.tables(d1);
-  // 業務 45 表 + 仕組み側 5 表（取り込み記録・台帳の版・版の見張り・付随処理の控え・通知の宛先）
-  assert.equal(tables.length, 53);
-  for (const name of ['_importRuns', '_ledger', '_guard', '_effects', 'pushSubs']) assert.ok(tables.includes(name), '仕組みの表が無い: ' + name);
+  // 業務 48 表 + 仕組み側 6 表（取り込み記録・台帳の版・版の見張り・付随処理の控え・文章解析回数・通知の宛先）
+  assert.equal(tables.length, 54);
+  for (const name of ['_importRuns', '_ledger', '_guard', '_effects', '_nl_usage', 'pushSubs']) assert.ok(tables.includes(name), '仕組みの表が無い: ' + name);
   for (const name of ['slots', 'planLines', 'familyAccounts', 'lessonRecords', '入金管理', '生徒台帳'])
     assert.ok(tables.includes(name), '表が無い: ' + name);
   const indexes = d1h.indexes(d1).map(i => i.name);
-  for (const name of ['slots_student_date', 'events_student_dateTo', 'planLines_student_status', 'familyLinks_student', 'lessonRecords_slot', 'log_time'])
+  for (const name of ['slots_student_date', 'events_student_dateTo', 'planLines_student_status', 'familyLinks_student', 'lessonRecords_slot', 'log_time', '_nl_usage_scope_created'])
     assert.ok(indexes.includes(name), '索引が無い: ' + name);
 });
 
