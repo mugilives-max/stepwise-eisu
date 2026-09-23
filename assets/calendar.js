@@ -182,7 +182,7 @@
       // Restrictions remain in chronological order; crowded groups use the normal list.
       if(g.items.length<2 || g.lanes.length>2 || g.items.some(function(x){return !x.item.lesson;})) return g.items.map(function(x){return x.item.html;}).join('');
       var sameTime=g.items.every(function(x){return x.start===g.start && x.end===g.end;});
-      if(sameTime)return '<span class="cal-overlap cal-same-time">'+g.items.map(function(x){return '<span class="cal-overlap-item">'+x.item.html+'</span>';}).join('')+'</span>';
+      if(sameTime)return '<span class="cal-overlap cal-same-time"><span class="cal-shared-time">'+esc(g.items[0].item.start)+'–'+esc(g.items[0].item.end)+'</span>'+g.items.map(function(x){return '<span class="cal-overlap-item">'+x.item.html+'</span>';}).join('')+'</span>';
       var scale=Math.max.apply(null,[0.9].concat(g.items.map(function(x){return 56/(x.end-x.start);})));
       var gaps='';
       g.lanes.forEach(function(_,lane) {
