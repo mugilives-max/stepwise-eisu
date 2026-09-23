@@ -426,7 +426,8 @@
         }
         function admin(op, extra) {
           var body = { action: "admin", token: token(), op: op, from: "kanri", view: viewOf() };
-          if (route().page === "student") body.section = route().section;
+          var planningRequest = route().page === "student" && route().section === "planning";
+          if (route().page === "student") body.section = planningRequest ? "billing" : route().section;
           Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
           var t0 = Date.now();
           return post(body).then(function (res) {
@@ -434,6 +435,7 @@
             if (body.token !== token()) { var changed = new Error("ログインが更新されました。内容を確認してもう一度操作してください"); changed.code = "sessionChanged"; throw changed; }
             if (res && res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); throw new Error("ログインし直してください"); }
             if (res && res.error) { var er = new Error(res.error); er.code = res.errorCode || ""; er.res = res; throw er; }
+            if (planningRequest && res && res.data && res.data.section === "billing") res.data = Object.assign({}, res.data, { section: "planning" });
             return res;
           });
         }

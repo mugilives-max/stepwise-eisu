@@ -235,13 +235,15 @@ test('dedicated planning page opens the proposal editor and refreshes saved defa
   ui.requests[0].reply({data:{students:[{id:'test-a',name:'【テスト】生徒A',active:true}]}}); await flush();
   assert.ok(ui.html().includes('#plans?student=test-a'));
   ui.navigate('#plans?student=test-a');
-  ui.requests.at(-1).reply({data:card({plan:{lines:[],defaultRows:[{subject:'英語',count:4}]}})}); await flush();
+  assert.equal(ui.requests.at(-1).body.section, 'billing');
+  ui.requests.at(-1).reply({data:card({section:'billing',plan:{lines:[],defaultRows:[{subject:'英語',count:4}]}})}); await flush();
   assert.ok(ui.html().includes('授業計画の承認状況'));
   assert.ok(!ui.html().includes('請求・入金管理'));
   ui.click('pe-new'); assert.ok(ui.html().includes('id="plan-editor"'));
   ui.click('pe-cancel');
   ui.click('pl-fromdefault',{'data-ym':'2026-10'});
   assert.equal(ui.requests.at(-1).body.op,'planLinesFromDefault');
-  ui.requests.at(-1).reply({data:card({name:'【テスト】更新済み'})}); await flush();
+  assert.equal(ui.requests.at(-1).body.section, 'billing');
+  ui.requests.at(-1).reply({data:card({section:'billing',name:'【テスト】更新済み'})}); await flush();
   assert.ok(ui.html().includes('【テスト】更新済みさんの授業計画'));
 });
