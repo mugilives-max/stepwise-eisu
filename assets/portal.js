@@ -1159,6 +1159,7 @@
           if (!pls.length) html += '<div class="empty">承認をお願いする予定はいまありません</div>';
           else {
             html += '<div class="card">';
+            if (pls.some(function(l){return l.status==='proposed';})) html += '<div class="plan-invitation-intro"><p><strong>先生から、以下の回数・料金で授業を進めたいという案内が届いています。</strong></p><p>期間・科目・1回の授業時間・回数・料金をご確認いただき、内容がよろしければ「承認する」を押してください。承認いただいた回数を上限に、授業を計画・実施します。</p><p><strong>授業料が発生するのは、実際に実施した授業の分だけです。</strong>承認した回数をすべて受ける必要はなく、実施しなかった分の授業料はかかりません。</p></div>';
             pls.forEach(function (l) {
               html += '<div style="padding:12px 0;border-bottom:1px solid var(--line)"><strong>'+esc(planPeriod(l))+'</strong>'+(l.status==='approved'?' <span class="tag green">承認済み</span>':l.status==='declined'?' <span class="tag gray">見送り</span>':' <span class="tag amber">承認待ち</span>');
               html += '<p>'+esc(planName(l))+(l.addon?' <span class="tag gray">追加</span>':'')+'　'+(l.lessonMin?esc(l.lessonMin)+'分 × ':'')+(l.addon?'＋':'')+esc(planLimit(l))+'回まで</p>'+(l.comment?'<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>'+esc(l.comment)+'</p>':'')+'<p><strong>'+(planFee(l)?'1回 '+yen(l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30)):'授業時間・料金は先生に確認してください')+'</strong></p>';
