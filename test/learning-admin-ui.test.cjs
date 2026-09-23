@@ -25,11 +25,11 @@ test('chemistry can be selected for a new offer independently of the student def
   assert.equal(ui.requests.at(-1).body.subject, '化学'); assert.equal(ui.requests.at(-1).body.deliveryMode, 'online');
 });
 
-test('the home calendar lists timed teacher breaks as 休み marks and the lessons of the day in start order (shared component)', async () => {
-  const ui = createUI('admin', { hash: '#home' });
+test('the lessons calendar lists timed teacher breaks as 休み marks and the lessons of the day in start order (shared component)', async () => {
+  const ui = createUI('admin', { hash: '#lessons' });
   const lessons = [offered({ start: '14:00', studentName: '【テスト】A' }), offered({ id: 'slot-b', start: '13:30', studentId: 'test-b', studentName: '【テスト】B' }),
     offered({ id: 'slot-c', start: '09:00', studentName: '【テスト】C', subject: '化学' })];
-  ui.requests[0].reply({ data: { today: '2026-09-08', slots: lessons, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [],
+  ui.requests[0].reply({ admin: { today: '2026-09-08', slots: lessons, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [],
     teacherOff: [{ date: '2026-09-10', start: '12:00', end: '13:00' }, { date: '2026-09-10', start: '08:00', end: '08:30' }] } }); await flush();
   const html = ui.html(), cell = /data-date="2026-09-10">10<span class="calmarks"><\/span>([^]*?)<\/button>/.exec(html);
   assert.ok(cell, 'the day cell renders'); const marks = cell[1];

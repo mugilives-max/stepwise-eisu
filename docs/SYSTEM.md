@@ -4,7 +4,7 @@
 
 現行の構成・台帳・API・反映手順の正本。作業対象に関係する節を参照する。共通の制約と資料案内は [AGENTS.md](../AGENTS.md)、未完了事項は [FUTURE_WORK.md](FUTURE_WORK.md)。
 
-**2026-09-23・未公開の開発差分**: 先生用ホームの新配置を `?homePreview=1` で比較する実装が開発ブランチにある。通常の本番ホームは未変更。案内の種類を保持するための `kanriDashboard_` 応答（各授業の `kind` と種類一覧 `lessonKinds`）も未反映であり、画面だけを先行公開しない。[プレビュー・検証・次の判断](UI_UX_REVIEW.md#teacher-home-work-preview) を参照する。
+**2026-09-23・新ホーム公開準備**: 配置の承認を受け、簡易カレンダー＋選択日の授業を通常表示に切り替えた。旧ホームとプレビュー分岐を整理し、`kanriDashboard_` の授業種別情報（各授業の `kind`・一覧 `lessonKinds`）とGAS・Worker・Pagesへまとめて公開する。テーブル・認証・公開範囲の変更はない。[実装・公開記録](UI_UX_REVIEW.md#teacher-home-work-preview) を参照する。
 
 **2026-09-22・本番反映済み**: 授業記録UI・省スペースの宿題入力・任意の計画内訳をD1、Worker、GAS v100、Pagesへ反映。その後、本番環境の暗号計算上限による保護者ログインのエラーを修正し、GAS v101／Workerの現行releaseは `2026-09-22-family-crypto-fallback`。既存パスワードと60万回の強度を維持し、本番テスト家族による報告・既読まで確認した。[仕様・検証範囲](LESSON_CYCLE_PHASE1_SPEC.md#local-plan-outline)、[認証修正・復旧先](D1_MIGRATION.md#family-crypto-release) を参照。本番mirror／週次バックアップの新3表確認は引き続き残る。
 

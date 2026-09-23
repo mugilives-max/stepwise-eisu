@@ -6,7 +6,7 @@ const day = '2026-09-23';
 const slot = (id, patch={}) => ({id, studentId:'test-a', studentName:'【テスト】生徒A', date:day, start:'17:00', min:60, status:'booked', done:false, subject:'数学', kind:'夏期講習', deliveryMode:'in_person', lessonRecordStatus:'none', lessonDraftStatus:'none', ...patch});
 const dash = (patch={}) => ({today:day, slots:[], lessonsToday:[], lessonsWeek:[], pending:[], unpaid:[], students:[], meetings:[], ...patch});
 async function ready(patch={}, window={}) {
-  const ui=createUI('admin',{hash:'#home', search:'?homePreview=1', now:day+'T12:00:00+09:00', window});
+  const ui=createUI('admin',{hash:'#home', now:day+'T12:00:00+09:00', window});
   ui.requests[0].reply({data:dash(patch)});await flush();return ui;
 }
 const todaySection = html => html.match(/<section class="card home-day"[^]*?<\/section>/)[0];

@@ -120,11 +120,11 @@ test('server pending recovery overrides stale local state and shows snapshots ev
   ui.click('batchsend'); assert.equal(ui.requests.at(-1).body.requestId, 'server-pending-request'); assert.deepEqual(ui.requests.at(-1).body.slotIds, ['slot-a', 'slot-b']);
 });
 
-test('the home calendar is the shared component: one box per lesson with time, family name and subject initial, teacher off as 休み, wishes and events named', async () => {
+test('the lessons calendar is the shared component: one box per lesson with time, family name and subject initial, teacher off as 休み, wishes and events named', async () => {
   const slots = ['17:00', '17:30', '18:30', '19:00'].map((start, i) => slot('chain-' + i, { date: '2026-09-15', start, min: 90, status: 'booked', studentId: i % 2 ? 'test-b' : 'test-a', studentName: i % 2 ? '【テスト】B' : '【テスト】山田 太郎', subject: i % 2 ? '数学' : '英語', req: i === 2 ? '{"kind":"cancel"}' : '' }));
   slots.push(slot('of-1', { date: '2026-09-16', start: '16:00', min: 60, status: 'offered', studentId: 'test-a', studentName: '【テスト】山田 太郎', subject: '英語' }));
-  const ui = createUI('admin', { hash: '#home' });
-  ui.requests[0].reply({ data: { today: '2026-09-08', slots, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [], teacherOff: [{ id: 'o1', date: '2026-09-20', start: '', end: '', note: '' }], wishes: [{ id: 'w1', studentId: 'test-b', studentName: '【テスト】B', date: '2026-09-18', start: '16:00', end: '18:00', kind: 'range' }], allEvents: [{ id: 'e1', studentId: 'test-a', studentName: '【テスト】山田 太郎', date: '2026-09-25', dateTo: '2026-09-25', title: '中間テスト', kind: 'test' }] } }); await flush();
+  const ui = createUI('admin', { hash: '#lessons' });
+  ui.requests[0].reply({ admin: { today: '2026-09-08', slots, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [], teacherOff: [{ id: 'o1', date: '2026-09-20', start: '', end: '', note: '' }], wishes: [{ id: 'w1', studentId: 'test-b', studentName: '【テスト】B', date: '2026-09-18', start: '16:00', end: '18:00', kind: 'range' }], events: [{ id: 'e1', studentId: 'test-a', studentName: '【テスト】山田 太郎', date: '2026-09-25', dateTo: '2026-09-25', title: '中間テスト', kind: 'test' }] } }); await flush();
   const html = ui.html();
   assert.doesNotMatch(html, /class="cgrp"|class="cbox|class="caldot|calday boxed/, 'the old home renderer is gone');
   assert.match(html, /<button class="calday[^"]*" data-action="calday" data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:30<\/span><span class="s">山田 英<\/span><\/span><span class="calbox"><span class="t">17:30-<wbr>19:00<\/span><span class="s">B 数<\/span><\/span><span class="calbox rq"><span class="t">18:30-<wbr>20:00<\/span><span class="s">山田 英（取消依頼）<\/span><\/span>/);
@@ -138,39 +138,7 @@ test('the home calendar is the shared component: one box per lesson with time, f
 test('selected calendar day exposes add button and carries date into student offer',async()=>{
  const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="sdayadd" aria-label="9\/15\(火\)の予定を追加"/);ui.click('sdayadd');assert.equal(ui.el('f-date'),undefined);ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date'),undefined);assert.equal(ui.requests.length,1);
 });
-test('home calendar preserves past selection and shows its lessons in the 予定の編集 card without an add button',async()=>{
- const ui=createUI('admin',{hash:'#home'});ui.requests[0].reply({data:{today:'2026-09-08',slots:[{id:'old',date:'2026-09-05',start:'13:00',min:60,status:'booked',studentId:'test-a',studentName:'【テスト】過去授業',subject:'英語'}],lessonsToday:[],lessonsWeek:[],pending:[],unpaid:[],students:[],meetings:[]}});await flush();ui.click('calday',{'data-date':'2026-09-05'});
- assert.match(ui.html(),/<h2>予定の編集<\/h2><div class="card"[^>]*><div class="row"[^>]*><h3[^>]*>9月5日（土）の予定<\/h3><\/div>/);assert.match(ui.html(),/【テスト】過去授業/);assert.doesNotMatch(ui.html(),/data-action="calendar-add"|data-action="sdayadd"/);
-});
 
-test('the home 予定の編集 card mirrors the student page: named rows with teacher actions, ＋ opens 授業を案内 (student select) and 先生の休みを登録', async () => {
-  const ui = createUI('admin', { hash: '#home' });
-  ui.requests[0].reply({ data: { today: '2026-09-08', students: [{ id: 'test-a', name: '【テスト】生徒A', active: true, deliveryMode: 'online' }, { id: 'test-b', name: '【テスト】生徒B', active: true }],
-    slots: [{ id: 'bk', date: '2026-09-15', start: '17:00', min: 60, status: 'booked', studentId: 'test-a', studentName: '【テスト】生徒A', subject: '英語', meetUrl: 'https://meet.example.invalid/x' }, { id: 'of', date: '2026-09-15', start: '18:00', min: 60, status: 'offered', studentId: 'test-b', studentName: '【テスト】生徒B', subject: '数学' }, { id: 'dn', date: '2026-09-15', start: '15:00', min: 60, status: 'booked', done: true, studentId: 'test-b', studentName: '【テスト】生徒B', subject: '数学' }],
-    teacherOff: [{ id: 'o1', date: '2026-09-15', start: '12:00', end: '13:00', note: '通院' }], blocked: [{ id: 'b1', studentId: 'test-a', studentName: '【テスト】生徒A', date: '2026-09-15', start: '', end: '', note: '部活' }],
-    wishes: [{ id: 'w1', studentId: 'test-b', studentName: '【テスト】生徒B', date: '2026-09-15', start: '19:00', end: '21:00', kind: 'range' }], allEvents: [{ id: 'e1', studentId: 'test-a', studentName: '【テスト】生徒A', date: '2026-09-15', dateTo: '2026-09-15', title: '中間テスト', kind: 'test' }],
-    lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], meetings: [] } }); await flush();
-  ui.click('calday', { 'data-date': '2026-09-15' });
-  const html = ui.html();
-  assert.match(html, /<h3[^>]*>9月15日（火）の予定<\/h3><button class="btn-primary"[^>]*data-action="sdayadd"[^>]*>＋ 予定を追加<\/button><\/div><div class="daylist">/);
-  assert.match(html, /<span class="tag gray">先生の休み<\/span><span class="time">12:00〜13:00<\/span><span class="who"><span class="small muted">通院<\/span><\/span><span class="acts"><button class="btn-quiet btn-sm" data-action="tdeloff" data-ids="o1">削除<\/button>/);
-  assert.match(html, /<span class="tag coral">重要な予定<\/span>[^]*?<a class="nm" href="#s=test-a"[^>]*><strong>【テスト】生徒A<\/strong><\/a> 中間テスト[^]*?data-action="delevent" data-id="e1" data-sid="test-a"/);
-  assert.match(html, /<span class="tag gray">実施済<\/span><a class="lesson-link" href="#lesson\?student=test-b&amp;slot=dn"[^>]*><span class="time">15:00〜16:00<\/span><span class="who"><a class="nm" href="#s=test-b"[^>]*><strong>【テスト】生徒B<\/strong><\/a> 数学<\/span><\/a><span class="acts"><button class="btn-quiet btn-sm" data-action="toggledone" data-id="dn" data-done="0" data-sid="test-b">未実施に戻す<\/button>/);
-  assert.match(html, /<span class="tag green">確定<\/span><a class="lesson-link" href="#lesson\?student=test-a&amp;slot=bk"[^>]*><span class="time">17:00〜18:00<\/span>[^]*?<span class="acts"><a class="btn-ghost btn-sm"[^>]*>Meet<\/a><button class="btn-quiet btn-sm" data-action="toggledone" data-id="bk" data-done="1" data-sid="test-a">実施済にする<\/button><button class="btn-quiet btn-sm" data-action="unbook" data-id="bk" data-name="【テスト】生徒A" data-when="9\/15\(火\) 17:00" data-sid="test-a">解除<\/button>/);
-  assert.match(html, /<span class="tag amber">案内<\/span><span class="time">18:00〜19:00<\/span>[^]*?data-action="delslot" data-id="of" data-sid="test-b">取り下げ<\/button>/);
-  assert.match(html, /<span class="tag gray">授業不可<\/span><span class="time">終日<\/span><span class="who"><a class="nm" href="#s=test-a"[^>]*><strong>【テスト】生徒A<\/strong><\/a> 部活<\/span><span class="acts"><button class="btn-quiet btn-sm" data-action="sdelblock" data-id="b1" data-sid="test-a">解除<\/button>/);
-  assert.match(html, /<span class="tag green">授業可<\/span><span class="time">19:00〜21:00<\/span>[^]*?data-action="usewish"[^>]*data-sid="test-b"[^>]*>この希望で案内<\/button><button class="btn-quiet btn-sm" data-action="delwish" data-id="w1" data-sid="test-b">削除<\/button>/);
-  const cardHtml = html.slice(html.indexOf('<h2>予定の編集</h2>'), html.indexOf('<div class="head">')); assert.doesNotMatch(cardHtml, /class="line"|授業ページで案内|data-action="calendar-add"/, 'the old home lists are gone from the card');
-  // ＋ → 授業を案内 (student select, prefilled date) / 先生の休みを登録 (inline form)
-  ui.click('sdayadd'); assert.match(ui.html(), /data-action="sdayadd"[^>]*aria-expanded="true">閉じる<\/button>/, 'the add button becomes 閉じる while open'); assert.match(ui.html(), /<h3[^>]*>手動で予定入力<\/h3><div class="row"[^>]*><button class="btn-quiet btn-sm" data-action="dayoffer" data-date="2026-09-15" aria-expanded="false">授業を案内<\/button><button class="btn-quiet btn-sm" data-action="homeoff" data-date="2026-09-15" aria-expanded="false">先生の休みを登録<\/button><\/div>/);
-  ui.click('dayoffer', { 'data-date': '2026-09-15' }); assert.match(ui.html(), /<h4[^>]*>授業を案内する<\/h4>/); assert.ok(ui.el('f-student'), 'the home form lets the teacher pick the student'); assert.equal(ui.el('f-date').value, '2026-09-15'); assert.match(ui.html(), /<option value="test-b">【テスト】生徒B<\/option>/);
-  ui.click('homeoff', { 'data-date': '2026-09-15' }); assert.ok(ui.el('ho-start')); assert.equal(ui.el('f-student'), undefined, 'the two manual forms are exclusive'); assert.match(ui.html(), /data-action="homeoff" data-date="2026-09-15" aria-expanded="true"/);
-  ui.input('ho-note', '学会'); ui.click('homeoffsave', { 'data-date': '2026-09-15' });
-  const req = ui.requests.at(-1).body; assert.equal(req.op, 'addOff'); assert.equal(req.date, '2026-09-15'); assert.equal(req.note, '学会'); assert.equal(req.start, '');
-  // teacher actions send the student id taken from the row, not from a student page
-  ui.requests.at(-1).reply({ ok: true, dash: { today: '2026-09-08', students: [], slots: [{ id: 'bk', date: '2026-09-15', start: '17:00', min: 60, status: 'booked', studentId: 'test-a', studentName: '【テスト】生徒A', subject: '英語' }], teacherOff: [], lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], meetings: [] } }); await flush();
-  ui.click('toggledone', { 'data-id': 'bk' }); const td = ui.requests.at(-1).body; assert.equal(td.op, 'toggleDone'); assert.equal(td.slotId, 'bk'); assert.equal(td.studentId, 'test-a'); assert.equal(td.done, true);
-});
 
 test('past months stay reachable for a year and past days keep their lessons and 授業不可 marks', async () => {
   const c = card({ lessons: [{ id: 'old', date: '2026-04-10', start: '17:00', min: 60, status: 'booked', done: true, subject: '英語', kind: '' }], blocked: [{ id: 'b0', date: '2026-04-11', start: '', end: '', note: '' }], teacherOff: [{ id: 't0', date: '2026-04-12', start: '12:00', end: '13:00', note: '' }], wishes: [{ id: 'w0', date: '2026-04-13', start: '16:00', end: '18:00', kind: 'range' }] });
