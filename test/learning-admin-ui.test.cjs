@@ -261,7 +261,7 @@ test('planning summary hides controls until details opens and retains editing in
  assert.ok(!ui.html().includes('data-action="pe-open"'));
  assert.ok(!ui.html().includes('id="plan-dialog"'));
  ui.click('plan-consent',{'data-line':'test-plan'});
- assert.ok(ui.html().includes('open><summary>その他の操作</summary>'));
+ assert.ok(!ui.html().includes('open><summary>その他の操作</summary>'));
  assert.ok(ui.html().includes('open><summary>LINE・電話などで受けた承諾を記録</summary>'));
  ui.click('plan-close');
  ui.click('plan-detail',{'data-line':'test-plan'});
@@ -270,7 +270,7 @@ test('planning summary hides controls until details opens and retains editing in
  assert.ok(ui.html().includes('class="btn-primary" data-action="pe-open"'));
  assert.ok(ui.html().includes('<summary>その他の操作</summary>'));
  assert.ok(!ui.html().includes('data-action="po-open"'));
- assert.ok(ui.html().includes('data-action="pl-approve"'));
+ assert.ok(!ui.html().includes('data-action="pl-approve"'));
  ui.click('pe-open',{'data-line':'test-plan'});
  assert.ok(ui.html().includes('id="plan-editor"'));
  assert.ok(ui.html().includes('<summary>授業内容の内訳（任意）</summary>'));
