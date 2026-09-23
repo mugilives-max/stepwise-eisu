@@ -12,13 +12,13 @@ async function ready(extra = {}) {
   ui.requests[0].reply({admin:data(extra)}); await flush(); return ui;
 }
 function calendar(html) { return html.slice(html.indexOf('<div class="card cal">'), html.indexOf('<h2>9/', html.indexOf('<div class="card cal">'))); }
-function dayDetails(html) { return html.slice(html.indexOf('の授業 '), html.indexOf('<h2>生徒からの希望日程')); }
+function dayDetails(html) { return html.slice(html.indexOf('の授業 '), html.indexOf('id="lesson-attention"')); }
 
 test('one unfolded home-style month calendar replaces the weekly board at the top', async () => {
   const ui = await ready(); const html = ui.html();
   assert.equal((html.match(/class="card cal"/g)||[]).length, 1);
   assert.doesNotMatch(html, /class="schedule-board"|class="board-scroll"|data-board-time|月間予定表・選択日の詳細|data-action="board-new"/);
-  assert.ok(html.indexOf('class="card cal"') < html.indexOf('<h2>生徒からの希望日程'));
+  assert.ok(html.indexOf('class="card cal"') < html.indexOf('id="lesson-attention"'));
   assert.ok(html.indexOf('class="card cal"') < html.indexOf('<details>'));
   assert.match(html, /class="calday[^\"]*today[^\"]*sel" data-action="calday" data-date="2026-09-23"/);
   assert.equal(ui.requests.length, 1);
@@ -89,7 +89,7 @@ test('attention list selects missing completed records and cancellation requests
   assert.match(section, /4件/); assert.match(section, /記録を再開/); assert.match(section, /【テスト】都合変更/);
   assert.equal((section.match(/class="line"/g)||[]).length,4);
   assert.doesNotMatch(section, /slot=recorded|slot=upcoming/);
-  assert.ok(ui.html().indexOf('承認待ちの案内') < ui.html().indexOf('id="lesson-attention"'));
+  assert.ok(ui.html().indexOf('id="lesson-attention"') < ui.html().indexOf('承認待ちの案内'));
   ui.click('cancelkeep',{'data-id':'cancel'});
   assert.equal(ui.requests.at(-1).body.op,'resolveCancel');
   assert.equal(ui.requests.at(-1).body.slotId,'cancel');
