@@ -21,11 +21,11 @@ test('board renders ordinary hours, escapes labels and explicitly surfaces off-h
 });
 async function ready(){const ui=createUI('admin',{hash:'#lessons'});ui.requests[0].reply({admin:{today:date,students:[{id:'a',active:true,name:'【テスト】A',deliveryMode:'in_person'}],slots:[],blocked:[],teacherOff:[],wishes:[],events:[],plans:[]}});await flush();return ui;}
 test('calendar composer validates the default hours before sending and preserves fields across failed writes',async()=>{
- const ui=await ready();assert.equal(ui.el('f-date'),undefined);ui.click('board-new');ui.change('f-student','a');ui.change('f-subject','英語');ui.input('f-start','21:30');ui.change('f-min','60');ui.click('offerslot');assert.equal(ui.requests.length,1);
+ const ui=await ready();assert.equal(ui.el('f-date'),undefined);ui.click('calendar-add');ui.change('f-student','a');ui.change('f-subject','英語');ui.input('f-start','21:30');ui.change('f-min','60');ui.click('offerslot');assert.equal(ui.requests.length,1);
  ui.input('f-start','21:00');ui.click('offerslot');assert.equal(ui.requests.length,2);assert.equal(ui.requests[1].body.start,'21:00');assert.equal(ui.requests[1].body.deliveryMode,'in_person');
  ui.requests[1].fail();await flush();assert.equal(ui.el('f-start').value,'21:00');assert.match(ui.html(),/入力を保持/);
 });
-test('calendar navigation does not render the removed preview or global restriction lists',async()=>{const ui=await ready();assert.ok(!ui.html().includes('先生の休み(先生が授業できない日)'));assert.match(ui.html(),/先生の授業不可時間を登録/);ui.click('board-next');assert.equal(ui.el('board-date').value,'2026-09-17');});
+test('month navigation does not render the weekly board or removed global restriction lists',async()=>{const ui=await ready();assert.ok(!ui.html().includes('先生の休み(先生が授業できない日)'));assert.match(ui.html(),/先生の授業不可時間を登録/);assert.doesNotMatch(ui.html(),/class="schedule-board"|id="board-date"/);ui.click('calnext');assert.match(ui.html(),/class="callabel">2026年10月/);});
 
 test('overlap columns remain distinct across chains, triples and adjacent lessons',()=>{
  const board=require('../assets/schedule-board.js');

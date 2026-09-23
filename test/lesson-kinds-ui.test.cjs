@@ -6,7 +6,7 @@ function admin(extra = {}) { return { today: '2026-09-08', lessonKinds: kinds, s
 async function lessons(extra) { const ui = createUI('admin', { hash: '#lessons' }); ui.requests[0].reply({ admin: admin(extra) }); await flush(); return ui; }
 
 test('the offer form requires a kind (default 通常, inactive kinds hidden) and sends it with the offer', async () => {
-  const ui = await lessons(); ui.click('board-new');
+  const ui = await lessons(); ui.click('calendar-add');
   assert.match(ui.html(), /<label for="f-kind">種類（必須）<\/label><select id="f-kind" required><option value="通常" selected>通常<\/option><option value="演習">演習<\/option><\/select>/);
   assert.doesNotMatch(ui.html(), /<option value="講習"/);
   ui.change('f-student', 'a'); ui.change('f-subject', '英語'); ui.change('f-kind', '演習'); ui.input('f-start', '17:00'); ui.change('f-min', '60'); ui.click('offerslot');
@@ -41,7 +41,9 @@ test('students see the kind next to the subject and plan labels stay consistent'
 test('the admin plan card lists lines with status, opens one editor at a time, and sends line operations with the line id and revision', async () => {
   const { adminReady, card, line } = require('./helpers/operations-ui-harness.cjs');
   const lines = [line({ id: 'p1', status: 'proposed', revision: 3, comment: '既存のコメント' }), line({ id: 'a1', subject: '数学', kind: '演習', status: 'approved', approvedCount: 3, count: 4, startDate: '2026-09-22', endDate: '2026-10-05', period: '2026/9/22〜10/5', month: '', lessonMin: 60, lessonFee: 3000, approvedVia: 'LINE', consentDate: '2026-09-05' }), line({ id: 'd1', subject: '国語', status: 'draft', revision: 1 })];
-  const ui = await adminReady(card({ plan: { lines, defaultRows: [{ subject: '英語', kind: '', count: 4 }] } }), 'billing');
+  // Addon defaults use the current day; keep this fixture stable after September 22.
+  const ui = createUI('admin', {hash:'#s=test-a&tab=billing', now:'2026-09-22T12:00:00+09:00'});
+  ui.requests[0].reply({data:card({ plan: { lines, defaultRows: [{ subject: '英語', kind: '', count: 4 }] } })}); await flush();
   assert.match(ui.html(), /<div class="plan-grid"><div class="plan-gh">科目<\/div><div class="plan-gh">種類<\/div><div class="plan-gh">回数<\/div><div class="plan-gh">期間<\/div><div class="plan-gh">時間<\/div><div class="plan-gh">1回の料金<\/div><div class="plan-gr" data-line="p1"><div class="plan-gc">英語<\/div><div class="plan-gc">通常<\/div><div class="plan-gc">4回<\/div><div class="plan-gc">9月<\/div><div class="plan-gc">90分<\/div><div class="plan-gc">3,000円<\/div><\/div><div class="plan-gs" data-line="p1">[^]*?<button class="btn-quiet btn-sm" data-action="pe-open" data-line="p1"[^>]*>✎<\/button><button class="btn-quiet btn-sm" data-action="plancopy" data-line="p1">/);
   assert.match(ui.html(), /<div class="plan-gr" data-line="a1"><div class="plan-gc">数学<\/div><div class="plan-gc">演習<\/div><div class="plan-gc">4回<br><span class="small muted">承認 3回<\/span><\/div><div class="plan-gc">9\/22〜<wbr>10\/5<\/div><div class="plan-gc">60分<\/div><div class="plan-gc">3,000円<\/div><\/div>/); assert.match(ui.html(), /承諾: 2026-09-05・LINE/);
   assert.doesNotMatch(ui.html(), /class="tag (amber|gray)">(承認待ち|下書き)</); assert.doesNotMatch(ui.html(), /2026年9月|2026\/9\/22/); assert.match(ui.html(), /<div class="plan-gs" data-line="d1"><button[^>]*data-action="po-open"[^>]*>内容の内訳を設定（任意）<\/button><div class="row"[^>]*><button class="btn-primary btn-sm" data-action="pl-send" data-line="d1" data-rev="1">送信<\/button><button class="btn-quiet btn-sm" data-action="pe-open" data-line="d1"/); assert.doesNotMatch(ui.html(), /案内を送信<\/button>|data-action="pl-delete"/);

@@ -1174,20 +1174,19 @@
           return h + "</div>";
         }
 
-        var boardDate = '', boardStudent = '', boardFull = false, boardOpen = false, boardDetail = null;
+        // The weekly board is no longer displayed. Keep its offer dialog and validation helpers.
+        var boardOpen = false;
         function boardOpenOffer(date,start,min) {
           if(busy)return;
           if(date<A.today){toast('過去の授業は案内できません');return;}
-          offerDraft=Object.assign({},offerDraft||{},{date:date,start:start,min:Math.min(120,min,(boardFull?1440:1320)-window.StepwiseBoard.minutes(start)),studentId:boardStudent||(offerDraft||{}).studentId});
-          boardDate=date;boardOpen=true;boardDetail=null;render();
+          offerDraft=Object.assign({},offerDraft||{},{date:date,start:start,min:Math.min(120,min,1320-window.StepwiseBoard.minutes(start))});
+          selDate=date;selManual=true;var selectedMonth=date.split('-');calY=+selectedMonth[0];calM=+selectedMonth[1]-1;
+          boardOpen=true;render();
           var el=document.getElementById('board-editor');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});
         }
-        function boardHTML(){
-          var h=window.StepwiseBoard.render(A,{date:boardDate||A.today,full:boardFull,studentId:boardStudent});
-          if(boardOpen)h+='<dialog id="board-editor" class="board-editor" aria-label="授業の案内"><div class="row between"><h2>授業の案内</h2><button data-action="board-close" class="btn-quiet">閉じる</button></div>'+offerForm(A.today,A.students.filter(function(s){return s.active;}),null)+'</dialog>';
-          if(boardDetail){var items=boardDetail.kind==='slot'?A.slots:boardDetail.kind==='off'?A.teacherOff:A.blocked,item=(items||[]).filter(function(s){return String(s.id)===boardDetail.id;})[0];
-            if(item)h+='<section class="card" id="board-detail"><h2>'+esc(item.date)+' '+esc(item.start||'終日')+'</h2>'+(boardDetail.kind==='slot'?lessonRow(item,true):'<p>'+esc(item.studentName||'先生')+'・授業不可 '+esc(item.end||'')+'</p><p>'+esc(item.note||'メモなし')+'</p><button class="btn-quiet" data-action="'+(boardDetail.kind==='off'?'tdeloff':'tdelblock')+'" data-ids="'+esc(item.id)+'">解除する</button>')+' <button data-action="board-detailclose" class="btn-quiet">閉じる</button></section>';
-          }return h;
+        function lessonOfferDialogHTML(){
+          if(!boardOpen)return '';
+          return '<dialog id="board-editor" class="board-editor" aria-label="授業の案内"><div class="row between"><h2>授業の案内</h2><button data-action="board-close" class="btn-quiet">閉じる</button></div>'+offerForm(A.today,A.students.filter(function(s){return s.active;}),null)+'</dialog>';
         }
         function renderLessons() {
           renderNav();
@@ -1199,34 +1198,20 @@
           var html = '<div class="head"><div><h1>授業の案内と予定</h1><p class="sub">生徒に授業を案内し、承認されると確定します(カレンダー登録・Meet発行・通知は自動)</p></div>' +
             '<div class="row"><button class="btn-quiet btn-sm" data-action="copyweek">今後7日をコピー</button><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
-          // 案内フォーム
-          var byDate = {}, dates = [];
-          upcoming.forEach(function (s) { if (!byDate[s.date]) { byDate[s.date] = []; dates.push(s.date); } byDate[s.date].push(s); });
-          if (selDate === null || (!selManual && !byDate[selDate])) {
-            selDate = dates.length ? dates[0] : today;
+          // ホームと同じ月間予定表。過去・実施済みも含め、選んだ日を再描画時に戻さない。
+          var calendarSlots = slots.filter(function (s) { return s.status === "booked" || s.status === "offered"; }), byDate = {};
+          calendarSlots.forEach(function (s) { if (!byDate[s.date]) byDate[s.date] = []; byDate[s.date].push(s); });
+          if (selDate === null) {
+            selDate = today;
             var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
           if (!offerDraft) offerDraft = { date: (selDate && selDate >= today) ? selDate : today };
           else if (!offerDraft.date) offerDraft.date = today;
-          html += boardHTML();
-
-          // 生徒からの希望日程
-          var wl = A.wishes || [];
-          html += '<h2>生徒からの希望日程 <span class="cnt">' + wl.length + '件</span></h2>';
-          html += wl.length ? '<div class="card">' + wl.map(function (x) { return wishRow(x, true); }).join("") + '<div class="note">「この希望で案内」を押すと上のフォームに入ります。案内を送ると希望は消えます。</div></div>' : '<div class="empty">希望はありません(生徒は予定ページから送れます)</div>';
-
-          // 承認待ち
-          var offered = upcoming.filter(function (s) { return s.status === "offered"; });
-          html += '<h2>承認待ちの案内 <span class="cnt">' + offered.length + '件</span></h2>';
-          html += offered.length ? '<div class="card">' + offered.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">返事待ちの案内はありません</div>';
-          html += expiredCard(slots.filter(function (s) { return offerEnded(s, today); }).slice().reverse(), true);
-
-          // 予定表
-          html += '<details><summary>月間予定表・選択日の詳細</summary>';
+          html += '<h2>全体の予定表</h2>';
           // 同じ共通部品。授業不可(生徒NG)は案内フォームで選んでいる生徒の分だけ出す(全員分を重ねると読めないため)
           var pickSid = offerDraft && offerDraft.studentId ? String(offerDraft.studentId) : "";
           var linfo = window.StepwiseCalendar.buildInfo({
-            lessons: upcoming.filter(function (s2) { return s2.status === "booked" || s2.status === "offered"; }).map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : "mine", cls: s2.status !== "offered" && s2.req ? "rq" : "" }; }),
+            lessons: calendarSlots.map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : (s2.done ? "done" : (s2.date < today ? "past" : "mine")), cls: s2.status !== "offered" && s2.req ? "rq" : (s2.done ? "dn" : "") }; }),
             events: (A.events || []).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
             blocked: pickSid ? (A.blocked || []).filter(function (b2) { return sameId(b2.studentId, pickSid); }) : [],
             teacherOff: A.teacherOff || [],
@@ -1236,7 +1221,7 @@
           html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + '</h2>';
           var dayRows = byDate[selDate] || [];
-          html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。上のフォームから案内できます(日付は選択済み)。</div>';
+          html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。' + (selDate >= today ? '「＋」からこの日の授業を案内できます。' : '') + '</div>';
           var dayWish = (A.wishes || []).filter(function (x) { return x.date === selDate; });
           if (dayWish.length) html += '<div class="card" style="margin-top:10px">' + dayWish.map(function (x) { return wishRow(x, true); }).join("") + '</div>';
           var dayEv = (A.events || []).filter(function (e) { return e.date <= selDate && selDate <= e.dateTo; });
@@ -1248,8 +1233,20 @@
             html += '<div class="card" style="margin-top:10px">' + dayNg.map(function (b) { return '<div class="line"><span class="w"><strong>' + esc(b.studentName) + '</strong> <span class="tag gray">授業できない</span>' + ngWhen(b) + ' <span class="small muted">' + esc(b.note || "") + '</span></span><button class="btn-quiet btn-sm" data-action="tdelblock" data-id="' + esc(b.id) + '">削除</button></div>'; }).join("") + '</div>';
           }
 
+          html += lessonOfferDialogHTML();
+
+          // 生徒からの希望日程
+          var wl = A.wishes || [];
+          html += '<h2>生徒からの希望日程 <span class="cnt">' + wl.length + '件</span></h2>';
+          html += wl.length ? '<div class="card">' + wl.map(function (x) { return wishRow(x, true); }).join("") + '<div class="note">「この希望で案内」を押すと案内フォームが開きます。案内を送ると希望は消えます。</div></div>' : '<div class="empty">希望はありません(生徒は予定ページから送れます)</div>';
+
+          // 承認待ち
+          var offered = upcoming.filter(function (s) { return s.status === "offered"; });
+          html += '<h2>承認待ちの案内 <span class="cnt">' + offered.length + '件</span></h2>';
+          html += offered.length ? '<div class="card">' + offered.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">返事待ちの案内はありません</div>';
+          html += expiredCard(slots.filter(function (s) { return offerEnded(s, today); }).slice().reverse(), true);
+
           // 今後の予定
-          html += '</details>';
           var next14 = upcoming.filter(function (s) { return s.status === "booked" && s.date < addDaysStr(today, 14); });
           html += '<details><summary>今後2週間の授業（' + next14.length + '件）</summary>';
           html += next14.length ? '<div class="card">' + next14.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">確定した授業はありません</div>';
@@ -2565,14 +2562,7 @@
                 D.lessonsToday = strip(D.lessonsToday); D.lessonsWeek = strip(D.lessonsWeek);
               });
               break;
-            case 'board-prev': boardDate=addDaysStr(boardDate||A.today,-7);render();break;
-            case 'board-next': boardDate=addDaysStr(boardDate||A.today,7);render();break;
-            case 'board-today': boardDate=A.today;render();break;
-            case 'board-hours': boardFull=!boardFull;render();break;
-            case 'board-new': boardOpenOffer(boardDate||A.today,'17:00',60);break;
             case 'board-close': if(!busy){boardOpen=false;render();}break;
-            case 'board-detail': boardDetail={kind:btn.getAttribute('data-kind'),id:btn.getAttribute('data-id')};render();var detailEl=document.getElementById('board-detail');if(detailEl)detailEl.scrollIntoView({block:'center',behavior:'smooth'});break;
-            case 'board-detailclose': boardDetail=null;render();break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } render(); break;
             case "calendar-add":
@@ -2601,8 +2591,9 @@
               if(btn.getAttribute('data-mode'))uw.deliveryMode=btn.getAttribute('data-mode');
               if(+btn.getAttribute('data-duration'))uw.min=+btn.getAttribute('data-duration');
               uw.subject = lsub;
-              offerDraft = uw; selDate = uw.date; selManual = true; boardOpen = true; boardDate = uw.date;
-              if (route().page === "student") { sDayAddOpen = true; sOfferOpen = true; sBlockOpen = false; sInputMode = 'manual'; var uwp = uw.date.split("-"); calY = +uwp[0]; calM = +uwp[1] - 1; }
+              offerDraft = uw; selDate = uw.date; selManual = true; boardOpen = true;
+              var uwp = uw.date.split("-"); calY = +uwp[0]; calM = +uwp[1] - 1;
+              if (route().page === "student") { sDayAddOpen = true; sOfferOpen = true; sBlockOpen = false; sInputMode = 'manual'; }
               render();
               var fe = document.getElementById("f-date"); if (fe) fe.scrollIntoView({ behavior: "smooth", block: "center" });
               toast(uwWant ? "希望日時をフォームに入れました。内容を確認して案内してください" : "空き時間 " + uw.window + " のあいだで開始時刻と長さを決めて案内してください");
@@ -2786,9 +2777,7 @@
           render();
         });
 
-        if(window.StepwiseBoard)window.StepwiseBoard.bind(app,boardOpenOffer,document);
         document.addEventListener('cancel',function(ev){if(ev.target.id==='board-editor'){if(busy)ev.preventDefault();else boardOpen=false;}},true);
-        document.addEventListener('change',function(ev){if(ev.target.id==='board-student'){boardStudent=ev.target.value;render();return;}if(ev.target.id==='board-date'){boardDate=ev.target.value||A.today;render();}});
         document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|delivery|outside)$/.test(el.id))return;
           offerDraft=Object.assign({},offerDraft||{},{studentId:val('f-student'),date:val('f-date'),start:val('f-start'),min:val('f-min'),repeat:val('f-rep'),subject:val('f-subject'),deliveryMode:val('f-delivery'),outside:!!(document.getElementById('f-outside')||{}).checked});
           var startField=document.getElementById('f-start');if(startField){startField.min=offerDraft.outside?'00:00':'07:00';startField.max=offerDraft.outside?'23:59':'22:00';}
