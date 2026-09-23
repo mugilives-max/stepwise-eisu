@@ -398,7 +398,7 @@
         function previewRoute(body) {
           if (!PREVIEW || !body) return null;
           var a = String(body.action || ''), tok = lsGet('sw_admt') || '';
-          function go(view) { return fetch(API, { method: 'POST', body: JSON.stringify({ action: 'preview', token: tok, studentId: PREVIEW.studentId, view: view }) }).then(function (r) { return r.json(); }); }
+          function go(view) { return fetch(WRITE_TO_WORKER && READ_API ? READ_API : API, { method: 'POST', body: JSON.stringify({ action: 'preview', token: tok, studentId: PREVIEW.studentId, view: view }) }).then(function (r) { return r.json(); }); }
           if (a === 'state' || a === 'familyStudentState') return go('student');
           if (a === 'familyData') return go('parent');
           if (a === 'familyHome') return go('home');
@@ -1371,6 +1371,7 @@
             h += '<p class="note">共用端末では利用後にログアウトしてください。</p><p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
             app.innerHTML = h; return;
           }
+          if (PREVIEW && F.step === 'login') { app.innerHTML = previewBanner(true) + '<div class="card">' + (F.busy ? '<p role="status">保護者ページを読み込んでいます…</p>' : '<p role="alert">' + esc(F.error || '保護者ページを読み込めませんでした。') + '</p><button class="btn-primary" data-action="fa-home">再試行</button>') + '</div>'; return; }
           if (familyToken() && F.step === "login") { app.innerHTML = h + '<div class="card"><button class="btn-primary" data-action="fa-home"' + dis + '>家族ページを開く</button> <button class="btn-quiet" data-action="fa-logout"' + dis + '>ログアウト</button></div>'; return; }
           var step = F.step, newPass = step === "setPassword" || step === "reset";
           var titles = { login: 'ログイン', register: '保護者ページで使うメールアドレスを入力してください', requestReset: 'パスワードを忘れた方', resend: '確認メールを再送', setPassword: 'パスワードを設定して登録完了', reset: '新しいパスワード', emailChange: 'メールアドレスを変更' };

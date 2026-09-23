@@ -357,3 +357,12 @@ test('the admin student header links to the read-only student and parent preview
   const ui = createUI('admin', { hash: '#s=test-a&tab=settings' }); ui.requests[0].reply({ ok: true, data: settingsCard() }); await flush();
   assert.match(ui.html(), /<a class="btn-quiet btn-sm" href="\/yoyaku\/\?preview=student:test-a#home" target="_blank" rel="noopener"[^>]*>生徒ページを見る<\/a><a class="btn-quiet btn-sm" href="\/yoyaku\/\?preview=parent:test-a#family\/home" target="_blank" rel="noopener"[^>]*>保護者ページを見る<\/a>/);
 });
+
+test('student settings requests registration metadata while group overview stays lightweight',async()=>{
+ const ui=createUI('admin',{hash:'#s=test-a&tab=settings'});
+ ui.requests[0].reply({ok:true,data:settingsCard()});await flush();
+ const request=ui.requests.findLast(r=>r.body.op==='familyList');assert.equal(request.body.view,'registration');
+ assert.doesNotMatch(ui.html(),/保護者アカウントはまだありません/);
+ request.reply(familyList({families:[{id:'g',status:'active',configured:true,email:'parent@example.invalid',children:[{studentId:'test-a'}]}]}));await flush();
+ assert.match(ui.html(),/登録済み/);assert.doesNotMatch(ui.html(),/data-action="family-student-invite"/);
+});

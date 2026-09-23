@@ -32,6 +32,7 @@ test('teacher parent preview shows the report but never mounts or claims family 
   assert.doesNotMatch(ui.html(),/data-parent-record|data-read-label|開くと既読になります|状態を取得できませんでした/);
   assert.equal(mounts.length,0);
   assert.ok(ui.requests.every(r=>r.body.action==='preview'),'no family write/read request in teacher preview');
+  assert.ok(ui.requests.every(r=>r.url==='https://stepwise-api.stepwise-edu.workers.dev'),'preview uses current API');
 });
 test('real family page retains read receipts with the matching child and family session',async()=>{
   const {ui,mounts}=await ready(false);
@@ -41,4 +42,12 @@ test('real family page retains read receipts with the matching child and family 
   const request=mounts.at(-1).call('recordRead',{recordId:'report-a',revision:1});
   assert.deepEqual(JSON.parse(JSON.stringify(ui.requests.at(-1).body)),{recordId:'report-a',revision:1,ftoken:'synthetic-family-session',studentId:'test-a',action:'learningService',op:'recordRead'});
   ui.requests.at(-1).reply({ok:true});await request;
+});
+
+test('parent preview displays API errors and permits retry without a family login',async()=>{
+ const ui=createUI('student',{hash:'#family/home',search:'?preview=parent:test-a'});
+ assert.match(ui.html(),/保護者ページを読み込んでいます/);
+ ui.requests[0].reply({error:'先生アカウントでログインし直してください',badAuth:true});await flush();
+ assert.match(ui.html(),/先生アカウントでログインし直してください/);assert.doesNotMatch(ui.html(),/家族ページを開く/);
+ ui.click('fa-home');assert.equal(ui.requests.length,2);assert.equal(ui.requests[1].body.action,'preview');
 });
