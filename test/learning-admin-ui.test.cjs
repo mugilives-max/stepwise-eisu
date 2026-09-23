@@ -237,7 +237,7 @@ test('dedicated planning page opens the proposal editor and refreshes saved defa
   ui.navigate('#plans?student=test-a');
   assert.equal(ui.requests.at(-1).body.section, 'billing');
   ui.requests.at(-1).reply({data:card({section:'billing',plan:{lines:[],defaultRows:[{subject:'英語',count:4}]}})}); await flush();
-  assert.ok(ui.html().includes('授業計画の承認状況'));
+  assert.ok(ui.html().includes('現在の計画'));
   assert.ok(!ui.html().includes('請求・入金管理'));
   ui.click('pe-new'); assert.ok(ui.html().includes('id="plan-editor"'));
   ui.click('pe-cancel');
@@ -246,4 +246,22 @@ test('dedicated planning page opens the proposal editor and refreshes saved defa
   assert.equal(ui.requests.at(-1).body.section, 'billing');
   ui.requests.at(-1).reply({data:card({section:'billing',name:'【テスト】更新済み'})}); await flush();
   assert.ok(ui.html().includes('【テスト】更新済みさんの授業計画'));
+});
+
+
+test('planning summary hides controls until details opens and retains editing in the dialog', async()=>{
+ const ui=createUI('admin',{hash:'#plans?student=test-a'});
+ const line={id:'test-plan',subject:'英語',kind:'通常',count:4,lessonMin:90,rate30:700,startDate:'2026-09-01',endDate:'2026-09-30',status:'proposed',revision:1};
+ ui.requests[0].reply({data:card({section:'billing',plan:{lines:[line],defaultRows:[]}})});await flush();
+ assert.ok(ui.html().includes('承認待ち'));
+ assert.ok(!ui.html().includes('data-action="pe-open"'));
+ assert.ok(!ui.html().includes('id="plan-dialog"'));
+ ui.click('plan-detail',{'data-line':'test-plan'});
+ assert.ok(ui.html().includes('id="plan-dialog"'));
+ assert.ok(ui.html().includes('data-action="plancopy"'));
+ assert.ok(ui.html().includes('data-action="pl-approve"'));
+ ui.click('pe-open',{'data-line':'test-plan'});
+ assert.ok(ui.html().includes('id="plan-editor"'));
+ ui.click('plan-close');
+ assert.ok(!ui.html().includes('id="plan-dialog"'));
 });

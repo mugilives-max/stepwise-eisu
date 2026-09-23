@@ -1509,6 +1509,7 @@
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
+          var planDialog=document.getElementById('plan-dialog');if(planDialog){planDialog.oncancel=function(e){e.preventDefault();if(!busy){planDetail=null;delete planEdits[cur.id];render();}};if(planDialog.showModal&&!planDialog.open)planDialog.showModal();}
           var aiDialog=document.getElementById('ai-schedule');if(aiDialog&&aiDialog.showModal&&!aiDialog.open)aiDialog.showModal();
           var boardDialog=document.getElementById('board-editor');if(boardDialog&&boardDialog.showModal&&!boardDialog.open)boardDialog.showModal();
           if (window.StepwiseServices) {
@@ -2298,7 +2299,32 @@
           });
           return h + '</div>';
         }
+        var planDetail = null;
+        function renderPlanningList(s) {
+          var lines=planLines(s), f=planEdits[s.id], dis=busy || s.active===false, td=s.today || today();
+          var labels={draft:'下書き',proposed:'承認待ち',approved:'承認済み',declined:'見送り'};
+          function table(items) {
+            if(!items.length)return '<p class="empty">計画はありません</p>';
+            return '<div style="overflow-x:auto"><table><thead><tr><th>期間</th><th>科目</th><th>回数・時間</th><th>1回の料金</th><th>状態</th><th></th></tr></thead><tbody>'+items.map(function(l){
+              var fee=l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30);
+              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject)+(l.kind&&l.kind!=='通常'?'・'+esc(l.kind):'')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td><td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td></tr>';
+            }).join('')+'</tbody></table></div>';
+          }
+          var h='<div class="row between" style="margin:18px 0"><h2>現在の計画</h2><button class="btn-primary btn-sm" data-action="pe-new"'+(dis?' disabled':'')+'>＋ 計画を作成</button></div><div class="card">'+table(lines.filter(function(l){return !l.endDate || l.endDate>=td;}))+'</div>';
+          h+='<details style="margin-top:24px"><summary>過去の計画</summary><div class="card">'+table(lines.filter(function(l){return l.endDate && l.endDate<td;}))+'</div></details>';
+          var p=s.plan||{};
+          h += '<details class="add" style="margin-top:10px"><summary>毎月のひな形</summary><div class="form" style="margin-top:10px"><label for="pl-subject">科目</label><select id="pl-subject">' + LESSON_SUBJECTS.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select><label for="pl-kind">種類</label><select id="pl-kind">' + kindOptions("") + '</select><label for="pl-count">回数</label><input type="number" id="pl-count" min="0" max="31" value="4"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="plansave"' + (busy ? " disabled" : "") + '>既定を保存</button></div><p class="note">「既定から下書きを作る」で、その月の案内の下書きをまとめて作れます（時間・料金は種類の標準、なければ基本単価×90分）。0回で既定から外れます。</p>' + ((p.defaultRows || []).length ? '<p class="note">毎月の既定: ' + p.defaultRows.map(function (x) { return esc(x.subject) + '（' + esc(x.kind || '通常') + '）' + esc(x.count) + '回'; }).join("、") + '</p>' : '') + '</details>';
+          if((p.defaultRows||[]).length) h=h.replace('</summary><div class="form"','</summary><button class="btn-quiet btn-sm" data-action="pl-fromdefault" data-ym="'+esc(addMonths(s.month||thisYm(),1))+'">翌月の下書きを作成</button><div class="form"');
+          var selected=planDetail&&planDetail.studentId===s.id?planLineById(s,planDetail.lineId):null;
+          if(selected || f) {
+            h+='<dialog id="plan-dialog" class="board-editor" aria-label="授業計画の詳細"><div class="row between"><h2>'+ (selected?'計画の詳細':'計画を作成')+'</h2><button class="btn-quiet" data-action="plan-close"'+(busy?' disabled':'')+'>閉じる</button></div>';
+            h+=selected?renderPlanGroup(s,labels[selected.status]||'', [selected],f,dis):renderPlanEditor(s,f);
+            h+='</dialog>';
+          }
+          return h;
+        }
         function renderPlanCard(s, proposalOnly) {
+          if(proposalOnly) return renderPlanningList(s);
           var p = s.plan || {}, lines = planLines(s), dis = busy || s.active === false, f = planEdits[s.id];
           var by = function (st) { return lines.filter(function (l) { return l.status === st; }); };
           var h = '<h2>授業計画の作成' + helpButton('plan') + (dis ? '' : '<button class="btn-primary btn-sm" data-action="pe-new">新規作成</button>') + '</h2>' + helpBox('plan', '科目・種類・回数・期間・1回の授業時間と授業料・コメントを1つの「案内」として作り、保護者へ送ります。月をまたぐ期間（定期テスト対策・夏期講習など）も1つの案内にできます。同じ科目・種類で期間が重なる案内は作れません。承認済みの案内に回数を足すときは「＋追加」を使います。') + '<div class="card">';
@@ -2829,7 +2855,9 @@
               render();
               if (sOfferOpen) { var fd = document.getElementById("f-date"); if (fd && fd.scrollIntoView) fd.scrollIntoView({ behavior: "smooth", block: "center" }); }
               break;
-            case "pe-new": planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
+            case "plan-detail": planDetail={studentId:cur.id,lineId:btn.getAttribute("data-line")};delete planEdits[cur.id];render();break;
+            case "plan-close": if(busy)return;planDetail=null;delete planEdits[cur.id];render();break;
+            case "pe-new": planDetail=null;planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
             case "pe-open": { var peL = planLineById(cur, btn.getAttribute("data-line")); if (!peL) return; planEdits[cur.id] = planEditOf(cur, peL); render(); var editor = document.getElementById("plan-editor"); if(editor && editor.scrollIntoView)editor.scrollIntoView({behavior:"smooth",block:"center"}); break; }
             case "pe-addon": { var paP = planLineById(cur, btn.getAttribute("data-line")); if (!paP) return; planEdits[cur.id] = planEditAddon(cur, paP); render(); var pe1 = document.getElementById("plan-editor"); if (pe1 && pe1.scrollIntoView) pe1.scrollIntoView({ behavior: "smooth", block: "center" }); break; }
             case "help-toggle": { var hk = btn.getAttribute("data-help"); helpOpen[hk] = !helpOpen[hk]; render(); break; }
