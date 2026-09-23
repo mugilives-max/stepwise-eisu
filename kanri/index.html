@@ -234,7 +234,7 @@
         // 授業の種類(通常・演習・講習など)。一覧は GAS の lessonKinds(設定ページで管理)。画面上の "" と "通常" は同じ意味
         function lessonKinds() { var data=route().page==='home'?D:A; var ks = ((data && data.lessonKinds) || (A && A.lessonKinds) || []).filter(function (k) { return k.active !== false; }).map(function (k) { return k.name; }); return ks.length ? ks : ["通常"]; }
         function kindOptions(sel) { var cur = sel || "通常", ks = lessonKinds(); if (ks.indexOf(cur) < 0) ks = ks.concat([cur]); return ks.map(function (k) { return '<option value="' + esc(k) + '"' + (k === cur ? " selected" : "") + ">" + esc(k) + "</option>"; }).join(""); }
-        function lessonLabel(s) { if (!s) return ""; var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); }
+        function lessonLabel(s) { if (!s) return ""; var k = String(s.kind || ""); return String(s.subject || "科目未登録") + "（" + (k || "通常") + "）"; }
         var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "化学": "#087e8b", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
         var FALLBACK_COLORS = ["#6b7280", "#4b5563"];
         var D = null;      // ダッシュボード
@@ -762,7 +762,7 @@
         }
         function unrecordedCard(list,withNames,student) {
           if (!list.length) return '';
-          return '<section class="card lc-notice" aria-label="実施状況の確認が必要"><h2>実施状況の確認が必要 <span class="cnt">'+list.length+'件</span></h2><p>前日以前の確定授業で、実施済みの登録がありません。授業記録の保存とは別に確認してください。</p>'+list.map(function(l){return '<div class="line"><span class="t">'+fmtDY(l.date)+' '+esc(l.start)+'</span><span class="w">'+(withNames?esc(l.studentName)+' ':'')+esc(l.subject || '科目未登録')+'</span><button class="btn-primary btn-sm" data-action="toggledone" data-done="1" data-id="'+esc(l.id)+'" data-sid="'+esc(l.studentId || (student || {}).id)+'"'+(busy?' disabled':'')+'>実施にする</button><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(l.studentId || (student || {}).id)+'">予定を確認</a></div>';}).join('')+'</section>';
+          return '<section class="card lc-notice" aria-label="実施状況の確認が必要"><h2>実施状況の確認が必要 <span class="cnt">'+list.length+'件</span></h2><p>前日以前の確定授業で、実施済みの登録がありません。授業記録の保存とは別に確認してください。</p>'+list.map(function(l){return '<div class="line"><span class="t">'+fmtDY(l.date)+' '+esc(l.start)+'</span><span class="w">'+(withNames?esc(l.studentName)+' ':'')+esc(lessonLabel(l))+'</span><button class="btn-primary btn-sm" data-action="toggledone" data-done="1" data-id="'+esc(l.id)+'" data-sid="'+esc(l.studentId || (student || {}).id)+'"'+(busy?' disabled':'')+'>実施にする</button><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(l.studentId || (student || {}).id)+'">予定を確認</a></div>';}).join('')+'</section>';
         }
 
 
@@ -2253,16 +2253,17 @@
           return h;
         }
         // 状態ごとの表(罫線つき)。作成カードには下書き、承認状況カードには送信済み・承認済み・見送りを出す
-        function renderPlanGroup(s, label, gl, f, dis) {
+        function renderPlanGroup(s, label, gl, f, dis, controlsOnly) {
           if (!gl.length) return '';
           var h = '<h3 class="plan-group" style="margin:14px 0 4px;font-size:14px">' + label + ' <span class="small muted" style="font-weight:400">' + gl.length + '件</span></h3>';
           h += '<div class="plan-grid"><div class="plan-gh">科目</div><div class="plan-gh">種類</div><div class="plan-gh">回数</div><div class="plan-gh">期間</div><div class="plan-gh">時間</div><div class="plan-gh">1回の料金</div>';
+          if (controlsOnly) h = '<div>';
           // 追加案内は親の直後に並べる(親が同じ表にいるとき)
           var ordered = [], inGroup = {}; gl.forEach(function (l) { inGroup[l.id] = true; });
           gl.forEach(function (l) { if (!l.parentId || !inGroup[l.parentId]) { ordered.push(l); gl.forEach(function (a) { if (a.parentId === l.id) ordered.push(a); }); } });
           ordered.forEach(function (l) {
             var attrs = ' data-line="' + esc(l.id) + '"', fee = l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * l.lessonMin / 30);
-            h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + (l.parentId ? '<span class="sub">追加</span>' : '') + '</div><div class="plan-gc">' + esc(l.kind || '通常') + '</div><div class="plan-gc">' + (l.parentId ? '＋' : '') + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分</div><div class="plan-gc">' + yen(fee) + '</div></div>';
+            if (!controlsOnly) h += '<div class="plan-gr"' + attrs + '><div class="plan-gc">' + esc(l.subject) + (l.parentId ? '<span class="sub">追加</span>' : '') + '</div><div class="plan-gc">' + esc(l.kind || '通常') + '</div><div class="plan-gc">' + (l.parentId ? '＋' : '') + esc(l.count) + '回' + (l.status === "approved" && l.approvedCount != null && Number(l.approvedCount) !== Number(l.count) ? '<br><span class="small muted">承認 ' + esc(l.approvedCount) + '回</span>' : '') + '</div><div class="plan-gc">' + esc(planPeriodShort(l)).replace('〜', '〜<wbr>') + '</div><div class="plan-gc">' + esc(l.lessonMin) + '分</div><div class="plan-gc">' + yen(fee) + '</div></div>';
             var sub = '';
             if (l.comment) sub += '<div class="small" style="white-space:pre-wrap;margin:2px 0">' + esc(l.comment) + '</div>';
             sub += window.StepwiseReport.outline(l.outline);
@@ -2307,11 +2308,11 @@
         function renderPlanningList(s) {
           var lines=planLines(s), f=planEdits[s.id], dis=busy || s.active===false, td=s.today || today();
           var labels={draft:'下書き',proposed:'承認待ち',approved:'承認済み',declined:'見送り'};
-          function table(items) {
+          function table(items, detail) {
             if(!items.length)return '<p class="empty">計画はありません</p>';
-            return '<div style="overflow-x:auto"><table class="plan-summary"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数・時間</th><th>1回の料金</th><th>状態</th><th></th></tr></thead><tbody>'+items.map(function(l){
+            return '<div style="overflow-x:auto"><table class="plan-summary"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数・時間</th><th>1回の料金</th><th>状態</th>'+(detail?'':'<th></th>')+'</tr></thead><tbody>'+items.map(function(l){
               var fee=l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30);
-              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '通常')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td><td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td></tr>';
+              return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '通常')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td>'+(detail?'':'<td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td>')+'</tr>';
             }).join('')+'</tbody></table></div>';
           }
           var h='<div class="row between" style="margin:18px 0"><h2>現在の計画</h2><button class="btn-primary btn-sm" data-action="pe-new"'+(dis?' disabled':'')+'>＋ 計画を作成</button></div><div class="card">'+table(lines.filter(function(l){return !l.endDate || l.endDate>=td;}))+'</div>';
@@ -2322,7 +2323,7 @@
           var selected=planDetail&&planDetail.studentId===s.id?planLineById(s,planDetail.lineId):null;
           if(selected || f) {
             h+='<dialog id="plan-dialog" class="board-editor" aria-label="授業計画の詳細"><div class="row between"><h2>'+ (selected?'計画の詳細':'計画を作成')+'</h2><button class="btn-quiet" data-action="plan-close"'+(busy?' disabled':'')+'>閉じる</button></div>';
-            h+=selected?renderPlanGroup(s,labels[selected.status]||'', [selected],f,dis):renderPlanEditor(s,f);
+            h+=selected?table([selected],true)+renderPlanGroup(s,labels[selected.status]||'', [selected],f,dis,true):renderPlanEditor(s,f);
             h+='</dialog>';
           }
           return h;
