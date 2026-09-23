@@ -99,6 +99,27 @@
       /* 先生ホームの実装プレビュー。採用時に旧ホームと切り替える。 */
       .home-work { margin-top: 18px; }
       .home-work .home-day { margin: 18px 0; }
+      .home-schedule { display: grid; grid-template-columns: minmax(280px,.85fr) minmax(0,1.15fr); gap: 16px; align-items: start; margin: 18px 0; }
+      .home-schedule > .home-day { min-width: 0; margin: 0; }
+      .home-calendar { min-width: 0; padding: 14px 12px; }
+      .home-calendar-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+      .home-calendar-head h2 { margin: 0; font-size: 16px; }
+      .home-calendar-head h2::after { display: none; }
+      .home-calendar-head .row { gap: 4px; }
+      .home-calendar-head button { min-height: 40px; padding: 6px 10px; }
+      .home-calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 2px; }
+      .home-calendar-weekday { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 0; }
+      .home-calendar-day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 54px; padding: 4px 0; background: transparent; font-weight: 400; color: var(--ink); }
+      .home-calendar-number { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; }
+      .home-calendar-day.today .home-calendar-number { box-shadow: inset 0 0 0 1px var(--primary); color: var(--primary); }
+      .home-calendar-day[aria-pressed="true"] { background: var(--soft); }
+      .home-calendar-day[aria-pressed="true"] .home-calendar-number { background: var(--primary); color: white; }
+      .home-calendar-count { font-size: 11px; min-height: 18px; color: var(--primary); font-variant-numeric: tabular-nums; }
+      .home-calendar .note { margin-bottom: 0; }
+      .home-schedule .home-lesson { grid-template-columns: 80px minmax(0,1fr); gap: 6px 10px; }
+      .home-schedule .home-lesson .home-actions { grid-column: 1 / -1; max-width: none; }
+      .home-day-footer { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
+      @media (max-width: 700px) { .home-schedule { grid-template-columns: minmax(0,1fr); } }
       .home-day h2 { margin: 0 0 4px; font-size: 18px; }
       .home-day h2::after { display: none; }
       .home-lesson { display: grid; grid-template-columns: 106px minmax(0,1fr) auto; gap: 8px 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
@@ -594,6 +615,29 @@
 
         /* ---------- ホーム(ダッシュボード) ---------- */
         var homeFoldState = Object.create(null);
+        // ホームの日付選択は、授業ページ・生徒カルテのカレンダーと独立して保持する。
+        var homeScheduleDate = null, homeScheduleMonth = null;
+        function homeCalendarBounds(day) {
+          var p=day.split('-'), current=Number(p[0])*12+Number(p[1])-1;
+          // kanriDashboard_.slots は今日から70日未満まで。未取得の日を0件と表示しない。
+          var last=addDaysStr(day,69), q=last.split('-');
+          return {minMonth:current-12,maxMonth:Number(q[0])*12+Number(q[1])-1,last:last};
+        }
+        function homeCalendar(slots,day) {
+          var selected=homeScheduleDate, month=homeScheduleMonth, y=Math.floor(month/12), m=month%12, bounds=homeCalendarBounds(day);
+          var counts=Object.create(null);
+          slots.forEach(function(s){var c=counts[s.date]||(counts[s.date]={booked:0,offered:0});c[s.status]++;});
+          var h='<section class="card home-calendar" aria-label="日付を選ぶカレンダー"><div class="home-calendar-head"><h2>'+y+'年'+(m+1)+'月</h2><div class="row"><button type="button" class="btn-quiet btn-sm" id="home-cal-prev" data-action="home-cal-prev" aria-label="前の月"'+(month<=bounds.minMonth?' disabled':'')+'>‹</button><button type="button" class="btn-quiet btn-sm" id="home-cal-today" data-action="home-cal-today">今日</button><button type="button" class="btn-quiet btn-sm" id="home-cal-next" data-action="home-cal-next" aria-label="次の月"'+(month>=bounds.maxMonth?' disabled':'')+'>›</button></div></div><div class="home-calendar-grid" role="group" aria-label="授業を確認する日付">';
+          ['日','月','火','水','木','金','土'].forEach(function(w){h+='<span class="home-calendar-weekday">'+w+'</span>';});
+          var first=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
+          for(var i=0;i<first;i++)h+='<span aria-hidden="true"></span>';
+          for(var n=1;n<=days;n++){
+            var date=y+'-'+pad(m+1)+'-'+pad(n), c=counts[date]||{booked:0,offered:0}, unavailable=date>bounds.last, total=c.booked+c.offered;
+            var label=fmtDY(date)+(date===day?'、今日':'')+(unavailable?'、ホームの表示期間外':'、確定'+c.booked+'件、案内中'+c.offered+'件');
+            h+='<button type="button" id="home-day-'+date+'" class="home-calendar-day'+(date===day?' today':'')+'" data-action="home-cal-day" data-date="'+date+'" aria-label="'+esc(label)+'" aria-pressed="'+(date===selected)+'"'+(date===day?' aria-current="date"':'')+(unavailable?' disabled':'')+'><span class="home-calendar-number">'+n+'</span><span class="home-calendar-count">'+(unavailable?'—':total?total+'件':'')+'</span></button>';
+          }
+          return h+'</div><p class="note">授業の件数（案内中を含む）。日付を選ぶと授業を表示します。</p>'+(month===bounds.maxMonth?'<p class="note">ホームでは'+fmtD(bounds.last)+'まで表示。先の予定は授業ページで確認できます。</p>':'')+'</section>';
+        }
         function homeFold(key, title, count, body, opened) {
           var open = Object.prototype.hasOwnProperty.call(homeFoldState,key) ? homeFoldState[key] : !!opened;
           return '<details class="home-fold" data-home-fold="'+key+'"'+(open?' open':'')+'><summary>'+esc(title)+' <span class="cnt">'+esc(count)+'</span></summary><div class="home-fold-body">'+body+'</div></details>';
@@ -637,12 +681,14 @@
             if(seen[key] || ['booked','offered'].indexOf(s.status)<0)return false;
             seen[key]=true;return true;
           }).sort(function(a,b){return (a.date+' '+a.start).localeCompare(b.date+' '+b.start);});
-          var todays=slots.filter(function(s){return s.date===d.today;}), booked=todays.filter(function(s){return s.status==='booked';}).length, ended=todays.filter(function(s){return offerEnded(s,d.today);}).length, awaiting=todays.length-booked-ended;
+          if(!homeScheduleDate){homeScheduleDate=d.today;var hp=d.today.split('-');homeScheduleMonth=Number(hp[0])*12+Number(hp[1])-1;}
+          var selected=homeScheduleDate, isToday=selected===d.today;
+          var daySlots=slots.filter(function(s){return s.date===selected;}), booked=daySlots.filter(function(s){return s.status==='booked';}).length, ended=daySlots.filter(function(s){return offerEnded(s,d.today);}).length, awaiting=daySlots.length-booked-ended;
           var prior=slots.filter(function(s){return s.date<d.today && s.status==='booked' && s.done && (s.lessonDraftStatus==='draft' || s.lessonRecordStatus!=='active' && s.lessonRecordStatus!=='void');});
           var cutoff=addDaysStr(d.today,-7), recent=prior.filter(function(s){return s.date>=cutoff;}), older=prior.filter(function(s){return s.date<cutoff;});
           var pending=(d.pending||[]).filter(function(s){return !offerEnded(s,d.today);}), cr=d.cancelReqs||[], unrecorded=d.unrecordedLessons||[], expired=d.expired||[], wishes=d.wishes||[], unpaid=d.unpaid||[];
           var h='<div class="home-work"><div class="head"><div><h1>ホーム</h1><p class="sub">'+fmtDY(d.today)+' · 今日の授業と、次にすること</p></div><div class="row"><a class="btn-primary btn-sm" href="#lessons">授業の予定表へ</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
-          h+='<section class="card home-day" aria-label="今日の授業"><h2>今日の授業</h2><p class="sub">確定 '+booked+'件'+(awaiting?' · 承認待ち '+awaiting+'件':'')+(ended?' · 時間終了・実施未確認 '+ended+'件':'')+'</p>'+(todays.length?todays.map(function(s){return homeLesson(s,false);}).join(''):'<p class="empty">今日の授業はありません。別の日の確認・案内は「授業の予定表へ」から進めます。</p>')+'</section>';
+          h+='<div class="home-schedule">'+homeCalendar(slots,d.today)+'<section class="card home-day" aria-label="'+(isToday?'今日の授業':'選択日の授業')+'"><h2>'+fmtD(selected)+'の授業'+(isToday?' <span class="tag blue">今日</span>':'')+'</h2><p class="sub">確定 '+booked+'件'+(awaiting?' · 承認待ち '+awaiting+'件':'')+(ended?' · 時間終了・実施未確認 '+ended+'件':'')+'</p>'+(daySlots.length?daySlots.map(function(s){return homeLesson(s,false);}).join(''):'<p class="empty">'+(isToday?'今日':'この日')+'の授業はありません。</p>')+'<div class="home-day-footer"><a class="btn-quiet btn-sm" href="#lessons" data-action="home-cal-full" data-date="'+esc(selected)+'">この日の予定を詳しく見る</a></div></section></div>';
           h+='<h2 class="home-section-title">確認・対応すること</h2>';
           if(cr.length)h+=homeFold('cancel','取消依頼',cr.length+'件・返事が必要',homeCancellation(cr),true);
           h+=homeFold('records','前日までの記録待ち',recent.length+'件・直近7日'+(older.length?' / 以前 '+older.length+'件':''), '<p class="note">'+fmtD(cutoff)+'〜'+fmtD(addDaysStr(d.today,-1))+'の実施済み授業で、記録が未入力または下書きのものです。宿題の反映・保護者の既読は記録画面で確認してください。</p>'+(recent.length?recent.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の記録待ちはありません。</p>')+(older.length?homeFold('older-records','それ以前の記録待ち',older.length+'件',older.map(function(s){return homeLesson(s,true);}).join('')):''),recent.length>0);
@@ -2660,6 +2706,25 @@
               });
               break;
             case 'board-close': if(!busy){boardOpen=false;render();}break;
+            case 'home-cal-prev':
+            case 'home-cal-next':
+            case 'home-cal-today':
+            case 'home-cal-day': {
+              if(!D || route().page!=='home')break;
+              var hb=homeCalendarBounds(D.today), focusId=a;
+              if(a==='home-cal-today'){
+                homeScheduleDate=D.today;var ht=D.today.split('-');homeScheduleMonth=Number(ht[0])*12+Number(ht[1])-1;
+              }else if(a==='home-cal-day'){
+                var hd=btn.getAttribute('data-date');if(!/^\d{4}-\d{2}-\d{2}$/.test(hd)||hd>hb.last)break;
+                homeScheduleDate=hd;focusId='home-day-'+hd;
+              }else homeScheduleMonth=Math.max(hb.minMonth,Math.min(hb.maxMonth,homeScheduleMonth+(a==='home-cal-next'?1:-1)));
+              render();var hf=document.getElementById(focusId);if(hf&&hf.disabled)hf=document.getElementById('home-cal-today');if(hf)hf.focus();
+              break;
+            }
+            case 'home-cal-full': {
+              ev.preventDefault();var hdFull=btn.getAttribute('data-date'), hfParts=hdFull.split('-');
+              selDate=hdFull;calY=Number(hfParts[0]);calM=Number(hfParts[1])-1;location.hash='#lessons';break;
+            }
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } render(); break;
             case "calendar-add":

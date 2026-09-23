@@ -105,3 +105,76 @@ test('an ended offer is not treated as confirmed or as an ordinary editable futu
   assert.match(todaySection(ui.html()),/確定 0件/);
   assert.doesNotMatch(todaySection(ui.html()),/承認待ち/);
 });
+
+test('compact month uses counts, separates booking meanings in accessible labels and selects today',async()=>{
+  const s=slot('confirmed'), o=slot('offered',{status:'offered'});
+  const ui=await ready({slots:[s,o],lessonsToday:[s],pending:[o]});
+  assert.match(ui.html(),/aria-label="日付を選ぶカレンダー"/);
+  const cell=ui.html().match(/<button[^>]*id="home-day-2026-09-23"[^]*?<\/button>/)[0];
+  assert.match(cell,/aria-label="2026\/9\/23、今日、確定1件、案内中1件"/);
+  assert.match(cell,/aria-pressed="true" aria-current="date"/);
+  assert.match(cell,/home-calendar-count">2件/);
+});
+
+test('selecting a date replaces the day list, preserves its real actions and supports empty dates',async()=>{
+  const ui=await ready({slots:[slot('today'),slot('future',{date:'2026-09-25',status:'offered'}),slot('past',{date:'2026-09-15',done:true})]});
+  ui.click('home-cal-day',{'data-date':'2026-09-25'});
+  assert.match(todaySection(ui.html()),/aria-label="選択日の授業"[^]*9\/25\(金\)の授業/);
+  assert.match(todaySection(ui.html()),/data-home-slot="future"[^]*data-action="slotedit"/);
+  assert.doesNotMatch(todaySection(ui.html()),/data-home-slot="today"/);
+  assert.equal(ui.focused(),'home-day-2026-09-25');
+  ui.click('home-cal-day',{'data-date':'2026-09-15'});
+  assert.match(todaySection(ui.html()),/data-home-slot="past"[^]*記録を入力/);
+  ui.click('home-cal-day',{'data-date':'2026-09-26'});
+  assert.match(todaySection(ui.html()),/この日の授業はありません/);
+  ui.click('home-cal-today');assert.match(todaySection(ui.html()),/data-home-slot="today"/);
+  assert.equal(ui.requests.length,1,'date browsing is local and read-only');
+});
+
+test('month browsing respects data coverage and today restores both month and selected date',async()=>{
+  const ui=await ready();
+  for(let n=0;n<12;n++)ui.click('home-cal-prev');
+  assert.match(ui.html(),/<h2>2025年9月<\/h2>/);assert.equal(ui.el('home-cal-prev').disabled,true);
+  ui.click('home-cal-prev');assert.match(ui.html(),/<h2>2025年9月<\/h2>/);
+  ui.click('home-cal-today');
+  for(let n=0;n<3;n++)ui.click('home-cal-next');
+  assert.match(ui.html(),/<h2>2026年12月<\/h2>/);assert.equal(ui.el('home-cal-next').disabled,true);
+  assert.equal(ui.el('home-day-2026-12-01').disabled,false);
+  assert.equal(ui.el('home-day-2026-12-02').disabled,true);
+  assert.match(ui.html(),/ホームでは12\/1\(火\)まで表示/);
+  ui.click('home-cal-today');assert.match(ui.html(),/<h2>2026年9月<\/h2>/);
+  assert.match(ui.html(),/id="home-day-2026-09-23"[^>]*aria-pressed="true"/);
+  for(let n=0;n<7;n++)ui.click('home-cal-prev');
+  assert.match(ui.html(),/<h2>2026年2月<\/h2>/);assert.ok(ui.el('home-day-2026-02-28'));assert.equal(ui.el('home-day-2026-02-29'),undefined);
+});
+
+test('selected date survives record navigation and refreshed record data',async()=>{
+  const s=slot('past',{date:'2026-09-22',done:true}),ui=await ready({slots:[s]});
+  ui.click('home-cal-day',{'data-date':s.date});
+  ui.navigate('#lesson?student=test-a&slot=past');ui.navigate('#home');
+  ui.requests.at(-1).reply({data:dash({slots:[{...s,lessonRecordStatus:'active'}]})});await flush();
+  assert.match(todaySection(ui.html()),/9\/22\(火\)の授業[^]*記録を見る/);
+  assert.match(ui.html(),/id="home-day-2026-09-22"[^>]*aria-pressed="true"/);
+});
+
+test('full calendar opens at the selected date without changing home calendar state',async()=>{
+  const ui=await ready({slots:[slot('future',{date:'2026-10-02'})]});
+  ui.click('home-cal-next');ui.click('home-cal-day',{'data-date':'2026-10-02'});ui.click('home-cal-full');
+  assert.equal(ui.location.hash,'#lessons');ui.navigate(ui.location.hash);
+  ui.requests.at(-1).reply({admin:{today:day,students:[],slots:[],blocked:[],teacherOff:[],wishes:[],events:[],plans:[]}});await flush();
+  assert.match(ui.html(),/class="callabel">2026年10月/);
+  assert.match(ui.html(),/data-action="calendar-add" data-date="2026-10-02"/);
+  ui.click('calprev');ui.navigate('#home');ui.requests.at(-1).reply({data:dash()});await flush();
+  assert.match(ui.html(),/<h2>2026年10月<\/h2>/);
+  assert.match(todaySection(ui.html()),/10\/2\(金\)の授業/);
+});
+
+test('editing an offered lesson from a selected date refreshes that date without deleting it',async()=>{
+  const s=slot('selected-offer',{date:'2026-09-25',status:'offered'}),ui=await ready({slots:[s],pending:[s]});
+  ui.click('home-cal-day',{'data-date':s.date});ui.click('slotedit',{'data-id':s.id});
+  ui.input('se-start','18:00');ui.click('se-save');
+  ui.requests.at(-1).reply({ok:true,dash:dash({slots:[{...s,start:'18:00'}],pending:[{...s,start:'18:00'}]})});await flush();
+  assert.match(todaySection(ui.html()),/9\/25\(金\)の授業[^]*18:00/);
+  assert.match(ui.html(),/id="home-day-2026-09-25"[^>]*aria-pressed="true"/);
+  assert.equal(ui.requests.some(r=>r.body.op==='deleteSlot'),false);
+});
