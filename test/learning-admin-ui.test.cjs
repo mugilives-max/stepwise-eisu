@@ -33,9 +33,9 @@ test('the lessons calendar lists timed teacher breaks as 休み marks and the le
     teacherOff: [{ date: '2026-09-10', start: '12:00', end: '13:00' }, { date: '2026-09-10', start: '08:00', end: '08:30' }] } }); await flush();
   const html = ui.html(), cell = /data-date="2026-09-10">10<span class="calmarks"><\/span>([^]*?)<\/button>/.exec(html);
   assert.ok(cell, 'the day cell renders'); const marks = cell[1];
-  // teacher breaks come first as timed blocks, then one box per lesson sorted by start
-  assert.match(marks, /^<span class="calbox unavailable toff"><span class="t">08:00-<wbr>08:30<\/span><span class="s">休み<\/span><\/span><span class="calbox unavailable toff"><span class="t">12:00-<wbr>13:00<\/span><span class="s">休み<\/span><\/span><span class="calbox of"><span class="t">09:00-<wbr>09:30<\/span><span class="s">C 化<\/span><\/span><span class="calbox of"><span class="t">13:30-/);
-  const positions = ['09:00-', '13:30-', '14:00-'].map(s => marks.indexOf('<span class="t">' + s)); assert.deepEqual(positions, positions.slice().sort((a, b) => a - b));
+  // Teacher breaks and lessons share one chronological sequence.
+  assert.deepEqual([...marks.matchAll(/class="t">(\d{2}:\d{2})/g)].map(m => m[1]), ['08:00','09:00','12:00','13:30','14:00']);
+  assert.equal((marks.match(/calbox unavailable toff/g)||[]).length, 2);
   assert.doesNotMatch(html, /class="cbox|class="cgrp|title="時間が重なる授業"/);
 });
 

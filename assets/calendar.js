@@ -225,19 +225,21 @@
       if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
       marks += "</span>";
       if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
-      if (it && it.ngT) it.ngT.slice().sort(byStart).forEach(function (b) { marks += unavailableBox(b, '授業不可', 'ng'); });
+      var timed = [];
+      if (it && it.ngT) it.ngT.forEach(function (b) { timed.push({start:b.start, html:unavailableBox(b, '授業不可', 'ng')}); });
       if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
       if (showToff && it && it.toff) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
-      if (showToff && it && it.toffT) it.toffT.slice().sort(byStart).forEach(function (o) { marks += unavailableBox(o, toffText, 'toff'); });
+      if (showToff && it && it.toffT) it.toffT.forEach(function (o) { timed.push({start:o.start, html:unavailableBox(o, toffText, 'toff')}); });
       if (hasItems) {
-        var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+        var lb = it.labels;
         // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
         lb.forEach(function (l) {
           if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
           var lc = (l.st === "offer" ? " of" : "") + (l.cls ? " " + l.cls : "");
-          marks += '<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>';
+          timed.push({start:l.start, html:'<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>'});
         });
       }
+      timed.sort(byStart).forEach(function(item) { marks += item.html; });
       if (holiday) marks = '<span class="calholiday">' + esc(holiday) + '</span>' + marks;
       var hasMarks = !!holiday || hasItems || !!(it && (it.ngAll || it.ngT || (showToff && (it.toff || it.toffT))));
       var clickable = !past || hasMarks; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)。過去は何かある日だけ
