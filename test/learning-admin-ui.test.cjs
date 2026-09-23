@@ -214,3 +214,17 @@ test('booked lessons show plain WEB text and release only through their edit mod
   req.reply({ok:true,data:card({lessons:[]})}); await flush();
   assert.doesNotMatch(ui.html(), /<dialog id="slot-editor"/);
 });
+
+test('completed lessons move undo and release into the edit dialog', async () => {
+  const ui = await adminReady(card({lessons:[offered({status:'booked',done:true})]}));
+  assert.doesNotMatch(ui.html(), /data-action="(?:toggledone|unbook)"/);
+  ui.click('slotedit', {'data-id':'slot-a'});
+  assert.match(ui.html(), /data-action="se-undone"/);
+  assert.match(ui.html(), /data-action="se-delete"/);
+  assert.doesNotMatch(ui.html(), /id="se-mode"/);
+  ui.click('se-undone'); const req=ui.requests.at(-1);
+  assert.equal(req.body.op,'toggleDone'); assert.equal(req.body.done,false);
+  assert.equal(req.body.slotId,'slot-a'); assert.equal(req.body.studentId,'test-a');
+  req.reply({ok:true,data:card({lessons:[offered({status:'booked',done:false})]})}); await flush();
+  assert.doesNotMatch(ui.html(), /<dialog id="slot-editor"/);
+});
