@@ -556,6 +556,8 @@
           if (h.indexOf("#s=") === 0) { var sq = new URLSearchParams(h.slice(1)), section = sq.get("tab") || "overview"; return { page: "student", id: sq.get("s") || "", section: ["overview","settings","progress","billing"].indexOf(section) >= 0 ? section : "overview" }; }
           if (h === "#students" || h.indexOf("#students?") === 0) return { page: "students", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
           if (h === "#families" || h.indexOf("#families?")===0) return { page: "families", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
+          if (h === '#plans') return {page:'plans'};
+          if (h.indexOf('#plans?student=') === 0) return {page:'student',id:new URLSearchParams(h.slice(7)).get('student') || '',section:'planning'};
           if (h === "#lessons") return { page: "lessons" };
           if (h === "#settings") return { page: "settings" };
           return { page: "home" };
@@ -572,7 +574,8 @@
           nav.innerHTML =
             '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
             '<a href="#lessons" class="' + (r.page === "lessons" ? "on" : "") + '">授業</a>' +
-            '<a href="#students" class="' + (r.page === "students" || r.page === "student" || r.page === "families" ? "on" : "") + '">生徒</a>' +
+            '<a href="#plans" class="' + (r.page === 'plans' || r.section === 'planning' ? 'on' : '') + '">計画</a>' +
+            '<a href="#students" class="' + (r.page === "students" || (r.page === "student" && r.section !== "planning") || r.page === "families" ? "on" : "") + '">生徒</a>' +
             '<a href="#settings" class="' + (r.page === "settings" ? "on" : "") + '">設定</a>' +
             '<a href="#" data-action="logout">ログアウト</a>' +
             (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
@@ -760,6 +763,11 @@
         document.addEventListener("input", function(ev) { if(newStudentDraft && (ev.target.id==='n-name'||ev.target.id==='n-email')) newStudentDraft[ev.target.id==='n-name'?'name':'email']=ev.target.value; });
         function calendarAddButton(date,today) {
           return date>=today ? '<button class="btn-primary" data-action="calendar-add" data-date="'+esc(date)+'" aria-label="この日に予定を追加" title="この日に予定を追加" style="border-radius:50%;width:36px;height:36px;padding:0;font-size:24px;margin-left:8px">＋</button>' : '';
+        }
+        function renderPlans() {
+          renderNav();
+          var students=(D.students || []).filter(function(s){return s.active !== false;});
+          app.innerHTML='<h1>計画</h1><p class="sub">生徒を選び、授業の科目・回数・期間・料金をまとめて保護者に提案します。</p><div class="grid" style="margin-top:18px">'+students.map(function(s){return '<a class="card scard" href="#plans?student='+encodeURIComponent(s.id)+'"><strong>'+esc(s.name)+'</strong><div class="small muted">授業計画を作成・確認</div></a>';}).join('')+'</div>'+(students.length?'':'<div class="empty">生徒はまだ登録されていません</div>');
         }
         function renderStudents() {
           renderNav();
@@ -1003,6 +1011,10 @@
           renderNav();
           var s = cur;
           var p = s.profile || {}, section = route().section || "overview";
+          if (section === 'planning') {
+            app.innerHTML='<a href="#plans" class="small">← 計画の生徒一覧</a><h1>'+esc(s.name)+'さんの授業計画</h1><p class="sub">提案内容を下書きで確認し、保護者へ送信します。</p>'+renderPlanCard(s, true);
+            return;
+          }
           var html = '<div class="head"><div><a href="#students" class="small">← 生徒一覧</a><h1>' + esc(s.name) + '</h1>' +
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
             '<div class="row"><a class="btn-quiet btn-sm" href="/yoyaku/?preview=student:' + encodeURIComponent(s.id) + '#home" target="_blank" rel="noopener" title="生徒本人に見えている画面を表示だけします（登録・変更はできません）">生徒ページを見る</a><a class="btn-quiet btn-sm" href="/yoyaku/?preview=parent:' + encodeURIComponent(s.id) + '#family/home" target="_blank" rel="noopener" title="保護者に見えている画面を表示だけします（登録・変更はできません）">保護者ページを見る</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
@@ -1485,6 +1497,7 @@
           else if (r.page === "student" && cur) renderStudent();
           else if (r.page === "lessons" && A) renderLessons();
           else if (r.page === "settings" && A) renderSettings();
+          else if (r.page === "plans" && D) renderPlans();
           else if (r.page === "students" && D) renderStudents();
           else if (r.page === "home" && D) renderHome();
           else renderLoading();
@@ -2283,7 +2296,7 @@
           });
           return h + '</div>';
         }
-        function renderPlanCard(s) {
+        function renderPlanCard(s, proposalOnly) {
           var p = s.plan || {}, lines = planLines(s), dis = busy || s.active === false, f = planEdits[s.id];
           var by = function (st) { return lines.filter(function (l) { return l.status === st; }); };
           var h = '<h2>授業計画の作成' + helpButton('plan') + (dis ? '' : '<button class="btn-primary btn-sm" data-action="pe-new">新規作成</button>') + '</h2>' + helpBox('plan', '科目・種類・回数・期間・1回の授業時間と授業料・コメントを1つの「案内」として作り、保護者へ送ります。月をまたぐ期間（定期テスト対策・夏期講習など）も1つの案内にできます。同じ科目・種類で期間が重なる案内は作れません。承認済みの案内に回数を足すときは「＋追加」を使います。') + '<div class="card">';
@@ -2299,7 +2312,7 @@
           var sent = by('proposed'), okd = by('approved'), ng = by('declined');
           if (!sent.length && !okd.length && !ng.length) h += '<div class="empty">送信済み・承認済みの案内はまだありません</div>';
           h += renderPlanGroup(s, '送信済み（保護者の承認待ち）', sent, f, dis) + renderPlanGroup(s, '承認済み', okd, f, dis) + renderPlanGroup(s, '見送り', ng, f, dis);
-          return h + '</div>' + renderPlanUsage(s);
+          return h + '</div>' + (proposalOnly ? '' : renderPlanUsage(s));
         }
         function renderBilling(s) {
           var e = billingEditor(s), b = e.preview, disabled = busy || e.busy || !!e.pending;
@@ -2379,10 +2392,10 @@
         }
         function planLineWrite(op, payload, okMsg) {
           if (busy) return;
-          var sid = cur.id, planAuth = token();
+          var sid = cur.id, planAuth = token(), planRoute = route();
           busy = true; render();
           admin(op, Object.assign({ studentId: sid }, payload)).then(function (res) {
-            cacheClear(); if (token() === planAuth && authM === "ok") { if (op === "planLineSave" || op === "planLineDelete") delete planEdits[sid]; applyResult(res, { page: "student", id: sid, section: "billing" }); toast(okMsg + (res.notificationWarning ? "。" + res.notificationWarning : "")); }
+            cacheClear(); if (token() === planAuth && authM === "ok") { if (op === "planLineSave" || op === "planLineDelete") delete planEdits[sid]; applyResult(res, planRoute); toast(okMsg + (res.notificationWarning ? "。" + res.notificationWarning : "")); }
           }).catch(function (er) { if (planEdits[sid] && op === "planLineSave") planEdits[sid].error = er.message; toast(er.message + (op === "planLineSave" ? "。入力は保持しています" : "")); }).then(function () { busy = false; render(); });
         }
         function planEditSubmit(propose) {
