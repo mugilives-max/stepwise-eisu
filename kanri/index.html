@@ -1123,7 +1123,7 @@
               html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
               html += slotDelivery(l, s.id, false, 'mode') + ' ';
               html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
-              html += '</span>';
+              html += lessonRecordTag(l) + '</span>';
               if (l.status === "booked") {
                 html += slotDelivery(l, s.id, false, 'actions');
                 html += lessonEntry(l, s.id);
@@ -1201,6 +1201,10 @@
           h += '<div class="note">生徒から返事がないまま、授業の時間が終わった案内です。実際に授業をした場合は「実施済みにする」(確定・実施済みになり、授業料と月の回数に数えます)。しなかった場合は「未実施」で取り下げます。</div></div>';
           return h;
         }
+        function lessonRecordTag(s) {
+          if (!s.done) return '';
+          return s.lessonRecordStatus === 'active' ? ' <span class="tag blue">記入済</span>' : ' <span class="tag red">未記入</span>';
+        }
         function lessonRow(s, withDate) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + "</span>" : "");
@@ -1208,6 +1212,7 @@
           if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : (s.done ? ' <span class="tag gray">実施済</span>' : ' <span class="tag blue">確定</span>');
           else if (s.status === "offered") h += ' <span class="tag amber">承認待ち</span>';
           else h += ' <span class="tag gray">空き枠</span>';
+          h += lessonRecordTag(s);
           h += "</span>";
           if (s.status === "booked") {
             h += slotDelivery(s, null, false, 'actions');
