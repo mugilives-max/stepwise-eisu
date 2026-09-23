@@ -6,7 +6,9 @@ const {readFileSync}=require('node:fs');
 const {resolve}=require('node:path');
 const {TEACHER_TOKEN}=require('../test/gas-harness.cjs');
 const {createLessonOutlineFixture}=require('../test/helpers/lesson-outline-fixture.cjs');
-const {h,ftoken}=createLessonOutlineFixture(),root=resolve(__dirname,'..'),port=Number(process.env.STEPWISE_PREVIEW_PORT||8768);
+const homePreview=process.env.STEPWISE_PREVIEW_SCENARIO==='teacher-home';
+const {h,ftoken}=homePreview?require('../test/helpers/teacher-home-fixture.cjs').createTeacherHomeFixture():createLessonOutlineFixture();
+const root=resolve(__dirname,'..'),port=Number(process.env.STEPWISE_PREVIEW_PORT||8768);
 if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Invalid local preview port');
 const routes={'/kanri/':'kanri/index.html','/yoyaku/':'yoyaku/index.html','/hogosha/':'hogosha/index.html'};
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};
@@ -22,7 +24,7 @@ createServer(async(req,res)=>{
     }
     if(url.pathname==='/width'){
       const width=[320,390,1280].includes(Number(url.searchParams.get('w')))?Number(url.searchParams.get('w')):390;
-      const target=url.searchParams.get('view')==='student'?'/yoyaku/?k=synthetic-link-a#history':'/kanri/#lesson?student=test-a&slot=preview-current';
+      const target=url.searchParams.get('view')==='home'?'/kanri/?homePreview=1#home':url.searchParams.get('view')==='student'?'/yoyaku/?k=synthetic-link-a#history':'/kanri/#lesson?student=test-a&slot=preview-current';
       res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="ja"><title>架空データの幅確認</title><body style="margin:0;background:#e6e9ec"><iframe title="'+width+'pxの実画面" style="display:block;width:'+width+'px;height:100vh;border:0;margin:auto" src="'+target+'"></iframe></body></html>');return;
     }
     const relative=routes[url.pathname]||(url.pathname.startsWith('/assets/')?url.pathname.slice(1):null);
@@ -37,4 +39,4 @@ createServer(async(req,res)=>{
     }
     res.setHeader('Content-Type',(mime[ext]||'application/octet-stream')+'; charset=utf-8');res.end(data);
   }catch(e){res.writeHead(500);res.end('Local QA: '+e.message);}
-}).listen(port,'127.0.0.1',()=>console.log('Synthetic lesson QA: http://127.0.0.1:'+port+'/kanri/#lesson?student=test-a&slot=preview-current ; /width?w=390 ; /width?w=320'));
+}).listen(port,'127.0.0.1',()=>console.log('Synthetic QA: http://127.0.0.1:'+port+(homePreview?'/kanri/?homePreview=1#home':'/kanri/#lesson?student=test-a&slot=preview-current')+' ; /width?w=390&view=home ; /width?w=320&view=home'));

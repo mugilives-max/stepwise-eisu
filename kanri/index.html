@@ -96,6 +96,34 @@
       .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
       .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
       .head h1 { margin: 0; }
+      /* 先生ホームの実装プレビュー。採用時に旧ホームと切り替える。 */
+      .home-work { margin-top: 18px; }
+      .home-work .home-day { margin: 18px 0; }
+      .home-day h2 { margin: 0 0 4px; font-size: 18px; }
+      .home-day h2::after { display: none; }
+      .home-lesson { display: grid; grid-template-columns: 106px minmax(0,1fr) auto; gap: 8px 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+      .home-lesson:last-child { border-bottom: 0; padding-bottom: 4px; }
+      .home-lesson .home-time { font-weight: 700; font-variant-numeric: tabular-nums; }
+      .home-lesson .home-person { min-width: 0; overflow-wrap: anywhere; }
+      .home-person > a { font-weight: 700; color: inherit; text-decoration: none; }
+      .home-person > a:hover { text-decoration: underline; }
+      .home-lesson .home-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 270px; }
+      .home-work .home-actions a, .home-work .home-actions button { min-height: 40px; display: inline-flex; align-items: center; }
+      .home-fold { margin: 10px 0; border: 1px solid var(--line); border-radius: 12px; background: white; }
+      .home-fold > summary { padding: 13px 16px; cursor: pointer; font-weight: 700; overflow-wrap: anywhere; }
+      .home-fold > summary .cnt { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 13px; }
+      .home-fold > .home-fold-body { padding: 0 16px 16px; overflow-wrap: anywhere; }
+      .home-fold .card { box-shadow: none; }
+      .home-work .home-meta { font-size: 12.5px; color: var(--muted); margin: 4px 0 0; }
+      .home-work .home-section-title { margin: 24px 0 8px; }
+      .home-work .line .w { overflow-wrap: anywhere; }
+      .home-work a:focus-visible, .home-work summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+      @media (max-width: 600px) {
+        .home-lesson { grid-template-columns: 86px minmax(0,1fr); gap: 6px 10px; }
+        .home-lesson .home-actions { grid-column: 1 / -1; justify-content: flex-end; max-width: none; }
+        .home-work .head .row { width: 100%; }
+        .home-work .grid { grid-template-columns: minmax(0,1fr); }
+      }
       .chart { width: 100%; height: auto; display: block; }
       .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
       .legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -178,7 +206,7 @@
         var WD = ["日","月","火","水","木","金","土"];
         var LESSON_SUBJECTS = ["英語", "数学", "英数", "国語", "理科", "化学", "社会"];
         // 授業の種類(通常・演習・講習など)。一覧は GAS の lessonKinds(設定ページで管理)。画面上の "" と "通常" は同じ意味
-        function lessonKinds() { var ks = ((A && A.lessonKinds) || []).filter(function (k) { return k.active !== false; }).map(function (k) { return k.name; }); return ks.length ? ks : ["通常"]; }
+        function lessonKinds() { var data=route().page==='home'?D:A; var ks = ((data && data.lessonKinds) || (A && A.lessonKinds) || []).filter(function (k) { return k.active !== false; }).map(function (k) { return k.name; }); return ks.length ? ks : ["通常"]; }
         function kindOptions(sel) { var cur = sel || "通常", ks = lessonKinds(); if (ks.indexOf(cur) < 0) ks = ks.concat([cur]); return ks.map(function (k) { return '<option value="' + esc(k) + '"' + (k === cur ? " selected" : "") + ">" + esc(k) + "</option>"; }).join(""); }
         function lessonLabel(s) { if (!s) return ""; var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); }
         var SUBJECT_COLOR = { "英語": "#3556c8", "数学": "#a86f12", "国語": "#7a4fc9", "理科": "#2e8b57", "化学": "#087e8b", "社会": "#b8466f", "5教科": "#19212a", "3教科": "#6b7280" };
@@ -260,9 +288,9 @@
         function studentLink(code) { return new URL(YOYAKU + "?k=" + code, location.href).href; }
         function deliveryLabel(mode) { return mode === "in_person" ? "対面" : mode === "online" ? "オンライン" : "形式未設定"; }
         function deliveryOptions(mode) { return '<option value="">選択してください</option>' + ["in_person", "online"].map(function (m) { return '<option value="' + m + '"' + (m === mode ? ' selected' : '') + '>' + deliveryLabel(m) + '</option>'; }).join(""); }
-        function slotDelivery(s, sid) {
-          var h = '<span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>';
-          var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(sid || s.studentId) + '" data-snapshot="' + esc(JSON.stringify(slotEditSnapshot(s))) + '"' + (busy ? ' disabled' : '');
+        function slotDelivery(s, sid, hideLabel) {
+          var h = hideLabel ? '' : '<span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>';
+          var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(sid || s.studentId) + '" data-kind="' + esc(s.kind || '通常') + '" data-snapshot="' + esc(JSON.stringify(slotEditSnapshot(s))) + '"' + (busy ? ' disabled' : '');
           if (!s.done && s.status === "offered") h += '<button class="btn-quiet btn-sm" data-action="slotedit"' + attrs + '>案内を修正</button>';
           if (!s.done && s.status === "booked") h += '<button class="btn-quiet btn-sm" data-action="slotmode"' + attrs + '>この回の形式を変更</button>';
           return h;
@@ -278,7 +306,9 @@
           var existing = slotEditPending().filter(function (p) { return String(p.slotId) === btn.getAttribute("data-id"); })[0];
           if (existing) { slotEditResume(existing); return; }
           var s; try { s = JSON.parse(btn.getAttribute("data-snapshot")); } catch (e) { load(true); return; }
-          slotEdit = { auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: s, form: Object.assign({}, s), pending: null, busy: false, error: "" }; render();
+          slotEdit = { auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: s, form: Object.assign({}, s, {kind:btn.getAttribute('data-kind') || '通常'}), pending: null, busy: false, error: "" }; render();
+          var editFirst = document.getElementById(op === 'editOffered' ? 'se-date' : 'se-mode');
+          if (editFirst) { editFirst.focus(); editFirst.scrollIntoView({block:'center'}); }
         }
         function slotEditHtml() {
           var h = "", e = slotEdit, pending = slotEditPending();
@@ -563,6 +593,72 @@
         }
 
         /* ---------- ホーム(ダッシュボード) ---------- */
+        var homeFoldState = Object.create(null);
+        function homeFold(key, title, count, body, opened) {
+          var open = Object.prototype.hasOwnProperty.call(homeFoldState,key) ? homeFoldState[key] : !!opened;
+          return '<details class="home-fold" data-home-fold="'+key+'"'+(open?' open':'')+'><summary>'+esc(title)+' <span class="cnt">'+esc(count)+'</span></summary><div class="home-fold-body">'+body+'</div></details>';
+        }
+        document.addEventListener('toggle',function(ev) {
+          var el=ev.target, key=el.getAttribute && el.getAttribute('data-home-fold');
+          if (key && el.isConnected) homeFoldState[key]=el.open;
+        },true);
+        function homeLesson(s, withDate) {
+          var day=D.today, offered=s.status==='offered', ended=offerEnded(s,day), record=s.lessonRecordStatus;
+          var state=offered?(ended?'時間終了・実施未確認':'承認待ち'):s.req?'取消依頼中':s.done?'実施済み':'確定';
+          var status=offered?'amber':s.req?'red':s.done?'gray':'blue';
+          var recordText=s.lessonDraftStatus==='draft'?'下書き・未公開':record==='active'?'記録済み':record==='void'?'記録無効化済み':s.date<=day?'記録未入力':'';
+          var h='<article class="home-lesson" data-home-slot="'+esc(s.id)+'"><div class="home-time">'+(withDate?'<div class="small muted">'+fmtD(s.date)+'</div>':'')+esc(s.start)+'<br><span class="small muted">〜'+endTime(s.start,s.min)+'</span></div>';
+          h+='<div class="home-person"><a href="#s='+encodeURIComponent(s.studentId)+'">'+esc(s.studentName)+'</a><div class="home-meta">'+esc(lessonLabel(s)||'科目未登録')+' · '+deliveryLabel(s.deliveryMode)+'</div><div class="row" style="gap:6px;margin-top:5px"><span class="tag '+status+'">'+state+'</span>'+(!offered && recordText?'<span class="small muted">'+recordText+'</span>':'')+'</div></div><div class="home-actions">';
+          if (offered) {
+            h+=ended?finishRecordButton(s,day,s.studentId):slotDelivery(s,null,true);
+          } else {
+            var label=s.lessonDraftStatus==='draft'?'記録を再開':record==='active'?'記録を見る':record==='void'?'記録を確認':s.date>day?'授業準備':'記録を入力';
+            h+='<a class="'+(record==='active' && s.lessonDraftStatus!=='draft'?'btn-quiet':'btn-primary')+' btn-sm" href="'+esc(lessonHref(s.studentId,s.id))+'">'+label+'</a>';
+            if (s.meetUrl && !s.done) h+='<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="'+esc(s.meetUrl)+'">Meet</a>';
+            h+='<details><summary class="small" style="cursor:pointer;padding:8px">その他</summary>';
+            if (s.date<=day) h+='<button class="btn-quiet btn-sm" data-action="toggledone" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'" data-done="'+(s.done?'0':'1')+'"'+(busy?' disabled':'')+'>'+(s.done?'未実施に戻す':'実施済みにする')+'</button>';
+            if(s.deliveryMode==='in_person') h+='<a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>';
+            h+='<a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(s.studentId)+'">生徒の予定を確認</a></details>';
+          }
+          return h+'</div></article>';
+        }
+        function homeCancellation(list) {
+          return '<p class="note">承認するまでは予定を保持します。理由を確認して返事をしてください。</p>'+list.map(function(s) {
+            var q=s.req||{};
+            return '<div class="line"><span class="t">'+fmtD(s.date)+' '+esc(s.start)+'〜'+endTime(s.start,s.min)+'</span><span class="w"><a href="#s='+encodeURIComponent(s.studentId)+'">'+esc(s.studentName)+'</a> '+esc(lessonLabel(s))+'<div class="small"><strong>'+(q.requestType==='exception'?'期限後の例外申請':q.requestType==='normal'?'24時間前までの通常申請':'取消依頼')+'</strong> '+esc(q.reason||'理由なし')+(q.at?'・受付 '+esc(fmtAuthTime(q.at)):'')+'</div></span><button class="btn-danger btn-sm" data-action="cancelok" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'"'+(busy?' disabled':'')+'>取消を承認</button><button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'"'+(busy?' disabled':'')+'>予定どおり行う</button></div>';
+          }).join('')+'<p class="note">返事は受信確認済みの生徒メールへ通知します。取消の承認は予定の削除を伴います。</p>';
+        }
+        function renderHomeWork() {
+          renderNav();
+          var d=D, seen=Object.create(null);
+          // slots を正本とし、旧応答でも今日・承認待ちの情報を失わない。1枠を重複計上しない。
+          var slots=(d.slots||[]).concat(d.lessonsToday||[],d.pending||[]).filter(function(s) {
+            var key=JSON.stringify([s.studentId,s.id]);
+            if(seen[key] || ['booked','offered'].indexOf(s.status)<0)return false;
+            seen[key]=true;return true;
+          }).sort(function(a,b){return (a.date+' '+a.start).localeCompare(b.date+' '+b.start);});
+          var todays=slots.filter(function(s){return s.date===d.today;}), booked=todays.filter(function(s){return s.status==='booked';}).length, ended=todays.filter(function(s){return offerEnded(s,d.today);}).length, awaiting=todays.length-booked-ended;
+          var prior=slots.filter(function(s){return s.date<d.today && s.status==='booked' && s.done && (s.lessonDraftStatus==='draft' || s.lessonRecordStatus!=='active' && s.lessonRecordStatus!=='void');});
+          var cutoff=addDaysStr(d.today,-7), recent=prior.filter(function(s){return s.date>=cutoff;}), older=prior.filter(function(s){return s.date<cutoff;});
+          var pending=(d.pending||[]).filter(function(s){return !offerEnded(s,d.today);}), cr=d.cancelReqs||[], unrecorded=d.unrecordedLessons||[], expired=d.expired||[], wishes=d.wishes||[], unpaid=d.unpaid||[];
+          var h='<div class="home-work"><div class="head"><div><h1>ホーム</h1><p class="sub">'+fmtDY(d.today)+' · 今日の授業と、次にすること</p></div><div class="row"><a class="btn-primary btn-sm" href="#lessons">授業の予定表へ</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
+          h+='<section class="card home-day" aria-label="今日の授業"><h2>今日の授業</h2><p class="sub">確定 '+booked+'件'+(awaiting?' · 承認待ち '+awaiting+'件':'')+(ended?' · 時間終了・実施未確認 '+ended+'件':'')+'</p>'+(todays.length?todays.map(function(s){return homeLesson(s,false);}).join(''):'<p class="empty">今日の授業はありません。別の日の確認・案内は「授業の予定表へ」から進めます。</p>')+'</section>';
+          h+='<h2 class="home-section-title">確認・対応すること</h2>';
+          if(cr.length)h+=homeFold('cancel','取消依頼',cr.length+'件・返事が必要',homeCancellation(cr),true);
+          h+=homeFold('records','前日までの記録待ち',recent.length+'件・直近7日'+(older.length?' / 以前 '+older.length+'件':''), '<p class="note">'+fmtD(cutoff)+'〜'+fmtD(addDaysStr(d.today,-1))+'の実施済み授業で、記録が未入力または下書きのものです。宿題の反映・保護者の既読は記録画面で確認してください。</p>'+(recent.length?recent.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の記録待ちはありません。</p>')+(older.length?homeFold('older-records','それ以前の記録待ち',older.length+'件',older.map(function(s){return homeLesson(s,true);}).join('')):''),recent.length>0);
+          if(unrecorded.length)h+=homeFold('unrecorded','実施状況の確認',unrecorded.length+'件',unrecordedCard(unrecorded,true));
+          if(expired.length)h+=homeFold('expired','返事がないまま終わった案内',expired.length+'件',expiredCard(expired,true));
+          h+=homeFold('pending','承認待ちの案内',pending.length+'件', '<p class="note">まだ確定していない案内です。削除せず、そのまま日時などを修正できます。</p>'+(pending.length?pending.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">承認待ちの案内はありません。</p>'));
+          h+=homeFold('wishes','生徒からの希望日程',wishes.length+'件',(wishes.length?wishes.slice(0,5).map(function(s){return '<div class="line"><span class="t">'+fmtD(s.date)+' '+esc(s.start)+'〜'+esc(s.end)+'</span><span class="w">'+esc(s.studentName)+(s.note?'<div class="small muted">'+esc(s.note)+'</div>':'')+'</span></div>';}).join(''):'<p class="empty">希望日程はありません。</p>')+(wishes.length>5?'<p class="note">ほか '+(wishes.length-5)+'件</p>':'')+'<a class="btn-ghost btn-sm" href="#lessons">授業ページで日程調整</a>');
+          h+='<div id="home-services"></div><h2 class="home-section-title">この先の予定・運営情報</h2>';
+          var week=d.lessonsWeek||[], events=d.events||[];
+          h+=homeFold('week','明日以降の確定授業',week.length+'件・7日以内',week.length?week.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の確定授業はありません。</p>');
+          h+=homeFold('events','生徒・保護者からの共有予定',events.length+'件・3週間以内',events.length?events.map(function(e){return '<div class="line"><span class="t">'+evRange(e)+'</span><span class="w"><a href="#s='+encodeURIComponent(e.studentId)+'">'+esc(e.studentName)+'</a> '+esc(e.title)+'</span></div>';}).join(''):'<p class="empty">共有予定はありません。</p>');
+          h+=homeFold('unpaid','未入金',unpaid.length+'件'+(unpaid.length?'・'+yen(unpaid.reduce(function(sum,u){return sum+u.amount;},0)):''),unpaid.length?unpaid.map(function(u){return '<div class="line"><span class="t">'+esc(u.ym)+'</span><span class="w">'+esc(u.name)+' '+yen(u.amount)+'</span><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(u.studentId)+'&amp;tab=billing">請求・入金を確認</a></div>';}).join(''):'<p class="empty">未入金はありません。</p>');
+          h+=homeFold('students','生徒ごとの今月の状況',(d.students||[]).length+'人','<div class="grid">'+(d.students||[]).map(function(s){return '<a class="card scard" href="#s='+encodeURIComponent(s.id)+'"><strong>'+esc(s.name)+'</strong><div class="small muted">'+esc([s.grade,s.school].filter(Boolean).join('・'))+'</div><div class="small">実施 '+Number(s.doneThisMonth||0)+'回 · '+yen(s.feeThisMonth||0)+'</div>'+(s.plannedThisMonth?'<div class="small">確定 '+Number(s.bookedThisMonth||0)+' / 計画 '+Number(s.plannedThisMonth)+'回'+(s.bookedThisMonth<s.plannedThisMonth?' · 残り'+(s.plannedThisMonth-s.bookedThisMonth)+'回':'')+' · '+(s.planStatus==='proposed'?'計画承認待ち':s.planStatus==='approved'?'計画承認済み':'計画未提案')+'</div>':'')+'<div class="small muted">次回 '+(s.next?fmtD(s.next.date)+' '+esc(s.next.start):'未定')+'</div>'+(s.unpaid?'<span class="tag red">未入金 '+Number(s.unpaid)+'件</span>':'')+'</a>';}).join('')+'</div><p><a href="#students">生徒一覧・生徒を追加</a></p>');
+          h+=homeFold('meetings','最近の面談・連絡',(d.meetings||[]).length+'件',(d.meetings||[]).length?d.meetings.map(function(m){return '<div class="line"><span class="t">'+fmtD(m.date)+'</span><span class="w"><a href="#s='+encodeURIComponent(m.studentId)+'">'+esc(m.name)+'</a> <span class="small muted">'+esc([m.who,m.method].filter(Boolean).join('・'))+'</span><div class="small">'+esc(m.content)+'</div>'+(m.next?'<div class="small">次回：'+esc(m.next)+'</div>':'')+'</span></div>';}).join(''):'<p class="empty">記録はまだありません。生徒のカルテから登録できます。</p>');
+          app.innerHTML=h+'</div>';
+        }
         function unrecordedCard(list,withNames,student) {
           if (!list.length) return '';
           return '<section class="card lc-notice" aria-label="実施状況の確認が必要"><h2>実施状況の確認が必要 <span class="cnt">'+list.length+'件</span></h2><p>前日以前の確定授業で、実施済みの登録がありません。授業記録の保存とは別に確認してください。</p>'+list.map(function(l){return '<div class="line"><span class="t">'+fmtDY(l.date)+' '+esc(l.start)+'</span><span class="w">'+(withNames?esc(l.studentName)+' ':'')+esc(l.subject || '科目未登録')+'</span><button class="btn-primary btn-sm" data-action="toggledone" data-done="1" data-id="'+esc(l.id)+'" data-sid="'+esc(l.studentId || (student || {}).id)+'"'+(busy?' disabled':'')+'>実施にする</button><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(l.studentId || (student || {}).id)+'">予定を確認</a></div>';}).join('')+'</section>';
@@ -580,6 +676,7 @@
           return h + "</div>";
         }
         function renderHome() {
+          if (new URLSearchParams(location.search).get('homePreview') === '1') { renderHomeWork(); return; }
           renderNav();
           var d = D;
           var html = '';
@@ -1411,7 +1508,7 @@
           if (window.StepwiseServices) {
             if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && ['overview','progress'].indexOf(r.section || 'overview') >= 0)) {
               var serviceSid=r.page==='student'?String(cur.id):'',serviceToken=token();
-              window.StepwiseServices.mount(app,{key:serviceToken+'|'+serviceSid,teacher:true,inbox:!serviceSid,pendingCount:D&&D.contactPendingCount||0,studentId:serviceSid,call:function(op,payload){
+              window.StepwiseServices.mount(document.getElementById('home-services') || app,{key:serviceToken+'|'+serviceSid,teacher:true,inbox:!serviceSid,pendingCount:D&&D.contactPendingCount||0,studentId:serviceSid,call:function(op,payload){
                 if(token()!==serviceToken)return Promise.reject(new Error('ログインが変更されました'));
                 var ops={list:'serviceList',inbox:'serviceInbox',pdf:'servicePdf',examSave:'serviceExamSave',messageReply:'serviceMessageReply'};
                 return admin(ops[op],Object.assign({studentId:serviceSid},payload));
