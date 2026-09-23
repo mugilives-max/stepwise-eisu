@@ -702,7 +702,7 @@
             if (s.meetUrl && !s.done) h+='<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="'+esc(s.meetUrl)+'">Meet</a>';
             h+='<details><summary class="small" style="cursor:pointer;padding:8px">その他</summary>';
             if (s.date<=day) h+='<button class="btn-quiet btn-sm" data-action="toggledone" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'" data-done="'+(s.done?'0':'1')+'"'+(busy?' disabled':'')+'>'+(s.done?'未実施に戻す':'実施済みにする')+'</button>';
-            if(s.deliveryMode==='in_person') h+='<a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>';
+            if(s.deliveryMode==='in_person' && s.date>=day) h+='<a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>';
             h+='<a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(s.studentId)+'">生徒の予定を確認</a></details>';
           }
           return h+'</div></article>';
@@ -1680,7 +1680,7 @@
           var page = route().page, day = (page === 'student' && cur ? cur.today : page === 'lessons' ? A.today : D && D.today) || today();
           if (s.date > day) return "";
           var label = s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "記録未入力" : "授業記録";
-          return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>' + (s.status==='booked' && s.deliveryMode==='in_person' ? ' <a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>' : '');
+          return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>' + (s.status==='booked' && s.deliveryMode==='in_person' && s.date>=day ? ' <a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>' : '');
         }
         function lessonEditor(r) {
           r = r || route();
