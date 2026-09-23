@@ -1285,16 +1285,11 @@
 
           // 承認待ち
           var offered = upcoming.filter(function (s) { return s.status === "offered"; });
-          html += '<h2>承認待ちの案内 <span class="cnt">' + offered.length + '件</span></h2>';
+          html += '<details><summary>承認待ちの案内（' + offered.length + '件）</summary>';
           html += offered.length ? '<div class="card">' + offered.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">返事待ちの案内はありません</div>';
+          html += '</details>';
           html += expiredCard(slots.filter(function (s) { return offerEnded(s, today); }).slice().reverse(), true);
 
-          // 今後の予定
-          var next14 = upcoming.filter(function (s) { return s.status === "booked" && s.date < addDaysStr(today, 14); });
-          html += '<details><summary>今後2週間の授業（' + next14.length + '件）</summary>';
-          html += next14.length ? '<div class="card">' + next14.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">確定した授業はありません</div>';
-
-          html += '</details>';
           // 先生の休み
           html += '<details><summary>先生の授業不可時間を登録</summary><div class="card"><div class="row">';
           html += '<input type="date" id="o-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="o-date2" min="' + today + '">';
@@ -1338,8 +1333,6 @@
               });
               html += '</table></div>';
             }
-            var undone = pastBooked.filter(function (s) { return !s.done; });
-            html += '<details class="add"' + (undone.length ? " open" : "") + '><summary>過去の授業(直近20件)' + (undone.length ? ' <span class="tag amber">未記録 ' + undone.length + '件</span>' : '') + '</summary><div class="card">' + pastBooked.slice(0, 20).map(function (s) { return lessonRow(s, true); }).join("") + '</div></details>';
             html += '<div class="note">「実施にする」を押すと月の実績に反映されます。請求額と文面はカルテの「請求・入金管理」で確認してください。</div>';
           }
           app.innerHTML = html;
