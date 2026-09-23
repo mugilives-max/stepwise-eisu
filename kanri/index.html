@@ -157,6 +157,11 @@
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
       .tbwrap { overflow-x: auto; }
       /* 案内の一覧: 表計算ソフトのような罫線つきの表(gap を罫線色で埋める) */
+      .plan-summary { width:100%; border-collapse:collapse; border:1px solid #b8c4d3; font-size:14px; }
+      .plan-summary th, .plan-summary td { border:1px solid #b8c4d3; padding:10px 12px; text-align:left; vertical-align:middle; white-space:nowrap; }
+      .plan-summary th { background:#eef2f6; color:var(--text); font-weight:700; }
+      .plan-summary td { background:#fff; }
+      .plan-summary th:last-child, .plan-summary td:last-child { text-align:center; }
       .plan-grid { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content) minmax(0, max-content); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 4px 0 6px; max-width: 100%; }
       .plan-gh { background: var(--bg-soft, #f3f5f8); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 8px; min-width: 0; overflow-wrap: anywhere; }
       .plan-gr { display: contents; }
@@ -2304,7 +2309,7 @@
           var labels={draft:'下書き',proposed:'承認待ち',approved:'承認済み',declined:'見送り'};
           function table(items) {
             if(!items.length)return '<p class="empty">計画はありません</p>';
-            return '<div style="overflow-x:auto"><table><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数・時間</th><th>1回の料金</th><th>状態</th><th></th></tr></thead><tbody>'+items.map(function(l){
+            return '<div style="overflow-x:auto"><table class="plan-summary"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数・時間</th><th>1回の料金</th><th>状態</th><th></th></tr></thead><tbody>'+items.map(function(l){
               var fee=l.lessonFee!=null?l.lessonFee:Math.round((Number(l.rate30)||0)*l.lessonMin/30);
               return '<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject || '未設定')+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind || '通常')+'</td><td>'+esc(l.count)+'回 × '+esc(l.lessonMin)+'分</td><td>'+yen(fee)+'</td><td><span class="tag '+(l.status==='proposed'?'amber':l.status==='approved'?'blue':'gray')+'">'+esc(labels[l.status]||l.status)+'</span></td><td><button class="btn-quiet btn-sm" data-action="plan-detail" data-line="'+esc(l.id)+'">詳細</button></td></tr>';
             }).join('')+'</tbody></table></div>';
