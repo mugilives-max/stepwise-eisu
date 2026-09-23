@@ -114,7 +114,7 @@ test('admin calendar colors depend on required action rather than past dates', a
 
 test('pending offers appear in attention with their edit action', async()=>{
  const ui=await ready({slots:[lesson('pending',{status:'offered'})]});
- const section=ui.html().match(/<section id="lesson-attention">([^]*?)</section>/)[1];
+ const section=ui.html().match(/<section id="lesson-attention">([^]*?)<\/section>/)[1];
  assert.match(section,/1件/); assert.match(section,/承認待ち/); assert.match(section,/data-action="slotedit"/);
  assert.doesNotMatch(ui.html(),/<summary>承認待ちの案内/);
 });
