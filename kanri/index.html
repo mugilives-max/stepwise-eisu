@@ -1023,7 +1023,7 @@
           }
 
           // 予約ページの設定(予約システムのstudentsシート)
-          html += '<h2>予約ページの設定</h2><div class="card">';
+          html += '<h2>生徒・保護者のページ設定</h2><div class="card"><h3>生徒</h3>';
           html += '<div class="line"><span class="t">専用リンク</span><span class="w small">' + (s.code ? '<span class="muted">' + esc(studentLink(s.code)) + '</span>' : '<span class="muted">未発行</span>') + '</span>' +
             (s.code ? '<button class="btn-ghost btn-sm" data-action="copylink">リンクをコピー</button>' : "") + '<button class="btn-quiet btn-sm" data-action="relink"' + (busy ? " disabled" : "") + '>再発行</button></div>';
           if (editEmail) {
@@ -1031,9 +1031,9 @@
           } else {
             html += '<div class="line"><span class="t">通知メール</span><span class="w">' + (s.email ? esc(s.email) : '<span class="muted">未登録（生徒への通知メールなし）</span>') + '</span><button class="btn-quiet btn-sm" data-action="editemail">変更</button></div>';
           }
-          html += '<div class="note">再発行すると、以前の専用リンクは使えなくなります。</div></div>';
+          html += '<div class="note">再発行すると、以前の専用リンクは使えなくなります。</div>';
 
-          html += studentParentInviteHtml(s) + studentFamilySettingsHtml(s);
+          html += studentParentInviteHtml(s, true) + '</div>' + studentFamilySettingsHtml(s);
           }
           if (section === 'billing') {
 
@@ -1512,10 +1512,10 @@
           return h+'<a class="btn-quiet btn-sm" href="#students?student='+encodeURIComponent(s.id)+'">グループの変更・管理</a></div>';
         }
         // 保護者カード: (1) メールで登録案内を送る(主経路) (2) 登録リンクを直接渡す(従来)。グループの登録状態を上に出す
-        function studentParentInviteHtml(s) {
+        function studentParentInviteHtml(s, embedded) {
           var own = studentInvite.id === String(s.id) && studentInvite.auth === token(), d = FT.auth === token() ? FT.data : null;
           var f = d ? (d.families || []).filter(function (g) { return (g.children || []).some(function (c) { return sameId(c.studentId, s.id); }); })[0] : null;
-          var h = '<h2>保護者</h2><div class="card">';
+          var h = embedded ? '<div style="border-top:1px solid var(--line);margin-top:20px;padding-top:16px"><h3>保護者</h3>' : '<h2>保護者</h2><div class="card">';
           if (FT.busy) return h + '<p role="status">保護者の登録状況を確認しています…</p>' + (own && studentInvite.regMsg ? '<p role="status">' + esc(studentInvite.regMsg) + '</p>' : '') + (own && studentInvite.regError ? '<p role="alert">' + esc(studentInvite.regError) + '</p>' : '') + '</div>';
           if (!d || FT.error) return h + '<p role="alert">登録状況を取得できませんでした。</p><button class="btn-quiet btn-sm" data-action="family-settings-refresh">再読み込み</button></div>';
           if (f && f.configured) h += '<p><span class="tag green">登録済み</span> ' + esc(f.email || '') + (f.lastLogin ? ' <span class="small muted">最終ログイン ' + esc(fmtAuthTime(f.lastLogin)) + '</span>' : '') + '</p><p class="note">パスワードを忘れた場合は、保護者ページのログイン画面から再設定できます（先生は再発行しません）。</p>';
@@ -2203,7 +2203,7 @@
             }
             else if (l.status === "declined" && l.memo) sub += '<div class="small muted" style="margin:2px 0">保護者から: ' + esc(l.memo) + '</div>';
             if (!dis) {
-              sub += '<div class="row" style="margin:4px 0;gap:6px">' + (l.status === "draft" ? '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">送信</button>' : '') + '<button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + ' aria-label="編集" title="編集">✎</button>' + (l.status === "proposed" || l.status === "approved" ? '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>' : '') + (l.status === "approved" && !l.parentId ? '<button class="btn-quiet btn-sm" data-action="pe-addon"' + attrs + ' title="この案内に回数を追加する">＋追加</button>' : '') + '</div>';
+              sub += '<div class="row" style="margin:4px 0;gap:6px">' + (l.status === "draft" ? '<button class="btn-primary btn-sm" data-action="pl-send"' + attrs + ' data-rev="' + esc(l.revision) + '">送信</button>' : '') + '<button class="btn-quiet btn-sm" data-action="pe-open"' + attrs + ' aria-label="授業計画を編集" title="授業計画を編集">内容を編集</button>' + (l.status === "proposed" || l.status === "approved" ? '<button class="btn-quiet btn-sm" data-action="plancopy"' + attrs + '>連絡文をコピー</button>' : '') + (l.status === "approved" && !l.parentId ? '<button class="btn-quiet btn-sm" data-action="pe-addon"' + attrs + ' title="この案内に回数を追加する">＋追加</button>' : '') + '</div>';
               if (l.status === "proposed") {
                 sub += '<details class="add"><summary>LINE・電話などで受けた承諾を記録</summary><div class="form" style="margin-top:10px"><label for="pa-via-' + esc(l.id) + '">確認方法</label><select id="pa-via-' + esc(l.id) + '">' + ["LINE", "電話", "対面", "メール"].map(function (v) { return '<option>' + v + '</option>'; }).join("") + '</select><label for="pa-consent-' + esc(l.id) + '">実際の承諾日</label><input type="date" id="pa-consent-' + esc(l.id) + '" value="' + today() + '" max="' + today() + '"><label for="pa-memo-' + esc(l.id) + '">メモ（経緯など）</label><input type="text" id="pa-memo-' + esc(l.id) + '" maxlength="500"></div><div class="row" style="margin-top:8px"><button class="btn-quiet btn-sm" data-action="pl-approve"' + attrs + ' data-rev="' + esc(l.revision) + '">承諾を記録</button></div></details>';
               }
@@ -2755,7 +2755,7 @@
               if (sOfferOpen) { var fd = document.getElementById("f-date"); if (fd && fd.scrollIntoView) fd.scrollIntoView({ behavior: "smooth", block: "center" }); }
               break;
             case "pe-new": planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
-            case "pe-open": { var peL = planLineById(cur, btn.getAttribute("data-line")); if (!peL) return; planEdits[cur.id] = planEditOf(cur, peL); render(); break; }
+            case "pe-open": { var peL = planLineById(cur, btn.getAttribute("data-line")); if (!peL) return; planEdits[cur.id] = planEditOf(cur, peL); render(); var editor = document.getElementById("plan-editor"); if(editor && editor.scrollIntoView)editor.scrollIntoView({behavior:"smooth",block:"center"}); break; }
             case "pe-addon": { var paP = planLineById(cur, btn.getAttribute("data-line")); if (!paP) return; planEdits[cur.id] = planEditAddon(cur, paP); render(); var pe1 = document.getElementById("plan-editor"); if (pe1 && pe1.scrollIntoView) pe1.scrollIntoView({ behavior: "smooth", block: "center" }); break; }
             case "help-toggle": { var hk = btn.getAttribute("data-help"); helpOpen[hk] = !helpOpen[hk]; render(); break; }
             case "pe-cancel": delete planEdits[cur.id]; render(); break;
