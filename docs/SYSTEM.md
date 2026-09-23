@@ -524,6 +524,8 @@ GAS v60へ反映。退避・v59との基準照合後、固定版ソースの一�
 
 ### 文章からの予定登録（AI 変換、2026-09-11）
 
+2026-09-23、本番D1へ `0005_natural_schedule.sql`、Worker `1fce1110-6701-41cc-866d-7ee071245795`、GAS v105を反映（コード `9636d46`、release `2026-09-23-worker-natural-schedule`）。本人がWorker Secretを登録し、Secret名の存在を確認済み。全708テスト・構文検査、両公開APIのrelease、不正な先生認証の拒否を確認した。認証済み画面からの実Claude解析は未確認。GAS更新直後の版照合は一度遅延し、公開health確認後に同じ計画を再実行して完了。退避・照合記録は `.verification/releases/2026-09-23T12-05-01-917Z/`。復旧時はGAS v104と直前Workerへ戻せる。追加した内部表は既存業務表を変更しないため残置可能。
+
 生徒ホームの「選んだ日の予定」の＋を押したときに「手動で予定入力」(3ボタン)の下へ「文章で自動入力」を表示（2026-09-11 に別カード「文章で予定を伝える」から統合）。本人確認と入力検証は Worker に同梱した `scheduleParse`（`gas/NaturalSchedule.gs`）で行い、認証成功後だけ Worker が Anthropic Messages API（`claude-haiku-4-5-20251001`、ツール呼び出し `propose_schedule` で構造化出力）を直接呼ぶ。授業できる時間帯（wish）・授業できない日（block）・予定の共有（event、テスト・模試、授業不可を含むか）の候補に変換し、同じGAS関数で正規化して返す。画面は候補をチェックボックスで並べ、時間帯が曖昧な wish は時刻入力を出し、「チェックした内容で登録する」で既存の `wishMany` / `blockSet` / `eventAddMany` を順に呼ぶ（保存側の検証はそのまま。登録済みの授業できない日は除外。途中で失敗した項目からやり直せるよう完了項目は「登録済み」にする）。
 
 - 鍵は Cloudflare Worker Secret `ANTHROPIC_API_KEY`。`wrangler secret put ANTHROPIC_API_KEY --config cf/wrangler.jsonc` で設定し、コード・Git・D1・ログ・応答には含めない。未設定時は `notConfigured` を返す。
