@@ -1236,15 +1236,15 @@
           if (s.date < day) return true;
           return s.date === day && Date.now() >= new Date(s.date + 'T' + s.start + ':00+09:00').getTime() + Number(s.min) * 60000;
         }
-        function lessonAttention(slots, wishes) {
-          wishes = wishes || [];
+        function lessonAttention(slots, day) {
           var missing = function(s) { return s.done && s.lessonRecordStatus !== 'active'; };
-          var list = slots.filter(function(s) { return s.status === 'booked' && (s.req || missing(s)); });
+          var list = slots.filter(function(s) { return (s.status === 'booked' && (s.req || missing(s))) || (s.status === 'offered' && s.date >= day); });
           list.sort(function(a,b) { return Number(!!b.req) - Number(!!a.req) || slotCmp(a,b); });
-          var h = '<section id="lesson-attention"><h2>対応が必要な授業 <span class="cnt">' + (list.length + wishes.length) + '件</span></h2>';
-          if (!list.length && !wishes.length) return h + '<div class="empty">対応が必要な授業はありません</div></section>';
+          var h = '<section id="lesson-attention"><h2>対応が必要な授業 <span class="cnt">' + list.length + '件</span></h2>';
+          if (!list.length) return h + '<div class="empty">対応が必要な授業はありません</div></section>';
           if (list.length) h += '<div class="card">';
           list.forEach(function(s) {
+            if (s.status === "offered") { h += lessonRow(s, true); return; }
             var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '');
             h += '<div class="line"><span class="t">' + fmtD(s.date) + ' ' + esc(s.start) + '〜' + endTime(s.start,s.min) + '</span><span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '">' + esc(s.studentName) + '</a> <span class="small muted">' + esc(lessonLabel(s)) + '</span> ';
             if (s.req) h += '<span class="tag red">取消依頼中</span>' + (s.req.reason ? '<div class="small">' + esc(s.req.reason) + '</div>' : '');
@@ -1255,8 +1255,6 @@
             h += '</div>';
           });
           if (list.length) h += '</div>';
-          h += '<h3>生徒からの希望日程 <span class="cnt">' + wishes.length + '件</span></h3>';
-          h += wishes.length ? '<div class="card">' + wishes.map(function(x) { return wishRow(x, true); }).join('') + '</div>' : '<div class="empty">希望はありません(生徒は予定ページから送れます)</div>';
           return h + '</section>';
         }
 
@@ -1321,13 +1319,8 @@
 
           html += lessonOfferDialogHTML();
 
-          html += lessonAttention(slots, A.wishes || []);
+          html += lessonAttention(slots, today);
 
-          // 承認待ち
-          var offered = upcoming.filter(function (s) { return s.status === "offered"; });
-          html += '<details><summary>承認待ちの案内（' + offered.length + '件）</summary>';
-          html += offered.length ? '<div class="card">' + offered.map(function (s) { return lessonRow(s, true); }).join("") + '</div>' : '<div class="empty">返事待ちの案内はありません</div>';
-          html += '</details>';
           html += expiredCard(slots.filter(function (s) { return offerEnded(s, today); }).slice().reverse(), true);
 
           // 先生の休み

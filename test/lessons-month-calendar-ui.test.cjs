@@ -67,14 +67,11 @@ test('selected offered lesson retains direct edit with the same slot ID and no d
   assert.match(dayDetails(ui.html()), /18:00〜19:00/);
 });
 
-test('month retains shared events and teacher breaks; next-month wish opens a dated composer', async () => {
+test('month retains shared events and teacher breaks without the wishes list', async () => {
   const ui = await ready({teacherOff:[{id:'off',date:today,start:'13:00',end:'14:00'}], events:[{id:'event',studentId:'test-a',studentName:'【テスト】生徒A',date:today,dateTo:today,title:'【テスト】定期テスト'}], wishes:[{id:'wish',studentId:'test-a',studentName:'【テスト】生徒A',date:'2026-10-02',start:'16:00',end:'18:00',kind:'ok'}]});
   assert.match(calendar(ui.html()), /13:00-<wbr>14:00<\/span><span class="s">休み/); assert.match(calendar(ui.html()), /【テスト】定期テスト/);
   assert.match(dayDetails(ui.html()), /data-action="tdeloff"/); assert.match(dayDetails(ui.html()), /data-action="delevent"/);
-  ui.click('usewish', {'data-id':'wish'});
-  assert.match(ui.html(), /class="callabel">2026年10月/);
-  assert.equal(ui.el('f-date').value,'2026-10-02'); assert.equal(ui.el('f-student').value,'test-a');
-  assert.equal(ui.el('f-start').value,'16:00'); assert.equal(ui.requests.length,1);
+  assert.doesNotMatch(ui.html(), /生徒からの希望日程|data-action="usewish"/);
 });
 
 
@@ -89,7 +86,7 @@ test('attention list selects missing completed records and cancellation requests
   assert.match(section, /4件/); assert.match(section, /記録を再開/); assert.match(section, /【テスト】都合変更/);
   assert.equal((section.match(/class="line"/g)||[]).length,4);
   assert.doesNotMatch(section, /slot=recorded|slot=upcoming/);
-  assert.ok(ui.html().indexOf('id="lesson-attention"') < ui.html().indexOf('承認待ちの案内'));
+  assert.doesNotMatch(ui.html(), /<summary>承認待ちの案内|生徒からの希望日程/);
   ui.click('cancelkeep',{'data-id':'cancel'});
   assert.equal(ui.requests.at(-1).body.op,'resolveCancel');
   assert.equal(ui.requests.at(-1).body.slotId,'cancel');
@@ -113,4 +110,11 @@ test('admin calendar colors depend on required action rather than past dates', a
     assert.ok(cell.includes('calbox '+cls),date);
     assert.doesNotMatch(cell,/記録なし|実施未登録|calbox dn/);
   }
+});
+
+test('pending offers appear in attention with their edit action', async()=>{
+ const ui=await ready({slots:[lesson('pending',{status:'offered'})]});
+ const section=ui.html().match(/<section id="lesson-attention">([^]*?)</section>/)[1];
+ assert.match(section,/1件/); assert.match(section,/承認待ち/); assert.match(section,/data-action="slotedit"/);
+ assert.doesNotMatch(ui.html(),/<summary>承認待ちの案内/);
 });
