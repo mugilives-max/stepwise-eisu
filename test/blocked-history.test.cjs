@@ -9,5 +9,5 @@ test('student state retains own blocked history and day detail is read only',asy
  assert.ok(state.blocked.some(x=>x.id==='past'));assert.ok(!state.blocked.some(x=>x.id==='other'||x.id==='old'));
  const cal=require('../assets/calendar.js'), parts=past.split('-');
  const html=cal.render(cal.buildInfo({blocked:state.blocked}),{year:+parts[0],month:+parts[1]-1,today:today});
- assert.ok(html.includes('data-date="'+past+'"'));assert.match(html,/授業不可17-20/);
+ assert.ok(html.includes('data-date="'+past+'"'));assert.match(html,/17:00-<wbr>20:00<\/span><span class="s">授業不可/);
 });

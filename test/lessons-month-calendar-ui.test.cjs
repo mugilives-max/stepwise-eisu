@@ -69,7 +69,7 @@ test('selected offered lesson retains direct edit with the same slot ID and no d
 
 test('month retains shared events and teacher breaks; next-month wish opens a dated composer', async () => {
   const ui = await ready({teacherOff:[{id:'off',date:today,start:'13:00',end:'14:00'}], events:[{id:'event',studentId:'test-a',studentName:'【テスト】生徒A',date:today,dateTo:today,title:'【テスト】定期テスト'}], wishes:[{id:'wish',studentId:'test-a',studentName:'【テスト】生徒A',date:'2026-10-02',start:'16:00',end:'18:00',kind:'ok'}]});
-  assert.match(calendar(ui.html()), /休み13-14/); assert.match(calendar(ui.html()), /【テスト】定期テスト/);
+  assert.match(calendar(ui.html()), /13:00-<wbr>14:00<\/span><span class="s">休み/); assert.match(calendar(ui.html()), /【テスト】定期テスト/);
   assert.match(dayDetails(ui.html()), /data-action="tdeloff"/); assert.match(dayDetails(ui.html()), /data-action="delevent"/);
   ui.click('usewish', {'data-id':'wish'});
   assert.match(ui.html(), /class="callabel">2026年10月/);

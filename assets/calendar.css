@@ -60,3 +60,9 @@ button.calday { cursor: pointer; font-size: 13px; }
 .calholiday { display: block; font-size: 10px; line-height: 1.35; color: var(--danger); white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
 .calday.sel .calholiday { color: var(--white); }
 .home-calendar-day.holiday[aria-pressed="true"] .home-calendar-number { color: white; }
+
+/* Timed restrictions use the same two-line blocks as lessons. */
+.calbox.unavailable { box-sizing: border-box; max-width: 100%; }
+.calbox.unavailable.ng { color: var(--danger); border-left-color: var(--danger); background: repeating-linear-gradient(135deg, var(--danger-soft) 0 4px, transparent 4px 8px); }
+.calbox.unavailable.toff { color: var(--muted); border-left-color: var(--muted); background: repeating-linear-gradient(135deg, var(--taken) 0 4px, transparent 4px 8px); }
+.calday.sel .calbox.unavailable { color: var(--white); border-left-color: var(--white); background: repeating-linear-gradient(135deg, rgba(255,255,255,.22) 0 4px, rgba(255,255,255,.08) 4px 8px); }

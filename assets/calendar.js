@@ -163,6 +163,9 @@
   function endTime(start, min) { var p = String(start || "0:0").split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min || 0); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
   function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
   function byStart(a, b) { return String(a.start) < String(b.start) ? -1 : 1; }
+  function unavailableBox(item, label, kind) {
+    return '<span class="calbox unavailable '+kind+'"><span class="t">'+esc(item.start)+(item.end?'-<wbr>'+esc(item.end):'')+'</span><span class="s">'+esc(label)+'</span></span>';
+  }
   function defaultLabel(s) { var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); }
 
   // lessons: {date, start, min, subject, kind, st}  st = mine(確定) | offer(案内) | done(実施済み) | past(過去・未実施)
@@ -222,10 +225,10 @@
       if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
       marks += "</span>";
       if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
-      if (it && it.ngT) it.ngT.slice().sort(byStart).slice(0, 2).forEach(function (b) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可' + cT(b.start) + '-' + cT(b.end) + '</span>'; });
+      if (it && it.ngT) it.ngT.slice().sort(byStart).forEach(function (b) { marks += unavailableBox(b, '授業不可', 'ng'); });
       if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
       if (showToff && it && it.toff) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
-      if (showToff && it && it.toffT) it.toffT.slice().sort(byStart).slice(0, 2).forEach(function (o) { marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + cT(o.start) + '-' + cT(o.end) + '</span>'; });
+      if (showToff && it && it.toffT) it.toffT.slice().sort(byStart).forEach(function (o) { marks += unavailableBox(o, toffText, 'toff'); });
       if (hasItems) {
         var lb = it.labels.slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
         // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
