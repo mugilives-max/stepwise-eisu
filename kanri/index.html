@@ -206,7 +206,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260922-outline"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260923-unavailable-blocks"><script src="/assets/calendar.js?v=20260923-time-order"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260923-admin-health"><script src="/assets/calendar.js?v=20260923-admin-health"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -1004,10 +1004,10 @@
             var tdy = s.today || today();
             // 生徒マイページと同じ予定表(共通部品 assets/calendar.js)。授業は確定=青・案内=黄、授業不可・登録不可は斜線、授業可は緑
             var info = window.StepwiseCalendar.buildInfo({
-              lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
+              lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, cls: lessonNeedsAttention(l, tdy) ? "needs-attention" : "admin-ok", st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
               events: s.events || [], blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
-            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, adminHealth: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
             html += '<h2>予定の編集</h2>' + renderStudentDayCard(s, tdy);
           })();
 
@@ -1217,6 +1217,13 @@
           return h + "</div>";
         }
 
+        function lessonNeedsAttention(s, day) {
+          if (s.status !== 'booked' && s.status !== 'offered') return false;
+          if (s.req) return true;
+          if (s.done) return s.lessonRecordStatus !== 'active';
+          if (s.date < day) return true;
+          return s.date === day && Date.now() >= new Date(s.date + 'T' + s.start + ':00+09:00').getTime() + Number(s.min) * 60000;
+        }
         function lessonAttention(slots) {
           var missing = function(s) { return s.done && s.lessonRecordStatus !== 'active'; };
           var list = slots.filter(function(s) { return s.status === 'booked' && (s.req || missing(s)); });
@@ -1274,14 +1281,14 @@
           // 同じ共通部品。授業不可(生徒NG)は案内フォームで選んでいる生徒の分だけ出す(全員分を重ねると読めないため)
           var pickSid = offerDraft && offerDraft.studentId ? String(offerDraft.studentId) : "";
           var linfo = window.StepwiseCalendar.buildInfo({
-            lessons: calendarSlots.map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : (s2.done ? "done" : (s2.date < today ? "past" : "mine")), cls: s2.status !== "offered" && s2.req ? "rq" : (s2.done ? "dn" : "") }; }),
+            lessons: calendarSlots.map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : (s2.done ? "done" : (s2.date < today ? "past" : "mine")), cls: lessonNeedsAttention(s2, today) ? "needs-attention" : "admin-ok" }; }),
             events: (A.events || []).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
             blocked: pickSid ? (A.blocked || []).filter(function (b2) { return sameId(b2.studentId, pickSid); }) : [],
             teacherOff: A.teacherOff || [],
             wishes: (A.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
             lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
-          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", legendReq: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + '</h2>';
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。' + (selDate >= today ? '「＋」からこの日の授業を案内できます。' : '') + '</div>';

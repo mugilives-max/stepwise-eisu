@@ -66,3 +66,7 @@ button.calday { cursor: pointer; font-size: 13px; }
 .calbox.unavailable.ng { color: var(--danger); border-left-color: var(--danger); background: repeating-linear-gradient(135deg, var(--danger-soft) 0 4px, transparent 4px 8px); }
 .calbox.unavailable.toff { color: var(--muted); border-left-color: var(--muted); background: repeating-linear-gradient(135deg, var(--taken) 0 4px, transparent 4px 8px); }
 .calday.sel .calbox.unavailable { color: var(--white); border-left-color: var(--white); background: repeating-linear-gradient(135deg, rgba(255,255,255,.22) 0 4px, rgba(255,255,255,.08) 4px 8px); }
+
+/* Admin lesson health stays visible even on the selected day. */
+.calday .calbox.admin-ok { background:var(--soft);color:var(--primary);border-left-color:var(--primary); }
+.calday .calbox.needs-attention { background:var(--danger-soft);color:var(--danger);border-left-color:var(--danger); }

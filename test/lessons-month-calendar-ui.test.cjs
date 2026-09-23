@@ -30,7 +30,7 @@ test('month keeps every lesson label, time order, past/done and cancellation sta
   const todayCell = html.match(/<button[^>]*data-date="2026-09-23"[^>]*>([\s\S]*?)<\/button>/)[1];
   const starts = [...todayCell.matchAll(/class="t">(\d{2}:\d{2})/g)].map(m => m[1]);
   assert.deepEqual(starts, ['15:00','18:00','19:00']);
-  assert.match(html, /class="calbox of"/); assert.match(html, /class="calbox dn"/); assert.match(html, /class="calbox rq"/);
+  assert.match(html, /class="calbox of admin-ok"/); assert.match(html, /class="calbox needs-attention"/); assert.match(html, /class="calbox admin-ok"/);
   assert.doesNotMatch(html, /SHOULD_NOT_APPEAR/);
   ui.click('calday', {'data-date':'2026-09-21'});
   assert.match(dayDetails(ui.html()), /実施済/);
@@ -96,4 +96,21 @@ test('attention list selects missing completed records and cancellation requests
   assert.equal(ui.requests.at(-1).body.approve,false);
   ui.requests.at(-1).reply({admin:data({slots:slots.map(s=>s.id==='cancel'?{...s,req:null}:s)})}); await flush();
   assert.match(ui.html().match(/<section id="lesson-attention">([^]*?)<\/section>/)[1], /3件/);
+});
+
+
+test('admin calendar colors depend on required action rather than past dates', async () => {
+  const ui=await ready({slots:[
+    lesson('healthy',{date:'2026-09-20',done:true,lessonRecordStatus:'active'}),
+    lesson('missing',{date:'2026-09-21',done:true,lessonRecordStatus:'none'}),
+    lesson('unregistered',{date:'2026-09-22'}),
+    lesson('future',{date:'2026-09-24'}),
+    lesson('cancel',{date:'2026-09-25',req:{reason:'【テスト】'}})
+  ]});
+  const html=calendar(ui.html());
+  for(const [date,cls] of [['20','admin-ok'],['21','needs-attention'],['22','needs-attention'],['24','admin-ok'],['25','needs-attention']]) {
+    const cell=html.match(new RegExp('data-date="2026-09-'+date+'"[^>]*>([^]*?)</button>'))[1];
+    assert.ok(cell.includes('calbox '+cls),date);
+    assert.doesNotMatch(cell,/記録なし|実施未登録|calbox dn/);
+  }
 });
