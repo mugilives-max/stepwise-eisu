@@ -312,6 +312,9 @@
         function slotDelivery(s, sid, hideLabel, part) {
           var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(sid || s.studentId) + '" data-kind="' + esc(s.kind || '通常') + '" data-status="' + esc(s.status) + '" data-snapshot="' + esc(JSON.stringify(slotEditSnapshot(s))) + '"' + (busy ? ' disabled' : '');
           var mode = hideLabel ? '' : '<span class="muted small">' + (s.deliveryMode === 'online' ? 'WEB' : deliveryLabel(s.deliveryMode)) + '</span>', actions = '';
+          if (!hideLabel && s.deliveryMode === 'online') mode = s.meetUrl
+            ? '<button type="button" class="small" data-action="copymeet" data-url="' + esc(s.meetUrl) + '" aria-label="Meetリンクをコピー" title="Meetリンクをコピー" style="color:var(--primary);background:none;border:0;padding:4px 2px;border-radius:0;font:inherit;font-size:var(--small,0.85em);cursor:pointer">WEB</button>'
+            : '<span class="small" style="color:var(--primary)" title="Meetリンクはまだ発行されていません">WEB</span>';
           if (!s.done && (s.status === 'offered' || s.status === 'booked')) actions = '<button class="btn-quiet btn-sm" data-action="slotedit"' + attrs + '>案内を修正</button>';
           return part === 'mode' ? mode : part === 'actions' ? actions : mode + actions;
         }
@@ -2530,6 +2533,9 @@
                   location.hash = "#s=" + encodeURIComponent(res.data.id);
                 } else load(true);
               }).catch(function (e) { busy = false; syncMsg = ""; toast(e.message); render(); });
+              break;
+            case "copymeet":
+              if (btn.getAttribute("data-url")) copyText(btn.getAttribute("data-url"), "Meetリンクをコピーしました");
               break;
             case "copylink":
               if (!cur.code) { toast("リンクがまだ発行されていません"); return; }

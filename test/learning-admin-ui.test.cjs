@@ -203,7 +203,7 @@ test('failed withdrawal keeps the offer editor and its input for correction', as
 
 test('booked lessons show plain WEB text and release only through their edit modal', async () => {
   const ui = await adminReady(card({lessons:[offered({status:'booked',deliveryMode:'online'})]}));
-  assert.match(ui.html(), /<span class="muted small">WEB<\/span>/);
+  assert.match(ui.html(), /<span class="small" style="color:var\(--primary\)"[^>]*>WEB<\/span>/);
   assert.doesNotMatch(ui.html(), /data-action="(?:slotmode|unbook)"/);
   ui.click('slotedit', {'data-id':'slot-a'});
   assert.match(ui.html(), /<dialog id="slot-editor"/);
