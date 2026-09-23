@@ -163,6 +163,30 @@
   function endTime(start, min) { var p = String(start || "0:0").split(":"); var t = (+p[0]) * 60 + (+p[1]) + (+min || 0); return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60); }
   function addDaysStr(ds, n) { var p = ds.split("-"); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
   function byStart(a, b) { return String(a.start) < String(b.start) ? -1 : 1; }
+  // Only the administrator main calendar opts into compact overlap lanes.
+  function overlapGroups(items) {
+    var groups = [], minutes = function(t) { var p=String(t).split(':'); return +p[0]*60 + +p[1]; };
+    items.slice().sort(byStart).forEach(function(item) {
+      var start=minutes(item.start), end=minutes(item.end), g=groups[groups.length-1];
+      if (!Number.isFinite(end) || end<=start) end=start+1;
+      if (!g || start>=g.end) { g={start:start,end:end,items:[],lanes:[]}; groups.push(g); }
+      var lane=g.lanes.findIndex(function(e){return e<=start;});
+      if(lane<0)lane=g.lanes.length;
+      g.lanes[lane]=end;g.end=Math.max(g.end,end);
+      g.items.push({item:item,start:start,end:end,lane:lane});
+    });
+    return groups;
+  }
+  function overlapMarkup(items) {
+    return overlapGroups(items).map(function(g) {
+      // Restrictions remain in chronological order; crowded groups use the normal list.
+      if(g.items.length<2 || g.lanes.length>2 || g.items.some(function(x){return !x.item.lesson;})) return g.items.map(function(x){return x.item.html;}).join('');
+      var scale=Math.max.apply(null,[0.9].concat(g.items.map(function(x){return 56/(x.end-x.start);}))); 
+      return '<span class="cal-overlap" style="--overlap-height:'+((g.end-g.start)*scale)+'px">'+g.items.map(function(x){
+        return '<span class="cal-overlap-item" style="--overlap-top:'+((x.start-g.start)*scale)+'px;--overlap-size:'+((x.end-x.start)*scale-2)+'px;--overlap-lane:'+x.lane+'">'+x.item.html+'</span>';
+      }).join('')+'</span>';
+    }).join('');
+  }
   function unavailableBox(item, label, kind) {
     return '<span class="calbox unavailable '+kind+'"><span class="t">'+esc(item.start)+(item.end?'-<wbr>'+esc(item.end):'')+'</span><span class="s">'+esc(label)+'</span></span>';
   }
@@ -226,20 +250,21 @@
       marks += "</span>";
       if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
       var timed = [];
-      if (it && it.ngT) it.ngT.forEach(function (b) { timed.push({start:b.start, html:unavailableBox(b, '授業不可', 'ng')}); });
+      if (it && it.ngT) it.ngT.forEach(function (b) { timed.push({start:b.start, end:b.end, html:unavailableBox(b, '授業不可', 'ng')}); });
       if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
       if (showToff && it && it.toff) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
-      if (showToff && it && it.toffT) it.toffT.forEach(function (o) { timed.push({start:o.start, html:unavailableBox(o, toffText, 'toff')}); });
+      if (showToff && it && it.toffT) it.toffT.forEach(function (o) { timed.push({start:o.start, end:o.end, html:unavailableBox(o, toffText, 'toff')}); });
       if (hasItems) {
         var lb = it.labels;
         // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
         lb.forEach(function (l) {
           if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
           var lc = (l.st === "offer" ? " of" : "") + (l.cls ? " " + l.cls : "");
-          timed.push({start:l.start, html:'<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>'});
+          timed.push({start:l.start, end:l.end, lesson:true, html:'<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>'});
         });
       }
-      timed.sort(byStart).forEach(function(item) { marks += item.html; });
+      if(opts.overlapLanes) marks += overlapMarkup(timed);
+      else timed.sort(byStart).forEach(function(item) { marks += item.html; });
       if (holiday) marks = '<span class="calholiday">' + esc(holiday) + '</span>' + marks;
       var hasMarks = !!holiday || hasItems || !!(it && (it.ngAll || it.ngT || (showToff && (it.toff || it.toffT))));
       var clickable = !past || hasMarks; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)。過去は何かある日だけ
@@ -261,5 +286,5 @@
     return h;
   }
 
-  return { holidayName: holidayName, buildInfo: buildInfo, render: render, endTime: endTime, addDaysStr: addDaysStr };
+  return { overlapGroups: overlapGroups, holidayName: holidayName, buildInfo: buildInfo, render: render, endTime: endTime, addDaysStr: addDaysStr };
 });

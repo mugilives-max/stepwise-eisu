@@ -206,7 +206,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260922-outline"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260923-neutral-days"><script src="/assets/calendar.js?v=20260923-admin-health"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260923-overlap"><script src="/assets/calendar.js?v=20260923-overlap"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -1288,7 +1288,7 @@
             wishes: (A.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
             lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
-          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, overlapLanes: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
           html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + '</h2>';
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。' + (selDate >= today ? '「＋」からこの日の授業を案内できます。' : '') + '</div>';
