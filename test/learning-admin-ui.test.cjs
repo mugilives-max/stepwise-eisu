@@ -251,7 +251,7 @@ test('dedicated planning page opens the proposal editor and refreshes saved defa
 
 test('planning summary hides controls until details opens and retains editing in the dialog', async()=>{
  const ui=createUI('admin',{hash:'#plans?student=test-a'});
- const line={id:'test-plan',month:'2026-09',subject:'英語',kind:'通常',count:4,lessonMin:90,rate30:700,startDate:'2026-09-01',endDate:'2026-09-30',status:'proposed',revision:1};
+ const line={id:'test-plan',month:'2026-09',subject:'英語',kind:'',count:4,lessonMin:90,rate30:700,startDate:'2026-09-01',endDate:'2026-09-30',status:'proposed',revision:1};
  ui.requests[0].reply({data:card({section:'billing',plan:{lines:[line],defaultRows:[]}})});await flush();
  assert.ok(ui.html().includes('承認待ち'));
  assert.ok(ui.html().includes('<th>種類</th>'));

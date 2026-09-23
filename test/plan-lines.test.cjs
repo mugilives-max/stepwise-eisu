@@ -188,3 +188,20 @@ test('addon lines top up an approved line: same subject and kind, period inside 
   const usage = h.admin('kanriStudent', { studentId: 'test-a', section: 'billing' }).data.plan.usage;
   assert.deepEqual(json(usage), { [parent.line.id]: { done: 2, planned: 0 }, [a1.line.id]: { done: 1, planned: 0 }, [a2.line.id]: { done: 1, planned: 0 } });
 });
+
+
+test('explicit valid start and end dates are mandatory for both drafts and proposals',()=>{
+ for(const propose of [false,true]) for(const patch of [
+ {startDate:undefined},{endDate:undefined},{startDate:''},{endDate:''},
+ {startDate:'2026-02-30'},{endDate:'2026-09-31'},{startDate:'2026-10-01',endDate:'2026-09-30'}
+ ]) {
+  const h=createSchedulingHarness(); rejected(save(h,{...patch,propose}));
+  assert.equal(h.rows('planLines').length,0,'invalid period must not be stored');
+ }
+ const h=createSchedulingHarness();
+ const r=ok(save(h,{startDate:'2026-12-20',endDate:'2027-01-10'}));
+ assert.equal(r.line.startDate,'2026-12-20');assert.equal(r.line.endDate,'2027-01-10');
+ const before=json(h.rows('planLines'));
+ rejected(save(h,{lineId:r.line.id,expectedRevision:r.line.revision,startDate:'',propose:true}));
+ assert.deepEqual(json(h.rows('planLines')),before,'invalid edit must preserve stored dates');
+});
