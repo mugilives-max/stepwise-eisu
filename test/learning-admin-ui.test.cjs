@@ -71,7 +71,7 @@ for (const op of ['editOffered', 'setSlotDeliveryMode']) test('reload reconstruc
   const before = snapshot(offered()), after = { ...before, deliveryMode: 'online', ...(op === 'editOffered' ? { date: '2026-09-12', subject: '化学', min: 90 } : {}) };
   const pending = { requestId: 'server-pending-edit', op, studentId: 'test-a', slotId: 'slot-a', before, after };
   const ui = await adminReady(card({ lessons: [offered({ ...after, status: op === 'editOffered' ? 'offered' : 'booked' })], pendingEdits: [pending] }));
-  ui.click('se-resume', { 'data-request': pending.requestId }); assert.equal(ui.el('se-mode').disabled, true); ui.click('se-retry');
+  ui.click('se-resume', { 'data-request': pending.requestId }); if(op==='editOffered')assert.equal(ui.el('se-mode').disabled,true);else assert.equal(ui.el('se-mode'),undefined); ui.click('se-retry');
   const req = ui.requests.at(-1).body; assert.equal(req.op, op); assert.equal(req.requestId, pending.requestId); assert.equal(req.deliveryMode, 'online');
   if (op === 'editOffered') { assert.deepEqual(req.expectedSnapshot, before); assert.equal(req.subject, '化学'); assert.equal(req.date, after.date); }
   else { assert.equal(req.expectedMode, 'in_person'); assert.equal(req.expectedSnapshot, undefined); }
@@ -86,7 +86,7 @@ test('opening a lesson with an existing pending edit resumes that request instea
 test('a booked lesson opens a mode-only editor and carries a stable request ID through retry', async () => {
   const ui = await adminReady(card({ lessons: [offered({ status: 'booked' })] }));
   assert.equal(ui.html().includes('data-action="slotedit"'), false); ui.click('slotmode', { 'data-id': 'slot-a' });
-  assert.equal(ui.el('se-date'), undefined); ui.input('se-mode', 'online'); ui.click('se-save');
+  assert.equal(ui.el('se-date'), undefined); assert.equal(ui.el('se-mode'),undefined); assert.equal(ui.confirms(),1);
   const req = structuredClone(ui.requests.at(-1).body); assert.equal(req.expectedMode, 'in_person'); assert.equal(req.op, 'setSlotDeliveryMode');
   ui.requests.at(-1).reply({ error: 'Meetの準備中です', errorCode: 'pending' }); await flush(); ui.click('se-retry'); assert.deepEqual(ui.requests.at(-1).body, req);
 });
@@ -147,17 +147,9 @@ test('lesson homework deadline changes clear stale dates and retain the chosen p
   ui.requests.at(-1).fail(); await flush(); ui.click('lc-retry'); assert.deepEqual(ui.requests.at(-1).body, payload);
 });
 
-test('teacher email status permits explicit retries only for safe queued messages and shows unknown results', async () => {
-  const ui = await adminReady(card({ emailStatus: { email: 'synthetic@example.invalid', verified: true } }), 'settings');
-  ui.click('sm-load'); assert.equal(ui.requests.at(-1).body.op, 'studentEmailNotifications');
-  const emailStatus = { email: 'synthetic@example.invalid', verified: true }, notifications = [
-    { id: 'uncertain-notice', kind: 'changed', status: 'uncertain', retryable: false }, { id: 'failed-notice', kind: 'offered', status: 'failed', retryable: true }
-  ];
-  ui.requests.at(-1).reply({ ok: true, emailStatus, notifications }); await flush();
-  assert.match(ui.html(), /送信結果不明/); assert.equal(ui.html().includes('data-action="sm-retry" data-id="uncertain-notice"'), false);
-  const before = ui.requests.length; ui.click('sm-retry', { 'data-id': 'failed-notice' }); assert.equal(ui.requests.length, before, 'retry only asks for confirmation'); assert.match(ui.html(), /synthetic@example.invalid/);
-  ui.click('sm-send'); const req = ui.requests.at(-1).body; assert.equal(req.op, 'studentEmailRetryNotification'); assert.equal(req.studentId, 'test-a'); assert.equal(req.notificationId, 'failed-notice');
-  assert.equal(ui.confirms(), 0);
+test('student settings no longer exposes the removed email delivery panel', async () => {
+  const ui = await adminReady(card(), 'settings');
+  assert.doesNotMatch(ui.html(), /data-action="sm-load"|生徒メールの送信状況/);
 });
 
 test('offered edit survives teacher re-login with its request identity and input intact', async () => {
