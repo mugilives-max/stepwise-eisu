@@ -262,9 +262,13 @@ test('planning summary hides controls until details opens and retains editing in
  ui.click('plan-detail',{'data-line':'test-plan'});
  assert.ok(ui.html().includes('id="plan-dialog"'));
  assert.ok(ui.html().includes('data-action="plancopy"'));
+ assert.ok(ui.html().includes('class="btn-primary" data-action="pe-open"'));
+ assert.ok(ui.html().includes('<summary>その他の操作</summary>'));
+ assert.ok(!ui.html().includes('data-action="po-open"'));
  assert.ok(ui.html().includes('data-action="pl-approve"'));
  ui.click('pe-open',{'data-line':'test-plan'});
  assert.ok(ui.html().includes('id="plan-editor"'));
+ assert.ok(ui.html().includes('<summary>授業内容の内訳（任意）</summary>'));
  ui.click('plan-close');
  assert.ok(!ui.html().includes('id="plan-dialog"'));
 });
