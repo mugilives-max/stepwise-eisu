@@ -1238,7 +1238,7 @@
         }
         function lessonAttention(slots, day) {
           var missing = function(s) { return s.done && s.lessonRecordStatus !== 'active'; };
-          var list = slots.filter(function(s) { return (s.status === 'booked' && (s.req || missing(s))) || (s.status === 'offered' && s.date >= day); });
+          var list = slots.filter(function(s) { return (s.status === 'booked' && (s.req || missing(s))) || (s.status === 'offered' && s.date >= day && s.date <= addDaysStr(day, 2)); });
           list.sort(function(a,b) { return Number(!!b.req) - Number(!!a.req) || slotCmp(a,b); });
           var h = '<section id="lesson-attention"><details><summary style="font-weight:700;cursor:pointer;padding:14px 0">対応が必要な授業 <span class="cnt">' + list.length + '件</span></summary>';
           if (!list.length) return h + '<div class="empty">対応が必要な授業はありません</div></details></section>';
@@ -1249,7 +1249,7 @@
           ];
           groups.forEach(function(group) {
             if (!group.items.length) return;
-            h += '<div class="card" style="margin:12px 0 20px;border:2px solid var(--line)"><h3 style="margin:0 0 10px;padding-bottom:12px;border-bottom:2px solid var(--line)">' + group.title + ' <span class="cnt">' + group.items.length + '件</span></h3>';
+            h += '<details class="card" style="margin:12px 0 20px;border:2px solid var(--line)"><summary style="font-weight:700;cursor:pointer">' + group.title + ' <span class="cnt">' + group.items.length + '件</span></summary><div style="margin-top:12px;border-top:2px solid var(--line)">';
             group.items.forEach(function(s) {
             if (s.status === "offered") { h += lessonRow(s, true); return; }
             var attrs = ' data-id="' + esc(s.id) + '" data-sid="' + esc(s.studentId) + '"' + (busy ? ' disabled' : '');
@@ -1261,7 +1261,7 @@
             if (missing(s)) h += '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(s.studentId,s.id)) + '">' + (s.lessonDraftStatus === 'draft' ? '記録を再開' : s.lessonRecordStatus === 'void' ? '記録を確認' : '記録を入力') + '</a>';
             h += '</div>';
           });
-            h += '</div>';
+            h += '</div></details>';
           });
           return h + '</details></section>';
         }

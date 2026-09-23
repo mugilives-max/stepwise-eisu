@@ -118,3 +118,13 @@ test('pending offers appear in attention with their edit action', async()=>{
  assert.match(section,/1件/); assert.match(section,/承認待ち/); assert.match(section,/data-action="slotedit"/);
  assert.doesNotMatch(ui.html(),/<summary>承認待ちの案内/);
 });
+
+test('attention pending range includes today through two days later and groups collapse', async()=>{
+ const ui=await ready({slots:[-1,0,1,2,3].map(n=>lesson('pending'+n,{status:'offered',date:'2026-09-'+String(23+n)}))});
+ const section=ui.html().match(/<section id="lesson-attention">([^]*?)<\/section>/)[1];
+ assert.match(section,/3件/);
+ for(const n of [0,1,2]) assert.ok(section.includes('data-id="pending'+n+'"'));
+ for(const n of [-1,3]) assert.ok(!section.includes('data-id="pending'+n+'"'));
+ assert.match(section,/<details class="card"/);
+ assert.doesNotMatch(section,/<details[^>]*open/);
+});
