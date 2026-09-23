@@ -1388,7 +1388,7 @@
 
         function renderSettings() {
           renderNav();
-          var html = '<h1>設定</h1><p class="sub">先生アカウントと最近の動き</p>';
+          var html = '<h1>設定</h1><p class="sub">先生アカウントとログ</p>';
           html += '<h2>アカウント</h2><div class="card"><div class="row between" style="margin-bottom:10px"><span>ログイン中: <strong>' + esc(A.account || "") + '</strong></span><button class="btn-quiet btn-sm" data-action="logout">ログアウト</button></div>';
           html += '<div class="form"><label for="f-curpass">現在のパスワード</label><input type="password" id="f-curpass" autocomplete="current-password"><label for="f-newpass">新しいパスワード</label><input type="password" id="f-newpass" autocomplete="new-password" placeholder="8文字以上"></div>';
           html += '<div class="row" style="margin-top:10px"><button class="btn-quiet btn-sm" data-action="changepass"' + (busy ? " disabled" : "") + '>パスワードを変更</button></div>';
@@ -1397,8 +1397,7 @@
           html += '<div class="tbwrap"><table class="tb"><tr><th>種類</th><th>標準時間(分)</th><th>標準料金(円)</th><th>有効</th><th></th></tr>';
           ((A && A.lessonKinds) || []).forEach(function (k, i) { html += '<tr><td>' + esc(k.name) + '</td><td><input type="number" id="lk-min-' + i + '" min="30" max="480" step="5" value="' + (k.standardMin == null ? '' : esc(k.standardMin)) + '" style="width:80px"></td><td><input type="number" id="lk-fee-' + i + '" min="0" step="10" value="' + (k.standardFee == null ? '' : esc(k.standardFee)) + '" style="width:100px"></td><td><input type="checkbox" id="lk-active-' + i + '"' + (k.active !== false ? ' checked' : '') + (k.name === '通常' ? ' disabled' : '') + '></td><td><button class="btn-quiet btn-sm" data-action="kindsave" data-i="' + i + '" data-name="' + esc(k.name) + '"' + (busy ? ' disabled' : '') + '>保存</button></td></tr>'; });
           html += '</table></div><div class="row" style="margin-top:10px"><input type="text" id="lk-new-name" placeholder="新しい種類(例: 演習)" maxlength="20"><input type="number" id="lk-new-min" placeholder="標準時間(分)" min="30" max="480" step="5" style="width:120px"><input type="number" id="lk-new-fee" placeholder="標準料金(円)" min="0" step="10" style="width:130px"><button class="btn-primary btn-sm" data-action="kindadd"' + (busy ? ' disabled' : '') + '>追加</button></div></div>';
-          html += '<h2>データの置き場所</h2><div class="card small"><div>予定・生徒: スプレッドシート「ステップワイズ予約システム」(アプリ専用。手で編集しない)</div><div>カルテ・成績・入金・面談: スプレッドシート「塾管理台帳」(Google ドライブ「ステップワイズ塾」内)</div><div style="margin-top:6px">生徒用ページ: <a href="' + YOYAKU + '" target="_blank" rel="noopener">' + esc(new URL(YOYAKU, location.href).href) + '</a>(生徒は専用リンクからのみ利用)</div></div>';
-          html += '<h2>最近の動き</h2>';
+          html += '<h2>ログ</h2>';
           html += (A.log || []).length ? '<div class="card loglist">' + A.log.slice(0, 30).map(function (l) { return '<div>' + esc(l.time) + ' ' + esc(l.message) + '</div>'; }).join("") + '</div>' : '<div class="empty">まだ動きはありません</div>';
           app.innerHTML = html;
         }
