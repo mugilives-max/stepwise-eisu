@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-23-teacher-home' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-23-blocked-history' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -159,7 +159,7 @@ function studentState_(code) {
       done: String(s.done) === 'true' || s.done === true }; });
   var blocked = blockedRows_()
     .filter(function (b) {
-      return String(b.studentId) === String(me.id) && b.date >= today;
+      return String(b.studentId) === String(me.id) && b.date >= since;
     })
     .map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; });
   var wishes = wishRows_().filter(function (x) { return String(x.studentId) === String(me.id) && x.date >= today; })
