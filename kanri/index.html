@@ -479,6 +479,27 @@
           return h;
         }
         // 案内フォーム(授業ページ・カルテ共用)。fixedStudent を渡すと生徒は固定
+        function captureOfferDraft() {
+          var d=Object.assign({},offerDraft||{});
+          ['student','subject','kind','delivery','date','start','min','rep'].forEach(function(k){var e=document.getElementById('f-'+k);if(e)d[({student:'studentId',delivery:'deliveryMode',rep:'repeat'})[k]||k]=e.value;});
+          d.min=+d.min||90;d.repeat=+d.repeat||1;d.outside=!!(document.getElementById('f-outside')||{}).checked;
+          d.extra=(d.extra||[]).map(function(row,i){var r=Object.assign({},row);['subject','kind','deliveryMode','start','min'].forEach(function(k){var e=document.getElementById('f-extra-'+i+'-'+k);if(e)r[k]=e.value;});r.min=+r.min;return r;});
+          offerDraft=d;return d;
+        }
+        function updateOfferCount() {
+          var b=document.getElementById('offer-send'),d=offerDraft||{};
+          if(b&&!busy)b.textContent=d.extra&&d.extra.length?((d.extra.length+1)*(+(val('f-rep')||d.repeat)||1))+'件まとめて案内する':'この内容で案内する';
+        }
+        document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='f-rep')updateOfferCount();});
+        function consecutiveRowsHTML(d) {
+          return (d.extra||[]).map(function(r,i){var prefix='f-extra-'+i+'-';return '<fieldset style="margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px"><legend>'+ (i+2)+'件目</legend><div class="form">'
+            +'<label for="'+prefix+'subject">科目</label><select id="'+prefix+'subject"><option value="">科目を選択</option>'+LESSON_SUBJECTS.map(function(x){return '<option'+(x===r.subject?' selected':'')+'>'+x+'</option>';}).join('')+'</select>'
+            +'<label for="'+prefix+'kind">種類</label><select id="'+prefix+'kind">'+kindOptions(r.kind)+'</select>'
+            +'<label for="'+prefix+'deliveryMode">形式</label><select id="'+prefix+'deliveryMode">'+deliveryOptions(r.deliveryMode)+'</select>'
+            +'<label for="'+prefix+'start">開始</label><input type="time" step="300" id="'+prefix+'start" value="'+esc(r.start)+'">'
+            +'<label for="'+prefix+'min">長さ</label><select id="'+prefix+'min">'+[30,45,60,90,120].map(function(m){return '<option value="'+m+'"'+(m===+r.min?' selected':'')+'>'+m+'分</option>';}).join('')+'</select></div>'
+            +'<button class="btn-quiet btn-sm" data-action="offer-remove" data-index="'+i+'"'+(busy?' disabled':'')+'>この授業を外す</button></fieldset>';}).join('');
+        }
         function offerForm(today, students, fixedStudent) {
           var d = offerDraft || {};
           var student = fixedStudent || students.filter(function (s) { return sameId(s.id, d.studentId); })[0] || {};
@@ -492,7 +513,8 @@
           h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300">';
           h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
           h += '<label for="f-rep">くり返し</label><select id="f-rep">' + [1, 2, 4, 8, 12].map(function (n) { return '<option value="' + n + '"' + (n === (+d.repeat || 1) ? ' selected' : '') + '>' + (n === 1 ? 'この日だけ' : '毎週×' + n + '回') + '</option>'; }).join('') + '</select>';
-          h += '</div><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : "この内容で案内する") + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
+          h += '</div>' + consecutiveRowsHTML(d) + '<button class="btn-quiet" data-action="offer-add"'+(busy?' disabled':'')+'>＋ 続けて授業を追加</button><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" id="offer-send" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : (d.extra&&d.extra.length ? ((d.extra.length+1)*(+d.repeat||1))+"件まとめて案内する" : "この内容で案内する")) + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
+          if(d.extra&&d.extra.length)h+='<p class="small muted">日付とくり返しは、上の授業すべてに適用されます。</p>';
           h += planPromptHtml('offer');
           var warningData=A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]};
           var liveWarnings=window.StepwiseBoard.warnings(warningData,Object.assign({start:'17:00',min:90},d,{deliveryMode:d.deliveryMode||student.deliveryMode}));
@@ -1340,6 +1362,9 @@
           busy = true; syncMsg = "送信中…"; render();
           var body = { action: "admin", token: token(), op: "offer", from: "kanri", view: viewOf(), force: !!force, planForce: !!sendingDraft.planForce };
           ["studentId", "date", "start", "min", "repeat", "subject", "kind", "wishId", "deliveryMode"].forEach(function (k2) { if (sendingDraft[k2]) body[k2] = sendingDraft[k2]; });
+          if(sendingDraft.extra&&sendingDraft.extra.length)body.lessons=[sendingDraft].concat(sendingDraft.extra).map(function(r){return {start:r.start,min:+r.min,subject:r.subject,kind:r.kind,deliveryMode:r.deliveryMode};});
+          if(!sendingDraft.requestId)sendingDraft.requestId=lessonId();
+          body.requestId=sendingDraft.requestId;
           post(body).then(function (res) {
             if (offerDraft !== sendingDraft || keyOf(route()) !== keyOf(sendingRoute)) return;
             busy = false; syncMsg = "";
@@ -1347,7 +1372,7 @@
             if (res.badAuth) { lsDel("sw_admt"); authM = "login"; render(); return; }
             if (res.error) {
               // 授業計画の枠を超える案内: キャンセルか、計画の案内を送ってから続けるかをフォーム内で選ぶ
-              if (res.needPlan) { planPromptOpen('offer', res, function () { sendingDraft.planForce = true; sendOffer(force); }); render(); return; }
+              if (res.needPlan) { planPromptOpen('offer', res, function () { sendingDraft.planForce = !(sendingDraft.extra&&sendingDraft.extra.length); sendOffer(force); }); render(); return; }
               if (res.needForce) { if (confirm(res.error + "\n\nそれでも案内しますか?")) { sendOffer(true); return; } render(); return; }
               sendingDraft.error = res.error; sendingDraft.conflicts = res.conflicts || []; toast(res.error); render(); return;
             }
@@ -2598,14 +2623,21 @@
               selDate = btn.getAttribute("data-date"); selManual = true;
               offerDraft = { studentId: val("f-student"), subject: val("f-subject"), deliveryMode: val("f-delivery"), start: val("f-start"), min: val("f-min"), date: selDate, wishId: offerDraft && offerDraft.wishId };
               render(); break;
+            case "offer-add":
+              var od=captureOfferDraft(), previous=od.extra.length?od.extra[od.extra.length-1]:od;
+              if(od.extra.length>=11){toast('一度に追加できる授業は12件までです');return;}
+              var endMinutes=window.StepwiseBoard.minutes(previous.start)+(+previous.min||90);
+              if(!Number.isFinite(endMinutes)||endMinutes>=1440){toast('開始時刻を確認してください');return;}
+              od.extra.push({subject:previous.subject,kind:previous.kind,deliveryMode:previous.deliveryMode,min:+previous.min||90,start:('0'+Math.floor(endMinutes/60)).slice(-2)+':'+('0'+endMinutes%60).slice(-2)});
+              planPrompt=null;render();break;
+            case "offer-remove":
+              captureOfferDraft().extra.splice(+btn.getAttribute('data-index'),1);planPrompt=null;render();break;
             case "offerslot":
-              var stid = val("f-student"), odate = val("f-date"), ostart = val("f-start");
-              if (!stid) { toast("生徒をえらんでください"); return; }
-              if (!odate || !ostart) { toast("日付と時間を入れてください"); return; }
-              offerDraft = { studentId: stid, date: odate, start: ostart, min: +(val("f-min") || 60), repeat: +(val("f-rep") || 1), subject: val("f-subject"), kind: val("f-kind") || "通常", deliveryMode: val("f-delivery"), wishId: offerDraft && offerDraft.wishId };
-              offerDraft.outside=!!(document.getElementById('f-outside')||{}).checked;
-              if(!offerDraft.outside&&(window.StepwiseBoard.minutes(ostart)<420||window.StepwiseBoard.minutes(ostart)+offerDraft.min>1320)){toast('授業は7:00〜22:00の範囲で指定してください。例外は「範囲外を指定する」を選んでください');return;}
-              sendOffer(false); break;
+              var od=captureOfferDraft(), offerRows=[od].concat(od.extra);
+              if(!od.studentId){toast('生徒をえらんでください');return;}
+              if(!od.date||offerRows.some(function(r){return !r.start||!r.subject;})){toast('日付・開始時刻・科目を入れてください');return;}
+              if(!od.outside&&offerRows.some(function(r){var m=window.StepwiseBoard.minutes(r.start);return m<420||m+(+r.min)>1320;})){toast('授業は7:00〜22:00の範囲で指定してください。例外は「範囲外を指定する」を選んでください');return;}
+              sendOffer(false);break;
             case "usewish":
               var uwWant = btn.getAttribute("data-kind") === "want", uwLen = minutesBetween(btn.getAttribute("data-start"), btn.getAttribute("data-end"));
               var uw = { studentId: btn.getAttribute("data-sid"), date: btn.getAttribute("data-date"), start: btn.getAttribute("data-start"), min: uwWant ? fitMin(uwLen) : Math.min(90, fitMin(uwLen)), wishId: btn.getAttribute("data-id"), window: uwWant ? "" : btn.getAttribute("data-start") + "〜" + btn.getAttribute("data-end") };
@@ -2790,8 +2822,8 @@
         });
 
         document.addEventListener('cancel',function(ev){if(ev.target.id==='board-editor'){if(busy)ev.preventDefault();else boardOpen=false;}},true);
-        document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|delivery|outside)$/.test(el.id))return;
-          offerDraft=Object.assign({},offerDraft||{},{studentId:val('f-student'),date:val('f-date'),start:val('f-start'),min:val('f-min'),repeat:val('f-rep'),subject:val('f-subject'),deliveryMode:val('f-delivery'),outside:!!(document.getElementById('f-outside')||{}).checked});
+        document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|kind|delivery|outside|extra-.*)$/.test(el.id))return;
+          captureOfferDraft();updateOfferCount();
           var startField=document.getElementById('f-start');if(startField){startField.min=offerDraft.outside?'00:00':'07:00';startField.max=offerDraft.outside?'23:59':'22:00';}
           var target=document.getElementById('board-warnings');if(target)target.innerHTML=window.StepwiseBoard.warnings(A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]},offerDraft).map(function(w){return '<p class="board-warning">'+esc(w)+'</p>';}).join('');
         });
