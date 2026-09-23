@@ -76,6 +76,7 @@ button.calday { cursor: pointer; font-size: 13px; }
 }
 
 @media (min-width:1100px) {
+  .calday.cal-lanes { padding:4px 5px 6px;min-width:0; }
   .calday.cal-lanes > .calbox { width:100%;box-sizing:border-box; }
   .cal-lanes .cal-overlap.cal-same-time { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;height:auto; }
   .cal-same-time .cal-overlap-item { position:static;width:auto;height:auto; }
