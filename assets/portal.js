@@ -721,7 +721,16 @@
             if (fl.parentAck !== 'confirmed') h += '<div class="row" style="margin-top:6px;gap:8px"><button class="btn-primary btn-sm" data-action="fa-planack" data-child="' + esc(famChild.studentId) + '" data-line="' + esc(fl.id) + '" data-ack="confirmed"' + famDis + '>内容を確認しました</button><button class="btn-quiet btn-sm" data-action="fa-planack" data-child="' + esc(famChild.studentId) + '" data-line="' + esc(fl.id) + '" data-ack="inquiry"' + famDis + '>' + (fl.parentAck === 'inquiry' ? '問い合わせを追加する' : '先生に問い合わせる') + '</button></div>';
             return h + '</div>';
           }
-          function addExtra(x, key) { if (String(x.date || '').slice(0, 7) !== ymNow || approved.some(function (l) { return fits(l, x); })) return; var label = lessonLabel(x) || 'その他', status = proposed.some(function(l){return fits(l,x);}) ? '未承認' : '計画外', k = label+'|'+status, c = extra[k] || (extra[k] = { label: label, status: status, done: 0, plan: 0 }); c[key]++; }
+          function addExtra(x, key) {
+            if(approved.some(function(l){return fits(l,x);}))return;
+            var matching=proposed.filter(function(l){return fits(l,x);}),line=matching[0]||null;
+            if(line&&line.parentId){line=proposed.filter(function(l){return l.id===line.parentId;})[0]||line;}
+            if(!line&&String(x.date||'').slice(0,7)!==ymNow)return;
+            var label=lessonLabel(x)||'その他',status=line?'未承認':'計画外',k=line?'plan:'+line.id:label+'|'+status;
+            var count=line?Number(line.count)||0:null;
+            if(line)proposed.forEach(function(l){if(l.parentId===line.id)count+=Number(l.count)||0;});
+            var c=extra[k]||(extra[k]={label:label,status:status,line:line,count:count,done:0,plan:0});c[key]++;
+          }
           (S.history || []).forEach(function (h) { addExtra(h, h.done ? 'done' : 'plan'); }); mine.forEach(function (s2) { addExtra(s2, 'plan'); });
           var extraKeys = Object.keys(extra);
           if (!lines.length && !extraKeys.length) return '';
@@ -753,7 +762,7 @@
             var ack=famAckBlock(l);if(ack)html+=planInfo(ack);
             addons.forEach(function(a){html+=planComment(a);var ack=famAckBlock(a);if(ack)html+=planInfo(ack);});
           });
-          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td>—</td><td>'+n.plan+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>';});
+          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+(n.line?esc(planPeriod(n.line)):Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay)+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td>'+(n.count==null?'—':n.count+'回')+'</td><td>'+n.plan+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>';});
           if(approved.length||extraKeys.length)html+=planTableEnd();
           if (!shown) html += '<div class="empty">承認済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
