@@ -87,3 +87,5 @@ test('parent preview can select a sibling and inspect manual and AI editors with
 });
 
 test('preview allows profile input but cannot save it',async()=>{const {ui}=await ready(true);ui.navigate('#family/settings');const before=ui.requests.length;ui.click('fa-profile-open',{'data-child':'','data-kind':'name'});assert.match(ui.html(),/id="fa-profile-family"/);assert.match(ui.html(),/data-action="fa-profile-save" disabled/);ui.click('fa-profile-cancel');assert.equal(ui.requests.length,before);});
+
+test('parent preview opens the student preview without asking for a private link',async()=>{const {ui}=await ready(true),before=ui.requests.length;ui.click('fa-student-pages');assert.equal(ui.location.href,'/yoyaku/?preview=student:test-a#home');assert.equal(ui.requests.length,before);});

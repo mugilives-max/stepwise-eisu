@@ -222,3 +222,12 @@
 @media(max-width:520px){.family-info-table th,.family-info-table td{padding:9px 7px;font-size:13px}}
 
 .family-info-empty{border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font:inherit;padding:0;text-align:left}
+
+.family-info-table th,.family-info-table td{padding:8px 10px;font-size:14px;line-height:1.5;font-weight:400}
+.family-info-table thead th,.family-info-table tbody th{font-weight:500}
+.family-info-table th:first-child{width:30%}
+.family-info-table thead th:not(:first-child){width:35%}
+.family-info-table tbody th{white-space:nowrap}
+#parent-header-actions{display:flex;align-items:center;gap:14px}
+.student-page-link{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;padding:6px 0;cursor:pointer;white-space:nowrap}
+@media(max-width:520px){.family-info-table th,.family-info-table td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}.family-info-table thead th:not(:first-child){width:33%}#parent-header-actions{gap:8px}}

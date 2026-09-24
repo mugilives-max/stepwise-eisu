@@ -265,6 +265,7 @@ function familyDispatch_(req) {
     case 'familyResetConfirm':return familyResetConfirm_(req);
     case 'familyEmailChange':return familyEmailChange_(req);
     case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false),emailPrefs:familyEmailPrefs_(h.account.id)};}
+    case 'familyStudentLink':{var link=familyChildRequire_(req);return link.error?link:link.student.code?{ok:true,url:'https://www.stepwise-education.jp/yoyaku/?k='+encodeURIComponent(String(link.student.code))+'#home'}:familyError_('生徒ページのリンクが未登録です');}
     case 'familyProfileSave':return familyProfileSave_(req);
     case 'familyEmailPrefs':return familyEmailPrefsSave_(req);
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
