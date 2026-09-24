@@ -342,3 +342,11 @@ test('single lesson wish sends an exact start and duration instead of an availab
  const body=ui.requests.at(-1).body;
  assert.equal(body.action,'wishMany');assert.equal(body.kind,'want');assert.equal(body.min,90);assert.equal(body.start,'17:30');assert.deepEqual(body.dates,['2026-09-15']);assert.equal(body.note,'数学を希望');assert.equal(body.end,undefined);
 });
+
+test('lesson wish uses edited date and optional lesson selection', async () => {
+ const ui=await studentReady(state([slot('wish-choice',{subject:'数学',kind:'講習'})]));
+ ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');ui.click('dayact',{'data-m':'want'});
+ assert.match(ui.html(),/数学（講習）/);
+ ui.input('b-wdate','2026-09-18');ui.input('b-wstart','17:30');ui.input('b-wmin','90');ui.input('b-wlesson','数学（講習）');ui.input('b-wnote','復習');ui.click('selapply');
+ const body=ui.requests.at(-1).body;assert.deepEqual(body.dates,['2026-09-18']);assert.equal(body.note,'数学（講習）：復習');
+});

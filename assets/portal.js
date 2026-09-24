@@ -844,7 +844,9 @@
             html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button></div>';
           } else if (selMode === "want") {
             html += wishModeField('b');
-            html += '<p>'+selTxt+'</p><p class="note">この日時に1コマの授業を希望します。先生からの案内をお待ちください。</p><div class="row"><label>開始時刻 <input type="time" id="b-wstart" value="17:00" step="900"></label><label>授業時間 <select id="b-wmin"><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select></label></div><p><input type="text" id="b-wnote" maxlength="100" placeholder="希望する科目・メモ（任意）" style="width:100%;box-sizing:border-box"></p><button class="btn-primary" data-action="selapply"'+(busy?' disabled':'')+'>希望を送る</button>';
+            var wishLessons=[];
+            (S.planLines||[]).concat(S.slots||[]).forEach(function(l){if(l.subject){var label=lessonLabel(l,true);if(wishLessons.indexOf(label)<0)wishLessons.push(label);}});
+            html += '<div class="row"><label>日付 <input type="date" id="b-wdate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label><label>授業（任意） <select id="b-wlesson"><option value="">指定なし</option>'+wishLessons.map(function(label){return '<option value="'+esc(label)+'">'+esc(label)+'</option>';}).join('')+'</select></label></div><p class="note">この日時に1コマの授業を希望します。先生からの案内をお待ちください。</p><div class="row"><label>開始時刻 <input type="time" id="b-wstart" value="17:00" step="900"></label><label>授業時間 <select id="b-wmin"><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select></label></div><p><input type="text" id="b-wnote" maxlength="100" placeholder="メモ（任意）" style="width:100%;box-sizing:border-box"></p><button class="btn-primary" data-action="selapply"'+(busy?' disabled':'')+'>希望を送る</button>';
           } else if (selMode === "wish") {
             html += wishModeField('b');
             html += '<div class="msg">授業可能日時: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
@@ -1624,6 +1626,7 @@
             case "selcancel": if(busy)break; selMode = ""; selDays = {}; render(); break;
             case "selapply":
               var chosen = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
+              if(selMode === "want"){var wd=val("b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
               if (!chosen.length) { toast("日付をえらんでください"); return; }
               if (selMode === "ng") {
                 var ngBy2 = {}; (S.blocked || []).forEach(function (b) { (ngBy2[b.date] = ngBy2[b.date] || []).push(b.id); });
@@ -1636,6 +1639,7 @@
                 studentAction({ action: "blockSet", k: myKey(), add: addD2, removeIds: remIds2, note: ngNote2, start: ngSt, end: ngEn }, "登録しました");
               } else if (selMode === "wish" || selMode === "want") {
                 var bws = val("b-wstart"), bwn = val("b-wnote");
+                if(selMode === "want" && val("b-wlesson")){bwn=val("b-wlesson")+(bwn?"："+bwn:"");if(bwn.length>100){toast("メモをもう少し短くしてください");return;}}
                 if (!bws) { toast("開始時刻を入れてください"); return; }
                 var body = { action: "wishMany", k: myKey(), kind: selMode === "want" ? "want" : wishKind, dates: chosen, start: bws, note: bwn };
                 if (selMode === "want") { body.min=Number(val("b-wmin")); if([30,45,60,90,120].indexOf(body.min)<0){toast("授業時間を選んでください");return;} } else { var bwe = val("b-wend"); if (!bwe || bws >= bwe) { toast("時間帯は「開始 < 終了」で入れてください"); return; } body.end = bwe; }
