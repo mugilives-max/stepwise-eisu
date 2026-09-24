@@ -1359,20 +1359,19 @@
           if(!children.length)return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if(current)familyHomeViews[current.studentId]=savedView;
           h+=renderFamilyCalendar(children);
-          var rows=[],dialogs='',progress='',confirms='',offers='',offerCount=0,planCount=0,remain=0,progressHead='',total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
+          var rows=[],dialogs='',progress='',confirms='',offers='',offerCount=0,planCount=0,remain=0,total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
           children.forEach(function(c){
             var st=F.childState[c.studentId];
             if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);return;}
             F.studentId=c.studentId;S=st;useHomeView(familyHomeViews[c.studentId]||freshHomeView());
             if(familyCalendar.date){selDate=familyCalendar.date;selManual=true;}
-            var name=familyChildName(c),D=schedData(),day=renderDayDetail(D,true,!offsShown,{name:name}),summary=renderMonthSummary(D,name);
+            var name=familyChildName(c),D=schedData(),day=renderDayDetail(D,true,!offsShown,{name:name}),summary=renderMonthSummary(D);
             offsShown=true;today=today||D.today;canAI=canAI||!!st.nlEnabled||!!previewK;
             function owned(markup){return familyOwnedHtml(markup,c.studentId);}
             day.rows.forEach(function(row){rows.push({start:row.start,html:owned(row.html)});});
             dialogs+=owned(day.dialogs)+owned(renderPendingBar(D,name));
-            progress+=owned(summary.progressRows||'');confirms+=owned(summary.confirm||'');
+            progress+='<section class="family-student-progress"><h3>'+esc(name)+'</h3>'+ (summary.progressRows?owned(summary.progressHead+summary.progressRows+'</tbody></table></div>'):'<div class="empty">送信済みの計画はありません</div>')+'</section>';confirms+=owned(summary.confirm||'');
             planCount+=summary.planCount||0;remain+=summary.remain||0;
-            progressHead=summary.progressHead;
             offers+=owned(renderOffers(D,name));offerCount+=D.offers.length;
             var data=F.childrenData[c.studentId];if(data){month=month||data.month;var tm=data.thisMonth||{};total.count+=Number(tm.count)||0;total.minutes+=Number(tm.minutes)||0;}
             familyHomeViews[c.studentId]=homeView();
@@ -1383,7 +1382,7 @@
           h+=window.StepwiseCalendar.dayHeading({date:familyCalendar.date,title:fmtDateW(familyCalendar.date)+'の授業',disabled:busy||NL.busy,add:canAdd?{action:'family-dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'family-dayai',label:'AIで予定登録'}:null});
           h+=rows.length?'<div class="card daylist">'+rows.sort(function(a,b){return a.start.localeCompare(b.start);}).map(function(r){return r.html;}).join('')+'</div>':'<div class="empty">この日の予定はありません</div>';
           h+='<section class="parent-progress"><h2>授業計画・実施状況 <span class="cnt">'+planCount+'件の計画</span></h2><div class="card">';
-          h+=progress?progressHead+progress+'</tbody></table></div>':'<div class="empty">送信済みの計画はありません</div>';
+          h+=progress||'<div class="empty">送信済みの計画はありません</div>';
           if(remain)h+='<p class="small">あと '+remain+' 回、日程調整が必要です。</p>';
           h+=renderParentThisMonth({month:month,thisMonth:total})+'</div></section>';
           if(offers)h+=foldHead('offers','授業登録',offerCount+'件・返事をお願いします')+offers+'</details>';

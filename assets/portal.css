@@ -233,3 +233,16 @@
 @media(max-width:520px){.family-info-table th,.family-info-table td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}.family-info-table thead th:not(:first-child){width:33%}#parent-header-actions{gap:8px}}
 
 .family-permissions{width:100%;border-collapse:collapse;font-size:14px}.family-permissions th,.family-permissions td{border:1px solid #b8c7dc;padding:8px;text-align:left}.family-permissions th{background:#eef2f6;font-weight:500}.family-permissions select{font-size:14px;min-width:110px;padding:8px}
+
+/* Parent progress is grouped by student; keep the status column in view. */
+.family-student-progress + .family-student-progress{margin-top:24px}
+.family-student-progress h3{font-size:15px;margin:0 0 8px}
+.family-student-progress .portal-plan-table{table-layout:fixed;min-width:0;width:100%}
+.family-student-progress th:first-child{width:23%}
+.family-student-progress th:nth-child(2),.family-student-progress th:nth-child(3){width:10%}
+.family-student-progress th:nth-child(4),.family-student-progress th:nth-child(5),.family-student-progress th:nth-child(6){width:13%}
+.family-student-progress th:last-child{width:18%}
+.family-student-progress .portal-plan-table th,.family-student-progress .portal-plan-table td{padding:8px 4px;overflow-wrap:anywhere}
+.family-student-progress .tag{white-space:normal;max-width:100%}
+.family-student-progress .plan-count-value{flex-wrap:wrap;max-width:100%;gap:0}
+@media(max-width:480px){.family-student-progress .portal-plan-table th,.family-student-progress .portal-plan-table td{padding:6px 2px}.family-student-progress .tag{padding:4px 2px}}

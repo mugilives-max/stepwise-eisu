@@ -236,7 +236,7 @@ test('the family home places monthly completed totals inside progress without a 
  const html=ui.html();
  assert.ok(html.includes('<h2>予定表</h2>'));
  assert.doesNotMatch(html,/今月の授業|授業料\(時間換算\)/);
- const progress=html.split('<section class="parent-progress">')[1].split('</section>')[0];
+ const progress=html.split('<section class="parent-progress">')[1].split('<details class="fold offers"')[0];
  assert.ok(progress.includes('実施合計：0回 / 0分'));
  assert.doesNotMatch(progress, /<details|<summary/);
  assert.doesNotMatch(html, /data-fold="progress"/);
@@ -306,7 +306,7 @@ test('a parent approves the plan from the unified progress status', async () => 
   const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planLines: data('x').planLines }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.match(ui.html(),/授業計画・実施状況/);assert.match(ui.html(),/<td>英語<\/td><td>通常<\/td>/);
-  assert.ok(ui.html().includes('colspan="8"'));
+  assert.ok(ui.html().includes('colspan="7"'));
   ui.click('fa-planopen',{'data-child':'child-a','data-line':'line-1'});
   assert.ok(ui.html().includes('data-action="fa-planok" data-child="child-a" data-line="line-1"'));
   assert.ok(ui.html().includes('data-action="fa-planng" data-child="child-a" data-line="line-1"'));
@@ -427,9 +427,9 @@ test('combined home has single sections, named rows and isolated per-child count
  assert.match(day,/family-row-name">花子<\/strong>/);assert.match(day,/family-row-name">太郎<\/strong>/);
  assert.equal((day.match(/data-action="helptoff"/g)||[]).length,1);
  assert.match(day,/data-home-child="child-b" data-action="delblock" data-ids="block-child-b"/);
- const progress=html.split('<section class="parent-progress">')[1].split('</section>')[0];
- assert.equal((progress.match(/<table /g)||[]).length,1);assert.match(progress,/<th>名前<\/th>/);
- assert.match(progress,/<td>太郎<\/td>[^]*?<td>3回<\/td><td>2回<\/td>/);assert.match(progress,/<td>花子<\/td>[^]*?<td>2回<\/td><td>1回<\/td>/);
+ const progress=html.split('<section class="parent-progress">')[1].split('<details class="fold offers"')[0];
+ assert.equal((progress.match(/<table /g)||[]).length,2);assert.doesNotMatch(progress,/<th>名前<\/th>/);assert.match(progress,/<h3>太郎<\/h3>/);assert.match(progress,/<h3>花子<\/h3>/);
+ assert.match(progress,/<h3>太郎<\/h3>[^]*?<td>3回<\/td><td>2回<\/td>/);assert.match(progress,/<h3>花子<\/h3>[^]*?<td>2回<\/td><td>1回<\/td>/);
  assert.match(progress,/実施合計：3回 \/ 240分/);
  assert.match(progress,/data-action="fa-planopen" data-child="child-a"/);assert.match(progress,/data-action="fa-planopen" data-child="child-b"/);
 });
