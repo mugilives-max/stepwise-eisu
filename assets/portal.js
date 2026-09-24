@@ -539,7 +539,7 @@
         /* ---------- 予定表 ---------- */
         // 予定表の本体は共通部品 assets/calendar.js(管理画面の生徒カルテと同じ)
         function renderCal(info, today, showToff) {
-          return window.StepwiseCalendar.render(info, { year: calY, month: calM, today: today, selDate: selDate, selMode: selMode, selDays: selDays, showToff: !!showToff, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          return window.StepwiseCalendar.render(info, { offerLegend: "授業（未登録）", year: calY, month: calM, today: today, selDate: selDate, selMode: selMode, selDays: selDays, showToff: !!showToff, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
         }
 
         /* ---------- 画面: 専用リンクなし ---------- */
