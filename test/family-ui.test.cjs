@@ -228,13 +228,17 @@ test('one child has no selector and failed second-child loading retains the firs
 });
 
 
-test('the family home is the child mypage with 今月の授業 at the bottom, and the old schedule section is gone',async()=>{
+test('the family home places monthly completed totals inside progress without a fee card',async()=>{
  const ui=await readyFamily();ui.navigate('#family/home');
  assert.doesNotMatch(ui.el('tabs').innerHTML,/#family\/schedule|>予定</);assert.doesNotMatch(ui.html(),/予定カレンダー/);
  const st=ui.requests.find(r=>r.body.action==='familyStudentState');assert.ok(st,JSON.stringify(ui.requests.map(r=>r.body.action)));assert.equal(st.body.studentId,'child-a');
  st.reply({...state(),viewer:'family'});await flush();
- const html=ui.html();assert.ok(html.indexOf('<h2>予定表</h2>')>=0&&html.indexOf('<h2>予定表</h2>')<html.indexOf('今月の授業 <span class="cnt">2026-09</span>'));assert.match(html,/実施済み<\/div><div class="stat">0<small>回/);
- assert.equal(html.lastIndexOf('今月の授業')>html.lastIndexOf('授業計画'),true);
+ const html=ui.html();
+ assert.ok(html.includes('<h2>予定表</h2>'));
+ assert.doesNotMatch(html,/今月の授業|授業料\(時間換算\)/);
+ const progress=html.split('data-fold="progress"')[1].split('</details>')[0];
+ assert.ok(progress.includes('実施合計：0回 / 0分'));
+
  ui.navigate('#family/schedule');assert.match(ui.html(),/さんのマイページ/);
 });
 

@@ -29,7 +29,7 @@
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
         function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts'||part==='settings')return 'menu';return ['home','tasks','records','grades','menu'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts / settings は menu 扱い
-        // 保護者ページ: ホームは子どもの生徒ページ(マイページ)そのもの＋最下部に「今月の授業」。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
+        // 保護者ページ: ホームは子どもの生徒ページ(マイページ)を共用し、実施状況の末尾に月の実施合計を表示。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
         function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['menu','保護者メニュー']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
         function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; if (h === '#tasks' || h.indexOf('#tasks?') === 0) return 'tasks'; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
@@ -732,7 +732,7 @@
           }
           (S.history || []).forEach(function (h) { if(h.done)addExtra(h, 'done'); }); mine.forEach(function (s2) { addExtra(s2, 'plan'); });
           var extraKeys = Object.keys(extra);
-          if (!lines.length && !extraKeys.length) return '';
+          if (!lines.length && !extraKeys.length && !famChild) return '';
           var html = foldHead('plan', '授業計画', proposed.length ? proposed.length + '件の案内' : '新しい案内なし') + '<div class="card">';
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) html += renderFamilyPlanConfirm(F.busy ? ' disabled' : '');
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内</h3>';
@@ -765,6 +765,7 @@
           if(approved.length||extraKeys.length)html+=planTableEnd();
           if (!shown) html += '<div class="empty">送信済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
+          if (famChild && F.childrenData[famChild.studentId]) html += renderParentThisMonth(F.childrenData[famChild.studentId]);
           return html + '</div></details>';
         }
 
@@ -1130,12 +1131,10 @@
           return svg;
         }
 
-        // 今月の授業(実施回数・料金の見込み)。保護者ホーム(マイページ)の最下部と旧保護者画面で共用
+        // 保護者の実施状況の末尾に、当月の実施合計だけを表示する。
         function renderParentThisMonth(d) {
-          var tm = d.thisMonth || {}, bill = d.billing, html = '<div class="row" style="align-items:stretch">';
-          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">実施済み</div><div class="stat">' + (tm.count || 0) + '<small>回 / ' + (tm.minutes || 0) + '分</small></div></div>';
-          html += '<div class="card" style="flex:1;min-width:150px"><div class="small muted">' + (bill && bill.mode === "recorded" ? "請求記録額" : tm.mode === "monthly" ? "月謝" : "授業料(時間換算)") + '</div><div class="stat">' + yen(bill ? (bill.invoice ? bill.invoice.amount : bill.amount) : tm.fee) + '</div><div class="small muted">' + (bill && bill.mode === "recorded" ? "過去の請求記録（当時の料金条件は未記録）" : tm.mode === "monthly" ? "月額固定" : "30分 " + yen(bill ? bill.rate30 : d.rate30) + " × 実施時間") + '</div>' + (bill && bill.pendingCount && !bill.invoice ? '<div class="small" style="color:var(--amber)">承認待ちの授業 ' + bill.pendingCount + '件（' + yen(bill.pendingAmount || 0) + '）は、授業計画の承認後に加算されます</div>' : '') + '</div></div>';
-          return html;
+          var tm = d.thisMonth || {};
+          return '<div class="parent-progress-total" style="margin-top:16px">' + (d.month ? '<span class="small muted">' + esc(d.month) + '</span> ' : '') + '実施合計：' + esc(tm.count || 0) + '回 / ' + esc(tm.minutes || 0) + '分</div>';
         }
         function renderParent(data, family, childId, sectionOverride) {
           var d = data || P, activeBusy = family ? F.busy : busy, memoKey = family ? childId : myKey(), memos = family ? F.memos : parentPlanMemos;
@@ -1144,7 +1143,7 @@
           if (!family && parentPlanNotice) html += '<p class="parent-error" role="alert">' + esc(parentPlanNotice) + '</p>';
           html += '<p><button class="btn-sm" data-action="' + (family ? 'fa-refresh' : 'parentrefresh') + '"' + (activeBusy ? " disabled" : "") + '>最新の情報を確認</button></p>';
           if(section==='home'){
-          html += '<h2>今月の授業 <span class="cnt">' + esc(d.month) + '</span></h2>' + renderParentThisMonth(d);
+          html += renderParentThisMonth(d);
           html += '<p>授業報告・請求・連絡は上のメニューから確認できます。</p>';
           }
           if(!family&&(section==='home'||section==='schedule')){
@@ -1253,7 +1252,7 @@
           if (tab === 'grades') h += renderGradesPage() + '<section id="family-grades-panel" data-family-child="' + esc(c.studentId) + '" style="margin-top:18px"></section>';
           else if (tab === 'tasks') h += renderTasksPage();
           else if (tab === 'history') h += '<section id="family-records-host" data-family-child="' + esc(c.studentId) + '">' + renderHistoryPage() + '</section>';
-          else { h += renderHomePage(); var pd = F.childrenData[c.studentId]; if (pd) h += '<h2>今月の授業 <span class="cnt">' + esc(pd.month) + '</span></h2>' + renderParentThisMonth(pd); }
+          else h += renderHomePage();
           return h;
         }
         function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
