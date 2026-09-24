@@ -1165,7 +1165,7 @@
           }
 
           }
-          if(section==='billing'||section==='plans'){
+          if(section==='plans'){
           var pls = d.planLines || [];
           var approvalHelpId='approval-help-'+encodeURIComponent(childId||'parent');
           html += '<h2>授業計画の案内<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業計画の案内について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その期間に実施できる授業回数の上限を確認するものです。案内は科目・種類・期間ごとに届き、それぞれ承認できます。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、事前にキャンセルが成立した授業の料金は発生しません。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
@@ -1378,10 +1378,9 @@
             }
             // 保護者メニュー: 請求・料金承認 → 先生への連絡 → 保護者の設定(メール通知のオン/オフ)。2026-09-11 に旧3タブを統合
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
-            h += '<h2>請求・料金承認</h2>';
+            h += '<h2>請求・お支払い</h2>';
             h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
-            h += renderFamilyPlanConfirm(dis);
             familyVisibleChildren().forEach(function(c,index){
               h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
               h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId,'billing') : F.busy ? '<p>読み込んでいます…</p>' : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">子どもの情報を再読み込み</button>';
