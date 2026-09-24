@@ -657,7 +657,7 @@
             html += '</div>';
           }
           if (canAdd && dayAddOpen && !previewK) {
-            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">予定共有</button></div>';
+            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
             html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
           if ((route() === 'home' || route() === 'family') && selMode) html += renderSelBar(D, true);
