@@ -60,7 +60,7 @@ function familyChildren_(a,includeInactive) {
     if(String(l.familyId)!==String(a.id)||String(l.active)!=='true')return;
     if(seen[l.studentId])throw new Error('家族と生徒の紐付けが重複しています');seen[l.studentId]=true;
     var s=findStudent_(l.studentId);
-    if(s)out.push({studentId:String(s.id),name:String(s.name),familyName:studentNameParts_(s.id).familyName,givenName:studentNameParts_(s.id).givenName,active:true});
+    if(s)out.push({studentId:String(s.id),name:String(s.name),familyName:studentNameParts_(s.id).familyName,givenName:studentNameParts_(s.id).givenName,email:String(s.email||''),emailVerified:!!studentEmailVerifiedAddress_(s.id),active:true});
     else if(includeInactive){var old=readRows_('students').filter(function(x){return String(x.id)===String(l.studentId);})[0];if(old)out.push({studentId:String(old.id),name:String(old.name),active:false});}
   });return out;
 }
