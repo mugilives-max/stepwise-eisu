@@ -181,8 +181,8 @@
 .portal-plan-comment summary::before{content:'▶';flex:none;font-size:12px}
 .portal-plan-comment[open] summary::before{content:'▼'}
 .portal-plan-comment summary span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.portal-plan-comment[open] summary span{display:none}
-.portal-plan-comment>div{white-space:pre-wrap;overflow-wrap:anywhere;padding-left:20px}
+.portal-plan-comment[open] summary span{white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}
+.portal-plan-comment>div{display:none}
 @media(max-width:600px){.portal-plan-table{font-size:12px}.portal-plan-table th,.portal-plan-table td{padding:7px 4px}.portal-plan-table .tag{font-size:11px;padding:2px 4px}}
 
 .plan-count-value{display:inline-flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;vertical-align:middle}
