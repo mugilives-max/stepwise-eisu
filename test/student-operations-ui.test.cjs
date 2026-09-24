@@ -331,3 +331,14 @@ test('availability and unavailability open in dialogs and cancel without sending
     assert.equal(ui.requests.length, before);
   }
 });
+
+test('single lesson wish sends an exact start and duration instead of an availability window', async () => {
+ const ui=await studentReady(state());
+ ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');
+ assert.match(ui.html(),/data-m="want"[^>]*>希望日時</);
+ ui.click('dayact',{'data-m':'want'});
+ assert.match(ui.html(),/希望日時を登録/);
+ ui.input('b-wstart','17:30');ui.input('b-wmin','90');ui.input('b-wnote','数学を希望');ui.click('selapply');
+ const body=ui.requests.at(-1).body;
+ assert.equal(body.action,'wishMany');assert.equal(body.kind,'want');assert.equal(body.min,90);assert.equal(body.start,'17:30');assert.deepEqual(body.dates,['2026-09-15']);assert.equal(body.note,'数学を希望');assert.equal(body.end,undefined);
+});

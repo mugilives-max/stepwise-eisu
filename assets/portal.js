@@ -652,15 +652,15 @@
               else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
             dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
-            dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">授業可</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="helpwish" aria-label="授業可の説明" aria-expanded="' + helpWish + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
-            if (dayWishes.length && helpWish) html += '<div class="note" style="margin:4px 0 8px">授業ができる時間帯として登録した内容です。先生はこの時間帯を優先して授業を案内します。時間帯すべてが授業になるわけではなく、案内が届いてから確定します。</div>';
+            dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">'+(w.kind==='want'?'希望日時':'授業可')+'</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="helpwish" aria-label="希望日時・授業可能の説明" aria-expanded="' + helpWish + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
+            if (dayWishes.length && helpWish) html += '<div class="note" style="margin:4px 0 8px">「希望日時」はその日時に1コマ受けたい希望、「授業可」は授業を受けられる時間帯です。先生が確認して授業を案内します。案内が届いたら「予定する」で登録してください。</div>';
             html += '</div>';
           }
           if (canAdd && dayAddOpen && !previewK) {
-            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
+            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="want" data-date="'+selDate+'">希望日時</button><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
             html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
-          if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能日時を登録",ng:"授業不可日時を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
+          if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能日時を登録",want:"希望日時を登録",ng:"授業不可日時を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
           return html;
         }
 
@@ -842,6 +842,9 @@
             html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。斜線の日をタップすると解除") + '</div>';
             html += '<div class="row" style="margin-bottom:6px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-ngstart" step="900"><span class="muted">〜</span><input type="time" id="b-ngend" step="900"></div>';
             html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button></div>';
+          } else if (selMode === "want") {
+            html += wishModeField('b');
+            html += '<p>'+selTxt+'</p><p class="note">この日時に1コマの授業を希望します。先生からの案内をお待ちください。</p><div class="row"><label>開始時刻 <input type="time" id="b-wstart" value="17:00" step="900"></label><label>授業時間 <select id="b-wmin"><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select></label></div><p><input type="text" id="b-wnote" maxlength="100" placeholder="希望する科目・メモ（任意）" style="width:100%;box-sizing:border-box"></p><button class="btn-primary" data-action="selapply"'+(busy?' disabled':'')+'>希望を送る</button>';
           } else if (selMode === "wish") {
             html += wishModeField('b');
             html += '<div class="msg">授業可能日時: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
@@ -1631,12 +1634,12 @@
                 if (ngSt && ngSt >= ngEn) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
                 selMode = ""; selDays = {};
                 studentAction({ action: "blockSet", k: myKey(), add: addD2, removeIds: remIds2, note: ngNote2, start: ngSt, end: ngEn }, "登録しました");
-              } else if (selMode === "wish") {
+              } else if (selMode === "wish" || selMode === "want") {
                 var bws = val("b-wstart"), bwn = val("b-wnote");
                 if (!bws) { toast("開始時刻を入れてください"); return; }
-                var body = { action: "wishMany", k: myKey(), kind: wishKind, dates: chosen, start: bws, note: bwn };
-                { var bwe = val("b-wend"); if (!bwe || bws >= bwe) { toast("時間帯は「開始 < 終了」で入れてください"); return; } body.end = bwe; }
-                body.deliveryMode=val('b-wmode');studentAction(body, '授業可能日時を登録しました', function(){selMode='';selDays={};});
+                var body = { action: "wishMany", k: myKey(), kind: selMode === "want" ? "want" : wishKind, dates: chosen, start: bws, note: bwn };
+                if (selMode === "want") { body.min=Number(val("b-wmin")); if([30,45,60,90,120].indexOf(body.min)<0){toast("授業時間を選んでください");return;} } else { var bwe = val("b-wend"); if (!bwe || bws >= bwe) { toast("時間帯は「開始 < 終了」で入れてください"); return; } body.end = bwe; }
+                body.deliveryMode=val('b-wmode');studentAction(body, selMode === 'want' ? '希望日時を送りました' : '授業可能日時を登録しました', function(){selMode='';selDays={};});
               } else if (selMode === "event") {
                 var bet = val("b-etitle"), beb = !!(document.getElementById("b-eblock") || {}).checked;
                 if (!bet) { toast("予定の内容を入れてください"); return; }
