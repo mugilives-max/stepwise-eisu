@@ -60,7 +60,7 @@ test('login uses a separate session token and clears each child before loading t
 
 test('family approval requires a DOM confirmation and sends that child and proposal revision', async () => {
   const ui = await readyFamily(); ui.navigate('#family/plans'); const before = ui.requests.length;
-  ui.click('fa-planok', { 'data-line': 'line-1' });
+  ui.click('fa-planopen', { 'data-line': 'line-1' });ui.click('fa-planok', { 'data-line': 'line-1' });
   assert.equal(ui.requests.length, before); assert.equal(ui.confirms(), 0); assert.match(ui.html(), /授業計画の回答確認/);
   ui.click('fa-decide'); const b = ui.requests.at(-1).body;
   assert.equal(b.action, 'familyPlanDecide'); assert.equal(b.studentId, 'child-a'); assert.equal(b.expectedRevision, 7); assert.equal(b.ftoken, 'test-family-token');
@@ -69,7 +69,7 @@ test('family approval requires a DOM confirmation and sends that child and propo
 });
 
 test('child switch discards the previous approval confirmation and membership refresh removes old private data', async () => {
-  const ui = await readyFamily(); ui.navigate('#family/plans'); ui.click('fa-planok', { 'data-line': 'line-1' }); ui.navigate('#family/menu'); ui.change('fa-child', 'child-b');
+  const ui = await readyFamily(); ui.navigate('#family/plans'); ui.click('fa-planopen', { 'data-line': 'line-1' });ui.click('fa-planok', { 'data-line': 'line-1' }); ui.navigate('#family/menu'); ui.change('fa-child', 'child-b');
   assert.equal(ui.html().includes('data-action="fa-decide"'), false);
   ui.navigate('#family/settings'); ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
   ui.requests.at(-1).reply(home([])); await flush(); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
@@ -216,7 +216,7 @@ test('student add card opens on demand and retains draft after a failed save',as
 });
 
 test('all-child approval targets child B and keeps child A visible after saving',async()=>{
- const ui=await readyFamily();ui.navigate('#family/plans');ui.click('fa-planng',{'data-child':'child-b'});ui.input('fa-plan-message','Bへの相談');ui.change('fa-reduce-0','2');ui.click('fa-plan-review');assert.match(ui.html(),/子B/);ui.click('fa-decide');const request=ui.requests.at(-1);assert.equal(request.body.studentId,'child-b');assert.equal(request.body.memo,'Bへの相談');request.reply({ok:true,data:data('更新後B')});await flush();ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/);assert.doesNotMatch(ui.html(),/子どもの情報を再読み込み/);
+ const ui=await readyFamily();ui.navigate('#family/plans');ui.click('fa-planopen', {'data-child':'child-b'});ui.click('fa-planng',{'data-child':'child-b'});ui.input('fa-plan-message','Bへの相談');ui.change('fa-reduce-0','2');ui.click('fa-plan-review');assert.match(ui.html(),/子B/);ui.click('fa-decide');const request=ui.requests.at(-1);assert.equal(request.body.studentId,'child-b');assert.equal(request.body.memo,'Bへの相談');request.reply({ok:true,data:data('更新後B')});await flush();ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/);assert.doesNotMatch(ui.html(),/子どもの情報を再読み込み/);
 });
 test('one child has no selector and failed second-child loading retains the first with retry',async()=>{
  const one=loggedUI();one.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();one.requests.at(-1).reply({ok:true,data:data('一人')});await flush();assert.equal(one.el('fa-child'),undefined);
@@ -304,6 +304,7 @@ test('a parent approves the proposed lesson plan directly from the mypage 授業
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.ok(ui.html().includes('<td>英語</td><td>通常</td><td>4回</td><td>90分</td><td>3,000円</td>'));
   assert.ok(ui.html().includes('colspan="8"'));
+  ui.click('fa-planopen',{'data-child':'child-a','data-line':'line-1'});
   assert.ok(ui.html().includes('data-action="fa-planok" data-child="child-a" data-line="line-1"'));
   assert.ok(ui.html().includes('data-action="fa-planng" data-child="child-a" data-line="line-1"'));
   assert.doesNotMatch(ui.html(), /保護者の方に伝えて/);
@@ -383,7 +384,7 @@ test('parent plans menu opens plans and approval review without billing or setti
  assert.ok(ui.el('tabs').innerHTML.includes('href="#family/plans" class="on"'));
  assert.match(ui.html(),/<h2>授業計画<\/h2>/);
  assert.doesNotMatch(ui.html(),/お支払い状況|メールアドレスを変更/);
- ui.click('fa-planok',{'data-child':'child-a','data-line':'line-1'});
+ ui.click('fa-planopen', {'data-child':'child-a','data-line':'line-1'});ui.click('fa-planok',{'data-child':'child-a','data-line':'line-1'});
  assert.match(ui.html(),/data-action="fa-decide"/);
  assert.match(ui.html(),/承認しますか/);
 });
@@ -425,10 +426,10 @@ test('combined home has single sections, named rows and isolated per-child count
  assert.match(progress,/<td>太郎<\/td>[^]*?<td>3回<\/td><td>2回<\/td>/);assert.match(progress,/<td>花子<\/td>[^]*?<td>2回<\/td><td>1回<\/td>/);
  assert.match(progress,/実施合計：3回 \/ 240分/);
  const plans=html.split('data-fold="plan"')[1];assert.equal((plans.match(/<table /g)||[]).length,1);assert.match(plans,/<th>名前<\/th>/);assert.match(plans,/<td>太郎<\/td>/);assert.match(plans,/<td>花子<\/td>/);assert.match(plans,/colspan="8"/);
- assert.match(plans,/id="plan-status-help-child-a-line-1"/);assert.match(plans,/id="plan-status-help-child-b-line-1"/);
+ assert.match(plans,/data-action="fa-planopen" data-child="child-a"/);assert.match(plans,/data-action="fa-planopen" data-child="child-b"/);
 });
 test('combined plan approval retains the owning sibling despite identical plan subjects',async()=>{
- const ui=await combinedHome();ui.click('fa-planok',{'data-child':'child-b','data-line':'line-1'});assert.match(ui.html(),/授業計画の回答確認[^]*【テスト】花子/);
+ const ui=await combinedHome();ui.click('fa-planopen', {'data-child':'child-b','data-line':'line-1'});ui.click('fa-planok',{'data-child':'child-b','data-line':'line-1'});assert.match(ui.html(),/授業計画の回答確認[^]*【テスト】花子/);
  ui.click('fa-decide');assert.equal(ui.requests.at(-1).body.studentId,'child-b');assert.equal(ui.requests.at(-1).body.action,'familyPlanDecide');
 });
 test('combined lesson confirmation and restriction removal target their own sibling',async()=>{
@@ -457,8 +458,10 @@ test('calendar filters hide only selected siblings, retain the day list and rest
  assert.equal(table(ui.html()),expected);
  assert.equal((ui.html().match(/<table /g)||[]).length,1);
  assert.doesNotMatch(ui.html(),/最新の情報を確認|<h2>[^<]*(太郎|花子)/);
- ui.click('fa-planok',{'data-child':'child-b','data-line':'line-1'});ui.click('fa-decide');
+ ui.click('fa-planopen', {'data-child':'child-b','data-line':'line-1'});ui.click('fa-planok',{'data-child':'child-b','data-line':'line-1'});ui.click('fa-decide');
  const req=ui.requests.at(-1);assert.equal(req.body.studentId,'child-b');
  const updated=data('【テスト】花子');updated.planLines=[];req.reply({ok:true,data:updated});await flush();
  assert.match(table(ui.html()),/<td>太郎<\/td>/);assert.doesNotMatch(table(ui.html()),/<td>花子<\/td>/);
  });
+
+test('plan status opens a dismissible modal without sending an approval',async()=>{const ui=await combinedHome(),before=ui.requests.length;assert.doesNotMatch(ui.html(),/data-action="fa-planok"/);ui.click('fa-planopen',{'data-child':'child-b','data-line':'line-1'});assert.match(ui.html(),/<dialog id="family-plan-dialog"/);assert.match(ui.html(),/data-action="fa-planng"/);ui.click('fa-cancel');assert.doesNotMatch(ui.html(),/id="family-plan-dialog"/);assert.equal(ui.requests.length,before);});

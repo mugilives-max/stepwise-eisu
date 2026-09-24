@@ -692,7 +692,7 @@
           var proposed = lines.filter(function (l) { return l.status === 'proposed'; }), approved = lines.filter(function (l) { return l.status === 'approved'; });
           function fits(l, x) { return lessonLabel(l) === lessonLabel(x) && planCovers(l, x.date); }
           function lessonsOf(l) { var n = { done: 0, plan: 0 }; (S.history || []).forEach(function (h) { if (h.done && fits(l, h)) n.done++; }); mine.forEach(function (s2) { if (fits(l, s2)) n.plan++; }); return n; }
-          // 保護者のマイページでは、案内の下で直接承認・回数調整できる(保護者メニューと同じ確認カードを使う)
+          // 保護者は状態セルから共通モーダルで承認・回数調整する。
           var famChild = route() === 'family' ? familyMypageChild() : null, famLines = famChild && F.childrenData[famChild.studentId] ? (F.childrenData[famChild.studentId].planLines || []) : [];
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) folds.plan = true;
           var ymNow = today.slice(0, 7), extra = {};
@@ -702,7 +702,7 @@
           function planPeriod(l){function date(d){return d ? (d.slice(0,4)===today.slice(0,4)?'':d.slice(0,4)+'/')+Number(d.slice(5,7))+'/'+Number(d.slice(8,10)) : '未設定';}return date(l.startDate)+'〜'+date(l.endDate);}
           function planRow(l){
             var parentLine=famChild&&famLines.filter(function(x){return x.id===l.id;})[0];
-            return '<tr>'+nameCell+'<td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>')+'</td></tr>'+(l.status==='proposed'?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。登録・実施の回数は「実施状況」で確認できます。')+'</td></tr>':'');
+            return '<tr>'+nameCell+'<td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':(famChild?'<button type="button" class="tag amber" aria-haspopup="dialog" data-action="fa-planopen" data-child="'+esc(famChild.studentId)+'" data-line="'+esc(l.id)+'"'+(F.busy?' disabled':'')+'>承認待ち</button>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>'))+'</td></tr>'+(l.status==='proposed'&&!famChild?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。登録・実施の回数は「実施状況」で確認できます。')+'</td></tr>':'');
           }
           function planInfo(content){return '<tr><td class="portal-plan-info" colspan="'+planCols+'">'+content+'</td></tr>';}
           function planComment(l){return planInfo('<details class="portal-plan-comment"><summary><span>'+esc(l.comment||'コメントはありません')+'</span></summary><div>'+esc(l.comment||'コメントはありません')+'</div></details>');}
@@ -747,10 +747,7 @@
           proposed.forEach(function(l){
             html += planRow(l)+planComment(l);
             var outline=window.StepwiseReport.outline(l.outline);if(outline)html+=planInfo(outline);
-            if(famChild){
-              var fl=famLines.filter(function(x){return x.id===l.id;})[0],famDis=F.busy?' disabled':'';
-              if(fl&&fl.status==='proposed'&&Number.isSafeInteger(fl.revision))html+=planInfo('<div class="row"><button class="btn-primary btn-sm" data-action="fa-planok" data-child="'+esc(famChild.studentId)+'" data-line="'+esc(l.id)+'"'+famDis+'>承認する</button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="'+esc(famChild.studentId)+'" data-line="'+esc(l.id)+'"'+famDis+'>回数を調整・見送る</button></div>');
-            }
+
           });
           var proposalRows=html.slice(proposalStart), proposalHead=planTableHead();
           if (proposed.length) html += planTableEnd();
@@ -1239,6 +1236,12 @@
         function renderFamilyPlanConfirm(dis) {
           if (!F.confirm) return '';
           var c = F.confirm, l = c.line || {}, h = '<div class="card" role="region" aria-label="授業計画の回答確認"><strong>' + esc((F.childrenData[c.studentId] || {}).name) + '・' + esc(planPeriod(l)) + '</strong>';
+          function dialog(content){return window.StepwiseCalendar.dayDialog({id:'family-plan-dialog',title:'授業計画の回答確認',close:'fa-cancel',busy:F.busy,content:(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+content});}
+          if(c.stage==='choose'){
+            h+='<p>'+esc(planName(l))+' '+esc(l.count)+'回・'+esc(l.lessonMin)+'分'+(planFee(l)?'（'+esc(planFee(l))+'）':'')+'</p>'+(l.comment?'<p style="white-space:pre-wrap">'+esc(l.comment)+'</p>':'');
+            h+='<div class="row"><button class="btn-primary" data-action="fa-planok" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>承認する</button><button class="btn-quiet" data-action="fa-planng" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>回数を調整・見送る</button></div></div>';
+            return dialog(h);
+          }
           if (c.stage === 'ack') {
             h += '<p>先生が記録した承認（' + esc(planName(l)) + ' ' + esc(planLimit(l)) + '回）について、先生に伝える内容を書いてください。先生に通知が届き、折り返し連絡があります。</p><label>先生への伝言<textarea id="fa-plan-message" maxlength="500" placeholder="例: 電話で話した回数と違うようです">' + esc(c.memo || '') + '</textarea></label><p><button class="btn-primary" data-action="fa-ack-send"' + dis + '>問い合わせを送る</button> <button class="btn-quiet" data-action="fa-cancel"' + dis + '>戻る</button></p></div>';
             return h;
@@ -1251,10 +1254,10 @@
             h += '<p>' + esc(planName(l)) + (l.addon ? '（追加）' : '') + ' ' + (l.addon ? '＋' : '') + c.approvedCount + '回まで' + (planFee(l) ? '（' + esc(planFee(l)) + '）' : '') + '</p>' + (l.comment ? '<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>' + esc(l.comment) + '</p>' : '');
             h += c.approve ? '<p>この回数以内で授業の計画を立てることができます。授業実施前であれば、いつでもシステムまたはLINEから計画の見直しを申し出ることができます。承認しますか？</p>' : '<p>今回は見送ります。先生にこの内容を伝えますか？</p>';
             if (c.memo) h += '<p>' + esc(c.memo) + '</p>';
-            h += '<button class="btn-primary" data-action="fa-decide"' + dis + '>' + (c.approve ? '承認する' : '今回は見送る') + '</button> ';
+            h += '<button class="btn-primary" data-action="fa-decide"' + (previewK?' disabled':dis) + '>' + (c.approve ? '承認する' : '今回は見送る') + '</button> ';
           }
-          h += '<button class="btn-quiet" data-action="fa-cancel"' + dis + '>戻る</button></div>';
-          return h;
+          h += '</div>';
+          return dialog(h);
         }
         var familyHomeViews = Object.create(null);
         function homeView() { return {calY:calY,calM:calM,selDate:selDate,selManual:selManual,dayAddOpen:dayAddOpen,dayInputMode:dayInputMode,selMode:selMode,selDays:selDays,pending:pending,NL:NL}; }
@@ -1483,7 +1486,7 @@
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
-            if(parentSection()==='plans'){ app.innerHTML=h+renderFamilyPlans(); return; }
+            if(parentSection()==='plans'){ app.innerHTML=h+renderFamilyPlans(); mountDayDialog(); return; }
             // 保護者メニュー: 請求・料金承認 → 先生への連絡 → 保護者の設定(メール通知のオン/オフ)。2026-09-11 に旧3タブを統合
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             h += '<h2>請求・お支払い</h2>';
@@ -1526,10 +1529,10 @@
           else if (action === "fa-mode") { F.step = btn.getAttribute("data-step"); F.error = ""; F.message = ""; F.confirm = null; if (F.step === 'emailChange') F.email = ''; familyRender(); }
           else if (action === "fa-verification-retry" && F.challenge) familyLoadVerification();
           else if (action === "fa-verify" && F.challenge && F.verificationInfo) familyRequest("familyVerify", { challenge: F.challenge }, function (res) { if (res.passwordRequired) { F.step="setPassword"; F.email=res.email; F.message="メールアドレスを確認しました。パスワードを設定すると登録完了です。"; } else { familyClear(); F.challenge = ""; F.challengeKind = ""; F.message = "メールアドレスを確認しました。ログインしてください。"; } });
-          else if (action === "fa-planok" || action === "fa-planng") {
+          else if (action === "fa-planopen" || action === "fa-planok" || action === "fa-planng") {
             var childId=btn.getAttribute("data-child"), childData=F.childrenData[childId], lineId=btn.getAttribute("data-line"), m=(childData && childData.planLines || []).filter(function (x) { return x.id === lineId; })[0];
             if (!m || m.status !== 'proposed' || !Number.isSafeInteger(m.revision)) { F.error = '最新の案内を確認してください。'; familyRender(); return; }
-            F.confirm={studentId:childId,lineId:lineId,line:m,approve:action==='fa-planok',expectedRevision:m.revision,memo:'',stage:action==='fa-planok'?'review':'reduce',approvedCount:action==='fa-planok'?Number(m.count):Math.max(0,Number(m.count)-1)};familyRender();
+            F.confirm={studentId:childId,lineId:lineId,line:m,approve:action==='fa-planok',expectedRevision:m.revision,memo:'',stage:action==='fa-planopen'?'choose':action==='fa-planok'?'review':'reduce',approvedCount:action==='fa-planok'?Number(m.count):Math.max(0,Number(m.count)-1)};familyRender();
           } else if(action==='fa-plan-review'&&F.confirm&&F.confirm.stage==='reduce'){
             var c=F.confirm,n=Number(val('fa-reduce-0'));c.memo=val('fa-plan-message');
             if(!Number.isInteger(n)||n<0||n>=Number(c.line.count)){F.error='案内より少ない回数を選んでください。';familyRender();return;}
@@ -1605,7 +1608,7 @@
         function studentNoticesHTML(){var items=studentNoticeItems();return '<section class="card" aria-label="生徒のお知らせ" style="margin-bottom:18px"><div class="row between"><h2 style="margin:0">お知らせ</h2><button class="btn-quiet btn-sm" data-action="student-notices">閉じる</button></div>'+ (items.length?items.map(function(x){return '<p>'+(x.required?'<span class="tag amber">要確認</span> ':'')+'<a href="'+x.url+'" data-action="student-notice-link">'+esc(x.title)+'</a></p>';}).join(''):'<p class="muted">お知らせはありません。</p>')+'</section>';}
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
-        function mountDayDialog(){var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
+        function mountDayDialog(){var plan=document.getElementById("family-plan-dialog");if(plan){plan.oncancel=function(e){if(F.busy)e.preventDefault();else F.confirm=null;};if(plan.showModal&&!plan.open)plan.showModal();}var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
         function mountAcceptDialog(){var d=document.getElementById('schedule-accept-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else pending=null;};if(d.showModal&&!d.open)d.showModal();}}
 
         function render() {
