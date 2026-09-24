@@ -1236,7 +1236,7 @@
         function renderFamilyPlanConfirm(dis) {
           if (!F.confirm) return '';
           var c = F.confirm, l = c.line || {}, h = '<div class="card" role="region" aria-label="授業計画の回答確認"><strong>' + esc((F.childrenData[c.studentId] || {}).name) + '・' + esc(planPeriod(l)) + '</strong>';
-          function dialog(content){return window.StepwiseCalendar.dayDialog({id:'family-plan-dialog',title:'授業計画の回答確認',close:'fa-cancel',busy:F.busy,content:(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+content});}
+          function dialog(content){return window.StepwiseCalendar.dayDialog({id:'family-plan-dialog',title:'授業計画の回答確認',help:['期間・科目・回数・授業時間・料金をご確認ください。','「承認する」は案内された回数で承認します。「回数を調整」は承認できる回数を選びます。「見送る」は今回の計画を承認せず、先生に伝えます。いずれも確認画面のあとに送信されます。','承認する回数は、その期間に実施できる授業回数の上限です。授業料は実際に実施した授業の分だけ発生します。','承認しても授業日時は登録されません。授業の案内から、別途「予定する」を押してください。'],close:'fa-cancel',busy:F.busy,content:(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+content});}
           if(c.stage==='choose'){
             h+='<p>'+esc(planName(l))+' '+esc(l.count)+'回・'+esc(l.lessonMin)+'分'+(planFee(l)?'（'+esc(planFee(l))+'）':'')+'</p>'+(l.comment?'<p style="white-space:pre-wrap">'+esc(l.comment)+'</p>':'');
             h+='<div class="row"><button class="btn-primary" data-action="fa-planok" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>承認する</button><button class="btn-quiet" data-action="fa-planng" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>回数を調整</button><button class="btn-quiet" data-action="fa-planskip" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>見送る</button></div></div>';

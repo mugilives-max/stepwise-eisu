@@ -308,7 +308,7 @@
     return '<h2 class="schedule-day-heading"><span>'+esc(opts.title)+'</span>'+action(opts.add,false)+action(opts.ai,true)+'</h2>';
   }
   function dayDialog(opts) {
-    return '<dialog id="'+esc(opts.id)+'" class="schedule-day-dialog" aria-label="'+esc(opts.title)+'"><div class="schedule-dialog-heading"><h2>'+esc(opts.title)+'</h2><button type="button" class="btn-quiet" data-action="'+esc(opts.close)+'"'+(opts.busy?' disabled':'')+'>閉じる</button></div>'+opts.content+'</dialog>';
+    return '<dialog id="'+esc(opts.id)+'" class="schedule-day-dialog" aria-label="'+esc(opts.title)+'"><div class="schedule-dialog-heading"><h2>'+esc(opts.title)+(opts.help?'<button type="button" class="approval-help-button" data-action="approval-help" aria-label="'+esc(opts.title)+'の説明" aria-expanded="false" aria-controls="'+esc(opts.id)+'-help">?</button>':'')+'</h2><button type="button" class="btn-quiet" data-action="'+esc(opts.close)+'"'+(opts.busy?' disabled':'')+'>閉じる</button></div>'+(opts.help?'<div id="'+esc(opts.id)+'-help" class="note" hidden>'+opts.help.map(function(p){return '<p>'+esc(p)+'</p>';}).join('')+'</div>':'')+opts.content+'</dialog>';
   }
 
   return { dayHeading: dayHeading, dayDialog: dayDialog, overlapGroups: overlapGroups, holidayName: holidayName, buildInfo: buildInfo, render: render, endTime: endTime, addDaysStr: addDaysStr };
