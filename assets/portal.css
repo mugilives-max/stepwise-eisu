@@ -168,3 +168,19 @@
 
       .approval-help-button { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: #e5e7eb; color: #59616b; font-size: 16px; font-weight: 700; cursor: pointer; }
       .approval-help-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+/* Planning tables share the admin planning grid; student tables omit all prices. */
+.portal-plan-wrap{width:100%;overflow-x:auto;margin:8px 0 14px}
+.portal-plan-table{width:100%;border-collapse:collapse;font-size:14px}
+.portal-plan-table th,.portal-plan-table td{border:1px solid #b8c4d3;padding:10px 8px;text-align:center;vertical-align:middle}
+.portal-plan-table th{background:#edf1f5;font-weight:700}
+.portal-plan-table td{background:#fff}
+.portal-plan-table td.portal-plan-info{text-align:left;background:#f7f9fc}
+.portal-plan-comment summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;list-style:none;contain:inline-size}
+.portal-plan-comment summary::-webkit-details-marker{display:none}
+.portal-plan-comment summary::before{content:'▶';flex:none;font-size:12px}
+.portal-plan-comment[open] summary::before{content:'▼'}
+.portal-plan-comment summary span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.portal-plan-comment[open] summary span{display:none}
+.portal-plan-comment>div{white-space:pre-wrap;overflow-wrap:anywhere;padding-left:20px}
+@media(max-width:600px){.portal-plan-table{font-size:12px}.portal-plan-table th,.portal-plan-table td{padding:7px 4px}.portal-plan-table .tag{font-size:11px;padding:2px 4px}}

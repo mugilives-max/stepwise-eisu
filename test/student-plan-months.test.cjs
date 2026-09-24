@@ -28,6 +28,11 @@ test('student UI never renders plan prices even from an old response',async()=>{
  const ui=await studentReady({...state([]),planLines:[line({lessonFee:987654,rate30:329218,comment:'学習内容'})]});
  assert.ok(ui.html().includes('学習内容'));
  assert.ok(ui.html().includes('90分'));
+ assert.match(ui.html(),/portal-plan-table/);
+ assert.ok(ui.html().includes('<th>種類</th><th>回数</th><th>時間</th>'));
+ assert.ok(ui.html().includes('9/1〜9/30'));
+ assert.match(ui.html(),/colspan="6"/);
+ assert.match(ui.html(),/portal-plan-comment/);
  assert.doesNotMatch(ui.html(),/987,?654|329,?218|1回 |料金|授業料/);
 });
 test('student API exposes learning fields only including the teacher student preview',()=>{
