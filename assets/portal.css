@@ -184,3 +184,9 @@
 .portal-plan-comment[open] summary span{display:none}
 .portal-plan-comment>div{white-space:pre-wrap;overflow-wrap:anywhere;padding-left:20px}
 @media(max-width:600px){.portal-plan-table{font-size:12px}.portal-plan-table th,.portal-plan-table td{padding:7px 4px}.portal-plan-table .tag{font-size:11px;padding:2px 4px}}
+
+.plan-count-warning{display:inline-flex;align-items:center;justify-content:center;width:26px;height:28px;min-height:0;margin:0 0 0 3px;padding:3px;border:0;border-radius:4px;background:transparent;color:#a86500;vertical-align:middle;cursor:pointer}
+.plan-count-warning svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.plan-count-warning svg circle{fill:currentColor;stroke:none}
+.plan-count-warning:hover,.plan-count-warning[aria-expanded="true"]{background:#fff3df}
+.plan-count-warning:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
