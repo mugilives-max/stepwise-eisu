@@ -657,8 +657,9 @@
             html += '</div>';
           }
           if (canAdd && dayAddOpen && !previewK) {
-            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="want" data-date="'+selDate+'">希望日時</button><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
-            html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
+            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="want" data-date="'+selDate+'">希望日時</button><button class="btn-quiet" data-action="dayavailability">授業可能・不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
+            if(dayInputMode==='availability')content='<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button></div>';
+            html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':dayInputMode==='availability'?'授業可能・不可':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
           if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能日時を登録",want:"希望日時を登録",ng:"授業不可日時を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
           return html;
@@ -1603,6 +1604,7 @@
             case "helpwish": helpWish = !helpWish; render(); break;
             case "helpnl": helpNl = !helpNl; render(); break;
             case "histback": histFolder = null; render(); break;
+            case "dayavailability": if(previewK||busy||NL.busy)break;dayInputMode="availability";dayAddOpen=true;render();break;
             case "dayadd": if(previewK||busy||NL.busy)break;dayInputMode='manual';dayAddOpen=true;render();break;
             case "dayai": if(previewK||busy||NL.busy||!S.nlEnabled)break;dayInputMode='text';dayAddOpen=true;render();break;
             case "dayclose": if(busy||NL.busy)break;dayAddOpen=false;render();break;

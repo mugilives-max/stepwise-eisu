@@ -201,7 +201,7 @@ test('students turn a sentence into checked proposals and register them through 
   // the sentence entry is the default; manual buttons are behind the switch and never shown at the same time
   assert.ok(ui.el('nl-text')); assert.match(ui.html(), /<dialog id="schedule-day-editor"/);
   assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayact"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('nl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('helpnl'); assert.match(ui.html(), /data-action="helpnl"[^>]*aria-expanded="true"/); assert.match(ui.html(), /文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。/); ui.click('helpnl'); assert.doesNotMatch(ui.html(), /文章を書いて「内容を確認」/); assert.match(ui.html(), /data-action="dayclose"[^>]*>閉じる<\/button>/);
-  ui.click('dayclose');ui.click('dayadd');assert.equal(ui.el('nl-text'),undefined);assert.match(ui.html(),/data-action="dayact" data-m="wish"/);
+  ui.click('dayclose');ui.click('dayadd');assert.equal(ui.el('nl-text'),undefined);assert.match(ui.html(),/data-action="dayavailability"/);
   ui.click('dayclose');ui.click('dayai');assert.ok(ui.el('nl-text'));assert.doesNotMatch(ui.html(),/data-action="dayact"/);
   const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
   ui.input('nl-text', text); ui.click('nl-parse');
@@ -224,7 +224,7 @@ test('students turn a sentence into checked proposals and register them through 
 });
 
 test('the sentence card is hidden while the API key is not configured', async () => {
-  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を登録|data-action="dayinput"/, 'no switch when the sentence entry is unavailable'); assert.match(ui.html(), /予定を追加/); assert.match(ui.html(), /data-action="dayact" data-m="wish"/);
+  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を登録|data-action="dayinput"/, 'no switch when the sentence entry is unavailable'); assert.match(ui.html(), /予定を追加/); assert.match(ui.html(), /data-action="dayavailability"/);
 });
 
 test('the offers section is a collapsed details block with one select-all / clear toggle', async () => {
@@ -323,7 +323,7 @@ test('availability and unavailability open in dialogs and cancel without sending
     const ui = await studentReady(state());
     ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd');
     const before = ui.requests.length;
-    ui.click('dayact', { 'data-m':mode });
+    ui.click('dayavailability'); ui.click('dayact', { 'data-m':mode });
     assert.match(ui.html(), /<dialog id="schedule-event-editor"/);
     assert.ok(ui.el(mode === 'wish' ? 'b-wstart' : 'b-ngstart'));
     ui.click('selcancel');
@@ -353,7 +353,7 @@ test('lesson wish uses edited date and optional lesson selection', async () => {
 
 test('blocked time uses editable date and adds intervals without removing existing blocks', async () => {
  for(const allDay of [true,false]){
- const ui=await studentReady(state());ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');ui.click('dayact',{'data-m':'ng'});
+ const ui=await studentReady(state());ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');ui.click('dayavailability');ui.click('dayact',{'data-m':'ng'});
  assert.equal(ui.el('b-ngall').checked,true);ui.input('b-ngdate','2026-09-18');ui.el('b-ngall').checked=allDay;
  ui.el('b-ngstart').value='10:00';ui.el('b-ngend').value='12:00';ui.click('selapply');
  const body=ui.requests.at(-1).body;assert.equal(body.action,'blockSet');assert.deepEqual(body.add,['2026-09-18']);assert.deepEqual(body.removeIds,[]);assert.equal(body.start,allDay?'':'10:00');assert.equal(body.end,allDay?'':'12:00');
