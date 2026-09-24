@@ -14,7 +14,7 @@ async function ready(preview) {
     answered=ui.requests.length;
     for (const req of pending) {
       const a=req.body.action, view=req.body.view;
-      if(a==='familyHome'||view==='home')req.reply({ok:true,children:[{studentId:'test-a',name:'【テスト】生徒'}]});
+      if(a==='familyHome'||view==='home')req.reply({ok:true,family:{id:'family-test',label:'【テスト】保護者'},children:[{studentId:'test-a',name:'【テスト】生徒'}]});
       else if(a==='familyStudentState'||view==='student')req.reply({me:{name:'【テスト】生徒'},today:'2026-09-07',slots:[],history:[{id:'slot-a',date:record.date,start:record.start,min:60,subject:'数学',done:true}],lessonRecords:[record]});
       else if(a==='familyData'||view==='parent')req.reply({ok:true,data:{name:'【テスト】生徒',month:'2026-09',thisMonth:{},payments:[],upcoming:[],planLines:[]}});
       else if(a==='familyNotices')req.reply({ok:true,notices:[]});
@@ -85,3 +85,5 @@ test('parent preview can select a sibling and inspect manual and AI editors with
  ui.click('family-dayai');ui.click('dayai',{'data-home-child':'test-a'});assert.match(ui.html(),/太郎：AIで予定登録/);assert.ok(ui.el('nl-text'));ui.input('nl-text','明日の午後');ui.click('nl-parse');
  assert.equal(ui.requests.length,count);assert.ok(ui.requests.every(r=>r.body.action==='preview'));
 });
+
+test('preview allows profile input but cannot save it',async()=>{const {ui}=await ready(true);ui.navigate('#family/settings');const before=ui.requests.length;ui.click('fa-profile-open',{'data-child':'','data-kind':'name'});assert.match(ui.html(),/id="fa-profile-family"/);assert.match(ui.html(),/data-action="fa-profile-save" disabled/);ui.click('fa-profile-cancel');assert.equal(ui.requests.length,before);});

@@ -220,3 +220,5 @@
 .family-info-table td.is-missing{background:#fff4e3;color:#945900}
 .family-info-table .tag{white-space:normal}
 @media(max-width:520px){.family-info-table th,.family-info-table td{padding:9px 7px;font-size:13px}}
+
+.family-info-empty{border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font:inherit;padding:0;text-align:left}

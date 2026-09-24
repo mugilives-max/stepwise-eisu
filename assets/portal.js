@@ -1412,7 +1412,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { familyHistoryFolders=Object.create(null); F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { F.profileEdit=null; familyHistoryFolders=Object.create(null); F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1520,9 +1520,10 @@
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
             var account=F.home.family||{},children=F.home.children||[];
-            function infoCell(value,span){var filled=!!String(value||'').trim();return '<td'+(span?' colspan="2"':'')+(!filled?' class="is-missing"':'')+'>'+esc(filled?value:'未登録')+'</td>';}
-            function personRows(label,person){return '<tr><th scope="row">'+esc(label)+'</th>'+infoCell(person.familyName)+infoCell(person.givenName)+'</tr><tr><th scope="row">連絡用メールアドレス</th>'+infoCell(person.email,true)+'</tr>';}
-            h += '<div class="card"><table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+personRows('保護者名',account)+children.map(function(c){return personRows('生徒名',c);}).join('')+'</tbody></table><div class="row" style="margin-top:18px"><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div></div>';
+            function infoCell(value,span,person,kind){var filled=!!String(value||'').trim();return '<td'+(span?' colspan="2"':'')+(!filled?' class="is-missing"':'')+'>'+(filled?esc(value):'<button class="family-info-empty" data-action="fa-profile-open" data-child="'+esc(person.studentId||'')+'" data-kind="'+kind+'">未登録</button>')+'</td>';}
+            function personRows(label,person){return '<tr><th scope="row">'+esc(label)+'</th>'+infoCell(person.familyName,false,person,'name')+infoCell(person.givenName,false,person,'name')+'</tr><tr><th scope="row">連絡用メールアドレス</th>'+infoCell(person.email,true,person,'email')+'</tr>';}
+            h += '<div class="card"><table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+personRows('保護者名',account)+children.map(function(c){return personRows('生徒名',c);}).join('')+'</tbody></table><div class="row" style="margin-top:18px"><button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div></div>';
+            if(F.profileEdit){var pe=F.profileEdit;h+='<div class="card"><h3>'+esc(pe.kind==='email'?'生徒の連絡用メールアドレスを登録':'姓・名を登録')+'</h3>'+(pe.studentId?'<p>'+esc(pe.name)+'</p>':'')+(pe.kind==='email'?'<label>メールアドレス<input id="fa-profile-email" type="email" value="'+esc(pe.email||'')+'"></label><p class="note">確認メールを送信します。届いたリンクを開くと登録が完了します。</p>':'<div class="row"><label>姓<input id="fa-profile-family" maxlength="80" value="'+esc(pe.familyName||'')+'"></label><label>名<input id="fa-profile-given" maxlength="80" value="'+esc(pe.givenName||'')+'"></label></div>')+(previewK?'<p class="note">プレビューでは保存・送信できません。</p>':'')+'<div class="row"><button class="btn-primary" data-action="fa-profile-save"'+(F.busy||previewK?' disabled':'')+'>'+(pe.kind==='email'?'確認メールを送る':'保存')+'</button><button class="btn-quiet" data-action="fa-profile-cancel"'+dis+'>やめる</button></div></div>';}
             h += renderFamilyMailPrefs(dis);
             h += '<p class="note">共用端末では利用後にログアウトしてください。</p><p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
               app.innerHTML=h;return;
@@ -1556,7 +1557,16 @@
           if (route() !== "family") return;
           if(["fa-notices","fa-notice-refresh","fa-notice-open"].indexOf(action)>=0){familyNoticeClick(action,btn);return;}
           if (F.busy) return;
-          if (action === "fa-home") familyLoadHome();
+          if(action==='fa-profile-open'){
+            var id=btn.getAttribute('data-child')||'',kind=btn.getAttribute('data-kind'),person=id?(F.home.children||[]).filter(function(c){return sameId(c.studentId,id);})[0]:F.home.family;if(!person)return;
+            if(kind==='email'&&!id){F.step='emailChange';F.email='';}else F.profileEdit={studentId:id,kind:kind,name:person.name||'',familyName:person.familyName||'',givenName:person.givenName||'',email:''};F.error='';familyRender();
+          }
+          else if(action==='fa-profile-cancel'){F.profileEdit=null;F.error='';familyRender();}
+          else if(action==='fa-profile-save'&&F.profileEdit&&!previewK){
+            var pe=F.profileEdit;pe.familyName=pe.kind==='name'?document.getElementById('fa-profile-family').value:pe.familyName;pe.givenName=pe.kind==='name'?document.getElementById('fa-profile-given').value:pe.givenName;pe.email=pe.kind==='email'?document.getElementById('fa-profile-email').value:'';
+            familyRequest('familyProfileSave',Object.assign({ftoken:familyToken()},pe),function(res){if(res.family)F.home.family=res.family;if(res.children)F.home.children=res.children;F.message=pe.kind==='email'?(res.mailStatus==='sent'?'確認メールを送りました。メールのリンクを開いて登録を完了してください。':'確認メールを送信できませんでした。時間をおいて再申請してください。'):'登録しました。';F.profileEdit=null;});
+          }
+          else if (action === "fa-home") familyLoadHome();
           else if (action === "fa-refresh") familyLoadChild(btn.getAttribute("data-child") || F.studentId);
           else if (action === "fa-logout") familyLogout();
           else if (action === "fa-mode") { F.step = btn.getAttribute("data-step"); F.error = ""; F.message = ""; F.confirm = null; if (F.step === 'emailChange') F.email = ''; familyRender(); }
@@ -1921,7 +1931,7 @@
           else if (qs.toString() && !PREVIEW) history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
         if (PREVIEW && PREVIEW.view === 'parent' && route() !== 'family') location.hash = '#family/home';
-        window.addEventListener("hashchange", function () { pending = null; F.transferConfirm=null; selMode = ""; selDays = {}; histFolder = null; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
+        window.addEventListener("hashchange", function () { pending = null; F.profileEdit=null; F.transferConfirm=null; selMode = ""; selDays = {}; histFolder = null; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
         window.addEventListener("storage", function (ev) {
           if (route()==='family')return;
           if (previewK || (ev.key !== "sw_k" && ev.key !== null) || (ev.key !== null && ev.oldValue === ev.newValue)) return;

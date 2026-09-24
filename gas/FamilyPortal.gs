@@ -14,7 +14,7 @@ var FAMILY_CHALLENGE_MS_ = 30 * 60 * 1000;
 var FAMILY_TEACHER_CHALLENGE_MS_ = 24 * 60 * 60 * 1000;
 
 function ensureFamilySchema_() {
-  var definitions={familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
+  var definitions={familyProfiles:FAMILY_PROFILE_COLS_,familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
   Object.keys(definitions).forEach(function(name){
     var sh=ss_().getSheetByName(name),cols=definitions[name];
     if(sh&&sh.getLastRow()&&(sh.getLastColumn()!==cols.length||sh.getRange(1,1,1,cols.length).getValues()[0].join('|')!==cols.join('|')))throw new Error(name+'の列構成を確認してください。自動上書きは行いません');
@@ -64,7 +64,7 @@ function familyChildren_(a,includeInactive) {
     else if(includeInactive){var old=readRows_('students').filter(function(x){return String(x.id)===String(l.studentId);})[0];if(old)out.push({studentId:String(old.id),name:String(old.name),active:false});}
   });return out;
 }
-function familyPublic_(a) { return {id:String(a.id),label:String(a.label),email:String(a.email)}; }
+function familyPublic_(a) { var p=familyProfile_(a.id);return {id:String(a.id),label:String(a.label),email:String(a.email),familyName:String(p.familyName||''),givenName:String(p.givenName||'')}; }
 function familyEmailPrefRow_(familyId){var rows=ss_().getSheetByName('familyEmailPrefs')?familyRows_('familyEmailPrefs'):[];return rows.filter(function(r){return String(r.familyId)===String(familyId);})[0]||null;}
 function familyEmailPrefs_(familyId){var r=familyEmailPrefRow_(familyId),p={};FAMILY_MAIL_KINDS_.forEach(function(k){p[k]=!r||String(r[k])!=='0';});return p;}
 function familyEmailPrefsSave_(req){
@@ -265,6 +265,7 @@ function familyDispatch_(req) {
     case 'familyResetConfirm':return familyResetConfirm_(req);
     case 'familyEmailChange':return familyEmailChange_(req);
     case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false),emailPrefs:familyEmailPrefs_(h.account.id)};}
+    case 'familyProfileSave':return familyProfileSave_(req);
     case 'familyEmailPrefs':return familyEmailPrefsSave_(req);
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}

@@ -101,3 +101,5 @@ test('セッションの照合に使う SHA-256 が GAS と同じ結果になる
   for (const [kind, id, value] of [['family-session', 'abc', 'fa1.abc.def'], ['x', '', ''], ['日本語', 'test-a', 'かぎ']])
     assert.equal(worker.parentDigest_(kind, id, value), gas.parentDigest_(kind, id, value), `${kind} の値が食い違う`);
 });
+
+test('parent name registration persists through Worker transactions',async()=>{const {h,ftoken}=familyLedger();const p=await createParity(h);const {runWrite}=await import('../cf/worker/write.mjs');const result=await runWrite({action:'familyProfileSave',ftoken,kind:'name',familyName:'試験',givenName:'保護者'},p.env,{now:h.now()});assert.equal(result.result.ok,true,JSON.stringify(result.result));const home=await p.worker({action:'familyHome',ftoken});assert.equal(home.family.familyName,'試験');assert.equal(home.family.givenName,'保護者');});

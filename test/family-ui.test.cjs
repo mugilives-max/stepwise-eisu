@@ -71,12 +71,12 @@ test('family approval requires a DOM confirmation and sends that child and propo
 test('child switch discards the previous approval confirmation and membership refresh removes old private data', async () => {
   const ui = await readyFamily(); ui.navigate('#family/plans'); ui.click('fa-planopen', { 'data-line': 'line-1' });ui.click('fa-planok', { 'data-line': 'line-1' }); ui.navigate('#family/menu'); ui.navigate('#family/settings');
   assert.equal(ui.html().includes('data-action="fa-decide"'), false);
-  ui.navigate('#family/settings'); ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
+  ui.navigate('#family/settings'); ui.click('fa-profile-open',{'data-kind':'name','data-child':''});ui.input('fa-profile-family','【テスト】姓');ui.input('fa-profile-given','名');ui.click('fa-profile-save'); assert.equal(ui.html().includes('Bだけの表示'), false);
   ui.requests.at(-1).reply(home([])); await flush(); ui.navigate('#family/menu'); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
 });
 
 test('family auth expiry removes protected data without clearing the legacy parent token', async () => {
-  const ui = await readyFamily(); ui.session.set('sw_pt_v2:test-link-a', 'legacy-parent-token'); ui.navigate('#family/settings'); ui.click('fa-home');
+  const ui = await readyFamily(); ui.session.set('sw_pt_v2:test-link-a', 'legacy-parent-token'); ui.navigate('#family/settings'); ui.click('fa-profile-open',{'data-kind':'name','data-child':''});ui.input('fa-profile-family','【テスト】姓');ui.input('fa-profile-given','名');ui.click('fa-profile-save');
   ui.requests.at(-1).reply({ error: 'ログイン期限切れ', familyAuthRequired: true }); await flush();
   assert.equal(ui.session.has('sw_ft_v1'), false); assert.equal(ui.session.get('sw_pt_v2:test-link-a'), 'legacy-parent-token'); assert.equal(ui.html().includes('今後の授業'), false); assert.ok(ui.el('fa-pass'));
 });
@@ -511,8 +511,10 @@ test('records show all siblings and keep same-subject folders separate',async()=
 
 test('settings show separate names and student contact email without guessing missing names',async()=>{
  const ui=loggedUI();ui.requests[0].reply(home([{studentId:'child-a',name:'【テスト】姓名',familyName:'【テスト】姓',givenName:'名',email:'student@example.invalid',emailVerified:false}]));await flush();ui.navigate('#family/settings');
- assert.match(ui.html(),/保護者名<\/th><td class="is-missing">未登録<\/td><td class="is-missing">未登録/);
+ assert.match(ui.html(),/保護者名/);assert.match(ui.html(),/data-action="fa-profile-open" data-child="" data-kind="name"/);
  assert.match(ui.html(),/生徒名<\/th><td>【テスト】姓<\/td><td>名<\/td>/);
  assert.match(ui.html(),/student@example.invalid/);assert.match(ui.html(),/parent@example.invalid/);
  assert.doesNotMatch(ui.html(),/>状態<|メール未確認|登録済み<|保護者の登録名/);
 });
+
+test('missing parent names open an editor and persist through the authenticated API',async()=>{const ui=await readyFamily();ui.navigate('#family/settings');assert.doesNotMatch(ui.html(),/家族情報を更新/);ui.click('fa-profile-open',{'data-child':'','data-kind':'name'});ui.input('fa-profile-family','試験');ui.input('fa-profile-given','保護者');ui.click('fa-profile-save');assert.equal(ui.requests.at(-1).body.action,'familyProfileSave');assert.equal(ui.requests.at(-1).body.ftoken,'test-family-token');ui.requests.at(-1).reply({ok:true,family:{...home().family,familyName:'試験',givenName:'保護者'},children:home().children});await flush();assert.match(ui.html(),/<td>試験<\/td><td>保護者<\/td>/);assert.doesNotMatch(ui.html(),/id="fa-profile-family"/);});
