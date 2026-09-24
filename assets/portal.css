@@ -246,3 +246,5 @@
 .family-student-progress .tag{white-space:normal;max-width:100%}
 .family-student-progress .plan-count-value{flex-wrap:wrap;max-width:100%;gap:0}
 @media(max-width:480px){.family-student-progress .portal-plan-table th,.family-student-progress .portal-plan-table td{padding:6px 2px}.family-student-progress .tag{padding:4px 2px}}
+
+.learning-navigation{display:flex;gap:8px;margin:0 0 20px;flex-wrap:wrap}.learning-navigation a{display:inline-block;padding:9px 16px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--muted)}.learning-navigation a.on{background:var(--soft);color:var(--primary);border-color:var(--primary);font-weight:600}

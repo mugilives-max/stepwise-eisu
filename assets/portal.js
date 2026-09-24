@@ -28,10 +28,10 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts'||part==='plans')return 'menu';return ['home','tasks','records','grades','menu','settings'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts は menu 扱い
+        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='learning')return (location.hash.split('/')[2]||'')==='grades'?'grades':'records';if(part==='billing'||part==='contacts'||part==='plans')return 'menu';return ['home','tasks','records','grades','menu','settings'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts は menu 扱い
         // 保護者ページ: ホームは子どもの生徒ページ(マイページ)を共用し、実施状況の末尾に月の実施合計を表示。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['menu','保護者メニュー'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
-        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; if (h === '#tasks' || h.indexOf('#tasks?') === 0) return 'tasks'; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['learning','学習記録'],['menu','保護者メニュー'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+((parentSection()===x[0]||x[0]==='learning'&&['records','grades'].indexOf(parentSection())>=0)?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; if (h === '#tasks' || h.indexOf('#tasks?') === 0) return 'tasks'; return { "#learning":"history", "#learning/records":"history", "#learning/grades":"grades", "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
           var brand = document.getElementById('site-brand'); if (!brand) return;
@@ -44,8 +44,8 @@
           updateBrand();
           if (route() === "family" || route() === 'parent') { tabs.innerHTML=parentNavigation(route()==='family');return; }
           if (!S || !S.me) { tabs.innerHTML = ""; return; }
-          var p = route();
-          tabs.innerHTML = [["#home", "home", "ホーム"], ["#tasks", "tasks", "宿題"], ["#grades", "grades", "成績"], ["#history", "history", "授業の記録"], ["#student-email", "student-email", "設定"]]
+          var p = route();if(p==='grades')p='history';
+          tabs.innerHTML = [["#home", "home", "ホーム"], ["#tasks", "tasks", "宿題"], ["#learning", "history", "学習記録"], ["#student-email", "student-email", "設定"]]
             .map(function (t) { return '<a href="' + t[0] + '" class="' + (p === t[1] ? "on" : "") + '"' + (p === t[1] ? ' aria-current="page"' : '') + '>' + t[2] + "</a>"; }).join("");
         }
 
@@ -949,6 +949,10 @@
           })();
         }
 
+        function learningNavigation(family,grades) {
+          var prefix=family?'#family/learning':'#learning';
+          return '<h1>学習記録</h1><nav class="learning-navigation" aria-label="学習記録の種類"><a href="'+prefix+'"'+(!grades?' class="on" aria-current="page"':'')+'>授業の記録</a><a href="'+prefix+'/grades"'+(grades?' class="on" aria-current="page"':'')+'>成績</a></nav>';
+        }
         function renderStudent() {
           if (route() === 'student-email') { renderTabs(); renderStudentEmail(); return; }
           renderTabs();
@@ -956,7 +960,7 @@
           if (!S || !S.me) { renderGuard(); return; }
           var page = route();
           if (page !== "home") {
-            var hh = previewBanner(false);
+            var hh = previewBanner(false);if(page==='history'||page==='grades')hh+=learningNavigation(false,page==='grades');
             if (page === "grades") hh += renderGradesPage();
             else if (page === "tasks") hh += renderTasksPage();
             else if (page === "history") hh += renderHistoryPage();
@@ -1522,8 +1526,8 @@
             if(notices.open)h+=renderFamilyNotices();
             if(parentSection()==='home'){ app.innerHTML = h + renderFamilyHomeAll(); mountDayDialog(); mountAcceptDialog(); return; }
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
-            if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
-            if(parentSection()==='records'){ app.innerHTML = h + renderFamilyRecords(); return; }
+            if(parentSection()==='grades'){ app.innerHTML = h + learningNavigation(true,true) + renderFamilyMypage('grades'); return; }
+            if(parentSection()==='records'){ app.innerHTML = h + learningNavigation(true,false) + renderFamilyRecords(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
             var account=F.home.family||{},children=F.home.children||[];

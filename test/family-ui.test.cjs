@@ -284,7 +284,7 @@ test('parent settings have a separate tab and mail notification toggles save at 
   const ui = loggedUI(); ui.requests[0].reply({ ...home(), emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: true } }); await flush();
   ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子B') }); await flush();
   ui.navigate('#family/menu');
-  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '宿題', '授業の記録', '成績', '保護者メニュー', '設定']);
+  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '宿題', '学習記録', '保護者メニュー', '設定']);
   assert.match(ui.html(), /請求・お支払い/);
   assert.doesNotMatch(ui.html(), /保護者の設定|メール通知|メールアドレスを変更|fa-logout/);
   ui.navigate('#family/settings');
@@ -522,3 +522,8 @@ test('missing parent names open an editor and persist through the authenticated 
 test('parent student-page entry selects siblings and requests only the chosen linked page',async()=>{const ui=await readyFamily();ui.click('fa-student-pages');assert.match(ui.html(),/id="family-student-dialog"/);assert.match(ui.html(),/【テスト】子A/);assert.match(ui.html(),/【テスト】子B/);ui.click('fa-student-pick',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.action,'familyStudentLink');assert.equal(ui.requests.at(-1).body.studentId,'child-b');assert.equal(ui.requests.at(-1).body.ftoken,'test-family-token');});
 
 test('parent permission matrix saves one child operation with its revision',async()=>{const ui=await readyFamily();ui.navigate('#family/settings');assert.match(ui.html(),/family-permissions/);ui.change('permission-child-a-booking','false');const req=ui.requests.at(-1);assert.equal(req.body.action,'familyPermissionsSave');assert.equal(req.body.studentId,'child-a');assert.equal(req.body.permission,'booking');assert.equal(req.body.allowed,false);assert.equal(req.body.expectedRevision,0);req.reply({ok:true,permissions:{booking:false},permissionsRevision:1});await flush();assert.match(ui.html(),/権限を保存しました/);ui.change('permission-child-a-events','false');assert.equal(ui.requests.at(-1).body.expectedRevision,1);});
+
+test('learning record navigation combines parent and student menus and preserves old links',async()=>{
+ const ui=await readyFamily();ui.navigate('#family/learning');assert.match(ui.html(),/<h1>学習記録<\/h1>/);assert.match(ui.el('tabs').innerHTML,/href="#family\/learning" class="on"[^>]*>学習記録/);assert.doesNotMatch(ui.el('tabs').innerHTML,/>成績<|>授業の記録</);ui.navigate('#family/learning/grades');assert.match(ui.html(),/aria-label="学習記録の種類"/);assert.match(ui.html(),/href="#family\/learning\/grades" class="on"/);
+ const student=createUI('student');student.requests[0].reply(state());await flush();student.navigate('#learning');assert.match(student.html(),/<h1>学習記録<\/h1>/);assert.doesNotMatch(student.el('tabs').innerHTML,/>成績<|>授業の記録</);student.navigate('#learning/grades');assert.match(student.html(),/href="#learning\/grades" class="on"/);student.navigate('#history');assert.match(student.html(),/学習記録の種類/);student.navigate('#grades');assert.match(student.el('tabs').innerHTML,/href="#learning" class="on"/);
+});
