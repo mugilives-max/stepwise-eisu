@@ -28,9 +28,9 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts'||part==='settings')return 'menu';return ['home','tasks','records','grades','menu'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts / settings は menu 扱い
+        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts'||part==='settings')return 'menu';return ['home','tasks','records','grades','plans','menu'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts / settings は menu 扱い
         // 保護者ページ: ホームは子どもの生徒ページ(マイページ)を共用し、実施状況の末尾に月の実施合計を表示。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['menu','保護者メニュー']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['plans','計画'],['menu','保護者メニュー']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
         function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; if (h === '#tasks' || h.indexOf('#tasks?') === 0) return 'tasks'; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
@@ -1164,6 +1164,8 @@
             html += '</table></div>';
           }
 
+          }
+          if(section==='billing'||section==='plans'){
           var pls = d.planLines || [];
           var approvalHelpId='approval-help-'+encodeURIComponent(childId||'parent');
           html += '<h2>授業計画の案内<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業計画の案内について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その期間に実施できる授業回数の上限を確認するものです。案内は科目・種類・期間ごとに届き、それぞれ承認できます。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、事前にキャンセルが成立した授業の料金は発生しません。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
@@ -1364,6 +1366,16 @@
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
+            if(parentSection()==='plans'){
+              h += '<h2>計画</h2>' + renderFamilyPlanConfirm(dis);
+              if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
+              (F.home.children || []).forEach(function(c,index){
+                h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
+                h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId,'plans') : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'"'+dis+'>計画を読み込む</button>';
+                h += '</section>';
+              });
+              app.innerHTML = h; return;
+            }
             // 保護者メニュー: 請求・料金承認 → 先生への連絡 → 保護者の設定(メール通知のオン/オフ)。2026-09-11 に旧3タブを統合
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             h += '<h2>請求・料金承認</h2>';
