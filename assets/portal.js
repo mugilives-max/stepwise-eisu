@@ -660,7 +660,7 @@
             var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
             html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
-          if ((route() === 'home' || route() === 'family') && selMode) html += selMode === "event" ? window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:"イベントを登録",close:"selcancel",busy:busy,content:renderSelBar(D, true)}) : renderSelBar(D, true);
+          if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能日時を登録",ng:"授業不可日時を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
           return html;
         }
 
@@ -951,8 +951,7 @@
           var html = previewBanner(true);
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
-          var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };
-          html += '<h2>予定表' + (selMode && selMode !== 'event' ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
+          html += '<h2>予定表</h2>';
           html += renderCal(D.info, today, true);
           html += renderDayDetail(D, true, true);
 
@@ -1614,7 +1613,6 @@
               selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
             case "dayact":
               selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; render();
-              var calEl2 = document.querySelector(route() === "home" || route() === "family" ? ".selbar" : ".cal"); if (calEl2 && selMode !== "event") calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "selstart":
               selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();

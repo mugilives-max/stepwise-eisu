@@ -317,3 +317,17 @@ test('teacher preview of the parent page: home, child state and parent data come
   assert.match(ui.html(), /【テスト】生徒Aさんの保護者ページを表示中<\/strong>（先生のプレビュー・表示のみ/);
   assert.equal(ui.session.has('sw_ft_v1'), false);
 });
+
+test('availability and unavailability open in dialogs and cancel without sending', async () => {
+  for (const mode of ['wish', 'ng']) {
+    const ui = await studentReady(state());
+    ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd');
+    const before = ui.requests.length;
+    ui.click('dayact', { 'data-m':mode });
+    assert.match(ui.html(), /<dialog id="schedule-event-editor"/);
+    assert.ok(ui.el(mode === 'wish' ? 'b-wstart' : 'b-ngstart'));
+    ui.click('selcancel');
+    assert.doesNotMatch(ui.html(), /<dialog id="schedule-event-editor"/);
+    assert.equal(ui.requests.length, before);
+  }
+});
