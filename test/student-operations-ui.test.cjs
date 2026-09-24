@@ -359,3 +359,11 @@ test('blocked time uses editable date and adds intervals without removing existi
  const body=ui.requests.at(-1).body;assert.equal(body.action,'blockSet');assert.deepEqual(body.add,['2026-09-18']);assert.deepEqual(body.removeIds,[]);assert.equal(body.start,allDay?'':'10:00');assert.equal(body.end,allDay?'':'12:00');
  }
 });
+
+test('event registration uses the date chosen inside the modal', async () => {
+ const ui=await studentReady(state());ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');ui.click('dayact',{'data-m':'event'});
+ assert.equal(ui.el('b-edate').value,'2026-09-15');
+ const before=ui.requests.length;ui.input('b-edate','');ui.input('b-etitle','大会');ui.click('selapply');assert.equal(ui.requests.length,before);
+ ui.input('b-edate','2026-09-18');ui.click('selapply');const body=ui.requests.at(-1).body;
+ assert.equal(body.action,'eventAddMany');assert.deepEqual(body.ranges,[{date:'2026-09-18',dateTo:'2026-09-18'}]);assert.equal(body.kind,'event');assert.equal(body.alsoBlock,false);
+});

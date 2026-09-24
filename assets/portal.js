@@ -847,8 +847,7 @@
             html += '<div class="msg">授業可能日時: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
             html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録する") + '</button></div>';
           } else if (selMode === "event") {
-            var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
-            html += '<div class="msg">イベント: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
+            html += '<p><label>日付 <input type="date" id="b-edate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label></p>';
             html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録") + '</button></div>';
           }
           return html + '</div></div>';
@@ -1621,7 +1620,7 @@
             case "selcancel": if(busy)break; selMode = ""; selDays = {}; render(); break;
             case "selapply":
               var chosen = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
-              if(selMode === "want" || selMode === "ng"){var wd=val(selMode === "ng" ? "b-ngdate" : "b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
+              if(selMode === "want" || selMode === "ng" || selMode === "event"){var wd=val(selMode === "event" ? "b-edate" : selMode === "ng" ? "b-ngdate" : "b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
               if (!chosen.length) { toast("日付をえらんでください"); return; }
               if (selMode === "ng") {
                 var addD2 = chosen, remIds2 = [];
