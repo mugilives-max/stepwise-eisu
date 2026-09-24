@@ -661,7 +661,7 @@
             if(dayInputMode==='availability')content='<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button></div>';
             html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':dayInputMode==='availability'?'授業可能・不可':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
-          if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能日時を登録",want:"希望日時を登録",ng:"授業不可日時を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
+          if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能・不可を登録",want:"希望日時を登録",ng:"授業可能・不可を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
           return html;
         }
 
@@ -835,6 +835,7 @@
           var selDates = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
           var selTxt = selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し)";
           var html = '<div class="confirmbar selbar ' + selMode + '"' + (inline ? ' style="position:static;margin-top:14px;padding:14px 0 0;box-shadow:none"' : '') + '><div class="inner">';
+          if(selMode === "wish" || selMode === "ng")html += '<div class="row" role="group" aria-label="授業可能・不可" style="margin-bottom:12px">'+['wish','ng'].map(function(mode){return '<button type="button" class="'+(selMode===mode?'btn-primary':'btn-quiet')+'" aria-pressed="'+(selMode===mode)+'" data-action="dayact" data-m="'+mode+'" data-date="'+esc(selDates[0]||D.today)+'">'+(mode==='wish'?'授業可能':'授業不可')+'</button>';}).join('')+'</div>';
           if (selMode === "ng") {
             html += '<div class="row"><label>日付 <input type="date" id="b-ngdate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label><label><input type="checkbox" id="b-ngall" checked> 終日</label></div><div class="row" style="margin:12px 0"><label>開始 <input type="time" id="b-ngstart" step="900" disabled></label><span>〜</span><label>終了 <input type="time" id="b-ngend" step="900" disabled></label></div>';
             html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button></div>';
@@ -845,7 +846,7 @@
             html += '<div class="row"><label>日付 <input type="date" id="b-wdate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label><label>授業（任意） <select id="b-wlesson"><option value="">指定なし</option>'+wishLessons.map(function(label){return '<option value="'+esc(label)+'">'+esc(label)+'</option>';}).join('')+'</select></label></div><p class="note">この日時に1コマの授業を希望します。先生からの案内をお待ちください。</p><div class="row"><label>開始時刻 <input type="time" id="b-wstart" value="17:00" step="900"></label><label>授業時間 <select id="b-wmin"><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90" selected>90分</option><option value="120">120分</option></select></label></div><p><input type="text" id="b-wnote" maxlength="100" placeholder="メモ（任意）" style="width:100%;box-sizing:border-box"></p><button class="btn-primary" data-action="selapply"'+(busy?' disabled':'')+'>希望を送る</button>';
           } else if (selMode === "wish") {
             html += wishModeField('b');
-            html += '<div class="msg">授業可能日時: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + selTxt + '</div>';
+            html += '<p><label>日付 <input type="date" id="b-wishdate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label></p>';
             html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録する") + '</button></div>';
           } else if (selMode === "event") {
             html += '<p><label>日付 <input type="date" id="b-edate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label></p>';
@@ -1604,7 +1605,7 @@
             case "helpwish": helpWish = !helpWish; render(); break;
             case "helpnl": helpNl = !helpNl; render(); break;
             case "histback": histFolder = null; render(); break;
-            case "dayavailability": if(previewK||busy||NL.busy)break;dayInputMode="availability";dayAddOpen=true;render();break;
+            case "dayavailability": if(previewK||busy||NL.busy)break;selMode="wish";selDays={};selDays[selDate]=true;pending=null;dayAddOpen=false;render();break;
             case "dayadd": if(previewK||busy||NL.busy)break;dayInputMode='manual';dayAddOpen=true;render();break;
             case "dayai": if(previewK||busy||NL.busy||!S.nlEnabled)break;dayInputMode='text';dayAddOpen=true;render();break;
             case "dayclose": if(busy||NL.busy)break;dayAddOpen=false;render();break;
@@ -1613,7 +1614,11 @@
               if (selMode) { var nd = btn.getAttribute("data-date"); selDays[nd] = !selDays[nd]; render(); break; }
               selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
             case "dayact":
-              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; render();
+              var switching=(selMode==='wish'||selMode==='ng')&&(btn.getAttribute('data-m')==='wish'||btn.getAttribute('data-m')==='ng');
+              var keepDate=switching?val(selMode==='ng'?'b-ngdate':'b-wishdate'):'',keepNote=switching?val(selMode==='ng'?'b-ngnote':'b-wnote'):'';
+              var keepStart=switching?val(selMode==="ng"?"b-ngstart":"b-wstart"):"",keepEnd=switching?val(selMode==="ng"?"b-ngend":"b-wend"):"";
+              selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[keepDate||btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; render();
+              if(switching){var noteInput=document.getElementById(selMode==="ng"?"b-ngnote":"b-wnote");if(noteInput)noteInput.value=keepNote;if(keepStart&&keepEnd){var st=document.getElementById(selMode==="ng"?"b-ngstart":"b-wstart"),en=document.getElementById(selMode==="ng"?"b-ngend":"b-wend");if(st&&en){st.value=keepStart;en.value=keepEnd;st.disabled=false;en.disabled=false;}var all=document.getElementById("b-ngall");if(all)all.checked=false;}}
               break;
             case "selstart":
               selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();
@@ -1622,7 +1627,7 @@
             case "selcancel": if(busy)break; selMode = ""; selDays = {}; render(); break;
             case "selapply":
               var chosen = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
-              if(selMode === "want" || selMode === "ng" || selMode === "event"){var wd=val(selMode === "event" ? "b-edate" : selMode === "ng" ? "b-ngdate" : "b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
+              if(selMode === "want" || selMode === "ng" || selMode === "wish" || selMode === "event"){var wd=val(selMode === "wish" ? "b-wishdate" : selMode === "event" ? "b-edate" : selMode === "ng" ? "b-ngdate" : "b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
               if (!chosen.length) { toast("日付をえらんでください"); return; }
               if (selMode === "ng") {
                 var addD2 = chosen, remIds2 = [];
