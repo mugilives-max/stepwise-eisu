@@ -53,3 +53,11 @@ test('approved plan progress is a sibling section showing completed versus plann
  assert.ok(!html.slice(boundary).includes('<th>時間</th>'));
  assert.ok(!html.includes('実施計画'));
 });
+
+test('progress separates lessons covered by a proposed plan from genuinely outside lessons',async()=>{
+ const ui=await studentReady({...state([]),history:[{date:'2026-09-02',subject:'英語',kind:'',done:true},{date:'2026-09-20',subject:'英語',kind:'',done:true},{date:'2026-09-02',subject:'英語',kind:'演習',done:true}],planLines:[line({endDate:'2026-09-10'})]});
+ const progress=ui.html().split('data-fold="progress"')[1];
+ assert.ok(progress.includes('<td>未承認</td>'));
+ assert.equal((progress.match(/<td>計画外<\/td>/g)||[]).length,2);
+ assert.ok(progress.includes('<td>通常</td><td>—</td><td>0回</td><td>1回</td><td>未承認</td>'));
+});
