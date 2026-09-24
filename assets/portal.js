@@ -954,13 +954,12 @@
         }
 
         /* ---------- ホーム: 予定表を最優先に、予定の編集・授業登録・授業計画の案内。宿題は専用メニューへ ---------- */
-        function renderHomePage() {
+        function renderHomePage(sharedCalendar) {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
-          html += '<h2>予定表</h2>';
-          html += renderCal(D.info, today, true);
+          if (!sharedCalendar) { html += '<h2>予定表</h2>'; html += renderCal(D.info, today, true); }
           html += renderDayDetail(D, true, true);
 
           var summary = renderMonthSummary(D);
@@ -1259,15 +1258,37 @@
           if(current){familyHomeViews[current.studentId]=homeView();familyHomeViews[current.studentId].dayAddOpen=false;familyHomeViews[current.studentId].selMode='';familyHomeViews[current.studentId].pending=null;}
           F.studentId=id;S=F.childState[id];useHomeView(familyHomeViews[id]||freshHomeView());return !!S;
         }
+        var familyCalendar = {year:calNow.getFullYear(),month:calNow.getMonth(),date:null};
+        function renderFamilyCalendar(children) {
+          var src={lessons:[],events:[],blocked:[],wishes:[],teacherOff:[]},offs={},today='',missing=false;
+          children.forEach(function(c){
+            var st=F.childState[c.studentId];if(!st||!st.me){missing=true;return;}
+            today=today||st.today;
+            var given=c.givenName||st.me.givenName||'',name=given||c.name;
+            if(given&&children.filter(function(x){return (x.givenName||(F.childState[x.studentId]||{}).me?.givenName)===given;}).length>1)name=c.name;
+            (st.slots||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name}));});
+            (st.events||[]).forEach(function(x){src.events.push(Object.assign({},x,{title:name+' '+(x.title||'イベント')}));});
+            (st.blocked||[]).forEach(function(x){src.blocked.push(Object.assign({},x,{label:name+' 授業不可'}));});
+            (st.wishes||[]).forEach(function(x){src.wishes.push(Object.assign({},x,{label:name+' '+(x.start||'')+'〜'+(x.end||'')+' 授業可'}));});
+            (st.teacherOff||[]).forEach(function(x){var key=x.date+'|'+x.start+'|'+x.end;if(!offs[key]){offs[key]=true;src.teacherOff.push(x);}});
+          });
+          if(!today)return '<h2>予定表</h2><p role="status">予定を読み込んでいます…</p>';
+          if(!familyCalendar.date){familyCalendar.date=today;familyCalendar.year=+today.slice(0,4);familyCalendar.month=+today.slice(5,7)-1;}
+          src.lessonLabel=function(x){return x.studentLabel+' '+lessonLabel(x);};
+          var h='<h2>予定表</h2>'+window.StepwiseCalendar.render(window.StepwiseCalendar.buildInfo(src),{year:familyCalendar.year,month:familyCalendar.month,today:today,selDate:familyCalendar.date,showToff:true,overlapLanes:true,offerLegend:'授業（未登録）',eventLegend:'イベント'});
+          h=h.replace(/data-action="cal/g,'data-action="family-cal');
+          return h+(missing?'<p role="status">ほかのお子さんの予定を読み込んでいます…</p>':'');
+        }
         function renderFamilyHomeAll() {
           var children=F.home.children||[],current=familyMypageChild(),savedId=F.studentId,savedS=S,savedView=homeView(),h=previewBanner(true);
           if(!children.length)return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if(current)familyHomeViews[current.studentId]=savedView;
+          h+=renderFamilyCalendar(children);
           children.forEach(function(c){
             h+='<section data-home-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'さん</h2>';
             var st=F.childState[c.studentId];
             if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);h+='<p role="status">予定を読み込んでいます…</p>';}
-            else {F.studentId=c.studentId;S=st;useHomeView(familyHomeViews[c.studentId]||freshHomeView());h+=renderHomePage().replace(/data-action=/g,'data-home-child="'+esc(c.studentId)+'" data-action=').replace(/data-accept-id=/g,'data-home-child="'+esc(c.studentId)+'" data-accept-id=');familyHomeViews[c.studentId]=homeView();}
+            else {F.studentId=c.studentId;S=st;useHomeView(familyHomeViews[c.studentId]||freshHomeView());if(familyCalendar.date){selDate=familyCalendar.date;selManual=true;}h+=renderHomePage(true).replace(/data-action=/g,'data-home-child="'+esc(c.studentId)+'" data-action=').replace(/data-accept-id=/g,'data-home-child="'+esc(c.studentId)+'" data-accept-id=');familyHomeViews[c.studentId]=homeView();}
             h+='</section>';
           });
           F.studentId=savedId;S=savedS;useHomeView(current&&familyHomeViews[current.studentId]||savedView);return h;
@@ -1287,7 +1308,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1616,6 +1637,12 @@
           if (!btn || btn.disabled) return;
           if (!familyHomeTarget(btn)) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
+          if(act==='family-calprev'||act==='family-calnext'||act==='family-calday'){
+            if(busy||NL.busy)return;
+            if(act==='family-calday'){familyCalendar.date=btn.getAttribute('data-date');}
+            else {familyCalendar.month+=act==='family-calnext'?1:-1;if(familyCalendar.month<0){familyCalendar.month=11;familyCalendar.year--;}if(familyCalendar.month>11){familyCalendar.month=0;familyCalendar.year++;}}
+            familyRender();return;
+          }
           if(act==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();return;}
           if(act==='student-notice-link'){studentNoticesOpen=false;render();return;}
           if(act==='approval-help'){var help=document.getElementById(btn.getAttribute('aria-controls'));if(help){help.hidden=!help.hidden;btn.setAttribute('aria-expanded',String(!help.hidden));}return;}

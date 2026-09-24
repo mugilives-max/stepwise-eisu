@@ -23,6 +23,7 @@ const ok = r => { assert.equal(r.ok, true, JSON.stringify(r).slice(0, 200)); ret
 function familyLedger() {
   const h = createFamilyHarness();
   h.admin('state');
+  ok(h.admin('kanriSaveProfile', {studentId:'test-a',profile:{'姓':'【テスト】','名':'保護者認証A'}}));
   const created = ok(h.admin('familyCreate', { label: '【テスト】並走', studentIds: ['test-a'] }));
   ok(h.family('familyRegister', { inviteCode: created.inviteCode, email: 'parity@example.invalid', pass: PASS }));
   const challenge = h.latestChallenge();

@@ -172,7 +172,7 @@ function studentState_(code) {
   // 授業計画(案内の行)。案内中(proposed)と承認済み(approved)で、期間が今月以降にかかるものだけを返す。下書き・見送りは出さない
   var planLines = studentPlanLines_(me.id, today);
   var tasks = tasksFor_(me.id, 45);
-  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planLines: planLines, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, familyName: studentNameParts_(me.id).familyName, givenName: studentNameParts_(me.id).givenName, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planLines: planLines, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
@@ -2033,6 +2033,7 @@ function kanriStudent_(studentId,section) {
   var month = today.slice(0, 7);
   var profile = null;
   ledgerRows_('生徒台帳').forEach(function (p) { if (String(p['生徒ID']) === id) profile = p; });
+  profile = profile || {}; var nameParts = studentNameParts_(id); profile['姓']=nameParts.familyName; profile['名']=nameParts.givenName;
   if (profile) delete profile._row;
   var base={section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,nlEnabled:typeof nlConfigured_==='function'&&nlConfigured_(),code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
   if (section==='settings') return Object.assign(base,{email:String(sys.email || ''),emailStatus:studentEmailStatus_(id),rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),parentAuth:parentStatus_(id)});
@@ -2096,6 +2097,8 @@ function kanriSaveProfile_(req) {
   var sys = systemStudent_(id);
   if (!sys) return { error: '生徒が見つかりません' };
   var pr = req.profile || {};
+  if(pr['姓']!==undefined || pr['名']!==undefined){var savedNames=saveStudentNameParts_(sys,pr['姓'],pr['名']);if(savedNames.error)return savedNames;}
+
   var cols = LEDGER_COLS['生徒台帳'];
   var target = null;
   ledgerRows_('生徒台帳').forEach(function (r) { if (String(r['生徒ID']) === id) target = r; });

@@ -22,3 +22,8 @@ test('staggered lanes fill leading and trailing gaps with their duration',()=>{
  const same=C.buildInfo({lessons:[1,2].map(()=>({date:'2026-09-26',start:'14:30',min:90,subject:'数学',st:'mine'}))});
  assert.doesNotMatch(C.render(same,{year:2026,month:8,overlapLanes:true}),/cal-overlap-gap/);
 });
+
+test('named sibling restrictions preserve ownership for both all-day and timed entries',()=>{
+ const info=C.buildInfo({blocked:[{date:'2026-09-09',label:'太郎 授業不可'},{date:'2026-09-09',start:'17:00',end:'18:00',label:'花子 授業不可'}]});
+ const html=C.render(info,{year:2026,month:8,today:'2026-09-01'});assert.match(html,/太郎 授業不可/);assert.match(html,/花子 授業不可/);
+});

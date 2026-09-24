@@ -261,7 +261,7 @@ test('the family マイページ tab shows the child student home and proxies st
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.match(ui.el('tabs').innerHTML, /href="#family\/home" class="on"[^>]*>ホーム/);
   assert.match(ui.html(), /【テスト】子Aさん/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/);
-  ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); ui.click('dayavailability'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
+  ui.click('family-calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); ui.click('dayavailability'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
   const sent = ui.requests.at(-1).body;
   assert.equal(sent.action, 'blockSet'); assert.equal(sent.ftoken, 'test-family-token'); assert.equal(sent.studentId, 'child-a'); assert.equal(sent.k, undefined); assert.deepEqual(sent.add, ['2026-09-15']);
   ui.requests.at(-1).reply({ ok: true, state: { ...state(), blocked: [{ id: 'b1', date: '2026-09-15' }] } }); await flush();
@@ -390,10 +390,10 @@ test('parent plans menu opens plans and approval review without billing or setti
 
 test('family home shows both sibling schedules by default and sends actions for the owning child',async()=>{
  const ui=await readyFamily();ui.navigate('#family/home');
- ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),viewer:'family',slots:[{id:'a-only',date:'2026-09-25',start:'13:00',min:90,st:'mine',subject:'兄A専用科目'}]});await flush();
+ ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),viewer:'family',me:{...state().me,givenName:'太郎'},slots:[{id:'a-only',date:'2026-09-25',start:'13:00',min:90,st:'mine',subject:'兄A専用科目'}]});await flush();
  const req=ui.requests.at(-1);assert.equal(req.body.action,'familyStudentState');assert.equal(req.body.studentId,'child-b');
- req.reply({...state(),viewer:'family',slots:[{id:'b-only',date:'2026-09-26',start:'15:00',min:90,st:'mine',subject:'弟B専用科目'}]});await flush();
- assert.match(ui.html(),/兄A専用科目/);assert.match(ui.html(),/弟B専用科目/);assert.equal(ui.el('fa-mychild'),undefined);
- ui.click('calday',{'data-home-child':'child-b','data-date':'2026-09-28'});ui.click('dayadd',{'data-home-child':'child-b'});ui.click('dayavailability',{'data-home-child':'child-b'});ui.click('dayact',{'data-home-child':'child-b','data-m':'ng'});ui.click('selapply',{'data-home-child':'child-b'});
+ req.reply({...state(),viewer:'family',me:{...state().me,givenName:'花子'},slots:[{id:'b-only',date:'2026-09-26',start:'15:00',min:90,st:'mine',subject:'弟B専用科目'}]});await flush();
+ assert.match(ui.html(),/太郎 兄A専用科目/);assert.match(ui.html(),/花子 弟B専用科目/);assert.match(ui.html(),/弟B専用科目/);assert.equal((ui.html().match(/class="card cal"/g)||[]).length,1);assert.equal(ui.el('fa-mychild'),undefined);
+ ui.click('family-calday',{'data-date':'2026-09-28'});ui.click('dayadd',{'data-home-child':'child-b'});ui.click('dayavailability',{'data-home-child':'child-b'});ui.click('dayact',{'data-home-child':'child-b','data-m':'ng'});ui.click('selapply',{'data-home-child':'child-b'});
  const sent=ui.requests.at(-1).body;assert.equal(sent.action,'blockSet');assert.equal(sent.studentId,'child-b');assert.deepEqual(sent.add,['2026-09-28']);
 });

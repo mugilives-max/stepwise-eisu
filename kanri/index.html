@@ -220,7 +220,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260922-outline"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260924-shared-day"><script src="/assets/calendar.js?v=20260924-shared-day"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260924-shared-day"><script src="/assets/calendar.js?v=20260924-family-calendar"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -1066,7 +1066,7 @@
           html += '<h2>基本情報 <button class="btn-quiet btn-sm" data-action="editprofile" style="margin-left:auto">' + (editProfile ? "閉じる" : "編集") + '</button></h2>';
           if (editProfile) {
             html += '<div class="card"><div class="form">';
-            [["ふりがな", "text"], ["学年", "text"], ["学校", "text"], ["保護者名", "text"], ["保護者連絡先", "text"], ["メール", "email"], ["入塾日", "date"], ["科目", "text"]].forEach(function (f) {
+            [["姓", "text"], ["名", "text"], ["ふりがな", "text"], ["学年", "text"], ["学校", "text"], ["保護者名", "text"], ["保護者連絡先", "text"], ["メール", "email"], ["入塾日", "date"], ["科目", "text"]].forEach(function (f) {
               html += '<label>' + f[0] + '</label><input type="' + f[1] + '" data-pf="' + f[0] + '" value="' + esc(p[f[0]] || "") + '">';
             });
             html += '<label>状態</label><select data-pf="状態">' + ["在籍", "休会", "退塾", "体験"].map(function (o) { return '<option' + ((p["状態"] || "在籍") === o ? " selected" : "") + '>' + o + '</option>'; }).join("") + '</select>';

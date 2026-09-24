@@ -219,7 +219,7 @@
       var d = e.date, to = e.dateTo || e.date;
       for (var i = 0; i < 61 && d && d <= to; i++) { var it = it0(d); it.ev++; it.labels.push({ text: e.title || "予定", st: "event", start: "99:99", end: "", kind: e.kind }); d = addDaysStr(d, 1); }
     });
-    (src.blocked || []).forEach(function (b) { var it = it0(b.date); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else it.ngAll = 1; });
+    (src.blocked || []).forEach(function (b) { var it = it0(b.date); it.ng++; if (b.start) (it.ngT = it.ngT || []).push(b); else { it.ngAll = 1; if(b.label)(it.ngNames=it.ngNames||[]).push(b.label); } });
     (src.teacherOff || []).forEach(function (o) { var it = it0(o.date); if (o.start) (it.toffT = it.toffT || []).push(o); else it.toff = 1; });
     // wishes: {date, label?} label があれば(全体予定表: 生徒名と時間帯)箱で出し、なければ「授業可」の印だけ
     (src.wishes || []).forEach(function (w) { var it = it0(w.date); it.wish = (it.wish || 0) + 1; if (w.label) (it.wishL = it.wishL || []).push(String(w.label)); });
@@ -259,9 +259,9 @@
       if (it && !past && it.mine) cls += " mine";
       if (selMode && selDays[ds] && !past) { cls += " selday " + selMode; if (selMode === "ng" && !(it && it.ng)) marks += '<span class="callbl to" style="color:var(--danger)">授業不可</span>'; }
       marks += "</span>";
-      if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">授業不可</span>';
+      if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">'+esc(it.ngNames?it.ngNames.join(' / '):'授業不可')+'</span>';
       var timed = [];
-      if (it && it.ngT) it.ngT.forEach(function (b) { timed.push({start:b.start, end:b.end, html:unavailableBox(b, '授業不可', 'ng')}); });
+      if (it && it.ngT) it.ngT.forEach(function (b) { timed.push({start:b.start, end:b.end, html:unavailableBox(b, b.label || '授業不可', 'ng')}); });
       if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
       if (showToff && it && it.toff) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
       if (showToff && it && it.toffT) it.toffT.forEach(function (o) { timed.push({start:o.start, end:o.end, html:unavailableBox(o, toffText, 'toff')}); });
