@@ -197,3 +197,6 @@
 .portal-proposal-table th:first-child{width:24%}
 .portal-proposal-table th:last-child{width:20%}
 .portal-proposal-table th,.portal-proposal-table td{overflow-wrap:anywhere}
+
+.selbar.availability-form{border-top-color:var(--line,#d8e1eb)}
+.availability-form [role="group"] button{min-width:90px}

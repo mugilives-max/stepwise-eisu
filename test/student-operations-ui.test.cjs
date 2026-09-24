@@ -354,7 +354,7 @@ test('lesson wish uses edited date and optional lesson selection', async () => {
 test('blocked time uses editable date and adds intervals without removing existing blocks', async () => {
  for(const allDay of [true,false]){
  const ui=await studentReady(state());ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');ui.click('dayavailability');ui.click('dayact',{'data-m':'ng'});
- assert.equal(ui.el('b-ngall').checked,true);ui.input('b-ngdate','2026-09-18');ui.el('b-ngall').checked=allDay;
+ assert.equal(ui.el('b-ngall').checked,false, 'switching preserves the available time range');ui.input('b-ngdate','2026-09-18');ui.el('b-ngall').checked=allDay;
  ui.el('b-ngstart').value='10:00';ui.el('b-ngend').value='12:00';ui.click('selapply');
  const body=ui.requests.at(-1).body;assert.equal(body.action,'blockSet');assert.deepEqual(body.add,['2026-09-18']);assert.deepEqual(body.removeIds,[]);assert.equal(body.start,allDay?'':'10:00');assert.equal(body.end,allDay?'':'12:00');
  }
