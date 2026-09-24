@@ -1519,7 +1519,7 @@
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyRecords(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
-            h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
+            h += '<div class="card"><dl><dt>保護者の登録名</dt><dd>'+esc((F.home.family||{}).label||'未登録')+'</dd><dt>連絡用メールアドレス</dt><dd style="overflow-wrap:anywhere">'+esc((F.home.family||{}).email||'未登録')+((F.home.family||{}).email?'（メール確認済み）':'')+'</dd><dt>登録済みの生徒</dt><dd>'+((F.home.children||[]).length?'<ul>'+(F.home.children||[]).map(function(c){return '<li>'+esc(c.name)+'</li>';}).join('')+'</ul>':'登録されていません')+'</dd></dl><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             h += renderFamilyMailPrefs(dis);
             h += '<p class="note">共用端末では利用後にログアウトしてください。</p><p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
               app.innerHTML=h;return;
