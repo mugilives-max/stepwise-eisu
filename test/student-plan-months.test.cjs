@@ -13,12 +13,26 @@ test('student state lists proposed and approved lines whose period reaches this 
   const old = save(h, { subject: '英語', startDate: '2026-08-01', endDate: '2026-08-31', count: 2, propose: true }); assert.equal(old.ok, true, JSON.stringify(old));
   const state = json(h.context().studentState_('synthetic-link-a'));
   assert.deepEqual(state.planLines.map(l => [l.subject, l.kind, l.count, l.period, l.status, l.lessonMin, l.lessonFee, l.comment]), [
-    ['数学', '', 3, '2026/9/22〜10/5', 'proposed', 90, 4500, '入試の過去問'],
-    ['英語', '', 4, '2026年9月', 'approved', 90, 4500, '定期テスト対策で\n文法を固めます']
+    ['数学', '', 3, '2026/9/22〜10/5', 'proposed', 90, undefined, '入試の過去問'],
+    ['英語', '', 4, '2026年9月', 'approved', 90, undefined, '定期テスト対策で\n文法を固めます']
   ]);
   assert.equal(state.planLines[1].approvedCount, 4);
   assert.deepEqual(state.plan, { '英語': 4, '数学': 3 }); assert.equal(state.planStatus, 'proposed');
   assert.deepEqual(json(h.context().studentState_('synthetic-link-b').planLines), []);
   const c = h.context(); const parent = json(c.parentDataForStudent_(c.findStudent_('test-a')));
   assert.deepEqual(parent.data.planLines.map(l => l.subject), ['数学', '英語']);
+});
+
+const {studentReady,state,line}=require('./helpers/operations-ui-harness.cjs');
+test('student UI never renders plan prices even from an old response',async()=>{
+ const ui=await studentReady({...state([]),planLines:[line({lessonFee:987654,rate30:329218,comment:'学習内容'})]});
+ assert.ok(ui.html().includes('学習内容'));
+ assert.ok(ui.html().includes('90分'));
+ assert.doesNotMatch(ui.html(),/987,?654|329,?218|1回 |料金|授業料/);
+});
+test('student API exposes learning fields only including the teacher student preview',()=>{
+ const h=createSchedulingHarness();save(h,{propose:true});const c=h.context();
+ const st=json(c.studentState_('synthetic-link-a'));
+ assert.doesNotMatch(JSON.stringify(st),/"(?:lessonFee|rate30|monthly|amount|billing|memo|parentAckMemo)"/);
+ assert.equal(c.parentDataForStudent_(c.findStudent_('test-a')).data.planLines[0].lessonFee,4500);
 });

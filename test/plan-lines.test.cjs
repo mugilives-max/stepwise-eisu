@@ -39,7 +39,9 @@ test('propose, parent approval with a reduced count, teacher consent record, and
   const sent = ok(save(h, { propose: true, comment: '入試対策' }));
   assert.equal(sent.line.status, 'proposed'); assert.equal(sent.line.revision, 1); assert.ok(sent.line.proposedAt);
   const st = json(h.context().studentState_('synthetic-link-a'));
-  assert.equal(st.planLines.length, 1); assert.equal(st.planLines[0].comment, '入試対策'); assert.equal(st.planLines[0].lessonFee, 4500);
+  assert.equal(st.planLines.length, 1); assert.equal(st.planLines[0].comment, '入試対策'); assert.equal(st.planLines[0].lessonFee, undefined); assert.equal(st.planLines[0].rate30, undefined);
+  assert.equal(st.planLines[0].lessonMin, 90);
+  assert.equal(h.context().parentDataForStudent_(h.context().findStudent_('test-a')).data.planLines[0].lessonFee, 4500);
   const id = sent.line.id;
   // teacher consent record needs the current revision and evidence
   rejected(h.admin('planLineApproveTeacher', { studentId: 'test-a', lineId: id, expectedRevision: 0, via: '電話', consentDate: '2026-09-06' }), 'conflict');

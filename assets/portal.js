@@ -719,7 +719,8 @@
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内 <span class="small muted" style="font-weight:400">保護者の承認待ち</span></h3>';
           if (!proposed.length) html += '<div class="empty">新しい案内はありません</div>';
           proposed.forEach(function (l) {
-            html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + ' ' + (l.addon ? '<span class="tag gray">追加</span> ＋' : '') + esc(l.count) + '回' + (planFee(l) ? '<span class="muted">・' + esc(planFee(l)) + '</span>' : '') + '</span><span class="tag amber">保護者の承認待ち</span></div>';
+            var parentLine = famChild && famLines.filter(function(x){return x.id===l.id;})[0];
+            html += '<div class="slotline"><span class="tag amber">案内</span><span class="time">' + esc(planShort(l)) + '</span><span class="who"><strong>' + esc(l.subject) + '</strong> ' + kindTag(l.kind) + ' ' + (l.addon ? '<span class="tag gray">追加</span> ＋' : '') + esc(l.count) + '回' + (parentLine && planFee(parentLine) ? '<span class="muted">・'+esc(planFee(parentLine))+'</span>' : l.lessonMin ? '<span class="muted">・' + esc(l.lessonMin) + '分</span>' : '') + '</span><span class="tag amber">保護者の承認待ち</span></div>';
             if (l.comment) html += '<div class="note" style="white-space:pre-wrap;margin:4px 0 6px"><strong>先生から：</strong>' + esc(l.comment) + '</div>';
             html += window.StepwiseReport.outline(l.outline);
             if (famChild) {
@@ -954,7 +955,7 @@
           html += renderOffers(D);
           html += renderMonthSummary(D);
 
-          html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」、授業料などは「保護者ページ」にあります。</div>';
+          html += '<div class="note" style="margin-top:18px">実施済みの授業は「授業の記録」、テストの結果は「成績」にあります。</div>';
           html += '<footer class="app"><span>ページを開くと最新の状態になります</span><span></span></footer>';
           html += renderPendingBar(D);
           return html;

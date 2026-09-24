@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-23-worker-natural-schedule' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-24-student-no-pricing' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -605,7 +605,15 @@ function planRows_() {
 function planComment_(studentId, ym) { if (!ss_().getSheetByName('planComments')) return ''; var r = readRows_('planComments').filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === String(ym); })[0]; return r ? String(r.comment || '') : ''; }
 function planMonthInfo_(studentId, ym) { return billingMonthInfo_(studentId, ym); }
 // 生徒・保護者に見せる案内の行: 案内中・承認済みで、終了日が今月1日以降のもの(開始日の新しい順)
+// Student responses are an explicit learning-only projection. Never expose financial or consent fields.
 function studentPlanLines_(studentId, today) {
+  return parentPlanLines_(studentId, today).map(function (l) {
+    var out = {};
+    ['id','subject','kind','count','approvedCount','startDate','endDate','period','month','lessonMin','comment','status','parentId','addon','outline'].forEach(function (key) { out[key] = l[key]; });
+    return out;
+  });
+}
+function parentPlanLines_(studentId, today) {
   var from = String(today || todayStr_()).slice(0, 7) + '-01';
   return planLinesFor_(String(studentId)).filter(function (l) { return (l.status === 'proposed' || l.status === 'approved') && l.endDate >= from; }).sort(planLineSort_).map(planLineView_);
 }
@@ -815,7 +823,7 @@ function parentDataForStudent_(student) {
     if (!months[m]) { months[m] = { ym: m, count: 0, minutes: 0 }; keys.push(m); }
     months[m].count++; months[m].minutes += Number(l.min) || 0;
   });
-  var planLines = studentPlanLines_(String(student.id), todayStr_());
+  var planLines = parentPlanLines_(String(student.id), todayStr_());
   var upcoming = readRows_('slots').filter(function(s){return String(s.studentId)===String(student.id)&&s.date>=todayStr_()&&(s.status==='offered'||s.status==='booked');})
     .sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);})
     .map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),status:s.status,subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||''),meetUrl:String(s.meetUrl||'')};});
