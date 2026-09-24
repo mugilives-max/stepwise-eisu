@@ -50,7 +50,7 @@ test('login uses a separate session token and clears each child before loading t
   ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-pass', 'test-family-password'); ui.submit('family-auth-form');
   ui.requests[0].reply({ ...home(), ftoken: 'test-family-token' }); await flush();
   assert.equal(ui.session.get('sw_ft_v1'), 'test-family-token'); assert.equal(ui.session.get('sw_pt_v2:test-link-a'), 'legacy-parent-token'); assert.equal(ui.requests.at(-1).body.studentId, 'child-a');
-  ui.requests.at(-1).reply({ ok: true, data: data('Aだけの表示') }); await flush(); assert.match(ui.html(), /【テスト】子Aさんのページを読み込んでいます|さんのマイページ/);
+  ui.requests.at(-1).reply({ ok: true, data: data('Aだけの表示') }); await flush(); assert.match(ui.html(), /【テスト】子Aさん/);
   assert.equal(ui.requests.at(-1).body.studentId, 'child-b');
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush();
   { const st = ui.requests.find(r => r.body.action === 'familyStudentState'); if (st) { st.reply({ ...state(), viewer: 'family' }); await flush(); } const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); } }
@@ -242,7 +242,7 @@ test('the family home places monthly completed totals inside progress without a 
  assert.doesNotMatch(html, /data-fold="progress"/);
  assert.ok(html.indexOf('<section class="parent-progress">') < html.indexOf('data-fold="plan"'));
 
- ui.navigate('#family/schedule');assert.match(ui.html(),/さんのマイページ/);
+ ui.navigate('#family/schedule');assert.match(ui.html(),/【テスト】子Aさん/);
 });
 
 test('notification bell opens all-child priorities; reading retains required status and routes to the correct child',async()=>{
@@ -260,7 +260,7 @@ test('the family マイページ tab shows the child student home and proxies st
   st.reply({ ...state(), viewer: 'family' }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.match(ui.el('tabs').innerHTML, /href="#family\/home" class="on"[^>]*>ホーム/);
-  assert.match(ui.html(), /【テスト】子Aさんのマイページ（保護者が代わりに操作できます）/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/);
+  assert.match(ui.html(), /【テスト】子Aさん/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/);
   ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); ui.click('dayavailability'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
   const sent = ui.requests.at(-1).body;
   assert.equal(sent.action, 'blockSet'); assert.equal(sent.ftoken, 'test-family-token'); assert.equal(sent.studentId, 'child-a'); assert.equal(sent.k, undefined); assert.deepEqual(sent.add, ['2026-09-15']);
@@ -325,7 +325,7 @@ test('a teacher-recorded approval shows a confirm-or-inquire notice on the paren
   ui.navigate('#family/home');
   const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planLines: [recorded] }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
-  assert.match(ui.html(), /<div class="note plan-ack" role="status"[^>]*><strong>先生が記録した承認です。<\/strong>2026-09-05に電話で承諾いただいた内容として、先生がこの計画（英語（通常） 4回・90分・1回 3,000円）を承認済みにしました。心当たりがない場合や内容が違う場合は問い合わせてください。<div class="row"[^>]*><button class="btn-primary btn-sm" data-action="fa-planack" data-child="child-a" data-line="line-1" data-ack="confirmed">内容を確認しました<\/button><button class="btn-quiet btn-sm" data-action="fa-planack" data-child="child-a" data-line="line-1" data-ack="inquiry">先生に問い合わせる<\/button>/);
+  assert.match(ui.html(), /<div class="note plan-ack" role="status"[^>]*><strong>先生が記録した承認です。<\/strong>2026-09-05に電話で承諾いただいた内容として、先生がこの計画（英語（通常） 4回・90分・1回 3,000円）を承認済みにしました。心当たりがない場合や内容が違う場合は問い合わせてください。<div class="row"[^>]*><button class="btn-primary btn-sm" data-home-child="child-a" data-action="fa-planack" data-child="child-a" data-line="line-1" data-ack="confirmed">内容を確認しました<\/button><button class="btn-quiet btn-sm" data-home-child="child-a" data-action="fa-planack" data-child="child-a" data-line="line-1" data-ack="inquiry">先生に問い合わせる<\/button>/);
   // inquiry: a message is required, then familyPlanAck(inquiry) is sent with the displayed revision
   ui.click('fa-planack', { 'data-ack': 'inquiry' }); assert.match(ui.html(), /先生に伝える内容を書いてください/); const count = ui.requests.length;
   ui.click('fa-ack-send'); assert.equal(ui.requests.length, count); assert.match(ui.html(), /問い合わせの内容を入力してください/);
@@ -386,4 +386,14 @@ test('parent plans menu opens plans and approval review without billing or setti
  ui.click('fa-planok',{'data-child':'child-a','data-line':'line-1'});
  assert.match(ui.html(),/data-action="fa-decide"/);
  assert.match(ui.html(),/承認しますか/);
+});
+
+test('family home shows both sibling schedules by default and sends actions for the owning child',async()=>{
+ const ui=await readyFamily();ui.navigate('#family/home');
+ ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),viewer:'family',slots:[{id:'a-only',date:'2026-09-25',start:'13:00',min:90,st:'mine',subject:'兄A専用科目'}]});await flush();
+ const req=ui.requests.at(-1);assert.equal(req.body.action,'familyStudentState');assert.equal(req.body.studentId,'child-b');
+ req.reply({...state(),viewer:'family',slots:[{id:'b-only',date:'2026-09-26',start:'15:00',min:90,st:'mine',subject:'弟B専用科目'}]});await flush();
+ assert.match(ui.html(),/兄A専用科目/);assert.match(ui.html(),/弟B専用科目/);assert.equal(ui.el('fa-mychild'),undefined);
+ ui.click('calday',{'data-home-child':'child-b','data-date':'2026-09-28'});ui.click('dayadd',{'data-home-child':'child-b'});ui.click('dayavailability',{'data-home-child':'child-b'});ui.click('dayact',{'data-home-child':'child-b','data-m':'ng'});ui.click('selapply',{'data-home-child':'child-b'});
+ const sent=ui.requests.at(-1).body;assert.equal(sent.action,'blockSet');assert.equal(sent.studentId,'child-b');assert.deepEqual(sent.add,['2026-09-28']);
 });

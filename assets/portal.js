@@ -416,7 +416,7 @@
             : (readable(sent) ? readFirst(sent).then(function (res) { return res === null ? fallback() : res; }) : fallback());
           return first.then(function (res) { if (proxied && F.home && proxiedToken === familyToken() && res && res.state && res.state.me) F.childState[proxied] = res.state; return res; });
         }
-        function myKey() { return previewK || lsGet("sw_k") || ""; }
+        function myKey() { var c = route() === "family" && familyMypageChild(); return c ? "family:" + c.studentId : previewK || lsGet("sw_k") || ""; }
         function parentSessionKey(k) { return "sw_pt_v2:" + (k === undefined ? myKey() : k); }
         function clearParentSession(k) {
           ssDel(parentSessionKey(k)); ssDel(parentSessionKey(k) + ":logout"); ssDel("sw_pt");
@@ -1246,6 +1246,32 @@
           h += '<button class="btn-quiet" data-action="fa-cancel"' + dis + '>戻る</button></div>';
           return h;
         }
+        var familyHomeViews = Object.create(null);
+        function homeView() { return {calY:calY,calM:calM,selDate:selDate,selManual:selManual,dayAddOpen:dayAddOpen,dayInputMode:dayInputMode,selMode:selMode,selDays:selDays,pending:pending,NL:NL}; }
+        function useHomeView(v) { calY=v.calY;calM=v.calM;selDate=v.selDate;selManual=v.selManual;dayAddOpen=v.dayAddOpen;dayInputMode=v.dayInputMode;selMode=v.selMode;selDays=v.selDays;pending=v.pending;NL=v.NL; }
+        function freshHomeView() { return {calY:calNow.getFullYear(),calM:calNow.getMonth(),selDate:null,selManual:false,dayAddOpen:false,dayInputMode:'manual',selMode:'',selDays:{},pending:null,NL:{text:'',busy:false,proposal:null,error:''}}; }
+        function familyHomeTarget(el) {
+          var owner=el&&el.getAttribute&&el.getAttribute('data-home-child')?el:el&&el.closest&&el.closest('[data-home-child]');
+          if(!owner)return true;
+          var id=owner.getAttribute('data-home-child'),current=familyMypageChild();
+          if(current&&sameId(current.studentId,id))return true;
+          if(busy||F.busy||NL.busy)return false;
+          if(current){familyHomeViews[current.studentId]=homeView();familyHomeViews[current.studentId].dayAddOpen=false;familyHomeViews[current.studentId].selMode='';familyHomeViews[current.studentId].pending=null;}
+          F.studentId=id;S=F.childState[id];useHomeView(familyHomeViews[id]||freshHomeView());return !!S;
+        }
+        function renderFamilyHomeAll() {
+          var children=F.home.children||[],current=familyMypageChild(),savedId=F.studentId,savedS=S,savedView=homeView(),h=previewBanner(true);
+          if(!children.length)return '<p>子どもの紐付けを先生にご依頼ください。</p>';
+          if(current)familyHomeViews[current.studentId]=savedView;
+          children.forEach(function(c){
+            h+='<section data-home-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'さん</h2>';
+            var st=F.childState[c.studentId];
+            if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);h+='<p role="status">予定を読み込んでいます…</p>';}
+            else {F.studentId=c.studentId;S=st;useHomeView(familyHomeViews[c.studentId]||freshHomeView());h+=renderHomePage().replace(/data-action=/g,'data-home-child="'+esc(c.studentId)+'" data-action=').replace(/data-accept-id=/g,'data-home-child="'+esc(c.studentId)+'" data-accept-id=');familyHomeViews[c.studentId]=homeView();}
+            h+='</section>';
+          });
+          F.studentId=savedId;S=savedS;useHomeView(current&&familyHomeViews[current.studentId]||savedView);return h;
+        }
         function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = previewBanner(true);
           if (!c) return h + '<p>子どもの紐付けを先生にご依頼ください。</p>';
@@ -1261,7 +1287,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1296,7 +1322,7 @@
         function familyLoadHome() {
           if (F.busy || !familyToken()) return;
           if (!PREVIEW && ssGet("sw_ft_v1:logout")) { F.step = "logout"; familyRender(); return; }
-          F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.confirm = null; notices.items=[];
+          familyHomeViews=Object.create(null); F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.confirm = null; notices.items=[];
           familyRequest("familyHome", { ftoken: familyToken() }, function (res) { F.home = res; F.step = "home"; var list = res.children || []; if (!list.some(function(c){return sameId(c.studentId,F.studentId);})) F.studentId=""; var first = familyMypageChild(); if (first) familyLoadChildState(first.studentId); familyLoadChild(); });
         }
         function familyLogout() {
@@ -1362,7 +1388,7 @@
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
-            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); mountDayDialog(); mountAcceptDialog(); return; }
+            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyHomeAll(); mountDayDialog(); mountAcceptDialog(); return; }
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
@@ -1588,6 +1614,7 @@
         app.addEventListener("click", function (ev) {
           var btn = ev.target.closest("[data-action]");
           if (!btn || btn.disabled) return;
+          if (!familyHomeTarget(btn)) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
           if(act==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();return;}
           if(act==='student-notice-link'){studentNoticesOpen=false;render();return;}
@@ -1724,6 +1751,7 @@
         app.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && (Object.prototype.hasOwnProperty.call(folds, key) || key.indexOf('hist:') === 0)) folds[key] = !!d.open; }, true);
         app.addEventListener("change", function (ev) {
           var el = ev.target;
+          if (!familyHomeTarget(el)) return;
           if(el && el.id === "b-ngall"){["b-ngstart","b-ngend"].forEach(function(id){var input=document.getElementById(id);if(input)input.disabled=el.checked;});return;}
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
           if (el && el.id === "fa-mychild") { if(F.busy)return; familySelectChild(el.value); familyRender(); return; }
