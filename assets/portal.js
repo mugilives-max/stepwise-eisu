@@ -687,7 +687,7 @@
           var today = D.today, mine = D.mine, lines = Array.isArray(S.planLines) ? S.planLines : [];
           var proposed = lines.filter(function (l) { return l.status === 'proposed'; }), approved = lines.filter(function (l) { return l.status === 'approved'; });
           function fits(l, x) { return lessonLabel(l) === lessonLabel(x) && planCovers(l, x.date); }
-          function lessonsOf(l) { var n = { done: 0, plan: 0 }; (S.history || []).forEach(function (h) { if (fits(l, h)) n[h.done ? 'done' : 'plan']++; }); mine.forEach(function (s2) { if (fits(l, s2)) n.plan++; }); return n; }
+          function lessonsOf(l) { var n = { done: 0, plan: 0 }; (S.history || []).forEach(function (h) { if (h.done && fits(l, h)) n.done++; }); mine.forEach(function (s2) { if (fits(l, s2)) n.plan++; }); return n; }
           // 保護者のマイページでは、案内の下で直接承認・回数調整できる(保護者メニューと同じ確認カードを使う)
           var famChild = route() === 'family' ? familyMypageChild() : null, famLines = famChild && F.childrenData[famChild.studentId] ? (F.childrenData[famChild.studentId].planLines || []) : [];
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) folds.plan = true;
@@ -723,7 +723,7 @@
             if(line)proposed.forEach(function(l){if(l.parentId===line.id)count+=Number(l.count)||0;});
             var c=extra[k]||(extra[k]={label:label,status:status,line:line,count:count,done:0,plan:0});c[key]++;
           }
-          (S.history || []).forEach(function (h) { addExtra(h, h.done ? 'done' : 'plan'); }); mine.forEach(function (s2) { addExtra(s2, 'plan'); });
+          (S.history || []).forEach(function (h) { if(h.done)addExtra(h, 'done'); }); mine.forEach(function (s2) { addExtra(s2, 'plan'); });
           var extraKeys = Object.keys(extra);
           if (!lines.length && !extraKeys.length) return '';
           var html = foldHead('plan', '授業計画', proposed.length ? proposed.length + '件の案内' : '新しい案内なし') + '<div class="card">';
@@ -744,17 +744,17 @@
           html += foldHead('progress', '実施状況', approved.length ? approved.length+'件の計画' : '承認済みの計画なし') + '<div class="card">';
           var remainTotal = 0, shown = 0;
           planCols=7;
-          if(approved.length||extraKeys.length)html+='<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>予定回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
+          if(approved.length||extraKeys.length)html+='<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
           var approvedIds={};approved.forEach(function(l){approvedIds[l.id]=true;});
           approved.filter(function(l){return !(l.addon&&approvedIds[l.parentId]);}).forEach(function(l){
             var addons=approved.filter(function(a){return a.addon&&a.parentId===l.id;}),goal=planLimit(l);addons.forEach(function(a){goal+=planLimit(a);});
             var n=lessonsOf(l),remain=Math.max(0,goal-n.done-n.plan);remainTotal+=remain;shown++;
-            html+='<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+'</td><td>'+goal+'回</td><td>'+n.plan+'回</td><td>'+n.done+'回</td><td><span class="tag green">承認済み</span></td></tr>'+planComment(l);
+            html+='<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+'</td><td>'+goal+'回</td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td><span class="tag green">承認済み</span></td></tr>'+planComment(l);
             var outline=window.StepwiseReport.outline(l.outline);if(outline)html+=planInfo(outline);
             var ack=famAckBlock(l);if(ack)html+=planInfo(ack);
             addons.forEach(function(a){html+=planComment(a);var ack=famAckBlock(a);if(ack)html+=planInfo(ack);});
           });
-          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+(n.line?esc(planPeriod(n.line)):Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay)+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td><span class="plan-count-value"><span>'+(n.count==null?'—':n.count+'回')+'</span>'+(n.line?'<button type="button" class="plan-count-warning" data-action="approval-help" aria-label="未承認の授業計画について" aria-expanded="false" aria-controls="progress-approval-'+esc(n.line.id)+'"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>':'')+'</span></td><td>'+n.plan+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>'+(n.line?'<tr id="progress-approval-'+esc(n.line.id)+'" hidden><td class="portal-plan-info" colspan="7">'+(famChild?'この授業計画は未承認です。内容をご確認のうえ、「授業計画」から承認をお願いします。':'この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。')+'</td></tr>':'');});
+          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+(n.line?esc(planPeriod(n.line)):Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay)+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td><span class="plan-count-value"><span>'+(n.count==null?'—':n.count+'回')+'</span>'+(n.line?'<button type="button" class="plan-count-warning" data-action="approval-help" aria-label="未承認の授業計画について" aria-expanded="false" aria-controls="progress-approval-'+esc(n.line.id)+'"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>':'')+'</span></td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>'+(n.line?'<tr id="progress-approval-'+esc(n.line.id)+'" hidden><td class="portal-plan-info" colspan="7">'+(famChild?'この授業計画は未承認です。内容をご確認のうえ、「授業計画」から承認をお願いします。':'この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。')+'</td></tr>':'');});
           if(approved.length||extraKeys.length)html+=planTableEnd();
           if (!shown) html += '<div class="empty">承認済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';

@@ -245,7 +245,7 @@ test('the 授業計画 fold separates proposed notices from the approved plan wi
   assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画 <span class="cnt">2件の案内<\/span>/);
   assert.ok(ui.html().includes('<td>10/1〜10/31</td><td>英語</td><td>通常</td><td>3回</td>'));
   assert.match(ui.html(), /保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう/);
-  assert.ok(ui.html().includes('<td>4回</td><td>0回</td><td>1回</td>'));
+  assert.ok(ui.html().includes('<td>4回</td><td>1回</td><td>1回</td>'));
   assert.ok(ui.html().includes('<td>未承認</td>'));
   assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
   const none = await studentReady({ ...state([]), planLines:[] }); assert.doesNotMatch(none.html(), /授業計画/);
@@ -290,7 +290,7 @@ test('approved addon lines are folded into their parent plan and proposed addons
     planLines:[line({ id:'p', status:'approved', approvedCount:4, comment:'通常の予習' }), line({ id:'x', parentId:'p', addon:true, count:2, approvedCount:2, status:'approved', startDate:'2026-09-20', endDate:'2026-09-30', period:'2026/9/20〜9/30', month:'', comment:'テスト前に演習を増やすため' }), line({ id:'y', parentId:'p', addon:true, count:1, status:'proposed', startDate:'2026-09-25', endDate:'2026-09-30', period:'2026/9/25〜9/30', month:'', comment:'さらに1回' })] };
   const ui = await studentReady(s);
   assert.ok(ui.html().includes('<td>通常（追加）</td><td>1回</td>'));
-  assert.ok(ui.html().includes('<td>6回</td><td>0回</td><td>1回</td>'));assert.match(ui.html(),/あと 5 回/);
+  assert.ok(ui.html().includes('<td>6回</td><td>1回</td><td>1回</td>'));assert.match(ui.html(),/あと 5 回/);
   assert.match(ui.html(),/テスト前に演習を増やすため/);
   assert.equal((ui.html().match(/<span class="tag green">承認済み<\/span>/g) || []).length, 1, 'the approved addon is not listed as a separate row');
 });
@@ -366,4 +366,13 @@ test('event registration uses the date chosen inside the modal', async () => {
  const before=ui.requests.length;ui.input('b-edate','');ui.input('b-etitle','大会');ui.click('selapply');assert.equal(ui.requests.length,before);
  ui.input('b-edate','2026-09-18');ui.click('selapply');const body=ui.requests.at(-1).body;
  assert.equal(body.action,'eventAddMany');assert.deepEqual(body.ranges,[{date:'2026-09-18',dateTo:'2026-09-18'}]);assert.equal(body.kind,'event');assert.equal(body.alsoBlock,false);
+});
+
+test('registered count adds completed and booked lessons but excludes invitations and unperformed history', async () => {
+ const data=state([slot('booked',{st:'mine',subject:'数学',date:'2026-09-15'}),slot('offered',{st:'offer',subject:'数学',date:'2026-09-16'})]);
+ data.planLines=[require('./helpers/operations-ui-harness.cjs').line({status:'approved',subject:'数学',count:6,approvedCount:6})];
+ data.history=[{id:'done',date:'2026-09-04',subject:'数学',done:true},{id:'missed',date:'2026-09-05',subject:'数学',done:false}];
+ const ui=await studentReady(data);
+ assert.match(ui.html(),/<th>登録回数<\/th>/);
+ assert.match(ui.html(),/<td>6回<\/td><td>2回<\/td><td>1回<\/td>/);
 });
