@@ -16,7 +16,7 @@ test('parent sections separate billing, reports and account settings without rel
   ui.navigate('#family/records');{const st=ui.requests.find(r=>r.body.action==='familyStudentState');st.reply({...state(),viewer:'family',history:[{id:'h1',date:'2026-09-02',start:'17:00',min:90,subject:'英語',done:true}],lessonRecords:[{recordId:'r1',revision:2,date:'2026-09-02',start:'17:00',min:90,subject:'英語',content:'本文',homework:[]}]});await flush();}
   assert.match(ui.html(),/data-folder="英語"/);ui.click('histopen',{'data-folder':'英語'});assert.match(ui.html(),/先生からの授業記録/);assert.match(ui.html(),/<details class="card" data-parent-record="r1" data-record-revision="2"><summary><span data-read-label class="tag">確認中<\/span>/);assert.ok(!ui.html().includes('承認する'));assert.ok(!ui.html().includes('メールアドレスを変更'));
   const count2=ui.requests.length; // 既読の取得(recordReadStatus)は StepwiseLessonRead を読み込む実ブラウザでのみ動く
-  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2+1);assert.equal(ui.requests.at(-1).body.action,'familyStudentState');assert.match(ui.el('tabs').innerHTML,/href="#family\/menu" class="on"[^>]*>保護者メニュー/);
+  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2);assert.match(ui.el('tabs').innerHTML,/href="#family\/settings" class="on"[^>]*>設定/);assert.doesNotMatch(ui.html(),/請求・お支払い|<h2>授業料/);
 });
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
 async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#students' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); ui.requests[1].reply({ok:true,data:{students:[],inactive:[]}}); await flush(); return ui; }
@@ -72,11 +72,11 @@ test('child switch discards the previous approval confirmation and membership re
   const ui = await readyFamily(); ui.navigate('#family/plans'); ui.click('fa-planopen', { 'data-line': 'line-1' });ui.click('fa-planok', { 'data-line': 'line-1' }); ui.navigate('#family/menu'); ui.change('fa-child', 'child-b');
   assert.equal(ui.html().includes('data-action="fa-decide"'), false);
   ui.navigate('#family/settings'); ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
-  ui.requests.at(-1).reply(home([])); await flush(); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
+  ui.requests.at(-1).reply(home([])); await flush(); ui.navigate('#family/menu'); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
 });
 
 test('family auth expiry removes protected data without clearing the legacy parent token', async () => {
-  const ui = await readyFamily(); ui.session.set('sw_pt_v2:test-link-a', 'legacy-parent-token'); ui.click('fa-home');
+  const ui = await readyFamily(); ui.session.set('sw_pt_v2:test-link-a', 'legacy-parent-token'); ui.navigate('#family/settings'); ui.click('fa-home');
   ui.requests.at(-1).reply({ error: 'ログイン期限切れ', familyAuthRequired: true }); await flush();
   assert.equal(ui.session.has('sw_ft_v1'), false); assert.equal(ui.session.get('sw_pt_v2:test-link-a'), 'legacy-parent-token'); assert.equal(ui.html().includes('今後の授業'), false); assert.ok(ui.el('fa-pass'));
 });
@@ -280,14 +280,17 @@ test('the family 成績 tab is the child grades page with the exam-report panel 
   ui.navigate('#family/home'); assert.doesNotMatch(ui.html(), /data-action="fa-mytab"/); assert.match(ui.html(), /<h2>予定表<\/h2>/);
 });
 
-test('the 保護者メニュー tab combines billing, contact and settings, with mail notification toggles saved at once', async () => {
+test('parent settings have a separate tab and mail notification toggles save at once', async () => {
   const ui = loggedUI(); ui.requests[0].reply({ ...home(), emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: true } }); await flush();
   ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子B') }); await flush();
   ui.navigate('#family/menu');
-  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '宿題', '授業の記録', '成績', '計画', '保護者メニュー']);
-  const html = ui.html(); const order = ['<h2>請求・お支払い</h2>', '<h2>保護者の設定</h2>', 'メール通知'].map(t => html.indexOf(t));
-  assert.ok(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), JSON.stringify(order));
-  assert.doesNotMatch(html, /授業計画の案内|承認する/); assert.match(html, /メールアドレスを変更/); assert.doesNotMatch(html, /family-contact-|先生への連絡/);
+  assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '宿題', '授業の記録', '成績', '計画', '保護者メニュー', '設定']);
+  assert.match(ui.html(), /請求・お支払い/);
+  assert.doesNotMatch(ui.html(), /保護者の設定|メール通知|メールアドレスを変更|fa-logout/);
+  ui.navigate('#family/settings');
+  const html = ui.html();
+  assert.match(html, /保護者の設定/); assert.match(html, /メールアドレスを変更/);
+  assert.doesNotMatch(html, /請求・お支払い|授業計画の案内|family-contact-|先生への連絡/);
   assert.equal((html.match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 3);
   ui.check('data-kind', 'invoiceVoided', false);
   assert.deepEqual(ui.requests.at(-1).body, { action: 'familyEmailPrefs', ftoken: 'test-family-token', prefs: { planProposed: true, invoiceCreated: true, invoiceVoided: false } });
