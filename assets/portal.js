@@ -706,7 +706,7 @@
           function planPeriod(l){function date(d){return d ? (d.slice(0,4)===today.slice(0,4)?'':d.slice(0,4)+'/')+Number(d.slice(5,7))+'/'+Number(d.slice(8,10)) : '未設定';}return date(l.startDate)+'〜'+date(l.endDate);}
           function planRow(l){
             var parentLine=famChild&&famLines.filter(function(x){return x.id===l.id;})[0];
-            return '<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td><span class="tag '+(l.status==='approved'?'green':'amber')+'">'+(l.status==='approved'?'承認済み':'承認待ち')+'</span></td></tr>';
+            return '<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>')+'</td></tr>'+(l.status==='proposed'?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると下の実施計画に移ります。')+'</td></tr>':'');
           }
           function planInfo(content){return '<tr><td class="portal-plan-info" colspan="'+planCols+'">'+content+'</td></tr>';}
           function planComment(l){return planInfo('<details class="portal-plan-comment"><summary><span>'+esc(l.comment||'コメントはありません')+'</span></summary><div>'+esc(l.comment||'コメントはありません')+'</div></details>');}
@@ -727,7 +727,7 @@
           if (!lines.length && !extraKeys.length) return '';
           var html = foldHead('plan', '授業計画', proposed.length ? proposed.length + '件の案内' : approved.length ? '承認済み' : (+ymNow.slice(5)) + '月') + '<div class="card">';
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) html += renderFamilyPlanConfirm(F.busy ? ' disabled' : '');
-          html += '<h3 style="margin:0 0 6px;font-size:15px">案内 <span class="small muted" style="font-weight:400">保護者の承認待ち</span></h3>';
+          html += '<h3 style="margin:0 0 6px;font-size:15px">案内</h3>';
           if (!proposed.length) html += '<div class="empty">新しい案内はありません</div>';
           if (proposed.length) html += planTableHead();
           proposed.forEach(function(l){
@@ -739,7 +739,6 @@
             }
           });
           if (proposed.length) html += planTableEnd();
-          if (proposed.length) html += '<div class="note">' + (famChild ? '「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。' : '保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると下の実施計画に移ります。') + '</div>';
           html += '<h3 style="margin:14px 0 6px;font-size:15px">実施計画 <span class="small muted" style="font-weight:400">承認済み</span></h3>';
           var remainTotal = 0, shown = 0;
           if(approved.length||extraKeys.length)html+=planTableHead();
