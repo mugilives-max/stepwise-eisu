@@ -336,14 +336,14 @@
         var slotEdit = null;
         function slotEditSnapshot(s) { return { id: String(s.id), date: s.date, start: s.start, min: Number(s.min), subject: s.subject || "", deliveryMode: s.deliveryMode || "" }; }
         function slotEditPending() { var r = route(), data = r.page === "student" ? cur : isLessons(r) ? A : D; return data && data.pendingEdits || []; }
-        function slotEditPayload(p) { var q = { op: p.op, studentId: p.studentId, slotId: p.slotId, requestId: p.requestId, deliveryMode: p.after.deliveryMode }; if (p.op === "editOffered") Object.assign(q, { expectedSnapshot: p.before, date: p.after.date, start: p.after.start, min: p.after.min, subject: p.after.subject, kind: p.after.kind || "通常" }); else q.expectedMode = p.before.deliveryMode; return q; }
+        function slotEditPayload(p) { var q = { op: p.op, studentId: p.studentId, slotId: p.slotId, requestId: p.requestId, deliveryMode: p.after.deliveryMode }; if (p.op === "editOffered") Object.assign(q, { expectedSnapshot: p.before, date: p.after.date, start: p.after.start, min: p.after.min, subject: p.after.subject, kind: p.after.kind || "通常" }); else if(p.op==="editLessonSubject") Object.assign(q,{subject:p.after.subject,expectedSnapshot:p.before,expectedDone:p.before.done||""}); else q.expectedMode = p.before.deliveryMode; return q; }
         function slotEditResume(p) { slotEdit = { auth: token(), op: p.op, studentId: p.studentId, before: p.before, form: Object.assign({}, p.after), pending: slotEditPayload(p), busy: false, error: "" }; render(); }
         function slotEditOpen(btn, op) {
           if (slotEdit && (slotEdit.busy || slotEdit.pending)) { toast("前の変更結果を先に確認してください"); return; }
           var existing = slotEditPending().filter(function (p) { return String(p.slotId) === btn.getAttribute("data-id"); })[0];
           if (existing) { slotEditResume(existing); return; }
           var s; try { s = JSON.parse(btn.getAttribute("data-snapshot")); } catch (e) { load(true); return; }
-          slotEdit = { done: btn.getAttribute("data-done") === "1", auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: s, form: Object.assign({}, s, {kind:btn.getAttribute('data-kind') || '通常'}), pending: null, busy: false, error: "" };
+          slotEdit = { done: btn.getAttribute("data-done") === "1", auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: Object.assign({},s,btn.getAttribute("data-done")==="1"?{done:"true"}:{}), form: Object.assign({}, s, {kind:btn.getAttribute('data-kind') || '通常'}), pending: null, busy: false, error: "" };
           render();
           var editFirst = document.getElementById(op === 'editOffered' ? 'se-date' : 'se-mode');
           if (editFirst) editFirst.focus();
@@ -353,12 +353,19 @@
           pending.forEach(function (p) { if (e && e.pending && e.pending.requestId === p.requestId) return; h += '<div class="lc-notice">確認が必要な授業変更：' + fmtDY(p.after.date) + ' ' + esc(p.after.start) + ' ' + esc(p.after.subject) + ' <button class="btn-quiet btn-sm" data-action="se-resume" data-request="' + esc(p.requestId) + '">変更の続きを確認</button></div>'; });
           if (!e || e.auth !== token()) return h;
           var dis = busy || e.busy || e.pending ? ' disabled' : '', modeOnly = e.op === "setSlotDeliveryMode", f = e.form;
-          h += '<dialog id="slot-editor" class="board-editor" aria-label="授業変更"><div class="row between"><h2>' + '案内を修正' + '</h2><button class="btn-quiet" data-action="se-close"' + dis + '>閉じる</button></div><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
+          h += '<dialog id="slot-editor" class="board-editor" aria-label="授業変更"><div class="row between"><h2>' + (e.done || e.op === 'editLessonSubject' ? '授業を修正' : '案内を修正') + '</h2><button class="btn-quiet" data-action="se-close"' + dis + '>閉じる</button></div><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
+          if (e.op === "editLessonSubject") {
+            if(e.error)h+='<p role="alert">'+esc(e.error)+'</p>';
+            h+='<p class="note">授業記録が未作成・未請求の授業の科目を変更できます。</p>';
+            h+='<label>科目<select id="se-subject" data-slot-edit="subject"'+dis+'>'+[""].concat(LESSON_SUBJECTS.indexOf(f.subject)<0&&f.subject?[f.subject]:[],LESSON_SUBJECTS).map(function(s){return '<option value="'+esc(s)+'"'+(s===f.subject?' selected':'')+'>'+esc(s||"選択してください")+'</option>';}).join("")+'</select></label>';
+            return h+'<button class="btn-primary" data-action="'+(e.pending?'se-retry':'se-save')+'"'+(e.busy?' disabled':'')+'>'+(e.pending?'同じ内容で結果を確認':'変更を保存')+'</button></dialog>';
+          }
           if (e.done) {
             if (e.error) h += '<p role="alert">' + esc(e.error) + '</p>';
-            return h + '<button class="btn-quiet" data-action="se-undone"' + dis + '>実施取消</button> <button class="btn-danger" data-action="se-delete"' + dis + '>解除</button></dialog>';
+            return h + '<button class="btn-primary" data-action="se-subject-edit"'+dis+'>授業内容を修正</button> <button class="btn-quiet" data-action="se-undone"' + dis + '>実施取消</button> <button class="btn-danger" data-action="se-delete"' + dis + '>解除</button></dialog>';
           }
           if (e.error) h += '<p class="lc-notice" role="alert">' + esc(e.error) + '</p>';
+
           if (!modeOnly) h += '<div class="row"><label>日付<input type="date" id="se-date" data-slot-edit="date" value="' + esc(f.date) + '"' + dis + '></label><label>開始<input type="time" id="se-start" data-slot-edit="start" value="' + esc(f.start) + '"' + dis + '></label><label>授業時間（分）<input type="number" id="se-min" data-slot-edit="min" min="30" max="240" step="30" value="' + esc(f.min) + '"' + dis + '></label><label>科目<select id="se-subject" data-slot-edit="subject"' + dis + '>' + [""].concat(LESSON_SUBJECTS.indexOf(f.subject) < 0 && f.subject ? [f.subject] : [], LESSON_SUBJECTS).map(function (s) { return '<option value="' + esc(s) + '"' + (s === f.subject ? ' selected' : '') + '>' + esc(s || '選択してください') + '</option>'; }).join('') + '</select></label></div>';
           if (!modeOnly) h += '<label for="se-kind">種類</label><select id="se-kind" data-slot-edit="kind"' + dis + '>' + kindOptions(f.kind) + '</select>';
           h += '<label for="se-mode">授業形式</label><select id="se-mode" data-slot-edit="deliveryMode"' + dis + '>' + deliveryOptions(f.deliveryMode) + '</select><p class="note">確認済みの生徒メールへ変更を通知します。対面は2人まで、オンラインは1人までです。</p>';
@@ -386,7 +393,7 @@
         function slotEditSend(force) {
           var e = slotEdit; if (!e || e.busy || e.auth !== token()) return;
           if (!e.pending) {
-            if (!e.form.deliveryMode || (e.op === "editOffered" && (!e.form.date || !e.form.start || !e.form.subject || !Number(e.form.min)))) { e.error = "日時・時間・科目・形式を確認してください。"; render(); return; }
+            if ((e.op === "editLessonSubject" && !e.form.subject) || !e.form.deliveryMode || (e.op === "editOffered" && (!e.form.date || !e.form.start || !e.form.subject || !Number(e.form.min)))) { e.error = "日時・時間・科目・形式を確認してください。"; render(); return; }
             e.pending = slotEditPayload({ op: e.op, studentId: e.studentId, slotId: e.before.id, requestId: lessonId(), before: e.before, after: e.form });
             if (force) e.pending.force = true;
           }
@@ -2537,7 +2544,7 @@
             else if (a === "se-save" || a === "se-retry" || a === "se-force") slotEditSend(a === "se-force");
             else if (a === "se-delete") slotEditDelete();
             else if (a === "se-undone") slotEditDelete(true);
-            else if (slotEdit && !busy && !slotEdit.pending && !slotEdit.busy) { if (a === "se-close") slotEdit = null; else if (a === "se-edit") slotEdit.force = false; render(); }
+            else if (slotEdit && !busy && !slotEdit.pending && !slotEdit.busy) { if (a === "se-close") slotEdit = null; else if(a === "se-subject-edit") slotEdit.op="editLessonSubject"; else if (a === "se-edit") slotEdit.force = false; render(); }
             return;
           }
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }

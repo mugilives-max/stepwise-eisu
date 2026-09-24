@@ -291,3 +291,11 @@ test('planning summary hides controls until details opens and retains editing in
  ui.click('plan-close');
  assert.ok(!ui.html().includes('id="plan-dialog"'));
 });
+
+ test('completed lesson subject editor submits the displayed snapshot and completion status', async()=>{
+ const ui=await editing(offered({status:'booked',done:true,subject:'英数'}));
+ ui.click('se-subject-edit');assert.match(ui.html(),/id="se-subject"/);assert.doesNotMatch(ui.html(),/id="se-date"/);
+ ui.input('se-subject','英語');ui.click('se-save');const req=ui.requests.at(-1);
+ assert.equal(req.body.op,'editLessonSubject');assert.equal(req.body.subject,'英語');assert.equal(req.body.expectedSnapshot.subject,'英数');assert.equal(req.body.expectedDone,'true');
+ req.reply({ok:true,data:card({lessons:[offered({status:'booked',done:true,subject:'英語'})]})});await flush();assert.doesNotMatch(ui.html(),/<dialog id="slot-editor"/);
+ });

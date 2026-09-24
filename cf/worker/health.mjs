@@ -1,5 +1,5 @@
 // 疎通確認。GAS の doGet と同じ形。release は移行の段階が分かる文字列にする。
-export const RELEASE = "2026-09-24-student-no-pricing";
+export const RELEASE = "2026-09-24-lesson-subject";
 
 export async function health(env) {
   const out = { ok: true, service: "stepwise-api", release: RELEASE };

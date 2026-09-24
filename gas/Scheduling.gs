@@ -160,13 +160,15 @@ function schedulingEditWrite_(w) {
 function schedulingPendingEdits_(studentId) {
   return readRows_('offerEdits').filter(function(w){return w.status!=='done'&&(studentId===undefined||String(w.studentId)===String(studentId));}).map(function(w){
     var before=JSON.parse(String(w.beforeJson)),after=JSON.parse(String(w.afterJson));
-    if(['editOffered','setSlotDeliveryMode'].indexOf(before.op)<0||before.op!==after.op||String(before.slot.studentId)!==String(w.studentId)||String(after.slot.studentId)!==String(w.studentId)||String(before.slot.id)!==String(w.slotId)||String(after.slot.id)!==String(w.slotId))throw new Error('変更処理の保存内容を先生が確認してください');
-    return {requestId:String(w.requestId),op:before.op,studentId:String(w.studentId),slotId:String(w.slotId),before:schedulingPublicSnapshot_(before.slot),after:schedulingPublicSnapshot_(after.slot)};
+    if(['editOffered','setSlotDeliveryMode','editLessonSubject'].indexOf(before.op)<0||before.op!==after.op||String(before.slot.studentId)!==String(w.studentId)||String(after.slot.studentId)!==String(w.studentId)||String(before.slot.id)!==String(w.slotId)||String(after.slot.id)!==String(w.slotId))throw new Error('変更処理の保存内容を先生が確認してください');
+    return {requestId:String(w.requestId),op:before.op,studentId:String(w.studentId),slotId:String(w.slotId),before:Object.assign(schedulingPublicSnapshot_(before.slot),before.op==='editLessonSubject'?{done:before.slot.done}:{}),after:schedulingPublicSnapshot_(after.slot)};
   });
 }
 function schedulingEditGate_(before,desired,force,editId,op) {
   var gate=billingSlotMutable_(before)||schedulingPendingSlotMutation_(before.id,undefined,editId)||schedulingCapacityError_(desired,undefined,desired.id);
   if(gate)return gate;
+  if(op==='editLessonSubject'&&lessonPending_(String(before.studentId),String(before.id),'').length)return schedulingError_('授業記録の保存が処理中です。完了してから変更してください','pending');
+  if(op==='editLessonSubject'&&readRows_('lessonRecords').some(function(r){return String(r.slotId)===String(before.id);}))return schedulingError_('授業記録があるため科目を変更できません。記録との整合を確認してください','recordExists');
   if(op==='editOffered'&&!force){
     var warnings=[];
     if(blockedRows_().some(function(b){return String(b.studentId)===String(desired.studentId)&&offHits_(b,desired.date,desired.start,desired.min);}))warnings.push('変更先は生徒が授業できない日時です');
@@ -176,6 +178,7 @@ function schedulingEditGate_(before,desired,force,editId,op) {
   return null;
 }
 function schedulingEditNotice_(write,student,before,after) {
+  if(before.op==='editLessonSubject')return {status:'skipped',recorded:true};
   if(schedulingExpectedMatches_(before.slot,after.slot)||typeof studentEmailNotifyOfferChanged_!=='function')return {status:'skipped',recorded:true};
   try{return studentEmailNotifyOfferChanged_(student,'offer-edited:'+write.id,schedulingPublicSnapshot_(before.slot),schedulingPublicSnapshot_(after.slot));}
   catch(e){return {status:'failed',recorded:false,warning:'変更は保存しました。変更通知の準備を確認できませんでした'};}
@@ -210,15 +213,19 @@ function schedulingEditLesson_(req,op) {
     try{before=JSON.parse(String(write.beforeJson));after=JSON.parse(String(write.afterJson));}catch(e){return schedulingError_('変更処理の保存内容を確認してください','conflict');}
     if(String(write.slotId)!==String(req.slotId)||before.op!==op||after.op!==op||String(after.slot.deliveryMode)!==mode||
       (op==='editOffered'&&(!schedulingExpectedMatches_(req.expectedSnapshot,before.slot)||!schedulingExpectedMatches_(Object.assign({},req,{id:req.slotId,subject:String(req.subject==null?'':req.subject).trim()}),after.slot)))||
+      (op==='editLessonSubject'&&(!schedulingExpectedMatches_(req.expectedSnapshot,before.slot)||String(req.expectedDone)!==String(before.slot.done||'')||String(req.subject||'').trim()!==after.slot.subject))||
       (op==='setSlotDeliveryMode'&&(req.expectedMode===undefined||String(req.expectedMode)!==before.slot.deliveryMode)))return schedulingError_('同じ処理番号で変更内容を変えられません。元の内容で再送してください','conflict');
     write._row=rows.findIndex(function(w){return String(w.id)===String(write.id);})+2;
     // A historical replay must never restore an old version after a later edit.
     if(write.status==='done')return schedulingEditResult_(write,student,before,after,true);
   } else {
     if(!r||String(r.slot.studentId)!==String(student.id)||!schedulingOccupied_(r.slot)||(op==='editOffered'&&r.slot.status!=='offered'))return schedulingError_('変更できる生徒の案内が見つかりません','notFound');
-    if(String(r.slot.done)==='true')return schedulingError_('実施済みの授業は変更できません','conflict');
-    if(op==='editOffered'?!schedulingExpectedMatches_(req.expectedSnapshot,r.slot):(req.expectedMode===undefined||String(req.expectedMode)!==String(r.slot.deliveryMode||'')))return schedulingError_('案内が変更されています。画面を更新して確認してください','conflict');
+    if(op==='editLessonSubject'&&(r.slot.status!=='booked'||String(r.slot.done)!=='true'))return schedulingError_('実施済みの授業を選んでください','conflict');
+    if(op!=='editLessonSubject'&&String(r.slot.done)==='true')return schedulingError_('実施済みの授業は変更できません','conflict');
+    if(op==='editLessonSubject'&&(!schedulingExpectedMatches_(req.expectedSnapshot,r.slot)||String(req.expectedDone)!==String(r.slot.done||'')))return schedulingError_('授業が変更されています。画面を更新してください','conflict');
+    if(op!=='editLessonSubject'&&(op==='editOffered'?!schedulingExpectedMatches_(req.expectedSnapshot,r.slot):(req.expectedMode===undefined||String(req.expectedMode)!==String(r.slot.deliveryMode||''))))return schedulingError_('案内が変更されています。画面を更新して確認してください','conflict');
     var desired=Object.assign({},r.slot,{deliveryMode:mode});
+    if(op==='editLessonSubject'){desired.deliveryMode=r.slot.deliveryMode;desired.subject=String(req.subject||'').trim();}
     if(op==='editOffered')Object.assign(desired,{date:req.date,start:req.start,min:Number(req.min),subject:String(req.subject==null?'':req.subject).trim(),kind:req.kind===undefined?kindNorm_(r.slot.kind):kindNorm_(req.kind)});
     if(op==='editOffered'&&!kindValid_(desired.kind))return kindError_();
     if(!billingSlotValid_(desired))return schedulingError_('授業の日付・時刻・分数・科目を確認してください');
@@ -236,6 +243,10 @@ function schedulingEditLesson_(req,op) {
     if(current===was){
       var desired=Object.assign({},r.slot,after.slot),gate=schedulingEditGate_(r.slot,desired,before.force,write.id,op);if(gate)throw new Error(gate.error);
       if(op==='setSlotDeliveryMode')schedulingApplyCalendarMode_(desired,student);
+      if(op==='editLessonSubject'&&desired.eventId&&!isTestStudent_(student)){
+        var eventId=String(desired.eventId).split('@')[0],summary=CAL_TITLE_PREFIX+student.name+'さん '+desired.subject+' ('+(desired.deliveryMode==='online'?'オンライン':'対面')+')';
+        Calendar.Events.patch({summary:summary},'primary',eventId,{sendUpdates:'none'});
+      }
       r.slot=desired;writeSlotRow_(r);
     }
     // Keep a reloadable edit receipt until the notification has a durable outbox

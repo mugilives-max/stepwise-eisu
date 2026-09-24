@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-24-student-no-pricing' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-09-24-lesson-subject' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1240,6 +1240,7 @@ function admin_(req) {
     case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));
     case 'state':       return { ok: true, admin: adminState_() };
     case 'setDeliveryMode': return kanriWrap_(req, schedulingSetDeliveryMode_(req));
+    case 'editLessonSubject': return kanriWrap_(req, schedulingEditLesson_(req,'editLessonSubject'));
     case 'setSlotDeliveryMode': return kanriWrap_(req, schedulingSetSlotDeliveryMode_(req));
     case 'editOffered': return kanriWrap_(req, schedulingEditOffered_(req), req.studentId);
     case 'parentIssueSetupCode': return adminParentIssueSetupCode_(req);
