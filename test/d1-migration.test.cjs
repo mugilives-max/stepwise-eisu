@@ -60,10 +60,10 @@ test('cf/migrations の表と列が GAS のシートの見出しと一致する'
 test('計画中の業務表と内部表がすべて作られ、索引が張られている', () => {
   const d1 = d1h.createD1();
   const tables = d1h.tables(d1);
-  // 業務 50 表 + 仕組み側 6 表（取り込み記録・台帳の版・版の見張り・付随処理の控え・文章解析回数・通知の宛先）
-  assert.equal(tables.length, 56);
+  // 業務 51 表 + 仕組み側 6 表（取り込み記録・台帳の版・版の見張り・付随処理の控え・文章解析回数・通知の宛先）
+  assert.equal(tables.length, 57);
   for (const name of ['_importRuns', '_ledger', '_guard', '_effects', '_nl_usage', 'pushSubs']) assert.ok(tables.includes(name), '仕組みの表が無い: ' + name);
-  for (const name of ['slots', 'planLines', 'familyAccounts', 'familyProfiles', 'studentNames', 'lessonRecords', '入金管理', '生徒台帳'])
+  for (const name of ['slots', 'planLines', 'familyAccounts', 'familyProfiles', 'studentPermissions', 'studentNames', 'lessonRecords', '入金管理', '生徒台帳'])
     assert.ok(tables.includes(name), '表が無い: ' + name);
   const indexes = d1h.indexes(d1).map(i => i.name);
   for (const name of ['slots_student_date', 'events_student_dateTo', 'planLines_student_status', 'familyLinks_student', 'lessonRecords_slot', 'log_time', '_nl_usage_scope_created'])

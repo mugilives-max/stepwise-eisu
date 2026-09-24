@@ -14,7 +14,7 @@ var FAMILY_CHALLENGE_MS_ = 30 * 60 * 1000;
 var FAMILY_TEACHER_CHALLENGE_MS_ = 24 * 60 * 60 * 1000;
 
 function ensureFamilySchema_() {
-  var definitions={familyProfiles:FAMILY_PROFILE_COLS_,familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
+  var definitions={studentPermissions:STUDENT_PERMISSION_COLS_,familyProfiles:FAMILY_PROFILE_COLS_,familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
   Object.keys(definitions).forEach(function(name){
     var sh=ss_().getSheetByName(name),cols=definitions[name];
     if(sh&&sh.getLastRow()&&(sh.getLastColumn()!==cols.length||sh.getRange(1,1,1,cols.length).getValues()[0].join('|')!==cols.join('|')))throw new Error(name+'の列構成を確認してください。自動上書きは行いません');
@@ -60,7 +60,7 @@ function familyChildren_(a,includeInactive) {
     if(String(l.familyId)!==String(a.id)||String(l.active)!=='true')return;
     if(seen[l.studentId])throw new Error('家族と生徒の紐付けが重複しています');seen[l.studentId]=true;
     var s=findStudent_(l.studentId);
-    if(s)out.push({studentId:String(s.id),name:String(s.name),familyName:studentNameParts_(s.id).familyName,givenName:studentNameParts_(s.id).givenName,email:String(s.email||''),emailVerified:!!studentEmailVerifiedAddress_(s.id),active:true});
+    if(s)out.push({studentId:String(s.id),name:String(s.name),familyName:studentNameParts_(s.id).familyName,givenName:studentNameParts_(s.id).givenName,email:String(s.email||''),emailVerified:!!studentEmailVerifiedAddress_(s.id),permissions:studentPermissions_(s.id),permissionsRevision:Number(studentPermissionRow_(s.id).revision)||0,active:true});
     else if(includeInactive){var old=readRows_('students').filter(function(x){return String(x.id)===String(l.studentId);})[0];if(old)out.push({studentId:String(old.id),name:String(old.name),active:false});}
   });return out;
 }
@@ -266,6 +266,7 @@ function familyDispatch_(req) {
     case 'familyEmailChange':return familyEmailChange_(req);
     case 'familyHome':{var h=familyRequire_(req);return h.error?h:{ok:true,family:familyPublic_(h.account),children:familyChildren_(h.account,false),billing:familyBilling_(h.account,false),emailPrefs:familyEmailPrefs_(h.account.id)};}
     case 'familyStudentLink':{var link=familyChildRequire_(req);return link.error?link:link.student.code?{ok:true,url:'https://www.stepwise-education.jp/yoyaku/?k='+encodeURIComponent(String(link.student.code))+'#home'}:familyError_('生徒ページのリンクが未登録です');}
+    case 'familyPermissionsSave':return familyPermissionsSave_(req);
     case 'familyProfileSave':return familyProfileSave_(req);
     case 'familyEmailPrefs':return familyEmailPrefsSave_(req);
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}

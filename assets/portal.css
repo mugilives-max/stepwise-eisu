@@ -231,3 +231,5 @@
 #parent-header-actions{display:flex;align-items:center;gap:14px}
 .student-page-link{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;padding:6px 0;cursor:pointer;white-space:nowrap}
 @media(max-width:520px){.family-info-table th,.family-info-table td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}.family-info-table thead th:not(:first-child){width:33%}#parent-header-actions{gap:8px}}
+
+.family-permissions{width:100%;border-collapse:collapse;font-size:14px}.family-permissions th,.family-permissions td{border:1px solid #b8c7dc;padding:8px;text-align:left}.family-permissions th{background:#eef2f6;font-weight:500}.family-permissions select{font-size:14px;min-width:110px;padding:8px}

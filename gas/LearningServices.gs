@@ -36,7 +36,7 @@ function servicePublic_(req){
     case 'list':return serviceList_(sid,false);
     case 'pdf':return servicePdfGet_(req,sid);
     case 'messageSend':return serviceMessageSend_(req,auth);
-    case 'cancelRequest':return serviceCancelRequest_(req,auth);
+    case 'cancelRequest':return (auth.role==='student'&&studentPermissionDenied_(sid,'reschedule'))||serviceCancelRequest_(req,auth);
     default:return {error:'この操作は利用できません'};
   }
 }

@@ -71,14 +71,16 @@ function doPost(e) {
     // 保護者ページから子どもの操作を代行: ログイン済みの保護者(ftoken)と、その家族に紐付く子ども(studentId)を確認できたときだけ、
     // その子の専用コードを k として扱う(コードは応答に含めない)。対象は生徒本人が使う操作に限る(メール設定・保護者認証は対象外)。
     var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
-    var proxyErr = null;
+    var proxyErr = null, authenticatedFamilyProxy=false;delete req.familyProxy;
     if (!req.k && req.ftoken && req.studentId && FAMILY_PROXY_.indexOf(String(req.action || '')) >= 0 && typeof familyChildRequire_ === 'function') {
       var fp = familyChildRequire_(req);
-      if (fp.error) proxyErr = fp; else { req.k = String(fp.student && fp.student.code || ''); req.familyProxy = true; }
+      if (fp.error) proxyErr = fp; else { req.k = String(fp.student && fp.student.code || ''); req.familyProxy = true; authenticatedFamilyProxy=true; }
     }
+    var permissionErr=authenticatedFamilyProxy?null:studentPermissionGate_(req);
     var moved = typeof syncWriteBlocked_ === 'function' ? syncWriteBlocked_(req) : null;
     if (moved) res = moved;                       // 台帳の正本が Worker にある間は書かせない(Sync.gs)
     else if (proxyErr) res = proxyErr;
+    else if (permissionErr) res=permissionErr;
     else if (String(req.action || '').indexOf('family') === 0) res = familyDispatch_(req);
     else if (String(req.action || '').indexOf('studentEmail') === 0) res = studentEmailDispatch_(req);
     else switch (req.action) {
@@ -172,7 +174,7 @@ function studentState_(code) {
   // 授業計画(案内の行)。案内中(proposed)と承認済み(approved)で、期間が今月以降にかかるものだけを返す。下書き・見送りは出さない
   var planLines = studentPlanLines_(me.id, today);
   var tasks = tasksFor_(me.id, 45);
-  return { nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, familyName: studentNameParts_(me.id).familyName, givenName: studentNameParts_(me.id).givenName, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planLines: planLines, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
+  return { permissions:studentPermissions_(me.id), nlEnabled: typeof nlConfigured_ === 'function' && nlConfigured_(), me: { name: me.name, familyName: studentNameParts_(me.id).familyName, givenName: studentNameParts_(me.id).givenName, deliveryMode: String(me.deliveryMode || '') }, emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(me.id) : null, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(me.id) : [], slots: slots, pendingAccepts: typeof schedulingPendingForStudent_ === 'function' ? schedulingPendingForStudent_(me.id) : [], blocked: blocked, teacherOff: teacherOff_(today, false), history: history, wishes: wishes, events: events, tasks: tasks, plan: planInfo.plan, planLines: planLines, planStatus: planMi.status, today: today, cancelDeadlineH: CANCEL_DEADLINE_H };
 }
 
 function ensureBlockedSheet_() {
