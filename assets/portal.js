@@ -742,18 +742,18 @@
           html += '</div></details>';
           html += foldHead('progress', '実施状況', approved.length ? approved.length+'件の計画' : '承認済みの計画なし') + '<div class="card">';
           var remainTotal = 0, shown = 0;
-          if(approved.length||extraKeys.length)html+=planTableHead();
+          planCols=6;
+          if(approved.length||extraKeys.length)html+='<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>予定回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
           var approvedIds={};approved.forEach(function(l){approvedIds[l.id]=true;});
           approved.filter(function(l){return !(l.addon&&approvedIds[l.parentId]);}).forEach(function(l){
             var addons=approved.filter(function(a){return a.addon&&a.parentId===l.id;}),goal=planLimit(l);addons.forEach(function(a){goal+=planLimit(a);});
             var n=lessonsOf(l),remain=Math.max(0,goal-n.done-n.plan);remainTotal+=remain;shown++;
-            html+=planRow(l)+planComment(l);
-            html+=planInfo('実施済み '+n.done+'回／予定 '+goal+'回　（日程確定 '+n.plan+'回）'+(remain?'　あと '+remain+' 回':'　日程確定'));
+            html+='<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+'</td><td>'+goal+'回</td><td>'+n.done+'回</td><td><span class="tag green">承認済み</span></td></tr>'+planComment(l);
             var outline=window.StepwiseReport.outline(l.outline);if(outline)html+=planInfo(outline);
             var ack=famAckBlock(l);if(ack)html+=planInfo(ack);
-            addons.forEach(function(a){html+=planRow(a)+planComment(a);var ack=famAckBlock(a);if(ack)html+=planInfo(ack);});
+            addons.forEach(function(a){html+=planComment(a);var ack=famAckBlock(a);if(ack)html+=planInfo(ack);});
           });
-          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay+'</td><td>'+esc(mm?mm[1]:label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td>—</td><td>—</td>'+(famChild?'<td>—</td>':'')+'<td>計画外</td></tr>'+planInfo('実施 '+n.done+'・予定 '+n.plan+'（計画外）');});
+          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay+'</td><td>'+esc(mm?mm[1]:label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td>'+n.plan+'回</td><td>'+n.done+'回</td><td>計画外</td></tr>';});
           if(approved.length||extraKeys.length)html+=planTableEnd();
           if (!shown) html += '<div class="empty">承認済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
