@@ -1274,9 +1274,9 @@
           var children=F.home.children||[],given=c.givenName||(F.childState[c.studentId]||{}).me?.givenName;
           return given&&children.filter(function(x){return (x.givenName||(F.childState[x.studentId]||{}).me?.givenName)===given;}).length===1?given:c.name;
         }
-        function familyOwnedHtml(html,id){
+        function familyOwnedHtml(html,id,scopeActions){
           return html.replace(/<[^>]+>/g,function(tag){
-            if(/\sdata-(?:action|accept-id)=/.test(tag))tag=tag.replace(/(?=\sdata-(?:action|accept-id)=)/,' data-home-child="'+esc(id)+'"');
+            if(scopeActions!==false&&/\sdata-(?:action|accept-id)=/.test(tag))tag=tag.replace(/(?=\sdata-(?:action|accept-id)=)/,' data-home-child="'+esc(id)+'"');
             return tag.replace(/((?:id|aria-controls)=")(plan-status-help-|progress-approval-)/g,'$1$2'+esc(id)+'-');
           });
         }
@@ -1301,6 +1301,27 @@
           var h='<h2>予定表</h2>'+filters+window.StepwiseCalendar.render(window.StepwiseCalendar.buildInfo(src),{year:familyCalendar.year,month:familyCalendar.month,today:today,selDate:familyCalendar.date,showToff:true,overlapLanes:true,offerLegend:'授業（未登録）',eventLegend:'イベント'});
           h=h.replace(/data-action="cal/g,'data-action="family-cal');
           return h+(missing?'<p role="status">ほかのお子さんの予定を読み込んでいます…</p>':'');
+        }
+        function renderFamilyProposalTable(head,rows,confirms) {
+          return '<div class="card">'+(confirms||'')+(rows?head+rows+'</tbody></table></div>':'<div class="empty">新しい案内はありません</div>')+'</div>';
+        }
+        function renderFamilyPlans() {
+          var children=F.home.children||[],savedId=F.studentId,savedS=S,rows='',head='',confirms='',missing=[];
+          if(!children.length)return '<h2>授業計画</h2><p>子どもの紐付けを先生にご依頼ください。</p>';
+          children.forEach(function(c){
+            var data=F.childrenData[c.studentId];if(!data){missing.push(c);return;}
+            // Use the current parent response so an approval immediately disappears from the proposals.
+            F.studentId=c.studentId;
+            S={me:{name:c.name},planLines:data.planLines||[],history:[]};
+            var today=(F.childState[c.studentId]||{}).today||(data.month?data.month+'-01':new Date().toISOString().slice(0,10));
+            var summary=renderMonthSummary({today:today,mine:[]},familyChildName(c));
+            head=summary.proposalHead;rows+=familyOwnedHtml(summary.proposalRows||'',c.studentId,false);confirms+=summary.confirm||'';
+          });
+          F.studentId=savedId;S=savedS;
+          var h='<h2>授業計画</h2>';
+          if(rows||!missing.length)h+=renderFamilyProposalTable(head,rows,confirms);
+          missing.forEach(function(c){h+=F.busy?'<p role="status">計画を読み込んでいます…</p>':'<p>'+esc(familyChildName(c))+'の計画を読み込めませんでした。<button class="btn-quiet btn-sm" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">再試行</button></p>';});
+          return h;
         }
         function renderFamilyHomeAll() {
           var children=F.home.children||[],current=familyMypageChild(),savedId=F.studentId,savedS=S,savedView=homeView(),h=previewBanner(true);
@@ -1335,9 +1356,7 @@
           if(remain)h+='<p class="small">あと '+remain+' 回、日程調整が必要です。</p>';
           h+=renderParentThisMonth({month:month,thisMonth:total})+'</div></section>';
           if(offers)h+=foldHead('offers','授業登録',offerCount+'件・返事をお願いします')+offers+'</details>';
-          h+=foldHead('plan','授業計画',proposalCount?proposalCount+'件の案内':'新しい案内なし')+'<div class="card">'+confirms;
-          h+=proposals?proposalHead+proposals+'</tbody></table></div>':'<div class="empty">新しい案内はありません</div>';
-          h+='</div></details>'+dialogs;
+          h+=foldHead('plan','授業計画',proposalCount?proposalCount+'件の案内':'新しい案内なし')+renderFamilyProposalTable(proposalHead,proposals,confirms)+'</details>'+dialogs;
           if(familyDayChooser){
             var choices=children.filter(function(c){return F.childState[c.studentId]&&(familyDayChooser!=='dayai'||previewK||F.childState[c.studentId].nlEnabled);}).map(function(c){return '<button class="btn-quiet" data-home-child="'+esc(c.studentId)+'" data-action="'+familyDayChooser+'">'+esc(familyChildName(c))+'</button>';}).join('');
             h+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:'登録するお子さんを選択',close:'family-dayclose',content:'<div class="row">'+choices+'</div>'});
@@ -1464,16 +1483,7 @@
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
-            if(parentSection()==='plans'){
-              h += '<h2>計画</h2>' + renderFamilyPlanConfirm(dis);
-              if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
-              (F.home.children || []).forEach(function(c,index){
-                h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
-                h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId,'plans') : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'"'+dis+'>計画を読み込む</button>';
-                h += '</section>';
-              });
-              app.innerHTML = h; return;
-            }
+            if(parentSection()==='plans'){ app.innerHTML=h+renderFamilyPlans(); return; }
             // 保護者メニュー: 請求・料金承認 → 先生への連絡 → 保護者の設定(メール通知のオン/オフ)。2026-09-11 に旧3タブを統合
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             h += '<h2>請求・お支払い</h2>';

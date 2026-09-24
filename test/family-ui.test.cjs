@@ -381,7 +381,7 @@ test('student settings requests registration metadata while group overview stays
 test('parent plans menu opens plans and approval review without billing or settings', async()=>{
  const ui=await readyFamily(); ui.navigate('#family/plans');
  assert.ok(ui.el('tabs').innerHTML.includes('href="#family/plans" class="on"'));
- assert.match(ui.html(),/授業計画の案内/);
+ assert.match(ui.html(),/<h2>授業計画<\/h2>/);
  assert.doesNotMatch(ui.html(),/お支払い状況|メールアドレスを変更/);
  ui.click('fa-planok',{'data-child':'child-a','data-line':'line-1'});
  assert.match(ui.html(),/data-action="fa-decide"/);
@@ -449,3 +449,16 @@ test('calendar filters hide only selected siblings, retain the day list and rest
  ui.click('family-calfilter',{'data-child':'child-a'});ui.click('family-calfilter',{'data-child':'child-b'});assert.match(calendar(),/太郎 英語/);assert.match(calendar(),/花子 英語/);
  assert.equal(ui.requests.length,count);
 });
+
+ test('plans page reuses the combined home table without child headings or refresh controls',async()=>{
+ const ui=await combinedHome();
+ const table=html=>html.match(/<table class="portal-plan-table portal-proposal-table family-plan-table">[^]*?<\/table>/)[0].replace(/ data-home-child="[^"]*"/g,'');
+ const expected=table(ui.html());ui.navigate('#family/plans');
+ assert.equal(table(ui.html()),expected);
+ assert.equal((ui.html().match(/<table /g)||[]).length,1);
+ assert.doesNotMatch(ui.html(),/最新の情報を確認|<h2>[^<]*(太郎|花子)/);
+ ui.click('fa-planok',{'data-child':'child-b','data-line':'line-1'});ui.click('fa-decide');
+ const req=ui.requests.at(-1);assert.equal(req.body.studentId,'child-b');
+ const updated=data('【テスト】花子');updated.planLines=[];req.reply({ok:true,data:updated});await flush();
+ assert.match(table(ui.html()),/<td>太郎<\/td>/);assert.doesNotMatch(table(ui.html()),/<td>花子<\/td>/);
+ });
