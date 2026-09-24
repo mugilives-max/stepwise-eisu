@@ -255,6 +255,11 @@ test('planning summary hides controls until details opens and retains editing in
  ui.requests[0].reply({data:card({section:'billing',plan:{lines:[line],defaultRows:[]}})});await flush();
  assert.ok(ui.html().includes('承認待ち'));
  assert.ok(ui.html().includes('<th>種類</th>'));
+ ui.click('plan-comment',{'data-line':'test-plan'});
+ assert.ok(ui.html().includes('colspan="8"'));
+ assert.ok(ui.html().includes('コメントはありません'));
+ ui.click('plan-comment',{'data-line':'test-plan'});
+ assert.ok(!ui.html().includes('colspan="8"'));
  assert.ok(ui.html().includes('<th>回数</th><th>時間</th>'));
  assert.ok(ui.html().includes('<td>通常</td>'));
  assert.ok(ui.html().includes('9/1〜9/30'));
