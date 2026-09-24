@@ -465,3 +465,11 @@ test('calendar filters hide only selected siblings, retain the day list and rest
  });
 
 test('plan status opens a dismissible modal without sending an approval',async()=>{const ui=await combinedHome(),before=ui.requests.length;assert.doesNotMatch(ui.html(),/data-action="fa-planok"/);ui.click('fa-planopen',{'data-child':'child-b','data-line':'line-1'});assert.match(ui.html(),/<dialog id="family-plan-dialog"/);assert.match(ui.html(),/data-action="fa-planng"/);ui.click('fa-cancel');assert.doesNotMatch(ui.html(),/id="family-plan-dialog"/);assert.equal(ui.requests.length,before);});
+
+test('declining a plan is separate from positive count adjustment and requires confirmation',async()=>{
+ const ui=await combinedHome();ui.click('fa-planopen',{'data-child':'child-b','data-line':'line-1'});
+ assert.doesNotMatch(ui.html(),/回数を調整・見送る/);assert.match(ui.html(),/>回数を調整<\/button>/);assert.match(ui.html(),/>見送る<\/button>/);
+ const before=ui.requests.length;ui.click('fa-planskip',{'data-child':'child-b','data-line':'line-1'});assert.equal(ui.requests.length,before);assert.doesNotMatch(ui.html(),/id="fa-reduce-0"/);assert.match(ui.html(),/今回は見送ります/);
+ ui.click('fa-decide');const sent=ui.requests.at(-1).body;assert.equal(sent.studentId,'child-b');assert.equal(sent.approve,false);assert.equal(sent.approvedCount,0);assert.equal(sent.expectedRevision,7);
+ const other=await combinedHome();other.click('fa-planopen',{'data-child':'child-a','data-line':'line-1'});other.click('fa-planng',{'data-child':'child-a','data-line':'line-1'});assert.doesNotMatch(other.html(),/<option value="0"/);other.change('fa-reduce-0','2');other.click('fa-plan-review');other.click('fa-decide');assert.equal(other.requests.at(-1).body.approvedCount,2);assert.equal(other.requests.at(-1).body.approve,true);
+});

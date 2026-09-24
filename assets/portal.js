@@ -1239,7 +1239,7 @@
           function dialog(content){return window.StepwiseCalendar.dayDialog({id:'family-plan-dialog',title:'授業計画の回答確認',close:'fa-cancel',busy:F.busy,content:(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+content});}
           if(c.stage==='choose'){
             h+='<p>'+esc(planName(l))+' '+esc(l.count)+'回・'+esc(l.lessonMin)+'分'+(planFee(l)?'（'+esc(planFee(l))+'）':'')+'</p>'+(l.comment?'<p style="white-space:pre-wrap">'+esc(l.comment)+'</p>':'');
-            h+='<div class="row"><button class="btn-primary" data-action="fa-planok" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>承認する</button><button class="btn-quiet" data-action="fa-planng" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>回数を調整・見送る</button></div></div>';
+            h+='<div class="row"><button class="btn-primary" data-action="fa-planok" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>承認する</button><button class="btn-quiet" data-action="fa-planng" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>回数を調整</button><button class="btn-quiet" data-action="fa-planskip" data-child="'+esc(c.studentId)+'" data-line="'+esc(l.id)+'"'+dis+'>見送る</button></div></div>';
             return dialog(h);
           }
           if (c.stage === 'ack') {
@@ -1247,8 +1247,8 @@
             return h;
           }
           if (c.stage === 'reduce') {
-            h += '<p>承認できる回数を選んでください。0回の場合は今回は見送ります。</p><p><label>' + esc(planName(l)) + ' <select id="fa-reduce-0">';
-            for (var n = 0; n <= Number(l.count || 0); n++) h += '<option value="' + n + '"' + (n === c.approvedCount ? ' selected' : '') + '>' + n + '回</option>';
+            h += '<p>承認できる回数を選んでください。</p><p><label>' + esc(planName(l)) + ' <select id="fa-reduce-0">';
+            for (var n = 1; n <= Number(l.count || 0); n++) h += '<option value="' + n + '"' + (n === c.approvedCount ? ' selected' : '') + '>' + n + '回</option>';
             h += '</select></label></p><label>先生への伝言（任意）<textarea id="fa-plan-message" maxlength="500">' + esc(c.memo || '') + '</textarea></label><p><button class="btn-primary" data-action="fa-plan-review">この内容を確認する</button></p>';
           } else {
             h += '<p>' + esc(planName(l)) + (l.addon ? '（追加）' : '') + ' ' + (l.addon ? '＋' : '') + c.approvedCount + '回まで' + (planFee(l) ? '（' + esc(planFee(l)) + '）' : '') + '</p>' + (l.comment ? '<p class="note" style="white-space:pre-wrap"><strong>先生から：</strong>' + esc(l.comment) + '</p>' : '');
@@ -1529,13 +1529,13 @@
           else if (action === "fa-mode") { F.step = btn.getAttribute("data-step"); F.error = ""; F.message = ""; F.confirm = null; if (F.step === 'emailChange') F.email = ''; familyRender(); }
           else if (action === "fa-verification-retry" && F.challenge) familyLoadVerification();
           else if (action === "fa-verify" && F.challenge && F.verificationInfo) familyRequest("familyVerify", { challenge: F.challenge }, function (res) { if (res.passwordRequired) { F.step="setPassword"; F.email=res.email; F.message="メールアドレスを確認しました。パスワードを設定すると登録完了です。"; } else { familyClear(); F.challenge = ""; F.challengeKind = ""; F.message = "メールアドレスを確認しました。ログインしてください。"; } });
-          else if (action === "fa-planopen" || action === "fa-planok" || action === "fa-planng") {
+          else if (action === "fa-planopen" || action === "fa-planok" || action === "fa-planng" || action === "fa-planskip") {
             var childId=btn.getAttribute("data-child"), childData=F.childrenData[childId], lineId=btn.getAttribute("data-line"), m=(childData && childData.planLines || []).filter(function (x) { return x.id === lineId; })[0];
             if (!m || m.status !== 'proposed' || !Number.isSafeInteger(m.revision)) { F.error = '最新の案内を確認してください。'; familyRender(); return; }
-            F.confirm={studentId:childId,lineId:lineId,line:m,approve:action==='fa-planok',expectedRevision:m.revision,memo:'',stage:action==='fa-planopen'?'choose':action==='fa-planok'?'review':'reduce',approvedCount:action==='fa-planok'?Number(m.count):Math.max(0,Number(m.count)-1)};familyRender();
+            F.confirm={studentId:childId,lineId:lineId,line:m,approve:action==='fa-planok',expectedRevision:m.revision,memo:'',stage:action==='fa-planopen'?'choose':action==='fa-planng'?'reduce':'review',approvedCount:action==='fa-planskip'?0:action==='fa-planok'?Number(m.count):Math.max(1,Number(m.count)-1)};familyRender();
           } else if(action==='fa-plan-review'&&F.confirm&&F.confirm.stage==='reduce'){
             var c=F.confirm,n=Number(val('fa-reduce-0'));c.memo=val('fa-plan-message');
-            if(!Number.isInteger(n)||n<0||n>=Number(c.line.count)){F.error='案内より少ない回数を選んでください。';familyRender();return;}
+            if(!Number.isInteger(n)||n<1||n>Number(c.line.count)){F.error='1回から案内の回数までで選んでください。';familyRender();return;}
             c.approvedCount=n;c.approve=n>0;c.stage='review';F.error='';familyRender();
           } else if (action === "fa-planack") {
             var akChild = btn.getAttribute("data-child"), akLine = btn.getAttribute("data-line"), akKind = btn.getAttribute("data-ack"), akM = ((F.childrenData[akChild] || {}).planLines || []).filter(function (x) { return x.id === akLine; })[0];
