@@ -48,8 +48,8 @@ test('approved plan progress is a sibling section showing completed versus plann
  assert.ok(boundary>0);
  assert.ok(html.slice(0,boundary).includes('</details>'));
  assert.ok(html.slice(boundary).includes('実施状況'));
- assert.ok(html.slice(boundary).includes('<th>予定回数</th><th>実施回数</th>'));
- assert.ok(html.slice(boundary).includes('<td>4回</td><td>2回</td>'));
+ assert.ok(html.slice(boundary).includes('<th>計画回数</th><th>予定回数</th><th>実施回数</th>'));
+ assert.ok(html.slice(boundary).includes('<td>4回</td><td>0回</td><td>2回</td>'));
  assert.ok(!html.slice(boundary).includes('<th>時間</th>'));
  assert.ok(!html.includes('実施計画'));
 });
