@@ -54,7 +54,7 @@ test('login uses a separate session token and clears each child before loading t
   assert.equal(ui.requests.at(-1).body.studentId, 'child-b');
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush();
   { const st = ui.requests.find(r => r.body.action === 'familyStudentState'); if (st) { st.reply({ ...state(), viewer: 'family' }); await flush(); } const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); } }
-  ui.navigate('#family/billing'); assert.match(ui.html(), /<td>【テスト】子A<\/td>[^]*<td>【テスト】子B<\/td>/); const count=ui.requests.length; ui.change('fa-child','child-b'); assert.equal(ui.html().includes('<h2>【テスト】子A</h2>'),false); assert.match(ui.html(),/【テスト】子B/); assert.equal(ui.requests.length,count); ui.change('fa-child',''); assert.match(ui.html(),/<td>【テスト】子A<\/td>/);
+  ui.navigate('#family/billing'); assert.match(ui.html(), /<td>【テスト】子A<\/td>[^]*<td>【テスト】子B<\/td>/); assert.equal(ui.el('fa-child'),undefined);
   assert.equal(JSON.stringify(ui.writes).includes('parent@example.invalid'), false);
 });
 
@@ -69,7 +69,7 @@ test('family approval requires a DOM confirmation and sends that child and propo
 });
 
 test('child switch discards the previous approval confirmation and membership refresh removes old private data', async () => {
-  const ui = await readyFamily(); ui.navigate('#family/plans'); ui.click('fa-planopen', { 'data-line': 'line-1' });ui.click('fa-planok', { 'data-line': 'line-1' }); ui.navigate('#family/menu'); ui.change('fa-child', 'child-b');
+  const ui = await readyFamily(); ui.navigate('#family/plans'); ui.click('fa-planopen', { 'data-line': 'line-1' });ui.click('fa-planok', { 'data-line': 'line-1' }); ui.navigate('#family/menu'); ui.navigate('#family/settings');
   assert.equal(ui.html().includes('data-action="fa-decide"'), false);
   ui.navigate('#family/settings'); ui.click('fa-home'); assert.equal(ui.html().includes('Bだけの表示'), false);
   ui.requests.at(-1).reply(home([])); await flush(); ui.navigate('#family/menu'); assert.match(ui.html(), /子どもの紐付けを先生/); assert.equal(ui.html().includes('今後の授業'), false);
@@ -248,7 +248,7 @@ test('the family home places monthly completed totals inside progress without a 
 test('notification bell opens all-child priorities; reading retains required status and routes to the correct child',async()=>{
  const ui=await readyFamily();const notice={id:'plan:b:2',studentId:'child-b',name:'【テスト】子B',title:'料金の確認',section:'billing',priority:0,required:true,read:false};
  assert.equal(ui.requests.at(-1).body.action,'familyNotices');ui.requests.at(-1).reply({ok:true,notices:[notice]});await flush();assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);assert.ok(!ui.el('parent-header-actions').innerHTML.includes('fa-logout'));
- ui.click('fa-notices');assert.match(ui.html(),/要対応/);ui.click('fa-notice-open',{'data-notice':notice.id});assert.equal(ui.requests.at(-1).body.action,'familyNoticeRead');assert.equal(ui.requests.at(-1).body.noticeId,notice.id);ui.requests.at(-1).reply({ok:true,notices:[{...notice,read:true}]});await flush();assert.equal(ui.location.hash,'#family/billing');assert.equal(ui.el('fa-child').value,'child-b');assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);ui.navigate('#family/settings');assert.match(ui.html(),/data-action="fa-logout"/);
+ ui.click('fa-notices');assert.match(ui.html(),/要対応/);ui.click('fa-notice-open',{'data-notice':notice.id});assert.equal(ui.requests.at(-1).body.action,'familyNoticeRead');assert.equal(ui.requests.at(-1).body.noticeId,notice.id);ui.requests.at(-1).reply({ok:true,notices:[{...notice,read:true}]});await flush();assert.equal(ui.location.hash,'#family/billing');assert.equal(ui.el('fa-child'),undefined);assert.match(ui.html(),/【テスト】子A/);assert.match(ui.html(),/【テスト】子B/);assert.match(ui.el('parent-header-actions').innerHTML,/お知らせ 1件/);ui.navigate('#family/settings');assert.match(ui.html(),/data-action="fa-logout"/);
 });
 
 test('the family マイページ tab shows the child student home and proxies student actions with the family session', async () => {
@@ -493,4 +493,18 @@ test('tuition does not turn unknown rates or missing state into zero fees',async
 test('monthly family invoice reports transfer only after confirmation and removes duplicate payment sections',async()=>{
  const ui=loggedUI(),m={ym:'2026-08',amount:6000,unpaid:6000,status:'waiting',signature:'two-invoices',children:[]};ui.requests[0].reply({...home(),billing:[m]});await flush();ui.requests.at(-1).reply({ok:true,data:data('子A')});await flush();ui.requests.at(-1).reply({ok:true,data:data('子B')});await flush();
  assert.doesNotMatch(ui.html(),/<h2>お支払い状況/);assert.match(ui.html(),/お支払い待ち/);const before=ui.requests.length;ui.click('fa-transfer',{'data-ym':m.ym});assert.match(ui.html(),/<dialog id="family-transfer-dialog"/);assert.equal(ui.requests.length,before);ui.click('fa-transfer-send');assert.equal(ui.requests.at(-1).body.action,'familyReportTransfer');assert.equal(ui.requests.at(-1).body.signature,m.signature);ui.requests.at(-1).reply({ok:true,billing:[{...m,status:'reported'}]});await flush();assert.match(ui.html(),/入金確認待ち/);assert.doesNotMatch(ui.html(),/data-action="fa-transfer"/);
+});
+
+test('records show all siblings and keep same-subject folders separate',async()=>{
+ const ui=await readyFamily();ui.navigate('#family/records');
+ const result=id=>({...state(),viewer:'family',history:[{id,date:'2026-09-02',start:'17:00',min:90,subject:'英語',done:true}],lessonRecords:[{recordId:id,revision:1,date:'2026-09-02',start:'17:00',subject:'英語',content:id,homework:[]}]});
+ ui.requests.find(r=>r.body.action==='familyStudentState'&&r.body.studentId==='child-a').reply(result('record-a'));await flush();
+ ui.requests.find(r=>r.body.action==='familyStudentState'&&r.body.studentId==='child-b').reply(result('record-b'));await flush();
+ assert.equal(ui.el('fa-mychild'),undefined);
+ assert.match(ui.html(),/family-records-child-a/);assert.match(ui.html(),/family-records-child-b/);
+ ui.click('histopen',{'data-home-child':'child-b','data-folder':'英語'});
+ assert.match(ui.html(),/data-parent-record="record-b"/);assert.doesNotMatch(ui.html(),/data-parent-record="record-a"/);
+ ui.click('histopen',{'data-home-child':'child-a','data-folder':'英語'});
+ assert.match(ui.html(),/data-parent-record="record-a"/);assert.match(ui.html(),/data-parent-record="record-b"/);
+ ui.navigate('#family/menu');assert.equal(ui.el('fa-child'),undefined);assert.match(ui.html(),/<td>【テスト】子A<\/td>/);assert.match(ui.html(),/<td>【テスト】子B<\/td>/);
 });

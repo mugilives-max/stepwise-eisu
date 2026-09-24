@@ -1311,7 +1311,7 @@
         function renderFamilyTuition() {
           var h='<h2>授業料</h2><div class="card"><p class="small">今月の金額の目安です。未承認の計画も含みます。請求額は「請求・お支払い」でご確認ください。</p><div class="tbwrap"><table class="tb"><thead><tr><th>名前</th><th>月</th><th>実施済み</th><th>登録分</th><th>計画分</th></tr></thead><tbody>',total=[0,0,0],complete=[true,true,true];
           function money(v){return v==null?'確認が必要':yen(v);}
-          familyVisibleChildren().forEach(function(c){
+          (F.home.children||[]).forEach(function(c){
             var d=F.childrenData[c.studentId],st=F.childState[c.studentId];
             if(!st&&!F.stateBusy&&!F.error)familyLoadChildState(c.studentId);
             if(!d||!st){h+='<tr><td>'+esc(familyChildName(c))+'</td><td colspan="4">'+(F.error?'料金を読み込めませんでした'+(!d?'<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">再試行</button>':''):'読み込み中…')+'</td></tr>';complete=[false,false,false];return;}
@@ -1386,6 +1386,17 @@
           }
           return h;
         }
+        var familyHistoryFolders=Object.create(null);
+        function renderFamilyRecords(){
+          var savedS=S,savedFolder=histFolder,h='<p class="sub">授業の記録（'+(PREVIEW?'プレビューでは既読を付けません':'開くと既読になります')+'）</p>';
+          (F.home.children||[]).forEach(function(c){
+            h+='<h2>'+esc(familyChildName(c))+'</h2>';
+            var st=F.childState[c.studentId];
+            if(!st||!st.me){if(!F.stateBusy&&!F.error)familyLoadChildState(c.studentId);h+='<p>授業の記録を読み込んでいます…</p>';return;}
+            S=st;histFolder=familyHistoryFolders[c.studentId]||null;
+            h+='<section id="family-records-'+esc(c.studentId)+'" data-family-child="'+esc(c.studentId)+'">'+familyOwnedHtml(renderHistoryPage(),c.studentId)+'</section>';
+          });S=savedS;histFolder=savedFolder;return h;
+        }
         function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = previewBanner(true);
           if (!c) return h + '<p>子どもの紐付けを先生にご依頼ください。</p>';
@@ -1401,7 +1412,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { familyHistoryFolders=Object.create(null); F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1505,7 +1516,7 @@
             if(parentSection()==='home'){ app.innerHTML = h + renderFamilyHomeAll(); mountDayDialog(); mountAcceptDialog(); return; }
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
-            if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
+            if(parentSection()==='records'){ app.innerHTML = h + renderFamilyRecords(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
             h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
@@ -1515,7 +1526,6 @@
             }
             // 保護者メニュー: 授業計画、授業料、請求・お支払い。
             h += renderFamilyPlans();
-            if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             h += renderFamilyTuition();
             h += '<h2>請求・お支払い</h2>';
             h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label,{report:true,disabled:F.busy||!!previewK});
@@ -1581,12 +1591,13 @@
           var active=Object.create(null), section=parentSection();
           (F.home.children||[]).forEach(function(c){active[JSON.stringify([familyToken(),c.studentId])]=true;});
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].reads.clear();});
-          var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild(), recHost=document.getElementById('family-records-host');
-          if(!PREVIEW&&section==='records'&&recHost&&gc){
-            var rkey=JSON.stringify([familyToken(),gc.studentId]);active[rkey]=true;
-            var rpanel=familyPanels[rkey] || (familyPanels[rkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
-            var rtoken=familyToken();rpanel.reads.mount(recHost,function(op,payload){return apiPost(Object.assign({},payload,{ftoken:rtoken,studentId:gc.studentId,action:'learningService',op:op}));},rkey);
-          }
+          var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild();
+          if(!PREVIEW&&section==='records') (F.home.children||[]).forEach(function(c){
+            var host=document.getElementById('family-records-'+c.studentId);if(!host)return;
+            var rkey=JSON.stringify([familyToken(),c.studentId]);active[rkey]=true;
+            var rpanel=familyPanels[rkey]||(familyPanels[rkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
+            var rtoken=familyToken();rpanel.reads.mount(host,function(op,payload){return apiPost(Object.assign({},payload,{ftoken:rtoken,studentId:c.studentId,action:'learningService',op:op}));},rkey);
+          });
           if(section==='grades'&&gradesHost&&gc&&F.childrenData[gc.studentId]){
             var gkey=JSON.stringify([familyToken(),gc.studentId]);active[gkey]=true;
             var gpanel=familyPanels[gkey] || (familyPanels[gkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
@@ -1762,11 +1773,11 @@
             case "closebar": pending = null; render(); break;
             case "calprev": calM--; if (calM < 0) { calM = 11; calY--; } pending = null; render(); break;
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } pending = null; render(); break;
-            case "histopen": histFolder = btn.getAttribute("data-folder"); render(); window.scrollTo(0, 0); break;
+            case "histopen": histFolder = btn.getAttribute("data-folder"); if(route()==='family')familyHistoryFolders[btn.getAttribute('data-home-child')||F.studentId]=histFolder; render(); window.scrollTo(0, 0); break;
             case "helptoff": helpToff = !helpToff; render(); break;
             case "helpwish": helpWish = !helpWish; render(); break;
             case "helpnl": helpNl = !helpNl; render(); break;
-            case "histback": histFolder = null; render(); break;
+            case "histback": histFolder = null; if(route()==='family')delete familyHistoryFolders[btn.getAttribute('data-home-child')||F.studentId]; render(); break;
             case "dayavailability": if(busy||NL.busy)break;selMode="wish";selDays={};selDays[selDate]=true;pending=null;dayAddOpen=false;render();break;
             case "dayadd": if(busy||NL.busy)break;dayInputMode='manual';dayAddOpen=true;render();break;
             case "dayai": if(busy||NL.busy||(!S.nlEnabled&&!previewK))break;dayInputMode='text';dayAddOpen=true;render();break;
