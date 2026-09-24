@@ -692,7 +692,7 @@
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) folds.plan = true;
           var ymNow = today.slice(0, 7), extra = {};
           var planCols = famChild ? 7 : 6;
-          function planTableHead(){return '<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th>'+(famChild?'<th>1回の料金</th>':'')+'<th>状態</th></tr></thead><tbody>';}
+          function planTableHead(){return '<div class="portal-plan-wrap"><table class="portal-plan-table portal-proposal-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th>'+(famChild?'<th>1回の料金</th>':'')+'<th>状態</th></tr></thead><tbody>';}
           function planTableEnd(){return '</tbody></table></div>';}
           function planPeriod(l){function date(d){return d ? (d.slice(0,4)===today.slice(0,4)?'':d.slice(0,4)+'/')+Number(d.slice(5,7))+'/'+Number(d.slice(8,10)) : '未設定';}return date(l.startDate)+'〜'+date(l.endDate);}
           function planRow(l){

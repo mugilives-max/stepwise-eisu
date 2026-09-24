@@ -191,3 +191,9 @@
 .plan-count-warning svg .warning-dot{fill:currentColor;stroke:none}
 .plan-count-warning:hover,.plan-count-warning[aria-expanded="true"]{background:#fff3df}
 .plan-count-warning:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Comment disclosure must not participate in proposal column sizing. */
+.portal-proposal-table{table-layout:fixed}
+.portal-proposal-table th:first-child{width:24%}
+.portal-proposal-table th:last-child{width:20%}
+.portal-proposal-table th,.portal-proposal-table td{overflow-wrap:anywhere}
