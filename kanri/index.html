@@ -161,6 +161,13 @@
       .plan-summary th, .plan-summary td { border:1px solid #b8c4d3; padding:10px 12px; text-align:center; vertical-align:middle; white-space:nowrap; }
       .plan-summary input, .plan-summary select { box-sizing:border-box; width:100%; min-width:65px; padding:6px 3px; text-align:center; border-radius:3px; }
       .plan-summary input[type="date"] { min-width:130px; display:block; }
+      #plan-dialog .plan-summary { table-layout:fixed; }
+      #plan-dialog .plan-summary th, #plan-dialog .plan-summary td { padding:8px 5px; white-space:normal; overflow-wrap:anywhere; }
+      #plan-dialog .plan-summary th:nth-child(1) { width:24%; }
+      #plan-dialog .plan-summary th:nth-child(2), #plan-dialog .plan-summary th:nth-child(3) { width:12%; }
+      #plan-dialog .plan-summary th:nth-child(4), #plan-dialog .plan-summary th:nth-child(5) { width:9%; }
+      #plan-dialog .plan-summary th:nth-child(6) { width:17%; }
+      #plan-dialog .plan-summary input, #plan-dialog .plan-summary select { min-width:0; max-width:100%; font-size:inherit; }
       .plan-summary th { background:#eef2f6; color:var(--text); font-weight:700; }
       .plan-summary td { background:#fff; }
       .plan-summary th:last-child, .plan-summary td:last-child { text-align:center; }
