@@ -41,3 +41,13 @@ test('student API exposes learning fields only including the teacher student pre
  assert.doesNotMatch(JSON.stringify(st),/"(?:lessonFee|rate30|monthly|amount|billing|memo|parentAckMemo)"/);
  assert.equal(c.parentDataForStudent_(c.findStudent_('test-a')).data.planLines[0].lessonFee,4500);
 });
+
+test('approved plan progress is a sibling section showing completed versus planned lessons',async()=>{
+ const ui=await studentReady({...state([]),history:[{date:'2026-09-01',subject:'英語',kind:'',done:true},{date:'2026-09-02',subject:'英語',kind:'',done:true}],planLines:[line({status:'approved',approvedCount:4})]});
+ const html=ui.html(),boundary=html.indexOf('data-fold="progress"');
+ assert.ok(boundary>0);
+ assert.ok(html.slice(0,boundary).includes('</details>'));
+ assert.ok(html.slice(boundary).includes('実施状況'));
+ assert.ok(html.slice(boundary).includes('実施済み 2回／予定 4回'));
+ assert.ok(!html.includes('実施計画'));
+});
