@@ -16,7 +16,7 @@ test('parent sections separate billing, reports and account settings without rel
   ui.navigate('#family/records');{const st=ui.requests.find(r=>r.body.action==='familyStudentState');st.reply({...state(),viewer:'family',history:[{id:'h1',date:'2026-09-02',start:'17:00',min:90,subject:'英語',done:true}],lessonRecords:[{recordId:'r1',revision:2,date:'2026-09-02',start:'17:00',min:90,subject:'英語',content:'本文',homework:[]}]});await flush();}
   assert.match(ui.html(),/data-folder="英語"/);ui.click('histopen',{'data-folder':'英語'});assert.match(ui.html(),/先生からの授業記録/);assert.match(ui.html(),/<details class="card" data-parent-record="r1" data-record-revision="2"><summary><span data-read-label class="tag">確認中<\/span>/);assert.ok(!ui.html().includes('承認する'));assert.ok(!ui.html().includes('メールアドレスを変更'));
   const count2=ui.requests.length; // 既読の取得(recordReadStatus)は StepwiseLessonRead を読み込む実ブラウザでのみ動く
-  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2);assert.match(ui.el('tabs').innerHTML,/href="#family\/menu" class="on"[^>]*>保護者メニュー/);
+  ui.navigate('#family/settings');assert.match(ui.html(),/メールアドレスを変更/);assert.equal(ui.requests.length,count2+1);assert.equal(ui.requests.at(-1).body.action,'familyStudentState');assert.match(ui.el('tabs').innerHTML,/href="#family\/menu" class="on"[^>]*>保護者メニュー/);
 });
 function familyList(extra = {}) { return { ok: true, families: [], students: [{ id: 'child-a', name: '【テスト】子A', active: true }, { id: 'child-b', name: '【テスト】子B', active: true }], notifications: [], ...extra }; }
 async function teacherReady(list = familyList()) { const ui = createUI('admin', { hash: '#students' }); assert.equal(ui.requests[0].body.op, 'familyList'); ui.requests[0].reply(list); ui.requests[1].reply({ok:true,data:{students:[],inactive:[]}}); await flush(); return ui; }
@@ -76,7 +76,7 @@ test('child switch discards the previous approval confirmation and membership re
 });
 
 test('family auth expiry removes protected data without clearing the legacy parent token', async () => {
-  const ui = await readyFamily(); ui.session.set('sw_pt_v2:test-link-a', 'legacy-parent-token'); ui.click('fa-refresh');
+  const ui = await readyFamily(); ui.session.set('sw_pt_v2:test-link-a', 'legacy-parent-token'); ui.click('fa-home');
   ui.requests.at(-1).reply({ error: 'ログイン期限切れ', familyAuthRequired: true }); await flush();
   assert.equal(ui.session.has('sw_ft_v1'), false); assert.equal(ui.session.get('sw_pt_v2:test-link-a'), 'legacy-parent-token'); assert.equal(ui.html().includes('今後の授業'), false); assert.ok(ui.el('fa-pass'));
 });
@@ -472,4 +472,15 @@ test('declining a plan is separate from positive count adjustment and requires c
  const before=ui.requests.length;ui.click('fa-planskip',{'data-child':'child-b','data-line':'line-1'});assert.equal(ui.requests.length,before);assert.doesNotMatch(ui.html(),/id="fa-reduce-0"/);assert.match(ui.html(),/今回は見送ります/);
  ui.click('fa-decide');const sent=ui.requests.at(-1).body;assert.equal(sent.studentId,'child-b');assert.equal(sent.approve,false);assert.equal(sent.approvedCount,0);assert.equal(sent.expectedRevision,7);
  const other=await combinedHome();other.click('fa-planopen',{'data-child':'child-a','data-line':'line-1'});other.click('fa-planng',{'data-child':'child-a','data-line':'line-1'});assert.doesNotMatch(other.html(),/<option value="0"/);other.change('fa-reduce-0','2');other.click('fa-plan-review');other.click('fa-decide');assert.equal(other.requests.at(-1).body.approvedCount,2);assert.equal(other.requests.at(-1).body.approve,true);
+});
+
+test('tuition shows cumulative registered and planned estimates per sibling without refresh buttons',async()=>{
+ const ui=await combinedHome();ui.navigate('#family/menu');const table=ui.html().split('<h2>授業料</h2>')[1].split('<h2>請求・お支払い</h2>')[0];
+ assert.match(table,/太郎<\/td><td>2026-09<\/td><td>6,000円<\/td><td>9,000円<\/td><td>12,000円/);
+ assert.match(table,/花子<\/td><td>2026-09<\/td><td>3,000円<\/td><td>6,000円<\/td><td>12,000円/);
+ assert.match(table,/合計<\/th><td>9,000円<\/td><td>15,000円<\/td><td>24,000円/);assert.doesNotMatch(ui.html(),/最新の情報を確認/);
+});
+test('tuition does not turn unknown rates or missing state into zero fees',async()=>{
+ const ui=loggedUI();ui.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();const d=data('【テスト】子A');d.planLines[0].rate30=null;d.planLines[0].lessonFee=null;ui.requests.at(-1).reply({ok:true,data:d});await flush();assert.match(ui.html(),/読み込み中/);
+ ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),today:'2026-09-24',history:[{id:'done',date:'2026-09-20',min:90,subject:'英語',done:true}],slots:[]});await flush();const table=ui.html().split('<h2>授業料</h2>')[1].split('<h2>請求・お支払い</h2>')[0];assert.match(table,/確認が必要/);assert.doesNotMatch(table,/>0円</);
 });

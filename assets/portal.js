@@ -1152,7 +1152,7 @@
           var html = family ? '' : '<div style="display:flex;justify-content:flex-end"><button class="btn-quiet btn-sm" data-action="parentclose"' + (activeBusy ? ' disabled' : '') + '>ログアウト</button></div>';
           var tm = d.thisMonth || {}, bill = d.billing, section=sectionOverride||parentSection();
           if (!family && parentPlanNotice) html += '<p class="parent-error" role="alert">' + esc(parentPlanNotice) + '</p>';
-          html += '<p><button class="btn-sm" data-action="' + (family ? 'fa-refresh' : 'parentrefresh') + '"' + (activeBusy ? " disabled" : "") + '>最新の情報を確認</button></p>';
+          if(!family)html += '<p><button class="btn-sm" data-action="' + (family ? 'fa-refresh' : 'parentrefresh') + '"' + (activeBusy ? " disabled" : "") + '>最新の情報を確認</button></p>';
           if(section==='home'){
           html += renderParentThisMonth(d);
           html += '<p>授業報告・請求・連絡は上のメニューから確認できます。</p>';
@@ -1307,6 +1307,26 @@
         }
         function renderFamilyProposalTable(head,rows,confirms) {
           return '<div class="card">'+(confirms||'')+(rows?head+rows+'</tbody></table></div>':'<div class="empty">新しい案内はありません</div>')+'</div>';
+        }
+        function renderFamilyTuition() {
+          var h='<h2>授業料</h2><div class="card"><p class="small">今月の金額の目安です。未承認の計画も含みます。請求額は「請求・お支払い」でご確認ください。</p><div class="tbwrap"><table class="tb"><thead><tr><th>名前</th><th>月</th><th>実施済み</th><th>登録分</th><th>計画分</th></tr></thead><tbody>',total=[0,0,0],complete=[true,true,true];
+          function money(v){return v==null?'確認が必要':yen(v);}
+          familyVisibleChildren().forEach(function(c){
+            var d=F.childrenData[c.studentId],st=F.childState[c.studentId];
+            if(!st&&!F.stateBusy&&!F.error)familyLoadChildState(c.studentId);
+            if(!d||!st){h+='<tr><td>'+esc(familyChildName(c))+'</td><td colspan="4">'+(F.error?'料金を読み込めませんでした':'読み込み中…')+'</td></tr>';complete=[false,false,false];return;}
+            var ym=d.month||String(st.today||'').slice(0,7),lines=(d.planLines||[]).filter(function(l){return l.status==='approved'||l.status==='proposed';});
+            function rate(l){return l.rate30!=null&&Number.isFinite(Number(l.rate30))&&Number(l.rate30)>=0?Number(l.rate30):l.lessonFee!=null&&Number(l.lessonMin)>0?Number(l.lessonFee)*30/Number(l.lessonMin):null;}
+            function sum(items,calc){var n=0;for(var i=0;i<items.length;i++){var v=calc(items[i]);if(v==null||!Number.isFinite(v))return null;n+=v;}return n;}
+            function fee(x){var matches=lines.filter(function(l){return lessonLabel(l)===lessonLabel(x)&&planCovers(l,x.date);}),rates=matches.map(rate);if(!rates.length||rates.some(function(r){return r==null||r!==rates[0];})||!Number(x.min))return null;return Math.round(Number(x.min)*rates[0]/30);}
+            var done=(st.history||[]).filter(function(x){return x.done&&String(x.date).slice(0,7)===ym;}),ids=done.map(function(x){return x.id;}),booked=(st.slots||[]).filter(function(x){return x.st==='mine'&&String(x.date).slice(0,7)===ym&&ids.indexOf(x.id)<0;});
+            var plans=lines.filter(function(l){return String(l.startDate||'').slice(0,7)<=ym&&String(l.endDate||'').slice(0,7)>=ym;});
+            var values=[sum(done,fee),sum(done.concat(booked),fee),sum(plans,function(l){var r=rate(l);return r==null||!Number(l.lessonMin)?null:Math.round(Number(l.lessonMin)*r/30)*planLimit(l);})];
+            if(d.thisMonth&&d.thisMonth.count!=null&&Number(d.thisMonth.count)!==done.length){values[0]=null;values[1]=null;}
+            values.forEach(function(v,i){if(v==null)complete[i]=false;else total[i]+=v;});
+            h+='<tr><td>'+esc(familyChildName(c))+'</td><td>'+esc(ym)+'</td>'+values.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
+          });
+          h+='</tbody><tfoot><tr><th colspan="2">合計</th>'+total.map(function(v,i){return '<td>'+money(complete[i]?v:null)+'</td>';}).join('')+'</tr></tfoot></table></div><p class="small">実施済み：実施した授業 ／ 登録分：実施済み＋今後の登録済み授業（返事前の案内は含みません） ／ 計画分：今月にかかる送信済み計画の全回数分。各列は足し合わせません。</p><p class="small">計画の単価と授業時間で計算します。単価が未設定・特定できない場合は「確認が必要」と表示します。</p></div>';return h;
         }
         function renderFamilyPlans() {
           var children=F.home.children||[],savedId=F.studentId,savedS=S,rows='',head='',confirms='',missing=[];
@@ -1489,6 +1509,7 @@
             if(parentSection()==='plans'){ app.innerHTML=h+renderFamilyPlans(); mountDayDialog(); return; }
             // 保護者メニュー: 請求・料金承認 → 先生への連絡 → 保護者の設定(メール通知のオン/オフ)。2026-09-11 に旧3タブを統合
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
+            h += renderFamilyTuition();
             h += '<h2>請求・お支払い</h2>';
             h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
