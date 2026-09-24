@@ -649,7 +649,7 @@
                 html += '</div></details>';
               }
               else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who, '');
-              else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
+              else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
             dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
             dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">授業可</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="helpwish" aria-label="授業可の説明" aria-expanded="' + helpWish + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
@@ -676,7 +676,7 @@
             html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
             html += cancelControl(next) + '</div></div>';
           } else {
-            html += '<div class="empty">次の授業はまだ決まっていません。' + (D.offers.length ? '下の「授業登録」から確定してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
+            html += '<div class="empty">次の授業はまだ決まっていません。' + (D.offers.length ? '下の「授業登録」から「予定する」を押してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
           }
           return html;
         }
@@ -769,9 +769,9 @@
           html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
             html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s)) : "") + deliveryTag(s) + "</span>";
-            html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>確定</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
+            html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
           });
-          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから確定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div></details>';
+          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから予定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div></details>';
           return html;
         }
 
@@ -806,11 +806,11 @@
           for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
           if (!s) return "";
           var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
-          var html = '<div class="confirmbar"><div class="inner">';
           if (pending.kind === "accept") {
-            html += '<div class="msg">' + when + " の授業を確定しますか?</div>";
-            html += '<div class="row"><button class="btn-primary" data-action="doaccept"' + (busy ? " disabled" : "") + ">" + (busy ? "確定しています…" : "確定する") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
-          } else if (pending.kind === "decline") {
+            return '<dialog id="schedule-accept-dialog" class="schedule-day-dialog" aria-labelledby="schedule-accept-title" aria-describedby="schedule-accept-message"><div class="schedule-dialog-heading"><h2 id="schedule-accept-title">授業を予定する</h2></div><p id="schedule-accept-message">' + esc(when) + ' の授業を予定しますか？</p><div class="row"><button type="button" class="btn-primary" data-action="doaccept">OK</button><button type="button" class="btn-quiet" data-action="closebar" autofocus>やめる</button></div></dialog>';
+          }
+          var html = '<div class="confirmbar"><div class="inner">';
+          if (pending.kind === "decline") {
             html += '<div class="msg">' + when + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
             html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "cancel") {
@@ -1352,7 +1352,7 @@
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
-            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); mountDayDialog(); return; }
+            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); mountDayDialog(); mountAcceptDialog(); return; }
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
@@ -1489,11 +1489,13 @@
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
         function mountDayDialog(){var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else dayAddOpen=false;};if(d.showModal&&!d.open)d.showModal();}}
+        function mountAcceptDialog(){var d=document.getElementById('schedule-accept-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else pending=null;};if(d.showModal&&!d.open)d.showModal();}}
+
         function render() {
           if(parentHeaderActions){var count=notices.items.filter(function(n){return n.required||!n.read;}).length;parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" data-action="fa-notices" aria-label="お知らせ '+count+'件" aria-expanded="'+notices.open+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(count?' <span class="tag red">'+count+'</span>':'')+(notices.error?' !':'')+'</button>':'';}
           if(parentHeaderActions&&route()!=='family'&&S&&S.me){var required=studentNoticeItems().filter(function(x){return x.required;}).length;parentHeaderActions.innerHTML='<button class="btn-quiet btn-sm" data-action="student-notices" aria-label="お知らせ 要確認'+required+'件" aria-expanded="'+studentNoticesOpen+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(required?' <span class="tag red">'+required+'</span>':'')+'</button>';}
           renderStudent(); if(studentNoticesOpen&&route()!=='family'&&S&&S.me)app.innerHTML=studentNoticesHTML()+app.innerHTML;
-          mountDayDialog();
+          mountDayDialog(); mountAcceptDialog();
           meetWatch();
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }

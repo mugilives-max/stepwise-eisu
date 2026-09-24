@@ -15,7 +15,18 @@ test('student single and batch confirmations carry exactly the displayed lesson 
   const a = slot('slot-a', { subject: '化学', min: 90 }), b = slot('slot-b');
   const ui = await studentReady(state([a, b])); ui.click('batchall'); ui.click('batchreview'); ui.click('batchsend');
   assert.deepEqual(ui.requests.at(-1).body.expectedSnapshots, [snapshot(a), snapshot(b)]);
-  const single = await studentReady(state([a])); single.click('askaccept', { 'data-id': a.id }); single.click('doaccept');
+  const single = await studentReady(state([a]));
+  assert.match(single.html(), /data-action="askaccept"[^>]*>予定する<\/button>/);
+  const before = single.requests.length;
+  single.click('askaccept', { 'data-id': a.id });
+  assert.match(single.html(), /<dialog id="schedule-accept-dialog"/);
+  assert.match(single.html(), /の授業を予定しますか？/);
+  assert.match(single.html(), /data-action="doaccept">OK<\/button>/);
+  assert.equal(single.requests.length, before);
+  single.click('closebar');
+  assert.doesNotMatch(single.html(), /<dialog id="schedule-accept-dialog"/);
+  assert.equal(single.requests.length, before);
+  single.click('askaccept', { 'data-id': a.id }); single.click('doaccept');
   assert.deepEqual(single.requests.at(-1).body.expectedSnapshots, [snapshot(a)]);
 });
 
