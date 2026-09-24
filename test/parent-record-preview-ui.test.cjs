@@ -65,6 +65,6 @@ test('parent preview reads each sibling with its own ID and the original family 
   }await flush();
  }
  for(const view of ['student','parent'])assert.deepEqual([...new Set(ui.requests.filter(r=>r.body.view===view).map(r=>r.body.studentId))].sort(),['test-a','test-b']);
- assert.match(ui.html(),/【テスト】兄さん/);assert.match(ui.html(),/【テスト】弟さん/);
+ assert.doesNotMatch(ui.html(),/<h2>【テスト】(?:兄|弟)さん/);assert.equal((ui.html().match(/class="schedule-day-heading"/g)||[]).length,1);
  assert.equal(ui.session.has('sw_ft_v1'),false);
 });

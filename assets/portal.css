@@ -200,3 +200,9 @@
 
 .selbar.availability-form{border-top-color:var(--line,#d8e1eb)}
 .availability-form [role="group"] button{min-width:90px}
+
+.family-row-name{display:inline-block;margin-right:6px}
+.family-plan-table{min-width:660px}
+.family-plan-table th:first-child{width:12%}
+.family-plan-table th:nth-child(2){width:22%}
+.family-plan-table th:last-child{width:16%}

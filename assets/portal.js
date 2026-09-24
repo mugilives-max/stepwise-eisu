@@ -527,13 +527,13 @@
             b.message = '最新の案内を読み込めませんでした。再読み込みしてから、日時を選び直してください。'; render();
           });
         }
-        function renderBatch(b) {
+        function renderBatch(b, sharedName) {
           var h = b.message ? '<p class="parent-error" role="status">' + esc(b.message) + '</p>' : '';
           if (b.refreshRequired) h += '<button class="btn-primary" data-action="batchrefresh"' + (b.busy ? ' disabled' : '') + '>' + (b.busy ? '読み込み中…' : '最新の案内を再読み込み') + '</button>';
           if (b.review) h += '<div class="card" role="region" aria-label="確定する日時の確認"><strong>次の' + b.review.length + '件を確定します</strong>' + b.review.map(function (s) { return '<p>' + fmtDateW(s.date) + ' ' + esc(s.start) + '〜' + endTime(s.start, s.min) + ' ' + esc(lessonLabel(s)) + (s.deliveryMode === 'in_person' ? '' : '・' + deliveryLabel(s.deliveryMode)) + '</p>'; }).join('') + '<p class="note">月間計画の承認と定員を確認します。カレンダー登録と通知を行い、オンライン授業にはMeetを発行します。</p>' + (b.pending ? '' : '<button class="btn-primary" data-action="batchsend">この日時で確定する</button> <button class="btn-quiet" data-action="batchcancel">選び直す</button>') + '</div>';
           if (b.results.length) h += '<ul>' + b.results.map(function (x) { var s = (b.review || b.rows || []).filter(function (r) { return sameId(r.id, x.slotId); })[0] || (S.slots || []).filter(function (r) { return sameId(r.id, x.slotId); })[0]; return '<li>' + (s ? fmtDateW(s.date) + ' ' + esc(s.start) : '選択した授業') + '：' + ({ booked: '確定済み', pending: '未完了', error: '確認が必要' }[x.status] || '確認中') + (x.error ? '・' + esc(x.error) : '') + '</li>'; }).join('') + '</ul>';
           if (b.pending) h += '<button class="btn-primary" data-action="batchsend"' + (b.busy ? ' disabled' : '') + '>' + (b.busy ? '処理中…' : '同じ処理を再試行') + '</button><p class="note">完了するまでこのタブを閉じないでください。</p>';
-          return h;
+          return sharedName&&h?'<div aria-label="'+esc(sharedName)+'の授業登録"><strong>'+esc(sharedName)+'</strong>'+h+'</div>':h;
         }
 
         /* ---------- 予定表 ---------- */
@@ -618,21 +618,23 @@
         }
 
         // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)。登録不可(先生の休み)はホーム・予定の両方で出す(2026-09-11)
-        function renderDayDetail(D, withActions, showToff) {
+        function renderDayDetail(D, withActions, showToff, shared) {
+          var rows=[], whoName=shared ? '<strong class="family-row-name">'+esc(shared.name)+'</strong> ' : '';
+          function emitDayRow(markup,start){if(shared){rows.push({html:markup,start:/^\d{2}:\d{2}$/.test(start)?start:'00:00'});return "";}return markup;}
           var today = D.today;
           var ds2 = (D.byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
           var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
           var dayWishes = (S.wishes || []).filter(function (w) { return w.date === selDate; });
           var canAdd=selDate>=today, canAI=!!S.nlEnabled && !previewK;
-          var html=window.StepwiseCalendar.dayHeading({date:selDate,title:fmtDateW(selDate)+'の授業',disabled:!!previewK,add:canAdd?{action:'dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'dayai',label:'AIで予定登録'}:null});
-          if (!ds2.length && !dayNg.length && !dayOffs.length && !dayWishes.length) html += '<div class="empty">この日の予定はありません</div>';
+          var html=shared ? "" : window.StepwiseCalendar.dayHeading({date:selDate,title:fmtDateW(selDate)+'の授業',disabled:!!previewK,add:canAdd?{action:'dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'dayai',label:'AIで予定登録'}:null});
+          if (!ds2.length && !dayNg.length && !dayOffs.length && !dayWishes.length && !shared) html += '<div class="empty">この日の予定はありません</div>';
           else {
             // 授業登録の一覧と同じ行形式(左: 種類のタグ、時刻、内容 / 右: 操作)
             var dis = (acceptBatch().pending || acceptBatch().busy || acceptBatch().refreshRequired) ? ' disabled' : '';
-            function dayRow(lead, time, who, actions) { return '<div class="slotline">' + lead + '<span class="time">' + time + '</span><span class="who">' + who + '</span>' + actions + '</div>'; }
-            html += '<div class="card daylist">';
-            dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', '<button class="btn-quiet btn-sm" data-action="helptoff" aria-label="登録不可の説明" aria-expanded="' + helpToff + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button>'); });
+            function dayRow(lead, time, who, actions, common) { return emitDayRow('<div class="slotline">' + lead + '<span class="time">' + time + '</span><span class="who">' + (common?'':whoName) + who + '</span>' + actions + '</div>',time.slice(0,5)); }
+            if(!shared)html += '<div class="card daylist">';
+            dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', '<button class="btn-quiet btn-sm" data-action="helptoff" aria-label="登録不可の説明" aria-expanded="' + helpToff + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button>',true); });
             if (dayOffs.length && helpToff) html += '<div class="note" style="margin:4px 0 8px">先生の予定があるため、この時間帯には授業を登録できません。別の日時を選ぶか、先生にご相談ください。</div>';
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
@@ -641,12 +643,12 @@
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
-                html += '<details class="slotline" style="display:block"><summary style="cursor:pointer;font-weight:600">実施済 ' + time + (s.subject ? ' ' + esc(lessonLabel(s)) : '') + '</summary><div style="padding:12px 4px">';
+                var recordHtml = '<details class="slotline" style="display:block"><summary style="cursor:pointer;font-weight:600">実施済 ' + whoName + time + (s.subject ? ' ' + esc(lessonLabel(s)) : '') + '</summary><div style="padding:12px 4px">';
                 if (record) {
-                  html += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
-                  html += '<h3 style="font-size:15px;margin:10px 0 6px">コメント</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
-                } else html += '<p class="muted" style="margin:0">授業の内容はまだ公開されていません。</p>';
-                html += '</div></details>';
+                  recordHtml += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
+                  recordHtml += '<h3 style="font-size:15px;margin:10px 0 6px">コメント</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
+                } else recordHtml += '<p class="muted" style="margin:0">授業の内容はまだ公開されていません。</p>';
+                html += emitDayRow(recordHtml+'</div></details>',s.start);
               }
               else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who, '');
               else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
@@ -654,7 +656,7 @@
             dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
             dayWishes.forEach(function (w) { html += dayRow('<span class="tag green">'+(w.kind==='want'?'希望日時':'授業可')+'</span>', esc(w.start) + '〜' + esc(w.end), (w.note ? esc(w.note) + ' ' : '') + '<span class="small muted">先生の返事待ち</span>', '<button class="btn-quiet btn-sm" data-action="helpwish" aria-label="希望日時・授業可能の説明" aria-expanded="' + helpWish + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button><button class="btn-quiet btn-sm" data-action="delwish" data-id="' + esc(w.id) + '">取消</button>'); });
             if (dayWishes.length && helpWish) html += '<div class="note" style="margin:4px 0 8px">「希望日時」はその日時に1コマ受けたい希望、「授業可」は授業を受けられる時間帯です。先生が確認して授業を案内します。案内が届いたら「予定する」で登録してください。</div>';
-            html += '</div>';
+            if(!shared)html += '</div>';
           }
           if (canAdd && dayAddOpen && !previewK) {
             var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="want" data-date="'+selDate+'">希望日時</button><button class="btn-quiet" data-action="dayavailability">授業可能・不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
@@ -662,7 +664,8 @@
             html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':dayInputMode==='availability'?'授業可能・不可':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
           if ((route() === 'home' || route() === 'family') && selMode) html += window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:({event:"イベントを登録",wish:"授業可能・不可を登録",want:"希望日時を登録",ng:"授業可能・不可を登録"})[selMode],close:"selcancel",busy:busy,content:renderSelBar(D, true)});
-          return html;
+          if(shared)html=html.replace(/(<h2[^>]*>)([^<]*)/g,function(_,tag,title){return tag+esc(shared.name)+'：'+title;});
+          return shared ? {rows:rows,dialogs:html} : html;
         }
 
         function renderNextLesson(D) {
@@ -683,7 +686,8 @@
         }
 
         // 授業計画(折り畳み)。案内=保護者の承認待ちの行、実施計画=承認済みの行と、その期間に当てはまる実施・予定の回数。GAS の planLines を使う
-        function renderMonthSummary(D) {
+        function renderMonthSummary(D, sharedName) {
+          var nameHead=sharedName ? '<th>名前</th>' : '', nameCell=sharedName ? '<td>'+esc(sharedName)+'</td>' : '';
           var today = D.today, mine = D.mine, lines = Array.isArray(S.planLines) ? S.planLines : [];
           var proposed = lines.filter(function (l) { return l.status === 'proposed'; }), approved = lines.filter(function (l) { return l.status === 'approved'; });
           function fits(l, x) { return lessonLabel(l) === lessonLabel(x) && planCovers(l, x.date); }
@@ -692,13 +696,13 @@
           var famChild = route() === 'family' ? familyMypageChild() : null, famLines = famChild && F.childrenData[famChild.studentId] ? (F.childrenData[famChild.studentId].planLines || []) : [];
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) folds.plan = true;
           var ymNow = today.slice(0, 7), extra = {};
-          var planCols = famChild ? 7 : 6;
-          function planTableHead(){return '<div class="portal-plan-wrap"><table class="portal-plan-table portal-proposal-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th>'+(famChild?'<th>1回の料金</th>':'')+'<th>状態</th></tr></thead><tbody>';}
+          var planCols = (famChild ? 7 : 6)+(sharedName?1:0);
+          function planTableHead(){return '<div class="portal-plan-wrap"><table class="portal-plan-table portal-proposal-table'+(sharedName?' family-plan-table':'')+'"><thead><tr>'+nameHead+'<th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th>'+(famChild?'<th>1回の料金</th>':'')+'<th>状態</th></tr></thead><tbody>';}
           function planTableEnd(){return '</tbody></table></div>';}
           function planPeriod(l){function date(d){return d ? (d.slice(0,4)===today.slice(0,4)?'':d.slice(0,4)+'/')+Number(d.slice(5,7))+'/'+Number(d.slice(8,10)) : '未設定';}return date(l.startDate)+'〜'+date(l.endDate);}
           function planRow(l){
             var parentLine=famChild&&famLines.filter(function(x){return x.id===l.id;})[0];
-            return '<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>')+'</td></tr>'+(l.status==='proposed'?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。登録・実施の回数は「実施状況」で確認できます。')+'</td></tr>':'');
+            return '<tr>'+nameCell+'<td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>')+'</td></tr>'+(l.status==='proposed'?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。登録・実施の回数は「実施状況」で確認できます。')+'</td></tr>':'');
           }
           function planInfo(content){return '<tr><td class="portal-plan-info" colspan="'+planCols+'">'+content+'</td></tr>';}
           function planComment(l){return planInfo('<details class="portal-plan-comment"><summary><span>'+esc(l.comment||'コメントはありません')+'</span></summary><div>'+esc(l.comment||'コメントはありません')+'</div></details>');}
@@ -737,7 +741,9 @@
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) html += renderFamilyPlanConfirm(F.busy ? ' disabled' : '');
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内</h3>';
           if (!proposed.length) html += '<div class="empty">新しい案内はありません</div>';
+          var confirmHtml=famChild&&F.confirm&&sameId(F.confirm.studentId,famChild.studentId)?renderFamilyPlanConfirm(F.busy?' disabled':''):'';
           if (proposed.length) html += planTableHead();
+          var proposalStart=html.length;
           proposed.forEach(function(l){
             html += planRow(l)+planComment(l);
             var outline=window.StepwiseReport.outline(l.outline);if(outline)html+=planInfo(outline);
@@ -746,42 +752,46 @@
               if(fl&&fl.status==='proposed'&&Number.isSafeInteger(fl.revision))html+=planInfo('<div class="row"><button class="btn-primary btn-sm" data-action="fa-planok" data-child="'+esc(famChild.studentId)+'" data-line="'+esc(l.id)+'"'+famDis+'>承認する</button><button class="btn-quiet btn-sm" data-action="fa-planng" data-child="'+esc(famChild.studentId)+'" data-line="'+esc(l.id)+'"'+famDis+'>回数を調整・見送る</button></div>');
             }
           });
+          var proposalRows=html.slice(proposalStart), proposalHead=planTableHead();
           if (proposed.length) html += planTableEnd();
           html += '</div></details>';
           var planHtml = html, progressCount = (approved.length + proposed.length) ? (approved.length + proposed.length)+'件の計画' : '送信済みの計画なし';
           html = (famChild ? '<section class="parent-progress"><h2>実施状況 <span class="cnt">'+esc(progressCount)+'</span></h2>' : foldHead('progress', '実施状況', progressCount)) + '<div class="card">';
           var remainTotal = 0, shown = 0;
-          planCols=7;
-          if(approved.length||extraKeys.length)html+='<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
+          planCols=7+(sharedName?1:0);
+          var progressHead='<div class="portal-plan-wrap"><table class="portal-plan-table'+(sharedName?' family-plan-table':'')+'"><thead><tr>'+nameHead+'<th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
+          if(approved.length||extraKeys.length)html+=progressHead;
+          var progressStart=html.length;
           var approvedIds={};approved.forEach(function(l){approvedIds[l.id]=true;});
           approved.filter(function(l){return !(l.addon&&approvedIds[l.parentId]);}).forEach(function(l){
             var addons=approved.filter(function(a){return a.addon&&a.parentId===l.id;}),goal=planLimit(l);addons.forEach(function(a){goal+=planLimit(a);});
             var n=lessonsOf(l),remain=Math.max(0,goal-n.done-n.plan);remainTotal+=remain;shown++;
-            html+='<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+'</td><td>'+goal+'回</td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td><span class="tag green">承認済み</span></td></tr>'+planComment(l);
+            html+='<tr>'+nameCell+'<td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+'</td><td>'+goal+'回</td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td><span class="tag green">承認済み</span></td></tr>'+planComment(l);
             var outline=window.StepwiseReport.outline(l.outline);if(outline)html+=planInfo(outline);
             var ack=famAckBlock(l);if(ack)html+=planInfo(ack);
             addons.forEach(function(a){html+=planComment(a);var ack=famAckBlock(a);if(ack)html+=planInfo(ack);});
           });
-          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+(n.line?esc(planPeriod(n.line)):Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay)+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td><span class="plan-count-value"><span>'+(n.count==null?'—':n.count+'回')+'</span>'+(n.line?'<button type="button" class="plan-count-warning" data-action="approval-help" aria-label="未承認の授業計画について" aria-expanded="false" aria-controls="progress-approval-'+esc(n.line.id)+'"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>':'')+'</span></td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>'+(n.line?'<tr id="progress-approval-'+esc(n.line.id)+'" hidden><td class="portal-plan-info" colspan="7">'+(famChild?'この授業計画は未承認です。内容をご確認のうえ、「授業計画」から承認をお願いします。':'この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。')+'</td></tr>':'');});
+          extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr>'+nameCell+'<td>'+(n.line?esc(planPeriod(n.line)):Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay)+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td><span class="plan-count-value"><span>'+(n.count==null?'—':n.count+'回')+'</span>'+(n.line?'<button type="button" class="plan-count-warning" data-action="approval-help" aria-label="未承認の授業計画について" aria-expanded="false" aria-controls="progress-approval-'+esc(n.line.id)+'"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>':'')+'</span></td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>'+(n.line?'<tr id="progress-approval-'+esc(n.line.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'この授業計画は未承認です。内容をご確認のうえ、「授業計画」から承認をお願いします。':'この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。')+'</td></tr>':'');});
+          var progressRows=html.slice(progressStart);
           if(approved.length||extraKeys.length)html+=planTableEnd();
           if (!shown) html += '<div class="empty">送信済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
           if (famChild && F.childrenData[famChild.studentId]) html += renderParentThisMonth(F.childrenData[famChild.studentId]);
-          return { plan: planHtml, progress: html + '</div>' + (famChild ? '</section>' : '</details>') };
+          return { plan: planHtml, progress: html + '</div>' + (famChild ? '</section>' : '</details>'), proposalRows:proposalRows,proposalHead:proposalHead,progressRows:progressRows,progressHead:progressHead,confirm:confirmHtml,proposalCount:proposed.length,planCount:approved.length+proposed.length,remain:remainTotal };
         }
 
-        function renderOffers(D) {
-          var offers = D.offers, b = acceptBatch(), html = renderBatch(b);
+        function renderOffers(D, sharedName) {
+          var offers = D.offers, b = acceptBatch(), html = renderBatch(b,sharedName);
           var selectable = offers.slice(0, 31), allSelected = selectable.every(function (s) { return b.selected[s.id]; });
           if (!offers.length) return html;
-          html += foldHead('offers', '授業登録', offers.length + '件・返事をお願いします');
+          html += (sharedName ? '' : foldHead('offers', '授業登録', offers.length + '件・返事をお願いします'));
           html += '<div class="card" style="border-color:#d99a2b">';
           html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
-            html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s, true)) : "") + deliveryTag(s) + "</span>";
+            html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (sharedName?'<strong class="family-row-name">'+esc(sharedName)+'</strong> ':'') + (s.subject ? esc(lessonLabel(s, true)) : "") + deliveryTag(s) + "</span>";
             html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
           });
-          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから予定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div></details>';
+          html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから予定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div>'+(sharedName?'':'</details>');
           return html;
         }
 
@@ -807,31 +817,31 @@
         }
 
         // 画面下の確認バー(確定・再調整・取消依頼・取り下げ)。ホーム・予定ページ共通
-        function renderPendingBar(D) {
+        function renderPendingBar(D, sharedName) {
           if (!pending) return "";
           if (pending.kind === "remove") {
-            return '<div class="confirmbar"><div class="inner"><div class="msg">' + pending.text + '</div><div class="row"><button class="btn-danger" data-action="doremove"' + (busy ? ' disabled' : '') + '>' + (busy ? '処理しています…' : esc(pending.verb)) + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div></div></div>';
+            return '<div class="confirmbar"><div class="inner"><div class="msg">' + (sharedName?esc(sharedName)+'さん：':'') + pending.text + '</div><div class="row"><button class="btn-danger" data-action="doremove"' + (busy ? ' disabled' : '') + '>' + (busy ? '処理しています…' : esc(pending.verb)) + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div></div></div>';
           }
           var s = null, slots = D.slots;
           for (var i = 0; i < slots.length; i++) if (sameId(slots[i].id, pending.slotId)) s = slots[i];
           if (!s) return "";
-          var when = fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
+          var when = (sharedName?sharedName+'さん：':'') + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min);
           if (pending.kind === "accept") {
             return '<dialog id="schedule-accept-dialog" class="schedule-day-dialog" aria-labelledby="schedule-accept-title" aria-describedby="schedule-accept-message"><div class="schedule-dialog-heading"><h2 id="schedule-accept-title">授業を予定する</h2></div><p id="schedule-accept-message">' + esc(when) + ' の授業を予定しますか？</p><div class="row"><button type="button" class="btn-primary" data-action="doaccept">OK</button><button type="button" class="btn-quiet" data-action="closebar" autofocus>やめる</button></div></dialog>';
           }
           var html = '<div class="confirmbar"><div class="inner">';
           if (pending.kind === "decline") {
-            html += '<div class="msg">' + when + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
+            html += '<div class="msg">' + esc(when) + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
             html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "cancel") {
             var deadline = S.cancelDeadlineH || 24;
             var late = (new Date(s.date + 'T' + s.start + ':00+09:00').getTime() - Date.now()) / 3600000 < deadline;
-            html += '<div class="msg">' + when + ' のキャンセル申請</div>';
+            html += '<div class="msg">' + esc(when) + ' のキャンセル申請</div>';
             html += '<p>' + (late ? '授業開始まで' + deadline + '時間を切っています。病気や大幅な電車の遅れなど、やむを得ない事情がある場合は記載してください。' : 'キャンセルの理由を記入してください。') + '</p>';
             html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px">';
             html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + '>' + (busy ? '申請しています…' : 'キャンセルを申請する') + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "withdraw") {
-            html += '<div class="msg">' + when + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
+            html += '<div class="msg">' + esc(when) + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
             html += '<div class="row"><button class="btn-primary" data-action="dowithdraw"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "依頼を取り下げる") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           }
           return html + "</div></div>";
@@ -1258,14 +1268,24 @@
           if(current){familyHomeViews[current.studentId]=homeView();familyHomeViews[current.studentId].dayAddOpen=false;familyHomeViews[current.studentId].selMode='';familyHomeViews[current.studentId].pending=null;}
           F.studentId=id;S=F.childState[id];useHomeView(familyHomeViews[id]||freshHomeView());return !!S;
         }
+        var familyDayChooser='';
+        function familyChildName(c) {
+          var children=F.home.children||[],given=c.givenName||(F.childState[c.studentId]||{}).me?.givenName;
+          return given&&children.filter(function(x){return (x.givenName||(F.childState[x.studentId]||{}).me?.givenName)===given;}).length===1?given:c.name;
+        }
+        function familyOwnedHtml(html,id){
+          return html.replace(/<[^>]+>/g,function(tag){
+            if(/\sdata-(?:action|accept-id)=/.test(tag))tag=tag.replace(/(?=\sdata-(?:action|accept-id)=)/,' data-home-child="'+esc(id)+'"');
+            return tag.replace(/((?:id|aria-controls)=")(plan-status-help-|progress-approval-)/g,'$1$2'+esc(id)+'-');
+          });
+        }
         var familyCalendar = {year:calNow.getFullYear(),month:calNow.getMonth(),date:null};
         function renderFamilyCalendar(children) {
           var src={lessons:[],events:[],blocked:[],wishes:[],teacherOff:[]},offs={},today='',missing=false;
           children.forEach(function(c){
             var st=F.childState[c.studentId];if(!st||!st.me){missing=true;return;}
             today=today||st.today;
-            var given=c.givenName||st.me.givenName||'',name=given||c.name;
-            if(given&&children.filter(function(x){return (x.givenName||(F.childState[x.studentId]||{}).me?.givenName)===given;}).length>1)name=c.name;
+            var name=familyChildName(c);
             (st.slots||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name}));});
             (st.events||[]).forEach(function(x){src.events.push(Object.assign({},x,{title:name+' '+(x.title||'イベント')}));});
             (st.blocked||[]).forEach(function(x){src.blocked.push(Object.assign({},x,{label:name+' 授業不可'}));});
@@ -1284,14 +1304,42 @@
           if(!children.length)return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if(current)familyHomeViews[current.studentId]=savedView;
           h+=renderFamilyCalendar(children);
+          var rows=[],dialogs='',proposals='',progress='',confirms='',offers='',offerCount=0,proposalCount=0,planCount=0,remain=0,proposalHead='',progressHead='',total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
           children.forEach(function(c){
-            h+='<section data-home-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'さん</h2>';
             var st=F.childState[c.studentId];
-            if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);h+='<p role="status">予定を読み込んでいます…</p>';}
-            else {F.studentId=c.studentId;S=st;useHomeView(familyHomeViews[c.studentId]||freshHomeView());if(familyCalendar.date){selDate=familyCalendar.date;selManual=true;}h+=renderHomePage(true).replace(/data-action=/g,'data-home-child="'+esc(c.studentId)+'" data-action=').replace(/data-accept-id=/g,'data-home-child="'+esc(c.studentId)+'" data-accept-id=');familyHomeViews[c.studentId]=homeView();}
-            h+='</section>';
+            if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);return;}
+            F.studentId=c.studentId;S=st;useHomeView(familyHomeViews[c.studentId]||freshHomeView());
+            if(familyCalendar.date){selDate=familyCalendar.date;selManual=true;}
+            var name=familyChildName(c),D=schedData(),day=renderDayDetail(D,true,!offsShown,{name:name}),summary=renderMonthSummary(D,name);
+            offsShown=true;today=today||D.today;canAI=canAI||!!st.nlEnabled;
+            function owned(markup){return familyOwnedHtml(markup,c.studentId);}
+            day.rows.forEach(function(row){rows.push({start:row.start,html:owned(row.html)});});
+            dialogs+=owned(day.dialogs)+owned(renderPendingBar(D,name));
+            proposals+=owned(summary.proposalRows||'');progress+=owned(summary.progressRows||'');confirms+=owned(summary.confirm||'');
+            proposalCount+=summary.proposalCount||0;planCount+=summary.planCount||0;remain+=summary.remain||0;
+            proposalHead=summary.proposalHead;progressHead=summary.progressHead;
+            offers+=owned(renderOffers(D,name));offerCount+=D.offers.length;
+            var data=F.childrenData[c.studentId];if(data){month=month||data.month;var tm=data.thisMonth||{};total.count+=Number(tm.count)||0;total.minutes+=Number(tm.minutes)||0;}
+            familyHomeViews[c.studentId]=homeView();
           });
-          F.studentId=savedId;S=savedS;useHomeView(current&&familyHomeViews[current.studentId]||savedView);return h;
+          F.studentId=savedId;S=savedS;useHomeView(current&&familyHomeViews[current.studentId]||savedView);
+          if(!today)return h;
+          var canAdd=familyCalendar.date>=today;
+          h+=window.StepwiseCalendar.dayHeading({date:familyCalendar.date,title:fmtDateW(familyCalendar.date)+'の授業',disabled:!!previewK,add:canAdd?{action:'family-dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'family-dayai',label:'AIで予定登録'}:null});
+          h+=rows.length?'<div class="card daylist">'+rows.sort(function(a,b){return a.start.localeCompare(b.start);}).map(function(r){return r.html;}).join('')+'</div>':'<div class="empty">この日の予定はありません</div>';
+          h+='<section class="parent-progress"><h2>実施状況 <span class="cnt">'+planCount+'件の計画</span></h2><div class="card">';
+          h+=progress?progressHead+progress+'</tbody></table></div>':'<div class="empty">送信済みの計画はありません</div>';
+          if(remain)h+='<p class="small">あと '+remain+' 回、日程調整が必要です。</p>';
+          h+=renderParentThisMonth({month:month,thisMonth:total})+'</div></section>';
+          if(offers)h+=foldHead('offers','授業登録',offerCount+'件・返事をお願いします')+offers+'</details>';
+          h+=foldHead('plan','授業計画',proposalCount?proposalCount+'件の案内':'新しい案内なし')+'<div class="card">'+confirms;
+          h+=proposals?proposalHead+proposals+'</tbody></table></div>':'<div class="empty">新しい案内はありません</div>';
+          h+='</div></details>'+dialogs;
+          if(familyDayChooser){
+            var choices=children.filter(function(c){return F.childState[c.studentId]&&(familyDayChooser!=='dayai'||F.childState[c.studentId].nlEnabled);}).map(function(c){return '<button class="btn-quiet" data-home-child="'+esc(c.studentId)+'" data-action="'+familyDayChooser+'">'+esc(familyChildName(c))+'</button>';}).join('');
+            h+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:'登録するお子さんを選択',close:'family-dayclose',content:'<div class="row">'+choices+'</div>'});
+          }
+          return h;
         }
         function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = previewBanner(true);
@@ -1308,7 +1356,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1544,7 +1592,7 @@
         function studentNoticesHTML(){var items=studentNoticeItems();return '<section class="card" aria-label="生徒のお知らせ" style="margin-bottom:18px"><div class="row between"><h2 style="margin:0">お知らせ</h2><button class="btn-quiet btn-sm" data-action="student-notices">閉じる</button></div>'+ (items.length?items.map(function(x){return '<p>'+(x.required?'<span class="tag amber">要確認</span> ':'')+'<a href="'+x.url+'" data-action="student-notice-link">'+esc(x.title)+'</a></p>';}).join(''):'<p class="muted">お知らせはありません。</p>')+'</section>';}
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
-        function mountDayDialog(){var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else dayAddOpen=false;};if(d.showModal&&!d.open)d.showModal();}}
+        function mountDayDialog(){var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
         function mountAcceptDialog(){var d=document.getElementById('schedule-accept-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else pending=null;};if(d.showModal&&!d.open)d.showModal();}}
 
         function render() {
@@ -1637,6 +1685,13 @@
           if (!btn || btn.disabled) return;
           if (!familyHomeTarget(btn)) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
+          if(act==='family-dayadd'||act==='family-dayai'){
+            if(previewK||busy||NL.busy)return;
+            familyDayChooser=act==='family-dayadd'?'dayadd':'dayai';
+            familyRender();return;
+          }
+          if(act==='family-dayclose'){familyDayChooser='';familyRender();return;}
+          if(act==='dayadd'||act==='dayai')familyDayChooser='';
           if(act==='family-calprev'||act==='family-calnext'||act==='family-calday'){
             if(busy||NL.busy)return;
             if(act==='family-calday'){familyCalendar.date=btn.getAttribute('data-date');}

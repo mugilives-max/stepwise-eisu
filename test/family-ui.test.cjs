@@ -50,7 +50,7 @@ test('login uses a separate session token and clears each child before loading t
   ui.input('fa-email', 'parent@example.invalid'); ui.input('fa-pass', 'test-family-password'); ui.submit('family-auth-form');
   ui.requests[0].reply({ ...home(), ftoken: 'test-family-token' }); await flush();
   assert.equal(ui.session.get('sw_ft_v1'), 'test-family-token'); assert.equal(ui.session.get('sw_pt_v2:test-link-a'), 'legacy-parent-token'); assert.equal(ui.requests.at(-1).body.studentId, 'child-a');
-  ui.requests.at(-1).reply({ ok: true, data: data('Aだけの表示') }); await flush(); assert.match(ui.html(), /【テスト】子Aさん/);
+  ui.requests.at(-1).reply({ ok: true, data: data('Aだけの表示') }); await flush(); assert.match(ui.html(), /予定を読み込んでいます/);
   assert.equal(ui.requests.at(-1).body.studentId, 'child-b');
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush();
   { const st = ui.requests.find(r => r.body.action === 'familyStudentState'); if (st) { st.reply({ ...state(), viewer: 'family' }); await flush(); } const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); } }
@@ -242,7 +242,7 @@ test('the family home places monthly completed totals inside progress without a 
  assert.doesNotMatch(html, /data-fold="progress"/);
  assert.ok(html.indexOf('<section class="parent-progress">') < html.indexOf('data-fold="plan"'));
 
- ui.navigate('#family/schedule');assert.match(ui.html(),/【テスト】子Aさん/);
+ ui.navigate('#family/schedule');assert.equal((ui.html().match(/class="schedule-day-heading"/g)||[]).length,1);
 });
 
 test('notification bell opens all-child priorities; reading retains required status and routes to the correct child',async()=>{
@@ -260,8 +260,8 @@ test('the family マイページ tab shows the child student home and proxies st
   st.reply({ ...state(), viewer: 'family' }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.match(ui.el('tabs').innerHTML, /href="#family\/home" class="on"[^>]*>ホーム/);
-  assert.match(ui.html(), /【テスト】子Aさん/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/);
-  ui.click('family-calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); ui.click('dayavailability'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
+  assert.doesNotMatch(ui.html(), /<h2>【テスト】子Aさん/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/);
+  ui.click('family-calday', { 'data-date': '2026-09-15' }); ui.click('family-dayadd'); ui.click('dayadd'); ui.click('dayavailability'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
   const sent = ui.requests.at(-1).body;
   assert.equal(sent.action, 'blockSet'); assert.equal(sent.ftoken, 'test-family-token'); assert.equal(sent.studentId, 'child-a'); assert.equal(sent.k, undefined); assert.deepEqual(sent.add, ['2026-09-15']);
   ui.requests.at(-1).reply({ ok: true, state: { ...state(), blocked: [{ id: 'b1', date: '2026-09-15' }] } }); await flush();
@@ -303,7 +303,7 @@ test('a parent approves the proposed lesson plan directly from the mypage 授業
   const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family', planLines: data('x').planLines }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.ok(ui.html().includes('<td>英語</td><td>通常</td><td>4回</td><td>90分</td><td>3,000円</td>'));
-  assert.ok(ui.html().includes('colspan="7"'));
+  assert.ok(ui.html().includes('colspan="8"'));
   assert.ok(ui.html().includes('data-action="fa-planok" data-child="child-a" data-line="line-1"'));
   assert.ok(ui.html().includes('data-action="fa-planng" data-child="child-a" data-line="line-1"'));
   assert.doesNotMatch(ui.html(), /保護者の方に伝えて/);
@@ -394,6 +394,45 @@ test('family home shows both sibling schedules by default and sends actions for 
  const req=ui.requests.at(-1);assert.equal(req.body.action,'familyStudentState');assert.equal(req.body.studentId,'child-b');
  req.reply({...state(),viewer:'family',me:{...state().me,givenName:'花子'},slots:[{id:'b-only',date:'2026-09-26',start:'15:00',min:90,st:'mine',subject:'弟B専用科目'}]});await flush();
  assert.match(ui.html(),/太郎 兄A専用科目/);assert.match(ui.html(),/花子 弟B専用科目/);assert.match(ui.html(),/弟B専用科目/);assert.equal((ui.html().match(/class="card cal"/g)||[]).length,1);assert.equal(ui.el('fa-mychild'),undefined);
- ui.click('family-calday',{'data-date':'2026-09-28'});ui.click('dayadd',{'data-home-child':'child-b'});ui.click('dayavailability',{'data-home-child':'child-b'});ui.click('dayact',{'data-home-child':'child-b','data-m':'ng'});ui.click('selapply',{'data-home-child':'child-b'});
+ ui.click('family-calday',{'data-date':'2026-09-28'});ui.click('family-dayadd');ui.click('dayadd',{'data-home-child':'child-b'});ui.click('dayavailability',{'data-home-child':'child-b'});ui.click('dayact',{'data-home-child':'child-b','data-m':'ng'});ui.click('selapply',{'data-home-child':'child-b'});
  const sent=ui.requests.at(-1).body;assert.equal(sent.action,'blockSet');assert.equal(sent.studentId,'child-b');assert.deepEqual(sent.add,['2026-09-28']);
+});
+
+async function combinedHome(){
+ const ui=loggedUI();ui.requests[0].reply(home([{studentId:'child-a',name:'【テスト】太郎',givenName:'太郎'},{studentId:'child-b',name:'【テスト】花子',givenName:'花子'}]));await flush();
+ ui.requests.at(-1).reply({ok:true,data:{...data('【テスト】太郎'),thisMonth:{count:2,minutes:180}}});await flush();
+ ui.requests.at(-1).reply({ok:true,data:{...data('【テスト】花子'),thisMonth:{count:1,minutes:60}}});await flush();ui.navigate('#family/home');
+ for(const [id,name,start,done] of [['child-a','太郎','15:00',2],['child-b','花子','13:00',1]]){
+  const req=ui.requests.findLast(r=>r.body.action==='familyStudentState'&&r.body.studentId===id);assert.ok(req);
+  req.reply({...state(),viewer:'family',me:{name:'【テスト】'+name,givenName:name},today:'2026-09-24',slots:[{id:'offer-'+id,date:'2026-09-25',start,min:90,st:'offer',subject:'英語'},{id:'book-'+id,date:'2026-09-26',start,min:90,st:'mine',subject:'英語'}],history:Array.from({length:done},(_,i)=>({id:id+i,date:'2026-09-20',start:'13:00',min:90,done:true,subject:'英語'})),planLines:data(name).planLines,blocked:[{id:'block-'+id,date:'2026-09-25',start:'17:00',end:'18:00',note:'部活'}],teacherOff:[{date:'2026-09-25',start:'20:00',end:'21:00'}]});await flush();
+ }
+ ui.click('family-calday',{'data-date':'2026-09-25'});return ui;
+}
+test('combined home has single sections, named rows and isolated per-child counts',async()=>{
+ const ui=await combinedHome(),html=ui.html();
+ assert.equal((html.match(/class="schedule-day-heading"/g)||[]).length,1);
+ assert.equal((html.match(/class="parent-progress"/g)||[]).length,1);
+ assert.equal((html.match(/data-fold="plan"/g)||[]).length,1);
+ assert.equal((html.match(/data-fold="offers"/g)||[]).length,1);
+ assert.doesNotMatch(html,/<h2>【テスト】(?:太郎|花子)さん/);
+ const day=html.split('<div class="card daylist">')[1].split('<section class="parent-progress">')[0];
+ assert.ok(day.indexOf('offer-child-b')<day.indexOf('offer-child-a'),'merged rows are chronological');
+ assert.match(day,/family-row-name">花子<\/strong>/);assert.match(day,/family-row-name">太郎<\/strong>/);
+ assert.equal((day.match(/data-action="helptoff"/g)||[]).length,1);
+ assert.match(day,/data-home-child="child-b" data-action="delblock" data-ids="block-child-b"/);
+ const progress=html.split('<section class="parent-progress">')[1].split('</section>')[0];
+ assert.equal((progress.match(/<table /g)||[]).length,1);assert.match(progress,/<th>名前<\/th>/);
+ assert.match(progress,/<td>太郎<\/td>[^]*?<td>3回<\/td><td>2回<\/td>/);assert.match(progress,/<td>花子<\/td>[^]*?<td>2回<\/td><td>1回<\/td>/);
+ assert.match(progress,/実施合計：3回 \/ 240分/);
+ const plans=html.split('data-fold="plan"')[1];assert.equal((plans.match(/<table /g)||[]).length,1);assert.match(plans,/<th>名前<\/th>/);assert.match(plans,/<td>太郎<\/td>/);assert.match(plans,/<td>花子<\/td>/);assert.match(plans,/colspan="8"/);
+ assert.match(plans,/id="plan-status-help-child-a-line-1"/);assert.match(plans,/id="plan-status-help-child-b-line-1"/);
+});
+test('combined plan approval retains the owning sibling despite identical plan subjects',async()=>{
+ const ui=await combinedHome();ui.click('fa-planok',{'data-child':'child-b','data-line':'line-1'});assert.match(ui.html(),/授業計画の回答確認[^]*【テスト】花子/);
+ ui.click('fa-decide');assert.equal(ui.requests.at(-1).body.studentId,'child-b');assert.equal(ui.requests.at(-1).body.action,'familyPlanDecide');
+});
+test('combined lesson confirmation and restriction removal target their own sibling',async()=>{
+ const ui=await combinedHome();ui.click('askaccept',{'data-id':'offer-child-b'});assert.match(ui.html(),/花子さん：9\/25/);ui.click('doaccept');
+ assert.equal(ui.requests.at(-1).body.studentId,'child-b');assert.deepEqual(ui.requests.at(-1).body.slotIds,['offer-child-b']);
+ const other=await combinedHome();other.click('delblock',{'data-ids':'block-child-a'});assert.match(other.html(),/太郎さん：/);other.click('doremove');assert.equal(other.requests.at(-1).body.studentId,'child-a');assert.deepEqual(other.requests.at(-1).body.blockIds,['block-child-a']);
 });
