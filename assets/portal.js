@@ -849,7 +849,7 @@
           } else if (selMode === "event") {
             var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
             html += '<div class="msg">イベント: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
-            html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-etest"> テスト・模試</label><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-eblock"> 授業できない日にもする</label><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録") + '</button></div>';
+            html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録") + '</button></div>';
           }
           return html + '</div></div>';
         }
@@ -1639,11 +1639,11 @@
                 if (selMode === "want") { body.min=Number(val("b-wmin")); if([30,45,60,90,120].indexOf(body.min)<0){toast("授業時間を選んでください");return;} } else { var bwe = val("b-wend"); if (!bwe || bws >= bwe) { toast("時間帯は「開始 < 終了」で入れてください"); return; } body.end = bwe; }
                 body.deliveryMode=val('b-wmode');studentAction(body, selMode === 'want' ? '希望日時を送りました' : '授業可能日時を登録しました', function(){selMode='';selDays={};});
               } else if (selMode === "event") {
-                var bet = val("b-etitle"), beb = !!(document.getElementById("b-eblock") || {}).checked;
+                var bet = val("b-etitle"), beb = false;
                 if (!bet) { toast("予定の内容を入れてください"); return; }
                 var ranges = groupDays(chosen);
                 selMode = ""; selDays = {};
-                var bkind = (document.getElementById("b-etest") || {}).checked ? "test" : "event";
+                var bkind = "event";
                 studentAction({ action: "eventAddMany", k: myKey(), ranges: ranges, title: bet, alsoBlock: beb, kind: bkind }, "イベントを登録しました");
               }
               break;
