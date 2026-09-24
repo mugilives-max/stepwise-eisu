@@ -1365,8 +1365,6 @@
               h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId,'billing') : F.busy ? '<p>読み込んでいます…</p>' : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">子どもの情報を再読み込み</button>';
               h += '</section>';
             });
-            h += '<h2>先生への連絡</h2><p>予定の希望・質問・改善点を送れます。取消は理由を記入して申請してください。</p>';
-            familyVisibleChildren().forEach(function(c,index){ h += '<section id="family-contact-'+index+'" data-family-child="'+esc(c.studentId)+'">'+((F.home.children||[]).length>1?'<h3 style="margin:8px 0">'+esc(c.name)+'</h3>':'')+'</section>'; });
             h += '<h2>保護者の設定</h2>';
             h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             h += renderFamilyMailPrefs(dis);
@@ -1439,14 +1437,6 @@
             var gpanel=familyPanels[gkey] || (familyPanels[gkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
             var gtoken=familyToken();gpanel.services.mount(gradesHost,{key:gkey,teacher:false,panel:'exams',call:function(op,payload){return apiPost(Object.assign({},payload,{ftoken:gtoken,studentId:gc.studentId,action:'learningService',op:op}));}});
           }
-          familyVisibleChildren().forEach(function(c,index){
-            var host=document.getElementById('family-contact-'+index);
-            if(section!=='menu'||!host||!F.childrenData[c.studentId])return;
-            var key=JSON.stringify([familyToken(),c.studentId]);active[key]=true;
-            var panel=familyPanels[key] || (familyPanels[key]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
-            var token=familyToken(); var call=function(op,payload){return apiPost(Object.assign({},payload,{ftoken:token,studentId:c.studentId,action:'learningService',op:op}));};
-            panel.services.mount(host,{key:key,teacher:false,panel:'messages',call:call});
-          });
           Object.keys(familyPanels).forEach(function(key){if(!active[key]){familyPanels[key].services.clear();familyPanels[key].reads.clear();}});
         }
         function loadFamilyNotices(action,id,done){
@@ -1501,14 +1491,13 @@
           var page=route(),auth=null;
           if(!previewK){
             if(page==='parent'&&parentStep==='data'&&P)auth={k:myKey(),ptoken:ssGet(parentSessionKey(myKey()))};
-            else if(page==='student-email'&&S&&S.me)auth={k:myKey()}; // 成績票・振り返り・先生への連絡は「設定」タブにだけ出す(2026-09-11)
           }
           if(window.StepwiseLessonRead){
             if(auth&&(auth.ftoken||auth.ptoken))window.StepwiseLessonRead.mount(app,function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));},JSON.stringify(auth));
             else window.StepwiseLessonRead.clear();
           }
           if(!auth){window.StepwiseServices.clear();return;}
-          var parentPanel=auth.ftoken||auth.ptoken;if(parentPanel&&['contacts','grades','schedule'].indexOf(parentSection())<0){return;}
+          var parentPanel=auth.ftoken||auth.ptoken;if(parentPanel&&['grades','schedule'].indexOf(parentSection())<0){return;}
           window.StepwiseServices.mount(app,{key:JSON.stringify(auth),teacher:false,panel:parentPanel?(parentSection()==='grades'?'exams':parentSection()==='schedule'?'cancel':'messages'):'all',call:function(op,payload){return apiPost(Object.assign({},payload,auth,{action:'learningService',op:op}));}});
         }
 
