@@ -511,7 +511,8 @@ test('records show all siblings and keep same-subject folders separate',async()=
 
 test('settings show separate names and student contact email without guessing missing names',async()=>{
  const ui=loggedUI();ui.requests[0].reply(home([{studentId:'child-a',name:'【テスト】姓名',familyName:'【テスト】姓',givenName:'名',email:'student@example.invalid',emailVerified:false}]));await flush();ui.navigate('#family/settings');
- assert.match(ui.html(),/保護者の姓<\/th><td>—<\/td>/);assert.match(ui.html(),/保護者の名<\/th><td>—<\/td>/);
- assert.match(ui.html(),/の姓<\/th><td>【テスト】姓/);assert.match(ui.html(),/の名<\/th><td>名/);
- assert.match(ui.html(),/student@example.invalid/);assert.match(ui.html(),/メール未確認/);assert.match(ui.html(),/parent@example.invalid/);
+ assert.match(ui.html(),/保護者名<\/th><td class="is-missing">未登録<\/td><td class="is-missing">未登録/);
+ assert.match(ui.html(),/生徒名<\/th><td>【テスト】姓<\/td><td>名<\/td>/);
+ assert.match(ui.html(),/student@example.invalid/);assert.match(ui.html(),/parent@example.invalid/);
+ assert.doesNotMatch(ui.html(),/>状態<|メール未確認|登録済み<|保護者の登録名/);
 });
