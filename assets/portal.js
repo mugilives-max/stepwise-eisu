@@ -1314,7 +1314,7 @@
           familyVisibleChildren().forEach(function(c){
             var d=F.childrenData[c.studentId],st=F.childState[c.studentId];
             if(!st&&!F.stateBusy&&!F.error)familyLoadChildState(c.studentId);
-            if(!d||!st){h+='<tr><td>'+esc(familyChildName(c))+'</td><td colspan="4">'+(F.error?'料金を読み込めませんでした':'読み込み中…')+'</td></tr>';complete=[false,false,false];return;}
+            if(!d||!st){h+='<tr><td>'+esc(familyChildName(c))+'</td><td colspan="4">'+(F.error?'料金を読み込めませんでした'+(!d?'<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">再試行</button>':''):'読み込み中…')+'</td></tr>';complete=[false,false,false];return;}
             var ym=d.month||String(st.today||'').slice(0,7),lines=(d.planLines||[]).filter(function(l){return l.status==='approved'||l.status==='proposed';});
             function rate(l){return l.rate30!=null&&Number.isFinite(Number(l.rate30))&&Number(l.rate30)>=0?Number(l.rate30):l.lessonFee!=null&&Number(l.lessonMin)>0?Number(l.lessonFee)*30/Number(l.lessonMin):null;}
             function sum(items,calc){var n=0;for(var i=0;i<items.length;i++){var v=calc(items[i]);if(v==null||!Number.isFinite(v))return null;n+=v;}return n;}
@@ -1401,7 +1401,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1511,18 +1511,14 @@
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             h += renderFamilyTuition();
             h += '<h2>請求・お支払い</h2>';
-            h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label);
+            h += window.StepwiseReport.invoices(F.home.billing,F.home.family.label,{report:true,disabled:F.busy||!!previewK});
             if (!(F.home.children || []).length) h += '<p>子どもの紐付けを先生にご依頼ください。</p>';
-            familyVisibleChildren().forEach(function(c,index){
-              h += '<section id="family-child-'+index+'" data-family-child="'+esc(c.studentId)+'"><h2>'+esc(c.name)+'</h2>';
-              h += F.childrenData[c.studentId] ? renderParent(F.childrenData[c.studentId],true,c.studentId,'billing') : F.busy ? '<p>読み込んでいます…</p>' : '<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">子どもの情報を再読み込み</button>';
-              h += '</section>';
-            });
+            if(F.transferConfirm){h+=window.StepwiseCalendar.dayDialog({id:'family-transfer-dialog',title:'振込の報告',close:'fa-transfer-cancel',busy:F.busy,content:'<p>'+esc(F.transferConfirm.ym)+'月分 '+yen(F.transferConfirm.amount)+'の振込が完了したことを先生に報告しますか？</p>'+(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+'<button class="btn-primary" data-action="fa-transfer-send"'+(F.busy||previewK?' disabled':'')+'>報告する</button>'});}
             h += '<h2>保護者の設定</h2>';
             h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
             h += renderFamilyMailPrefs(dis);
             h += '<p class="note">共用端末では利用後にログアウトしてください。</p><p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
-            app.innerHTML = h; return;
+            app.innerHTML = h; mountDayDialog(); return;
           }
           if (PREVIEW && F.step === 'login') { app.innerHTML = previewBanner(true) + '<div class="card">' + (F.busy ? '<p role="status">保護者ページを読み込んでいます…</p>' : '<p role="alert">' + esc(F.error || '保護者ページを読み込めませんでした。') + '</p><button class="btn-primary" data-action="fa-home">再試行</button>') + '</div>'; return; }
           if (familyToken() && F.step === "login") { app.innerHTML = h + '<div class="card"><button class="btn-primary" data-action="fa-home"' + dis + '>家族ページを開く</button> <button class="btn-quiet" data-action="fa-logout"' + dis + '>ログアウト</button></div>'; return; }
@@ -1550,6 +1546,9 @@
           else if (action === "fa-mode") { F.step = btn.getAttribute("data-step"); F.error = ""; F.message = ""; F.confirm = null; if (F.step === 'emailChange') F.email = ''; familyRender(); }
           else if (action === "fa-verification-retry" && F.challenge) familyLoadVerification();
           else if (action === "fa-verify" && F.challenge && F.verificationInfo) familyRequest("familyVerify", { challenge: F.challenge }, function (res) { if (res.passwordRequired) { F.step="setPassword"; F.email=res.email; F.message="メールアドレスを確認しました。パスワードを設定すると登録完了です。"; } else { familyClear(); F.challenge = ""; F.challengeKind = ""; F.message = "メールアドレスを確認しました。ログインしてください。"; } });
+          else if(action==='fa-transfer') {var invoice=(F.home.billing||[]).filter(function(m){return m.ym===btn.getAttribute('data-ym');})[0];if(invoice&&invoice.status==='waiting'){F.transferConfirm={ym:invoice.ym,amount:invoice.amount,signature:invoice.signature};familyRender();}}
+          else if(action==='fa-transfer-cancel'){F.transferConfirm=null;familyRender();}
+          else if(action==='fa-transfer-send'&&F.transferConfirm&&!previewK){familyRequest('familyReportTransfer',{ftoken:familyToken(),ym:F.transferConfirm.ym,signature:F.transferConfirm.signature},function(res){F.transferConfirm=null;F.home.billing=res.billing;F.message='振込の報告を受け付けました。';});}
           else if (action === "fa-planopen" || action === "fa-planok" || action === "fa-planng" || action === "fa-planskip") {
             var childId=btn.getAttribute("data-child"), childData=F.childrenData[childId], lineId=btn.getAttribute("data-line"), m=(childData && childData.planLines || []).filter(function (x) { return x.id === lineId; })[0];
             if (!m || m.status !== 'proposed' || !Number.isSafeInteger(m.revision)) { F.error = '最新の案内を確認してください。'; familyRender(); return; }
@@ -1629,7 +1628,7 @@
         function studentNoticesHTML(){var items=studentNoticeItems();return '<section class="card" aria-label="生徒のお知らせ" style="margin-bottom:18px"><div class="row between"><h2 style="margin:0">お知らせ</h2><button class="btn-quiet btn-sm" data-action="student-notices">閉じる</button></div>'+ (items.length?items.map(function(x){return '<p>'+(x.required?'<span class="tag amber">要確認</span> ':'')+'<a href="'+x.url+'" data-action="student-notice-link">'+esc(x.title)+'</a></p>';}).join(''):'<p class="muted">お知らせはありません。</p>')+'</section>';}
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
-        function mountDayDialog(){var plan=document.getElementById("family-plan-dialog");if(plan){plan.oncancel=function(e){if(F.busy)e.preventDefault();else F.confirm=null;};if(plan.showModal&&!plan.open)plan.showModal();}var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
+        function mountDayDialog(){var transfer=document.getElementById("family-transfer-dialog");if(transfer){transfer.oncancel=function(e){if(F.busy)e.preventDefault();else F.transferConfirm=null;};if(transfer.showModal&&!transfer.open)transfer.showModal();}var plan=document.getElementById("family-plan-dialog");if(plan){plan.oncancel=function(e){if(F.busy)e.preventDefault();else F.confirm=null;};if(plan.showModal&&!plan.open)plan.showModal();}var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
         function mountAcceptDialog(){var d=document.getElementById('schedule-accept-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else pending=null;};if(d.showModal&&!d.open)d.showModal();}}
 
         function render() {
@@ -1905,7 +1904,7 @@
           else if (qs.toString() && !PREVIEW) history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
         if (PREVIEW && PREVIEW.view === 'parent' && route() !== 'family') location.hash = '#family/home';
-        window.addEventListener("hashchange", function () { pending = null; selMode = ""; selDays = {}; histFolder = null; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
+        window.addEventListener("hashchange", function () { pending = null; F.transferConfirm=null; selMode = ""; selDays = {}; histFolder = null; familyReadChallenge(); studentEmailReadChallenge(); if (route() === 'family') { render(); if (!F.challenge && !F.home && F.step==='login' && familyToken()) familyLoadHome(); } else if (route() === 'student-email' && SE.challenge) render(); else if (!S) loadState().catch(function () { toast('読み込めませんでした'); }); else render(); window.scrollTo(0, 0); });
         window.addEventListener("storage", function (ev) {
           if (route()==='family')return;
           if (previewK || (ev.key !== "sw_k" && ev.key !== null) || (ev.key !== null && ev.oldValue === ev.newValue)) return;

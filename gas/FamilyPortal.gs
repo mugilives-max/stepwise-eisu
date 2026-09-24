@@ -88,7 +88,7 @@ function familyBilling_(a,includeInactive,childrenOverride) {
     m.children.push({studentId:child.studentId,name:child.name,invoice:invoice});m.amount+=invoice.amount;
     if(!invoice.paidDate)m.unpaid+=invoice.amount;
   });});
-  return Object.keys(months).sort().reverse().map(function(ym){var m=months[ym];if(m.conflict){m.amount=null;m.unpaid=null;}return m;});
+  return familyBillingClosedMonths_(a,Object.keys(months).sort().reverse().map(function(ym){var m=months[ym];if(m.conflict){m.amount=null;m.unpaid=null;}return familyBillingStatus_(a,m);}),children);
 }
 // 未使用・期限内の確認リンクがあるか(先生が送った登録メールの状態表示用)。秘密は返さない
 function familyPendingVerification_(a) {
@@ -269,6 +269,7 @@ function familyDispatch_(req) {
     case 'familyNotices':case 'familyNoticeRead':{var n=familyRequire_(req);return n.error?n:familyNotices_(n.account,req);}
     case 'familyData':{var d=familyChildRequire_(req);return d.error?d:parentDataForStudent_(d.student);}
     case 'familyStudentState':{var fs=familyChildRequire_(req);if(fs.error)return fs;var st=studentState_(String(fs.student&&fs.student.code||''));if(st&&typeof st==='object'){delete st.emailStatus;st.viewer='family';}return st;}
+    case 'familyReportTransfer':return familyReportTransfer_(req);
     case 'familyPlanDecide':{var b=familyChildRequire_(req);return b.error?b:planLineParentDecide_(b.student,req);}
     case 'familyPlanAck':{var pa=familyChildRequire_(req);return pa.error?pa:planLineParentAck_(pa.student,req);}
     default:return familyError_('操作が見つかりません');
@@ -332,7 +333,7 @@ function familyGroups_(studentId) {
   var students=readRows_('students').map(function(s){return {id:String(s.id),name:String(s.name),active:String(s.active)!=='false'};}),byId=Object.create(null);
   students.forEach(function(s){byId[s.id]=s;});
   var groups=familyRows_('familyAccounts').filter(function(a){return eligible.indexOf(String(a.id))>=0;}).map(function(a){return {id:String(a.id),label:String(a.label),status:String(a.status),children:members[String(a.id)].filter(function(id){return !!byId[id];}).map(function(id){var s=byId[id];return {studentId:s.id,name:s.name,active:s.active};})};});
-  return {ok:true,families:groups,students:students};
+  return {ok:true,families:groups,students:students,paymentReports:familyPaymentReports_()};
 }
 function familyList_() {
   var families=familyRows_('familyAccounts').map(familyView_),names={};families.forEach(function(a){names[a.id]=a.label;});
@@ -389,6 +390,7 @@ function familyMoveStudent_(req) {
 }
 function familyAdmin_(req) {
   if(authMode_()!=='account'||!tokenOk_(req.token))return {error:'先生アカウントでログインし直してください',badAuth:true};
+  if(req.op==='familyConfirmTransfer')return familyConfirmTransfer_(req);
   if(req.op==='familyList')return req.view==='groups'?familyGroups_(String(req.studentId||'')):familyList_();
   if(req.op==='familyEnsureGroup'){var ensured=familyEnsureGroup_(String(req.studentId||''));if(ensured.error)return ensured;return familyInvite_(familyAccount_(ensured.family.id));}
   if(req.op==='familyMoveStudent')return familyMoveStudent_(req);

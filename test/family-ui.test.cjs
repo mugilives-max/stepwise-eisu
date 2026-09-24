@@ -54,7 +54,7 @@ test('login uses a separate session token and clears each child before loading t
   assert.equal(ui.requests.at(-1).body.studentId, 'child-b');
   ui.requests.at(-1).reply({ ok: true, data: data('Bだけの表示') }); await flush();
   { const st = ui.requests.find(r => r.body.action === 'familyStudentState'); if (st) { st.reply({ ...state(), viewer: 'family' }); await flush(); } const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); } }
-  ui.navigate('#family/billing'); assert.match(ui.html(), /<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/); const count=ui.requests.length; ui.change('fa-child','child-b'); assert.equal(ui.html().includes('<h2>【テスト】子A</h2>'),false); assert.match(ui.html(), /<h2>【テスト】子B<\/h2>/); assert.equal(ui.requests.length,count); ui.change('fa-child',''); assert.match(ui.html(),/<h2>【テスト】子A<\/h2>/);
+  ui.navigate('#family/billing'); assert.match(ui.html(), /<td>【テスト】子A<\/td>[^]*<td>【テスト】子B<\/td>/); const count=ui.requests.length; ui.change('fa-child','child-b'); assert.equal(ui.html().includes('<h2>【テスト】子A</h2>'),false); assert.match(ui.html(),/【テスト】子B/); assert.equal(ui.requests.length,count); ui.change('fa-child',''); assert.match(ui.html(),/<td>【テスト】子A<\/td>/);
   assert.equal(JSON.stringify(ui.writes).includes('parent@example.invalid'), false);
 });
 
@@ -216,7 +216,7 @@ test('student add card opens on demand and retains draft after a failed save',as
 });
 
 test('all-child approval targets child B and keeps child A visible after saving',async()=>{
- const ui=await readyFamily();ui.navigate('#family/plans');ui.click('fa-planopen', {'data-child':'child-b'});ui.click('fa-planng',{'data-child':'child-b'});ui.input('fa-plan-message','Bへの相談');ui.change('fa-reduce-0','2');ui.click('fa-plan-review');assert.match(ui.html(),/子B/);ui.click('fa-decide');const request=ui.requests.at(-1);assert.equal(request.body.studentId,'child-b');assert.equal(request.body.memo,'Bへの相談');request.reply({ok:true,data:data('更新後B')});await flush();ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>[^]*<h2>【テスト】子B<\/h2>/);assert.doesNotMatch(ui.html(),/子どもの情報を再読み込み/);
+ const ui=await readyFamily();ui.navigate('#family/plans');ui.click('fa-planopen', {'data-child':'child-b'});ui.click('fa-planng',{'data-child':'child-b'});ui.input('fa-plan-message','Bへの相談');ui.change('fa-reduce-0','2');ui.click('fa-plan-review');assert.match(ui.html(),/子B/);ui.click('fa-decide');const request=ui.requests.at(-1);assert.equal(request.body.studentId,'child-b');assert.equal(request.body.memo,'Bへの相談');request.reply({ok:true,data:data('更新後B')});await flush();ui.navigate('#family/billing');assert.match(ui.html(),/【テスト】子A/);assert.doesNotMatch(ui.html(),/子どもの情報を再読み込み/);
 });
 test('one child has no selector and failed second-child loading retains the first with retry',async()=>{
  const one=loggedUI();one.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();one.requests.at(-1).reply({ok:true,data:data('一人')});await flush();assert.equal(one.el('fa-child'),undefined);
@@ -224,7 +224,7 @@ test('one child has no selector and failed second-child loading retains the firs
  // 読み取りは Worker へ行く。落ちると Apps Script に回るので、そちらも落とす
  var sent=ui.requests.length;ui.requests.at(-1).fail();await flush();
  if(ui.requests.length>sent){ui.requests.at(-1).fail();await flush();}
- ui.navigate('#family/billing');assert.match(ui.html(),/<h2>【テスト】子A<\/h2>(?![^]*子どもの情報を再読み込み[^]*<h2>【テスト】子B)/);assert.match(ui.html(),/<h2>【テスト】子B<\/h2>[^]*data-action="fa-refresh" data-child="child-b"/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
+ ui.navigate('#family/billing');assert.match(ui.html(),/<td>【テスト】子A<\/td>/);assert.match(ui.html(),/<td>【テスト】子B<\/td>[^]*data-action="fa-refresh" data-child="child-b"/);ui.click('fa-refresh',{'data-child':'child-b'});assert.equal(ui.requests.at(-1).body.studentId,'child-b');
 });
 
 
@@ -483,4 +483,9 @@ test('tuition shows cumulative registered and planned estimates per sibling with
 test('tuition does not turn unknown rates or missing state into zero fees',async()=>{
  const ui=loggedUI();ui.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();const d=data('【テスト】子A');d.planLines[0].rate30=null;d.planLines[0].lessonFee=null;ui.requests.at(-1).reply({ok:true,data:d});await flush();assert.match(ui.html(),/読み込み中/);
  ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),today:'2026-09-24',history:[{id:'done',date:'2026-09-20',min:90,subject:'英語',done:true}],slots:[]});await flush();const table=ui.html().split('<h2>授業料</h2>')[1].split('<h2>請求・お支払い</h2>')[0];assert.match(table,/確認が必要/);assert.doesNotMatch(table,/>0円</);
+});
+
+test('monthly family invoice reports transfer only after confirmation and removes duplicate payment sections',async()=>{
+ const ui=loggedUI(),m={ym:'2026-08',amount:6000,unpaid:6000,status:'waiting',signature:'two-invoices',children:[]};ui.requests[0].reply({...home(),billing:[m]});await flush();ui.requests.at(-1).reply({ok:true,data:data('子A')});await flush();ui.requests.at(-1).reply({ok:true,data:data('子B')});await flush();
+ assert.doesNotMatch(ui.html(),/<h2>お支払い状況/);assert.match(ui.html(),/お支払い待ち/);const before=ui.requests.length;ui.click('fa-transfer',{'data-ym':m.ym});assert.match(ui.html(),/<dialog id="family-transfer-dialog"/);assert.equal(ui.requests.length,before);ui.click('fa-transfer-send');assert.equal(ui.requests.at(-1).body.action,'familyReportTransfer');assert.equal(ui.requests.at(-1).body.signature,m.signature);ui.requests.at(-1).reply({ok:true,billing:[{...m,status:'reported'}]});await flush();assert.match(ui.html(),/入金確認待ち/);assert.doesNotMatch(ui.html(),/data-action="fa-transfer"/);
 });

@@ -167,7 +167,7 @@ function billingAddInvoice_(req) {
     var old=previous[0];
     if(String(old['生徒ID'])!==id||String(old['年月'])!==ym||(req.amount!=null&&Number(req.amount)!==Number(old['請求額'])))return billingError_('同じ処理IDで内容を変更できません','conflict');
     billingAudit_(billingInvoiceAudit_(id,ym,old['請求ID'],old['承認版'],{planJson:billingInvoiceLineRefs_(billingSavedLessons_(old)),rate30:Number(old['確定単価(30分)'])||0}),'invoiced',String(old['請求ID'])+':issued',{invoiceId:String(old['請求ID']),amount:Number(old['請求額']),minutes:Number(old['実施分数'])});
-    var oldNotice=!old['取消日時']&&old['状態']!=='取消'?billingNotifyResult_('invoiceCreated',id,String(old['請求ID'])+':issued',{ym:ym,revision:old['承認版']}):{};
+    var oldNotice=!req.silent&&!old['取消日時']&&old['状態']!=='取消'?billingNotifyResult_('invoiceCreated',id,String(old['請求ID'])+':issued',{ym:ym,revision:old['承認版']}):{};
     return Object.assign({ok:true,invoice:billingInvoiceView_(old),replayed:true},oldNotice);
   }
   var preview=billingPreview_(id,ym);if(preview.error)return preview;
@@ -181,7 +181,7 @@ function billingAddInvoice_(req) {
   // 請求の根拠・処理IDを1行に保存。後続ログが失敗しても再送はこの行を見つける。
   ledgerAppend_('入金管理',o);
   billingAudit_(a,'invoiced',invoiceId+':issued',{invoiceId:invoiceId,amount:preview.amount,minutes:preview.minutes});
-  var notice=billingNotifyResult_('invoiceCreated',id,invoiceId+':issued',{ym:ym,revision:0});
+  var notice=req.silent?{}:billingNotifyResult_('invoiceCreated',id,invoiceId+':issued',{ym:ym,revision:0});
   return Object.assign({ok:true,invoice:billingInvoiceView_(o)},notice);
 }
 function billingFindInvoice_(req) {

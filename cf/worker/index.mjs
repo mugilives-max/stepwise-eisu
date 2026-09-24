@@ -28,6 +28,12 @@ function cors(env, request) {
 const reply = (data, status, extra) => new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...extra } });
 
 export default {
+  // Daily at 00:10 JST; close completed months and retry held months.
+  async scheduled(event, env) {
+    if(env.WRITE_MODE !== "worker" || env.BILLING_AUTO_CLOSE !== "1") return;
+    const done = await runWrite({},env,{monthlyBilling:true});
+    if(done.result.error) throw new Error("Monthly billing failed");
+  },
   async fetch(request, env, ctx) {
     const head = cors(env, request);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: head });
