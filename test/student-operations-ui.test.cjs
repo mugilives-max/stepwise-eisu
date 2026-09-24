@@ -250,7 +250,7 @@ test('the 授業計画 fold separates proposed notices from the approved plan wi
   assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
   const none = await studentReady({ ...state([]), planLines:[] }); assert.doesNotMatch(none.html(), /授業計画/);
   const onlyProposed = await studentReady({ ...state([]), planLines:[line()] });
-  assert.match(onlyProposed.html(), /授業計画 <span class="cnt">1件の案内<\/span>/); assert.match(onlyProposed.html(), /承認済みの計画はありません/);
+  assert.match(onlyProposed.html(), /授業計画 <span class="cnt">1件の案内<\/span>/); assert.match(onlyProposed.html(), /progress-approval-line-1/);
 
 });
 
@@ -375,4 +375,17 @@ test('registered count adds completed and booked lessons but excludes invitation
  const ui=await studentReady(data);
  assert.match(ui.html(),/<th>登録回数<\/th>/);
  assert.match(ui.html(),/<td>6回<\/td><td>2回<\/td><td>1回<\/td>/);
+});
+
+test('sent plans appear in progress even without lessons, excluding drafts', async () => {
+  const data = state([]);
+  const { line } = require('./helpers/operations-ui-harness.cjs');
+  data.planLines = [line({ id: 'sent-zero', status: 'proposed', subject: '数学', count: 6 }), line({ id: 'draft-zero', status: 'draft', subject: '理科', count: 8 })];
+  data.history = [];
+  const ui = await studentReady(data);
+  const progress = ui.html().split('data-fold="progress"')[1];
+  assert.ok(progress.includes('progress-approval-sent-zero'));
+  assert.ok(progress.includes('<td>0回</td><td>0回</td><td>未承認</td>'));
+  assert.ok(!progress.includes('理科'));
+  assert.ok(!progress.includes('承認済みの計画なし'));
 });

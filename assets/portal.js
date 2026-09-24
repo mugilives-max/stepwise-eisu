@@ -698,7 +698,7 @@
           function planPeriod(l){function date(d){return d ? (d.slice(0,4)===today.slice(0,4)?'':d.slice(0,4)+'/')+Number(d.slice(5,7))+'/'+Number(d.slice(8,10)) : '未設定';}return date(l.startDate)+'〜'+date(l.endDate);}
           function planRow(l){
             var parentLine=famChild&&famLines.filter(function(x){return x.id===l.id;})[0];
-            return '<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>')+'</td></tr>'+(l.status==='proposed'?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。承認されると「実施状況」に移ります。')+'</td></tr>':'');
+            return '<tr><td>'+esc(planPeriod(l))+'</td><td>'+esc(l.subject)+'</td><td>'+esc(l.kind||'通常')+(l.addon?'（追加）':'')+'</td><td>'+esc(l.status==='approved'?planLimit(l):l.count)+'回</td><td>'+(l.lessonMin?esc(l.lessonMin)+'分':'未設定')+'</td>'+(famChild?'<td>'+(parentLine?yen(parentLine.lessonFee!=null?parentLine.lessonFee:Math.round((Number(parentLine.rate30)||0)*parentLine.lessonMin/30)):'読み込み中')+'</td>':'')+'<td>'+(l.status==='approved'?'<span class="tag green">承認済み</span>':'<button type="button" class="tag amber" data-action="approval-help" aria-expanded="false" aria-controls="plan-status-help-'+esc(l.id)+'">承認待ち</button>')+'</td></tr>'+(l.status==='proposed'?'<tr id="plan-status-help-'+esc(l.id)+'" hidden><td class="portal-plan-info" colspan="'+planCols+'">'+(famChild?'「承認する」で計画が確定します。回数を減らしたいときや今回は見送るときは「回数を調整・見送る」から先生に伝えられます。':'保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう。登録・実施の回数は「実施状況」で確認できます。')+'</td></tr>':'');
           }
           function planInfo(content){return '<tr><td class="portal-plan-info" colspan="'+planCols+'">'+content+'</td></tr>';}
           function planComment(l){return planInfo('<details class="portal-plan-comment"><summary><span>'+esc(l.comment||'コメントはありません')+'</span></summary><div>'+esc(l.comment||'コメントはありません')+'</div></details>');}
@@ -713,6 +713,13 @@
             if (fl.parentAck !== 'confirmed') h += '<div class="row" style="margin-top:6px;gap:8px"><button class="btn-primary btn-sm" data-action="fa-planack" data-child="' + esc(famChild.studentId) + '" data-line="' + esc(fl.id) + '" data-ack="confirmed"' + famDis + '>内容を確認しました</button><button class="btn-quiet btn-sm" data-action="fa-planack" data-child="' + esc(famChild.studentId) + '" data-line="' + esc(fl.id) + '" data-ack="inquiry"' + famDis + '>' + (fl.parentAck === 'inquiry' ? '問い合わせを追加する' : '先生に問い合わせる') + '</button></div>';
             return h + '</div>';
           }
+          // 送信済みの未承認計画は、授業登録がなくても実施状況に表示する。
+          proposed.forEach(function (l) {
+            if (l.parentId && proposed.some(function (p) { return p.id === l.parentId; })) return;
+            var count = Number(l.count) || 0;
+            proposed.forEach(function (a) { if (a.parentId === l.id) count += Number(a.count) || 0; });
+            extra['plan:' + l.id] = { label: lessonLabel(l) || 'その他', status: '未承認', line: l, count: count, done: 0, plan: 0 };
+          });
           function addExtra(x, key) {
             if(approved.some(function(l){return fits(l,x);}))return;
             var matching=proposed.filter(function(l){return fits(l,x);}),line=matching[0]||null;
@@ -741,7 +748,7 @@
           });
           if (proposed.length) html += planTableEnd();
           html += '</div></details>';
-          html += foldHead('progress', '実施状況', approved.length ? approved.length+'件の計画' : '承認済みの計画なし') + '<div class="card">';
+          html += foldHead('progress', '実施状況', (approved.length + proposed.length) ? (approved.length + proposed.length)+'件の計画' : '送信済みの計画なし') + '<div class="card">';
           var remainTotal = 0, shown = 0;
           planCols=7;
           if(approved.length||extraKeys.length)html+='<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
@@ -756,7 +763,7 @@
           });
           extraKeys.forEach(function(label){var n=extra[label],mm=/^(.*)（(.+)）$/.exec(n.label);shown++;var endDay=new Date(Number(ymNow.slice(0,4)),Number(ymNow.slice(5)),0).getDate();html+='<tr><td>'+(n.line?esc(planPeriod(n.line)):Number(ymNow.slice(5))+'/1〜'+Number(ymNow.slice(5))+'/'+endDay)+'</td><td>'+esc(mm?mm[1]:n.label)+'</td><td>'+esc(mm?mm[2]:'通常')+'</td><td><span class="plan-count-value"><span>'+(n.count==null?'—':n.count+'回')+'</span>'+(n.line?'<button type="button" class="plan-count-warning" data-action="approval-help" aria-label="未承認の授業計画について" aria-expanded="false" aria-controls="progress-approval-'+esc(n.line.id)+'"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>':'')+'</span></td><td>'+(n.done+n.plan)+'回</td><td>'+n.done+'回</td><td>'+esc(n.status)+'</td></tr>'+(n.line?'<tr id="progress-approval-'+esc(n.line.id)+'" hidden><td class="portal-plan-info" colspan="7">'+(famChild?'この授業計画は未承認です。内容をご確認のうえ、「授業計画」から承認をお願いします。':'この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。')+'</td></tr>':'');});
           if(approved.length||extraKeys.length)html+=planTableEnd();
-          if (!shown) html += '<div class="empty">承認済みの計画はありません</div>';
+          if (!shown) html += '<div class="empty">送信済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
           return html + '</div></details>';
         }
