@@ -816,6 +816,7 @@ function previewOp_(req) {
     if (!familyChildren_(previewFamily, false).some(function(c) { return c.studentId === id; })) return { error: 'この保護者に紐付いていない生徒です。', errorCode: 'previewChildUnavailable' };
   }
   if (view === 'student') { var st = studentState_(String(student.code || '')); if (st && typeof st === 'object') { delete st.emailStatus; st.viewer = 'preview'; } return st; }
+  if(view==='grades')return studentGrades_({k:String(student.code||'')});
   if (view === 'parent') { var pd = parentDataForStudent_(student); if (pd && pd.ok) pd.preview = true; return pd; }
   if (view === 'home') {
     var kids = familyChildren_(previewFamily, false);

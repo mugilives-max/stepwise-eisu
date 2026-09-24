@@ -8,6 +8,7 @@ test('parent preview resolves the actual family and allows linked sibling reads 
  const before=JSON.stringify([h.rows('familyAccounts'),h.rows('familyLinks'),h.rows('slots')]);
  const home=call({studentId:'test-a',view:'home'});assert.equal(home.ok,true);assert.equal(home.family.label,'【テスト】兄弟保護者');assert.deepEqual(home.children.map(c=>c.studentId),['test-a','test-b']);
  const sibling=call({studentId:'test-b',familyStudentId:'test-a',view:'student'});assert.ok(sibling.me);assert.equal(sibling.viewer,'preview');
+ const grades=call({studentId:'test-b',familyStudentId:'test-a',view:'grades'});assert.equal(grades.ok,true);assert.ok(Array.isArray(grades.grades));assert.equal(call({studentId:'test-b',view:'grades',token:'wrong'}).badAuth,true);
  const parent=call({studentId:'test-b',familyStudentId:'test-a',view:'parent'});assert.equal(parent.ok,true);
  assert.equal(call({studentId:'test-b',view:'home',token:'wrong'}).badAuth,true);
  assert.equal(JSON.stringify([h.rows('familyAccounts'),h.rows('familyLinks'),h.rows('slots')]),before);

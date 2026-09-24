@@ -403,6 +403,7 @@
           function go(view) { return fetch(WRITE_TO_WORKER && READ_API ? READ_API : API, { method: 'POST', body: JSON.stringify({ action: 'preview', token: tok, studentId: body.studentId || PREVIEW.studentId, familyStudentId: PREVIEW.view === 'parent' ? PREVIEW.studentId : undefined, view: view }) }).then(function (r) { return r.json(); }); }
           if (a === 'state' || a === 'familyStudentState') return go('student');
           if (a === 'familyData') return go('parent');
+          if(a==='grades')return go('grades');
           if (a === 'familyHome') return go('home');
           if (a === 'familyNotices' || a === 'familyNoticeRead') return Promise.resolve({ ok: true, notices: [] });
           return Promise.resolve({ error: '先生のプレビューでは表示だけできます（登録・変更はできません）', preview: true });
@@ -1408,6 +1409,19 @@
             h+='<section id="family-records-'+esc(c.studentId)+'" data-family-child="'+esc(c.studentId)+'">'+familyOwnedHtml(renderHistoryPage(),c.studentId)+'</section>';
           });S=savedS;histFolder=savedFolder;return h;
         }
+        var familyGrades=Object.create(null);
+        function renderFamilyGrades(){
+          var h=previewBanner(true),savedG=G,savedGX=GX;
+          (F.home.children||[]).forEach(function(c){
+            var id=c.studentId,token=familyToken(),key=JSON.stringify([token,id]),cache=familyGrades[key];
+            h+='<h2>'+esc(familyChildName(c))+'</h2>';
+            if(!cache){cache=familyGrades[key]={busy:true};apiPost({action:'grades',ftoken:token,studentId:id}).then(function(res){if(familyGrades[key]!==cache||token!==familyToken()||!F.home)return;cache.busy=false;if(res.error){cache.error=res.error;if(res.familyAuthRequired)familyClear();}else{cache.grades=res.grades||[];cache.exams=res.exams||[];}familyRender();}).catch(function(){if(familyGrades[key]!==cache)return;cache.busy=false;cache.error='成績を読み込めませんでした。';familyRender();});}
+            if(cache.busy)h+='<p role="status">成績を読み込んでいます…</p>';
+            else if(cache.error)h+='<p role="alert">'+esc(cache.error)+' <button data-action="fa-grades-retry" data-child="'+esc(id)+'">再試行</button></p>';
+            else{G=cache.grades;GX=cache.exams;h+=renderGradesPage();}
+            h+='<section id="family-grades-'+esc(id)+'" data-family-child="'+esc(id)+'" style="margin-top:18px"></section>';
+          });G=savedG;GX=savedGX;return h;
+        }
         function renderFamilyMypage(fixedTab) {
           var c = familyMypageChild(), h = previewBanner(true);
           if (!c) return h + '<p>子どもの紐付けを先生にご依頼ください。</p>';
@@ -1423,7 +1437,7 @@
           else h += renderHomePage();
           return h;
         }
-        function familyClear() { F.studentChooser=false; F.profileEdit=null; familyHistoryFolders=Object.create(null); F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
+        function familyClear() { familyGrades=Object.create(null); F.studentChooser=false; F.profileEdit=null; familyHistoryFolders=Object.create(null); F.transferConfirm=null; familyDayChooser=''; familyCalendar={year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}}; familyHomeViews=Object.create(null); notices.items=[]; notices.open=false; ++notices.seq; notices.busy=false; ssDel("sw_ft_v1"); ssDel("sw_ft_v1:logout"); F.home = null; F.childrenData = Object.create(null); F.childState = Object.create(null); F.stateBusy = ''; ++F.stateSeq; F.studentId = ""; F.confirm = null; F.memos = Object.create(null); F.step = "login"; }
         function familyRender() { if (route() === "family") render(); }
         function familyRequest(action, payload, success) {
           if (F.busy) return;
@@ -1526,7 +1540,7 @@
             if(notices.open)h+=renderFamilyNotices();
             if(parentSection()==='home'){ app.innerHTML = h + renderFamilyHomeAll(); mountDayDialog(); mountAcceptDialog(); return; }
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
-            if(parentSection()==='grades'){ app.innerHTML = h + learningNavigation(true,true) + renderFamilyMypage('grades'); return; }
+            if(parentSection()==='grades'){ app.innerHTML = h + learningNavigation(true,true) + renderFamilyGrades(); return; }
             if(parentSection()==='records'){ app.innerHTML = h + learningNavigation(true,false) + renderFamilyRecords(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
@@ -1593,6 +1607,7 @@
           else if(action==='fa-transfer') {var invoice=(F.home.billing||[]).filter(function(m){return m.ym===btn.getAttribute('data-ym');})[0];if(invoice&&invoice.status==='waiting'){F.transferConfirm={ym:invoice.ym,amount:invoice.amount,signature:invoice.signature};familyRender();}}
           else if(action==='fa-transfer-cancel'){F.transferConfirm=null;familyRender();}
           else if(action==='fa-transfer-send'&&F.transferConfirm&&!previewK){familyRequest('familyReportTransfer',{ftoken:familyToken(),ym:F.transferConfirm.ym,signature:F.transferConfirm.signature},function(res){F.transferConfirm=null;F.home.billing=res.billing;F.message='振込の報告を受け付けました。';});}
+          else if(action==='fa-grades-retry'){delete familyGrades[JSON.stringify([familyToken(),btn.getAttribute('data-child')])];familyRender();}
           else if (action === "fa-planopen" || action === "fa-planok" || action === "fa-planng" || action === "fa-planskip") {
             var childId=btn.getAttribute("data-child"), childData=F.childrenData[childId], lineId=btn.getAttribute("data-line"), m=(childData && childData.planLines || []).filter(function (x) { return x.id === lineId; })[0];
             if(action==='fa-planopen'&&m&&m.status==='approved'){F.confirm={studentId:childId,lineId:lineId,line:m,stage:'detail'};familyRender();return;}
@@ -1623,18 +1638,18 @@
           var active=Object.create(null), section=parentSection();
           (F.home.children||[]).forEach(function(c){active[JSON.stringify([familyToken(),c.studentId])]=true;});
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].reads.clear();});
-          var gradesHost=document.getElementById('family-grades-panel'), gc=familyMypageChild();
           if(!PREVIEW&&section==='records') (F.home.children||[]).forEach(function(c){
             var host=document.getElementById('family-records-'+c.studentId);if(!host)return;
             var rkey=JSON.stringify([familyToken(),c.studentId]);active[rkey]=true;
             var rpanel=familyPanels[rkey]||(familyPanels[rkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
             var rtoken=familyToken();rpanel.reads.mount(host,function(op,payload){return apiPost(Object.assign({},payload,{ftoken:rtoken,studentId:c.studentId,action:'learningService',op:op}));},rkey);
           });
-          if(section==='grades'&&gradesHost&&gc&&F.childrenData[gc.studentId]){
+          if(!PREVIEW&&section==='grades')(F.home.children||[]).forEach(function(gc){
+            var gradesHost=document.getElementById('family-grades-'+gc.studentId);if(!gradesHost)return;
             var gkey=JSON.stringify([familyToken(),gc.studentId]);active[gkey]=true;
             var gpanel=familyPanels[gkey] || (familyPanels[gkey]={services:window.StepwiseServices.create(),reads:window.StepwiseLessonRead.create()});
             var gtoken=familyToken();gpanel.services.mount(gradesHost,{key:gkey,teacher:false,panel:'exams',call:function(op,payload){return apiPost(Object.assign({},payload,{ftoken:gtoken,studentId:gc.studentId,action:'learningService',op:op}));}});
-          }
+          });
           Object.keys(familyPanels).forEach(function(key){if(!active[key]){familyPanels[key].services.clear();familyPanels[key].reads.clear();}});
         }
         function loadFamilyNotices(action,id,done){

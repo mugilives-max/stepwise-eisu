@@ -272,8 +272,8 @@ test('the family マイページ tab shows the child student home and proxies st
 test('the family 成績 tab is the child grades page with the exam-report panel host', async () => {
   const ui = await readyFamily(); ui.navigate('#family/grades');
   const st = ui.requests.find(r => r.body.action === 'familyStudentState'); st.reply({ ...state(), viewer: 'family' }); await flush();
-  assert.match(ui.html(), /【テスト】子Aさんの成績（保護者が代わりに操作できます）/); assert.match(ui.html(), /先生が記録したテストの結果/);
-  assert.doesNotMatch(ui.html(), /data-action="fa-mytab"/); assert.match(ui.html(), /<section id="family-grades-panel" data-family-child="child-a"/);
+  assert.match(ui.html(), /<h2>【テスト】子A<\/h2>/);assert.match(ui.html(), /<h2>【テスト】子B<\/h2>/);
+  assert.doesNotMatch(ui.html(), /data-action="fa-mytab"/); assert.match(ui.html(), /<section id="family-grades-child-a" data-family-child="child-a"/);
   const g = ui.requests.find(r => r.body.action === 'grades'); assert.ok(g, JSON.stringify(ui.requests.map(r => r.body.action))); assert.equal(g.body.studentId, 'child-a'); assert.equal(g.body.ftoken, 'test-family-token'); assert.equal(g.body.k, undefined);
   g.reply({ ok: true, grades: [{ date: '2026-09-01', test: '中間', subject: '英語', score: 80, max: 100, dev: null, rank: '' }], exams: [] }); await flush();
   assert.match(ui.html(), /成績推移 <span class="cnt">1件/); assert.match(ui.html(), /中間/);
@@ -527,3 +527,5 @@ test('learning record navigation combines parent and student menus and preserves
  const ui=await readyFamily();ui.navigate('#family/learning');assert.match(ui.html(),/<h1>学習記録<\/h1>/);assert.match(ui.el('tabs').innerHTML,/href="#family\/learning" class="on"[^>]*>学習記録/);assert.doesNotMatch(ui.el('tabs').innerHTML,/>成績<|>授業の記録</);ui.navigate('#family/learning/grades');assert.match(ui.html(),/aria-label="学習記録の種類"/);assert.match(ui.html(),/href="#family\/learning\/grades" class="on"/);
  const student=createUI('student');student.requests[0].reply(state());await flush();student.navigate('#learning');assert.match(student.html(),/<h1>学習記録<\/h1>/);assert.doesNotMatch(student.el('tabs').innerHTML,/>成績<|>授業の記録</);student.navigate('#learning/grades');assert.match(student.html(),/href="#learning\/grades" class="on"/);student.navigate('#history');assert.match(student.html(),/学習記録の種類/);student.navigate('#grades');assert.match(student.el('tabs').innerHTML,/href="#learning" class="on"/);
 });
+
+test('parent grades show all children and isolate grade responses',async()=>{const ui=await readyFamily();ui.navigate('#family/learning/grades');assert.doesNotMatch(ui.html(),/id="fa-mychild"|表示する子ども/);const requests=ui.requests.filter(r=>r.body.action==='grades');assert.deepEqual(requests.map(r=>r.body.studentId).sort(),['child-a','child-b']);requests[1].reply({ok:true,grades:[{date:'2026-09-01',test:'B専用テスト',subject:'数学',score:72,max:100,dev:null}],exams:[]});await flush();assert.match(ui.html(),/B専用テスト/);assert.match(ui.html(),/成績を読み込んでいます/);requests[0].reply({ok:true,grades:[{date:'2026-09-01',test:'A専用テスト',subject:'英語',score:85,max:100,dev:null}],exams:[]});await flush();assert.match(ui.html(),/子A<[^]*A専用テスト[^]*子B<[^]*B専用テスト/);});
