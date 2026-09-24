@@ -436,3 +436,16 @@ test('combined lesson confirmation and restriction removal target their own sibl
  assert.equal(ui.requests.at(-1).body.studentId,'child-b');assert.deepEqual(ui.requests.at(-1).body.slotIds,['offer-child-b']);
  const other=await combinedHome();other.click('delblock',{'data-ids':'block-child-a'});assert.match(other.html(),/太郎さん：/);other.click('doremove');assert.equal(other.requests.at(-1).body.studentId,'child-a');assert.deepEqual(other.requests.at(-1).body.blockIds,['block-child-a']);
 });
+
+test('calendar filters hide only selected siblings, retain the day list and restore without writes',async()=>{
+ const ui=await combinedHome(),count=ui.requests.length;
+ const calendar=()=>ui.html().split('<div class="card cal">')[1].split('<h2 class="schedule-day-heading">')[0];
+ assert.match(calendar(),/太郎 英語/);assert.match(calendar(),/花子 英語/);
+ ui.click('family-calfilter',{'data-child':'child-a'});
+ assert.match(ui.html(),/data-child="child-a" aria-pressed="false"/);assert.doesNotMatch(calendar(),/太郎/);assert.match(calendar(),/花子 英語/);
+ assert.match(ui.html().split('<div class="card daylist">')[1],/family-row-name">太郎/);
+ ui.click('family-calnext');ui.click('family-calprev');assert.doesNotMatch(calendar(),/太郎/);
+ ui.click('family-calfilter',{'data-child':'child-b'});assert.doesNotMatch(calendar(),/太郎|花子/);assert.match(calendar(),/20:00/);assert.doesNotMatch(ui.html(),/予定を読み込んでいます/);
+ ui.click('family-calfilter',{'data-child':'child-a'});ui.click('family-calfilter',{'data-child':'child-b'});assert.match(calendar(),/太郎 英語/);assert.match(calendar(),/花子 英語/);
+ assert.equal(ui.requests.length,count);
+});

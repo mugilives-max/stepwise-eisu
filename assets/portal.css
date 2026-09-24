@@ -206,3 +206,6 @@
 .family-plan-table th:first-child{width:12%}
 .family-plan-table th:nth-child(2){width:22%}
 .family-plan-table th:last-child{width:16%}
+
+.family-calendar-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.family-calendar-filter button[aria-pressed="true"]{background:var(--primary-soft,#edf3fc);border-color:var(--primary);color:var(--primary)}

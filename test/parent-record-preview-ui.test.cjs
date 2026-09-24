@@ -68,3 +68,20 @@ test('parent preview reads each sibling with its own ID and the original family 
  assert.doesNotMatch(ui.html(),/<h2>【テスト】(?:兄|弟)さん/);assert.equal((ui.html().match(/class="schedule-day-heading"/g)||[]).length,1);
  assert.equal(ui.session.has('sw_ft_v1'),false);
 });
+
+test('parent preview can select a sibling and inspect manual and AI editors without sending',async()=>{
+ const ui=createUI('student',{hash:'#family/home',search:'?preview=parent:test-a'});let answered=0;
+ for(let round=0;round<10;round++){
+  const pending=ui.requests.slice(answered);if(!pending.length)break;answered=ui.requests.length;
+  for(const req of pending){
+   if(req.body.view==='home')req.reply({ok:true,children:[{studentId:'test-a',name:'【テスト】太郎',givenName:'太郎'},{studentId:'test-b',name:'【テスト】花子',givenName:'花子'}]});
+   else if(req.body.view==='student')req.reply({me:{name:'【テスト】生徒'},today:'2026-09-24',slots:[],history:[],planLines:[],nlEnabled:false});
+   else req.reply({ok:true,data:{month:'2026-09',thisMonth:{},planLines:[],payments:[]}});
+  }await flush();
+ }
+ const count=ui.requests.length;
+ ui.click('family-dayadd');assert.match(ui.html(),/登録するお子さんを選択/);ui.click('dayadd',{'data-home-child':'test-b'});assert.match(ui.html(),/花子：予定を追加/);
+ ui.click('dayact',{'data-m':'event'});assert.match(ui.html(),/花子：イベントを登録/);assert.ok(ui.el('b-edate'));ui.input('b-etitle','【テスト】行事');assert.match(ui.html(),/data-action="selapply" disabled/);ui.click('selapply');ui.click('selcancel');
+ ui.click('family-dayai');ui.click('dayai',{'data-home-child':'test-a'});assert.match(ui.html(),/太郎：AIで予定登録/);assert.ok(ui.el('nl-text'));ui.input('nl-text','明日の午後');ui.click('nl-parse');
+ assert.equal(ui.requests.length,count);assert.ok(ui.requests.every(r=>r.body.action==='preview'));
+});

@@ -302,7 +302,11 @@ test('teacher preview of the student mypage: reads through action=preview with t
   ui.requests[0].reply({ ...state(), viewer: 'preview', nlEnabled: true }); await flush();
   assert.match(ui.html(), /<div class="preview-banner"[^>]*><span[^>]*><strong>【テスト】生徒Aさんのマイページを表示中<\/strong>（先生のプレビュー・表示のみ。登録や変更はできません）<\/span><a class="btn-quiet btn-sm" href="\/kanri\/#s=test-a"/);
   const count = ui.requests.length;
-  ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="dayadd"[^>]* disabled/);ui.click('dayadd');assert.doesNotMatch(ui.html(),/<dialog id="schedule-day-editor"/);
+  ui.click('calday',{'data-date':'2026-09-15'});assert.doesNotMatch(ui.html(),/data-action="dayadd"[^>]* disabled/);ui.click('dayadd');assert.match(ui.html(),/<dialog id="schedule-day-editor"/);
+  ui.click('dayact',{'data-m':'event'});assert.ok(ui.el('b-edate'));ui.input('b-etitle','【テスト】行事');assert.match(ui.html(),/data-action="selapply" disabled/);ui.click('selapply');ui.click('selcancel');
+  ui.click('dayadd');ui.click('dayavailability');assert.ok(ui.el('b-wishdate'));ui.click('dayact',{'data-m':'ng'});assert.ok(ui.el('b-ngdate'));ui.click('selapply');ui.click('selcancel');
+  ui.click('dayadd');ui.click('dayact',{'data-m':'want'});assert.ok(ui.el('b-wdate'));ui.click('selapply');ui.click('selcancel');
+  ui.click('dayai');assert.ok(ui.el('nl-text'));assert.equal(ui.el('nl-text').disabled,false);ui.input('nl-text','明日の午後は授業できます');assert.match(ui.html(),/data-action="nl-parse" disabled/);ui.click('nl-parse');ui.click('dayclose');
   assert.equal(ui.requests.length, count, 'no write request leaves the page');
 
 });
