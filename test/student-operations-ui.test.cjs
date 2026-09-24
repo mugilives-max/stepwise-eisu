@@ -183,7 +183,7 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const s = { ...state(), blocked:[{ id:'b1', date:'2026-09-16', note:'部活' }], events:[{ id:'e1', date:'2026-09-17', dateTo:'2026-09-17', title:'大会', kind:'event' }] };
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
-  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"|homework-summary/); assert.match(ui.html(), /<h2>予定の編集<\/h2><div class="card"/); assert.match(ui.html(), /^<h2>予定表[^]*<h2>予定の編集<\/h2>[^]*<details class="fold offers" data-fold="offers"><summary>/);
+  assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"|homework-summary/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/); assert.match(ui.html(), /^<h2>予定表[^]*<h2 class="schedule-day-heading">[^]*<details class="fold offers" data-fold="offers"><summary>/);
   ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定共有</);
   ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
@@ -197,12 +197,12 @@ test('the student page has no 予定 tab and registers or removes schedule items
 test('students turn a sentence into checked proposals and register them through the existing actions', async () => {
   const s = { ...state(), nlEnabled:true, blocked:[{ id:'b0', date:'2026-09-16' }] };
   const ui = await studentReady(s);
-  assert.equal(ui.el('nl-text'), undefined); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd');
+  assert.equal(ui.el('nl-text'), undefined); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayai');
   // the sentence entry is the default; manual buttons are behind the switch and never shown at the same time
-  assert.ok(ui.el('nl-text')); assert.match(ui.html(), /<div class="seg" role="tablist"[^>]*><button type="button" role="tab" class="on" aria-selected="true" data-action="dayinput" data-mode="text">文章で予定を登録<\/button><button type="button" role="tab" class="" aria-selected="false" data-action="dayinput" data-mode="manual">手動で入力<\/button><\/div>/);
-  assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayact"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('nl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('helpnl'); assert.match(ui.html(), /data-action="helpnl"[^>]*aria-expanded="true"/); assert.match(ui.html(), /文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。/); ui.click('helpnl'); assert.doesNotMatch(ui.html(), /文章を書いて「内容を確認」/); assert.match(ui.html(), /data-action="dayadd"[^>]*aria-expanded="true">閉じる<\/button>/);
-  ui.click('dayinput', { 'data-mode': 'manual' }); assert.equal(ui.el('nl-text'), undefined); assert.match(ui.html(), /data-action="dayact" data-m="wish"/); assert.match(ui.html(), /data-mode="manual">手動で入力<\/button>/); assert.match(ui.html(), /class="on" aria-selected="true" data-action="dayinput" data-mode="manual"/);
-  ui.click('dayinput', { 'data-mode': 'text' }); assert.ok(ui.el('nl-text')); assert.doesNotMatch(ui.html(), /data-action="dayact"/);
+  assert.ok(ui.el('nl-text')); assert.match(ui.html(), /<dialog id="schedule-day-editor"/);
+  assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayact"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('nl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('helpnl'); assert.match(ui.html(), /data-action="helpnl"[^>]*aria-expanded="true"/); assert.match(ui.html(), /文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。/); ui.click('helpnl'); assert.doesNotMatch(ui.html(), /文章を書いて「内容を確認」/); assert.match(ui.html(), /data-action="dayclose"[^>]*>閉じる<\/button>/);
+  ui.click('dayclose');ui.click('dayadd');assert.equal(ui.el('nl-text'),undefined);assert.match(ui.html(),/data-action="dayact" data-m="wish"/);
+  ui.click('dayclose');ui.click('dayai');assert.ok(ui.el('nl-text'));assert.doesNotMatch(ui.html(),/data-action="dayact"/);
   const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
   ui.input('nl-text', text); ui.click('nl-parse');
   assert.deepEqual(ui.requests.at(-1).body, { action:'scheduleParse', k:'test-link-a', text });
@@ -224,7 +224,7 @@ test('students turn a sentence into checked proposals and register them through 
 });
 
 test('the sentence card is hidden while the API key is not configured', async () => {
-  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を登録|data-action="dayinput"/, 'no switch when the sentence entry is unavailable'); assert.match(ui.html(), /手動で予定入力/); assert.match(ui.html(), /data-action="dayact" data-m="wish"/);
+  const ui = await studentReady(state()); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.equal(ui.el('nl-text'), undefined); assert.doesNotMatch(ui.html(), /文章で予定を登録|data-action="dayinput"/, 'no switch when the sentence entry is unavailable'); assert.match(ui.html(), /予定を追加/); assert.match(ui.html(), /data-action="dayact" data-m="wish"/);
 });
 
 test('the offers section is a collapsed details block with one select-all / clear toggle', async () => {
@@ -241,12 +241,12 @@ test('the 授業計画 fold separates proposed notices from the approved plan wi
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }, { id:'h2', date:'2026-09-25', start:'17:00', min:60, subject:'数学', done:true }], plan:{ '英語':4 }, planStatus:'approved',
     planLines:[line({ id:'l1', status:'approved', approvedCount:4, comment:'入試に向けて長文を仕上げます' }), line({ id:'l2', subject:'英語', count:3, startDate:'2026-10-01', endDate:'2026-10-31', period:'2026年10月', month:'2026-10', comment:'10月は模試対策で\n回数を増やします' }), line({ id:'l3', subject:'数学', count:6, startDate:'2026-09-22', endDate:'2026-10-05', period:'2026/9/22〜10/5', month:'', lessonMin:60, lessonFee:3000, comment:'' })] };
   const ui = await studentReady(s);
-  assert.match(ui.html(), /<strong>数学<\/strong> <span class="tag gray">通常<\/span> 6回<span class="muted">・60分・1回 3,000円<\/span><\/span><span class="tag amber">保護者の承認待ち<\/span>/); assert.match(ui.html(), /<strong>英語<\/strong> <span class="tag gray">通常<\/span> 3回[^]*?<div class="note"[^>]*><strong>先生から：<\/strong>10月は模試対策で\n回数を増やします<\/div>/); assert.match(ui.html(), /／計画 4回[^]*?<strong>先生から：<\/strong>入試に向けて長文を仕上げます/);
+  assert.ok(ui.html().includes('<td>数学</td><td>通常</td><td>6回</td><td>60分</td>'));assert.doesNotMatch(ui.html(),/3,000円/);assert.match(ui.html(),/入試に向けて長文を仕上げます/);
   assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画 <span class="cnt">2件の案内<\/span>/);
-  assert.match(ui.html(), /案内 <span[^>]*>保護者の承認待ち<\/span><\/h3><div class="slotline"><span class="tag amber">案内<\/span><span class="time">10月<\/span><span class="who"><strong>英語<\/strong> <span class="tag gray">通常<\/span> 3回<span class="muted">・90分・1回 3,000円<\/span><\/span><span class="tag amber">保護者の承認待ち<\/span><\/div>[^]*?<div class="slotline"><span class="tag amber">案内<\/span><span class="time">9\/22〜10\/5<\/span><span class="who"><strong>数学<\/strong>/);
+  assert.ok(ui.html().includes('<td>10/1〜10/31</td><td>英語</td><td>通常</td><td>3回</td>'));
   assert.match(ui.html(), /保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう/);
-  assert.match(ui.html(), /実施計画 <span[^>]*>承認済み<\/span><\/h3><div class="slotline"><span class="tag green">承認済み<\/span><span class="time">9月<\/span><span class="who"><strong>英語<\/strong> <span class="tag gray">通常<\/span> 実施 1・予定 0<span class="muted">／計画 4回<\/span><\/span><span class="small"[^>]*>あと 3 回<\/span>/);
-  assert.match(ui.html(), /<span class="tag gray">9月<\/span><span class="time"><\/span><span class="who"><strong>数学<\/strong> <span class="tag gray">通常<\/span> 実施 1・予定 0<span class="muted">（計画外）/);
+  assert.ok(ui.html().includes('<td>4回</td><td>0回</td><td>1回</td>'));
+  assert.ok(ui.html().includes('<td>未承認</td>'));
   assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
   const none = await studentReady({ ...state([]), planLines:[] }); assert.doesNotMatch(none.html(), /授業計画/);
   const onlyProposed = await studentReady({ ...state([]), planLines:[line()] });
@@ -289,9 +289,9 @@ test('approved addon lines are folded into their parent plan and proposed addons
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }],
     planLines:[line({ id:'p', status:'approved', approvedCount:4, comment:'通常の予習' }), line({ id:'x', parentId:'p', addon:true, count:2, approvedCount:2, status:'approved', startDate:'2026-09-20', endDate:'2026-09-30', period:'2026/9/20〜9/30', month:'', comment:'テスト前に演習を増やすため' }), line({ id:'y', parentId:'p', addon:true, count:1, status:'proposed', startDate:'2026-09-25', endDate:'2026-09-30', period:'2026/9/25〜9/30', month:'', comment:'さらに1回' })] };
   const ui = await studentReady(s);
-  assert.match(ui.html(), /<span class="tag amber">案内<\/span><span class="time">9\/25〜9\/30<\/span><span class="who"><strong>英語<\/strong> <span class="tag gray">通常<\/span> <span class="tag gray">追加<\/span> ＋1回/);
-  assert.match(ui.html(), /実施 1・予定 0<span class="muted">／計画 4回＋追加 2回<\/span><\/span><span class="small"[^>]*>あと 5 回<\/span>/);
-  assert.match(ui.html(), /<strong>追加（9\/20〜9\/30・＋2回）：<\/strong>テスト前に演習を増やすため/);
+  assert.ok(ui.html().includes('<td>通常（追加）</td><td>1回</td>'));
+  assert.ok(ui.html().includes('<td>6回</td><td>0回</td><td>1回</td>'));assert.match(ui.html(),/あと 5 回/);
+  assert.match(ui.html(),/テスト前に演習を増やすため/);
   assert.equal((ui.html().match(/<span class="tag green">承認済み<\/span>/g) || []).length, 1, 'the approved addon is not listed as a separate row');
 });
 
@@ -302,9 +302,9 @@ test('teacher preview of the student mypage: reads through action=preview with t
   ui.requests[0].reply({ ...state(), viewer: 'preview', nlEnabled: true }); await flush();
   assert.match(ui.html(), /<div class="preview-banner"[^>]*><span[^>]*><strong>【テスト】生徒Aさんのマイページを表示中<\/strong>（先生のプレビュー・表示のみ。登録や変更はできません）<\/span><a class="btn-quiet btn-sm" href="\/kanri\/#s=test-a"/);
   const count = ui.requests.length;
-  ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); assert.doesNotMatch(ui.html(), /data-action="dayinput"/, 'the sentence entry is off in preview'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply'); await flush();
+  ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="dayadd"[^>]* disabled/);ui.click('dayadd');assert.doesNotMatch(ui.html(),/<dialog id="schedule-day-editor"/);
   assert.equal(ui.requests.length, count, 'no write request leaves the page');
-  assert.match(ui.html() + ' ' + ui.el('toast').textContent, /先生のプレビューでは表示だけできます/);
+
 });
 
 test('teacher preview of the parent page: home, child state and parent data come from action=preview and notices are empty', async () => {

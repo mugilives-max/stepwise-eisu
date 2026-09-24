@@ -12,7 +12,7 @@
         var pending = null;      // 確認バー {kind, slotId}
         var acceptBatches = Object.create(null), stateSeq = 0, stateKey = "";
         var selDate = null, selManual = false, dayAddOpen = false;
-        var dayInputMode = 'text'; // ＋の中の入力方法: text=文章で予定を登録(既定) / manual=手動で入力。文章入力が使えないときは手動だけ
+        var dayInputMode = 'manual'; // 共通見出しの＋は手動、AIアイコンは文章入力だけ
         var calNow = new Date(), calY = calNow.getFullYear(), calM = calNow.getMonth();
         var panel = "";          // "" | "wish" | "event" | "ng"
         var wishKind = "ok";   // 生徒の登録は授業可能時間帯に統一
@@ -624,14 +624,14 @@
           var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
           var dayWishes = (S.wishes || []).filter(function (w) { return w.date === selDate; });
-          var dayLabel = Number(selDate.slice(5, 7)) + '月' + Number(selDate.slice(8, 10)) + '日（' + WD[wdOf(selDate)] + '）の予定';
-          var html = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>'+(selDate>=today?'<button class="'+(dayAddOpen?'btn-quiet':'btn-primary')+'" style="border-radius:999px;padding:8px 16px;font-weight:700" data-action="dayadd" aria-label="'+fmtDateW(selDate)+'の予定を追加" aria-expanded="'+dayAddOpen+'">'+(dayAddOpen?'閉じる':'＋ 予定を追加')+'</button>':'')+'</div>';
+          var canAdd=selDate>=today, canAI=!!S.nlEnabled && !previewK;
+          var html=window.StepwiseCalendar.dayHeading({date:selDate,title:fmtDateW(selDate)+'の授業',disabled:!!previewK,add:canAdd?{action:'dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'dayai',label:'AIで予定登録'}:null});
           if (!ds2.length && !dayNg.length && !dayOffs.length && !dayWishes.length) html += '<div class="empty">この日の予定はありません</div>';
           else {
             // 授業登録の一覧と同じ行形式(左: 種類のタグ、時刻、内容 / 右: 操作)
             var dis = (acceptBatch().pending || acceptBatch().busy || acceptBatch().refreshRequired) ? ' disabled' : '';
             function dayRow(lead, time, who, actions) { return '<div class="slotline">' + lead + '<span class="time">' + time + '</span><span class="who">' + who + '</span>' + actions + '</div>'; }
-            html += '<div class="daylist">';
+            html += '<div class="card daylist">';
             dayOffs.forEach(function (o) { html += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', '', '<button class="btn-quiet btn-sm" data-action="helptoff" aria-label="登録不可の説明" aria-expanded="' + helpToff + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button>'); });
             if (dayOffs.length && helpToff) html += '<div class="note" style="margin:4px 0 8px">先生の予定があるため、この時間帯には授業を登録できません。別の日時を選ぶか、先生にご相談ください。</div>';
             ds2.forEach(function (s) {
@@ -656,21 +656,12 @@
             if (dayWishes.length && helpWish) html += '<div class="note" style="margin:4px 0 8px">授業ができる時間帯として登録した内容です。先生はこの時間帯を優先して授業を案内します。時間帯すべてが授業になるわけではなく、案内が届いてから確定します。</div>';
             html += '</div>';
           }
-          if (selDate >= today) {
-            if (dayAddOpen) {
-              // 文章入力が使えるときは「文章で予定を登録」を既定にし、切り替えで手動入力を出す(両方同時には出さない)
-              var canText = S.nlEnabled && !previewK, mode = canText ? dayInputMode : 'manual';
-              if (canText) html += dayInputSwitch(mode);
-              else html += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3>';
-              if (mode === 'manual') html += '<div class="row" style="gap:6px">' +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="wish" data-date="' + selDate + '">授業可能</button>' +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="ng" data-date="' + selDate + '">授業不可</button>' +
-                '<button class="btn-quiet btn-sm" data-action="dayact" data-m="event" data-date="' + selDate + '">予定共有</button></div>';
-              else html += renderNaturalEntry();
-            }
+          if (canAdd && dayAddOpen && !previewK) {
+            var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">予定共有</button></div>';
+            html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
           if ((route() === 'home' || route() === 'family') && selMode) html += renderSelBar(D, true);
-          return html + '</div>';
+          return html;
         }
 
         function renderNextLesson(D) {
@@ -867,13 +858,7 @@
         var NL_LABEL = { wish: '授業できる時間帯', block: '授業できない日', event: '予定の共有' };
         function nlDates(dates) { return groupDays(dates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + '〜' + fmtDateW(g.dateTo); }).join('、'); }
         // ＋の中の入力方法の切り替え(文章で予定を登録 / 手動で入力)
-        function dayInputSwitch(mode) {
-          return '<div class="row" style="margin:12px 0 8px;gap:8px;align-items:center"><div class="seg" role="tablist" aria-label="予定の入力方法">' +
-            '<button type="button" role="tab" class="' + (mode === 'text' ? 'on' : '') + '" aria-selected="' + (mode === 'text' ? 'true' : 'false') + '" data-action="dayinput" data-mode="text">文章で予定を登録</button>' +
-            '<button type="button" role="tab" class="' + (mode === 'manual' ? 'on' : '') + '" aria-selected="' + (mode === 'manual' ? 'true' : 'false') + '" data-action="dayinput" data-mode="manual">手動で入力</button></div>' +
-            (mode === 'text' ? '<button class="btn-quiet btn-sm" data-action="helpnl" aria-label="文章で予定を登録の説明" aria-expanded="' + helpNl + '" style="border-radius:50%;width:30px;height:30px;padding:0;font-weight:700">？</button>' : '') + '</div>' +
-            (mode === 'text' && helpNl ? '<div class="note" style="margin:0 0 8px">文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。下書きは次の画面で確認でき、チェックを入れた項目だけ登録されます。例:「来週の月曜と水曜は16時から19時まで授業できます」「10/3〜10/5は修学旅行で授業できません」「10/20に模試があります」。日付や時間が読み取れない項目は確認画面で入力できます。</div>' : '');
-        }
+        function renderNaturalHelp(){return '<button class="btn-quiet btn-sm" data-action="helpnl" aria-expanded="'+helpNl+'">使い方</button>'+(helpNl?'<p class="note">文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。内容を確認し、チェックした項目だけ登録してください。</p>':'');}
         function renderNaturalEntry() {
           var dis = NL.busy || busy ? ' disabled' : '';
           var h = '<div>';
@@ -969,7 +954,6 @@
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };
           html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
           html += renderCal(D.info, today, true);
-          html += '<h2>予定の編集</h2>';
           html += renderDayDetail(D, true, true);
 
           html += renderOffers(D);
@@ -1368,7 +1352,7 @@
           if (F.step === "waiting") { app.innerHTML = h + '<div class="card"><h2>メールを開いて登録を続けてください</h2><p>送信先：' + esc(F.email) + '</p><p>入力したメールアドレスの受信箱を開き、ステップワイズから届いたメールのリンクを押してください。次にパスワードを設定します。メールが見当たらない場合は、迷惑メールフォルダもご確認ください。</p><button class="btn-quiet" data-action="fa-mode" data-step="resend"' + dis + '>確認メールを再送</button>' + (F.invite ? '<button class="btn-quiet" data-action="fa-mode" data-step="register"' + dis + '>メールアドレスを修正</button>' : '<p>アドレスを間違えた場合は、先生からの登録リンクを開き直してください。使えない場合は先生へご相談ください。</p>') + '</div>'; return; }
           if (F.home && F.step === "home") {
             if(notices.open)h+=renderFamilyNotices();
-            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); return; }
+            if(parentSection()==='home'){ app.innerHTML = h + renderFamilyMypage(''); mountDayDialog(); return; }
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
@@ -1504,10 +1488,12 @@
         function studentNoticesHTML(){var items=studentNoticeItems();return '<section class="card" aria-label="生徒のお知らせ" style="margin-bottom:18px"><div class="row between"><h2 style="margin:0">お知らせ</h2><button class="btn-quiet btn-sm" data-action="student-notices">閉じる</button></div>'+ (items.length?items.map(function(x){return '<p>'+(x.required?'<span class="tag amber">要確認</span> ':'')+'<a href="'+x.url+'" data-action="student-notice-link">'+esc(x.title)+'</a></p>';}).join(''):'<p class="muted">お知らせはありません。</p>')+'</section>';}
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
+        function mountDayDialog(){var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else dayAddOpen=false;};if(d.showModal&&!d.open)d.showModal();}}
         function render() {
           if(parentHeaderActions){var count=notices.items.filter(function(n){return n.required||!n.read;}).length;parentHeaderActions.innerHTML=route()==='family'&&F.home&&familyToken()?'<button class="btn-quiet btn-sm" data-action="fa-notices" aria-label="お知らせ '+count+'件" aria-expanded="'+notices.open+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(count?' <span class="tag red">'+count+'</span>':'')+(notices.error?' !':'')+'</button>':'';}
           if(parentHeaderActions&&route()!=='family'&&S&&S.me){var required=studentNoticeItems().filter(function(x){return x.required;}).length;parentHeaderActions.innerHTML='<button class="btn-quiet btn-sm" data-action="student-notices" aria-label="お知らせ 要確認'+required+'件" aria-expanded="'+studentNoticesOpen+'"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'+(required?' <span class="tag red">'+required+'</span>':'')+'</button>';}
           renderStudent(); if(studentNoticesOpen&&route()!=='family'&&S&&S.me)app.innerHTML=studentNoticesHTML()+app.innerHTML;
+          mountDayDialog();
           meetWatch();
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }
@@ -1617,8 +1603,9 @@
             case "helpwish": helpWish = !helpWish; render(); break;
             case "helpnl": helpNl = !helpNl; render(); break;
             case "histback": histFolder = null; render(); break;
-            case "dayadd": dayAddOpen=!dayAddOpen;render();break;
-            case "dayinput": dayInputMode = btn.getAttribute("data-mode") === "manual" ? "manual" : "text"; render(); break;
+            case "dayadd": if(previewK||busy||NL.busy)break;dayInputMode='manual';dayAddOpen=true;render();break;
+            case "dayai": if(previewK||busy||NL.busy||!S.nlEnabled)break;dayInputMode='text';dayAddOpen=true;render();break;
+            case "dayclose": if(busy||NL.busy)break;dayAddOpen=false;render();break;
             case "calday":
               dayAddOpen=false;
               if (selMode) { var nd = btn.getAttribute("data-date"); selDays[nd] = !selDays[nd]; render(); break; }

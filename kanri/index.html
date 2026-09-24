@@ -220,7 +220,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260922-outline"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260924-pending-color"><script src="/assets/calendar.js?v=20260924-pending-color"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260924-shared-day"><script src="/assets/calendar.js?v=20260924-shared-day"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -903,7 +903,7 @@
         function aiScheduleHtml() {
           if (!aiScheduleOpen) return '';
           var student=tnlStudent(), dis=busy || TNL.busy ? ' disabled' : '';
-          return '<dialog id="ai-schedule" class="board-editor" aria-label="AIで予定登録"><div class="row between"><h2>AIで予定登録</h2><button class="btn-quiet" data-action="ai-close"'+dis+'>閉じる</button></div><label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+A.students.filter(function(s){return s.active;}).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')+'</dialog>';
+          return window.StepwiseCalendar.dayDialog({id:'ai-schedule',title:'AIで予定登録',close:'ai-close',busy:busy||TNL.busy,content:'<label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+A.students.filter(function(s){return s.active;}).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')});
         }
         var TNL = { text: "", busy: false, proposal: null, error: "" };
         var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "予定の共有" };
@@ -1320,7 +1320,7 @@
         }
         function lessonOfferDialogHTML(){
           if(!boardOpen)return '';
-          return '<dialog id="board-editor" class="board-editor" aria-label="授業の案内"><div class="row between"><h2>授業の案内</h2><button data-action="board-close" class="btn-quiet">閉じる</button></div>'+offerForm(A.today,A.students.filter(function(s){return s.active;}),null)+'</dialog>';
+          return window.StepwiseCalendar.dayDialog({id:'board-editor',title:'授業の案内',close:'board-close',busy:busy,content:offerForm(A.today,A.students.filter(function(s){return s.active;}),null)});
         }
         function renderLessons() {
           renderNav();
@@ -1353,7 +1353,7 @@
             lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
           html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, overlapLanes: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
-          html += '<h2>' + fmtD(selDate) + 'の授業 ' + calendarAddButton(selDate,today) + (selDate >= today ? '<button type="button" class="btn-primary" data-action="ai-open" aria-label="AIで予定登録" title="AIで予定登録" style="border-radius:50%;width:36px;height:36px;padding:7px;margin-left:4px;display:inline-flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M9 3 11.4 9.6 18 12 11.4 14.4 9 21 6.6 14.4 0 12 6.6 9.6Z" transform="translate(1 0)"/><path d="m19 2 1.1 3L23 6l-2.9 1L19 10l-1-3-3-1 3-1Z"/></svg></button>' : '') + '</h2>';
+          html += window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',add:selDate>=today?{action:'calendar-add',label:'この日に予定を追加'}:null,ai:selDate>=today?{action:'ai-open',label:'AIで予定登録'}:null});
           var dayRows = byDate[selDate] || [];
           html += dayRows.length ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + '</div>' : '<div class="empty">この日の授業はありません。' + (selDate >= today ? '「＋」からこの日の授業を案内できます。' : '') + '</div>';
           var dayWish = (A.wishes || []).filter(function (x) { return x.date === selDate; });

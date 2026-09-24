@@ -138,7 +138,7 @@ test('student and parent homes prioritize the calendar and keep homework in its 
   const parent = await familyReady();
   parent.navigate('#family/home');
   for (const [view, href] of [[ui, '#tasks'], [parent, '#family/tasks']]) {
-    assert.match(view.html(), /<h2>予定表<\/h2>[^]*<h2>予定の編集<\/h2>/);
+    assert.match(view.html(), /<h2>予定表<\/h2>[^]*<h2 class="schedule-day-heading">/);
     assert.equal(view.html().match(/<h[12][^>]*>(.*?)<\/h[12]>/)?.[1], '予定表');
     assert.equal(toggleIds(view).length, 0);
     assert.doesNotMatch(view.html(), /homework-summary|取り組む宿題|f-ttitle|【テスト】完了した宿題/);

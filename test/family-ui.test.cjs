@@ -253,7 +253,7 @@ test('the family マイページ tab shows the child student home and proxies st
   st.reply({ ...state(), viewer: 'family' }); await flush();
   const nt = ui.requests.find(r => r.body.action === 'familyNotices'); if (nt) { nt.reply({ ok: true, notices: [] }); await flush(); }
   assert.match(ui.el('tabs').innerHTML, /href="#family\/home" class="on"[^>]*>ホーム/);
-  assert.match(ui.html(), /【テスト】子Aさんのマイページ（保護者が代わりに操作できます）/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2>予定の編集<\/h2>/);
+  assert.match(ui.html(), /【テスト】子Aさんのマイページ（保護者が代わりに操作できます）/); assert.match(ui.html(), /<h2>予定表<\/h2>/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/);
   ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('dayadd'); ui.click('dayact', { 'data-m': 'ng' }); ui.click('selapply');
   const sent = ui.requests.at(-1).body;
   assert.equal(sent.action, 'blockSet'); assert.equal(sent.ftoken, 'test-family-token'); assert.equal(sent.studentId, 'child-a'); assert.equal(sent.k, undefined); assert.deepEqual(sent.add, ['2026-09-15']);

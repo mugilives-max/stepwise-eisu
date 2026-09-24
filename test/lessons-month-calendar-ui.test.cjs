@@ -11,8 +11,8 @@ async function ready(extra = {}) {
   const ui = createUI('admin', {hash:'#lessons', now:today+'T12:00:00+09:00'});
   ui.requests[0].reply({admin:data(extra)}); await flush(); return ui;
 }
-function calendar(html) { return html.slice(html.indexOf('<div class="card cal">'), html.indexOf('<h2>9/', html.indexOf('<div class="card cal">'))); }
-function dayDetails(html) { return html.slice(html.indexOf('の授業 '), html.indexOf('id="lesson-attention"')); }
+function calendar(html) { return html.slice(html.indexOf('<div class="card cal">'), html.indexOf('<h2 class="schedule-day-heading">', html.indexOf('<div class="card cal">'))); }
+function dayDetails(html) { return html.slice(html.indexOf('<h2 class="schedule-day-heading">'), html.indexOf('id="lesson-attention"')); }
 
 test('one unfolded home-style month calendar replaces the weekly board at the top', async () => {
   const ui = await ready(); const html = ui.html();
