@@ -732,7 +732,7 @@
           }
           (S.history || []).forEach(function (h) { if(h.done)addExtra(h, 'done'); }); mine.forEach(function (s2) { addExtra(s2, 'plan'); });
           var extraKeys = Object.keys(extra);
-          if (!lines.length && !extraKeys.length && !famChild) return '';
+          if (!lines.length && !extraKeys.length && !famChild) return { plan: '', progress: '' };
           var html = foldHead('plan', '授業計画', proposed.length ? proposed.length + '件の案内' : '新しい案内なし') + '<div class="card">';
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) html += renderFamilyPlanConfirm(F.busy ? ' disabled' : '');
           html += '<h3 style="margin:0 0 6px;font-size:15px">案内</h3>';
@@ -748,7 +748,8 @@
           });
           if (proposed.length) html += planTableEnd();
           html += '</div></details>';
-          html += foldHead('progress', '実施状況', (approved.length + proposed.length) ? (approved.length + proposed.length)+'件の計画' : '送信済みの計画なし') + '<div class="card">';
+          var planHtml = html, progressCount = (approved.length + proposed.length) ? (approved.length + proposed.length)+'件の計画' : '送信済みの計画なし';
+          html = (famChild ? '<section class="parent-progress"><h2>実施状況 <span class="cnt">'+esc(progressCount)+'</span></h2>' : foldHead('progress', '実施状況', progressCount)) + '<div class="card">';
           var remainTotal = 0, shown = 0;
           planCols=7;
           if(approved.length||extraKeys.length)html+='<div class="portal-plan-wrap"><table class="portal-plan-table"><thead><tr><th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
@@ -766,7 +767,7 @@
           if (!shown) html += '<div class="empty">送信済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
           if (famChild && F.childrenData[famChild.studentId]) html += renderParentThisMonth(F.childrenData[famChild.studentId]);
-          return html + '</div></details>';
+          return { plan: planHtml, progress: html + '</div>' + (famChild ? '</section>' : '</details>') };
         }
 
         function renderOffers(D) {
@@ -962,8 +963,11 @@
           html += renderCal(D.info, today, true);
           html += renderDayDetail(D, true, true);
 
+          var summary = renderMonthSummary(D);
+          if (route() === 'family') html += summary.progress;
           html += renderOffers(D);
-          html += renderMonthSummary(D);
+          html += summary.plan;
+          if (route() !== 'family') html += summary.progress;
 
           html += renderPendingBar(D);
           return html;

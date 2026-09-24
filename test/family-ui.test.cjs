@@ -236,8 +236,11 @@ test('the family home places monthly completed totals inside progress without a 
  const html=ui.html();
  assert.ok(html.includes('<h2>予定表</h2>'));
  assert.doesNotMatch(html,/今月の授業|授業料\(時間換算\)/);
- const progress=html.split('data-fold="progress"')[1].split('</details>')[0];
+ const progress=html.split('<section class="parent-progress">')[1].split('</section>')[0];
  assert.ok(progress.includes('実施合計：0回 / 0分'));
+ assert.doesNotMatch(progress, /<details|<summary/);
+ assert.doesNotMatch(html, /data-fold="progress"/);
+ assert.ok(html.indexOf('<section class="parent-progress">') < html.indexOf('data-fold="plan"'));
 
  ui.navigate('#family/schedule');assert.match(ui.html(),/さんのマイページ/);
 });
