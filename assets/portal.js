@@ -1519,7 +1519,9 @@
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyRecords(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
-            h += '<div class="card"><dl><dt>保護者の登録名</dt><dd>'+esc((F.home.family||{}).label||'未登録')+'</dd><dt>連絡用メールアドレス</dt><dd style="overflow-wrap:anywhere">'+esc((F.home.family||{}).email||'未登録')+((F.home.family||{}).email?'（メール確認済み）':'')+'</dd><dt>登録済みの生徒</dt><dd>'+((F.home.children||[]).length?'<ul>'+(F.home.children||[]).map(function(c){return '<li>'+esc(c.name)+'</li>';}).join('')+'</ul>':'登録されていません')+'</dd></dl><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
+            var account=F.home.family||{},children=F.home.children||[];
+            function infoRow(label,value,status){var filled=!!String(value||'').trim();return '<tr'+(!filled?' class="is-missing"':'')+'><th scope="row">'+esc(label)+'</th><td>'+esc(filled?value:'—')+'</td><td><span class="tag '+(filled?'green':'amber')+'">'+esc(filled?(status||'登録済み'):'未登録')+'</span></td></tr>';}
+            h += '<div class="card"><table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">登録内容</th><th scope="col">状態</th></tr></thead><tbody>'+infoRow('保護者の登録名',account.label)+infoRow('連絡用メールアドレス',account.email,'メール確認済み')+(children.length?children.map(function(c,i){return infoRow('生徒 '+(i+1),c.name);}).join(''):infoRow('登録済みの生徒',''))+'</tbody></table><div class="row" style="margin-top:18px"><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div></div>';
             h += renderFamilyMailPrefs(dis);
             h += '<p class="note">共用端末では利用後にログアウトしてください。</p><p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
               app.innerHTML=h;return;

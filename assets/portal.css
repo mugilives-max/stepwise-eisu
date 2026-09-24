@@ -209,3 +209,14 @@
 
 .family-calendar-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .family-calendar-filter button[aria-pressed="true"]{background:var(--primary-soft,#edf3fc);border-color:var(--primary);color:var(--primary)}
+
+/* Parent account details: fixed grid and explicit missing values. */
+.family-info-table{width:100%;border-collapse:collapse;table-layout:fixed;text-align:left;margin:0}
+.family-info-table th,.family-info-table td{border:1px solid #b5c5d9;padding:12px;vertical-align:middle;overflow-wrap:anywhere}
+.family-info-table thead th{background:#eaf0f6;font-weight:700}
+.family-info-table th:first-child{width:27%}
+.family-info-table th:last-child{width:23%}
+.family-info-table tbody th{background:#f5f7fa;font-weight:600}
+.family-info-table .is-missing td{background:#fff4e3;color:#945900}
+.family-info-table .tag{white-space:normal}
+@media(max-width:520px){.family-info-table th,.family-info-table td{padding:9px 7px;font-size:13px}}
