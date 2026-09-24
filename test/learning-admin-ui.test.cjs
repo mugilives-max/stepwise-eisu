@@ -259,7 +259,8 @@ test('planning summary hides controls until details opens and retains editing in
  assert.ok(ui.html().includes('colspan="8"'));
  assert.ok(ui.html().includes('コメントはありません'));
  ui.click('plan-comment',{'data-line':'test-plan'});
- assert.ok(!ui.html().includes('colspan="8"'));
+ assert.ok(ui.html().includes('colspan="8"'));
+ assert.ok(ui.html().includes('white-space:nowrap;overflow:hidden;text-overflow:ellipsis'));
  assert.ok(ui.html().includes('<th>回数</th><th>時間</th>'));
  assert.ok(ui.html().includes('<td>通常</td>'));
  assert.ok(ui.html().includes('9/1〜9/30'));
