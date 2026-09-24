@@ -184,8 +184,8 @@ test('the student page has no 予定 tab and registers or removes schedule items
   const ui = await studentReady(s);
   assert.equal(ui.el('tabs').innerHTML.includes('#schedule'), false); assert.equal(ui.el('tabs').innerHTML.includes('>予定<'), false);
   assert.doesNotMatch(ui.html(), /予定管理|href="#schedule"|data-action="panel"|homework-summary/); assert.match(ui.html(), /<h2 class="schedule-day-heading">/); assert.match(ui.html(), /^<h2>予定表[^]*<h2 class="schedule-day-heading">[^]*<details class="fold offers" data-fold="offers"><summary>/);
-  ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>予定共有</);
-  ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /予定の日をタップ/);
+  ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayadd'); assert.match(ui.html(), /data-m="event"[^>]*>イベント</);
+  ui.click('dayact', { 'data-m':'event' }); assert.ok(ui.el('b-etitle')); assert.match(ui.html(), /<dialog id="schedule-event-editor"/); assert.doesNotMatch(ui.html(), /予定の日をタップ/);
   ui.input('b-etitle', '模試'); ui.click('selapply'); assert.equal(ui.requests.at(-1).body.action, 'eventAddMany'); assert.equal(ui.requests.at(-1).body.title, '模試'); assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('2026-09-15'), true);
   ui.requests.at(-1).reply({ ok:true, state:s }); await flush();
   ui.click('calday', { 'data-date':'2026-09-16' }); assert.match(ui.html(), /授業不可<\/span><span class="time">終日<\/span><span class="who">部活</); assert.match(ui.html(), /class="calday(?: sel)? ngday" data-action="calday" data-date="2026-09-16">16<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span>/); const before = ui.requests.length; ui.click('delblock', { 'data-ids':'b1' }); assert.equal(ui.requests.length, before); assert.match(ui.html(), /授業できない日 9\/16\(水\)（終日） を解除しますか\?/); ui.click('closebar'); assert.doesNotMatch(ui.html(), /解除しますか/); ui.click('delblock', { 'data-ids':'b1' }); ui.click('doremove'); assert.deepEqual(ui.requests.at(-1).body, { action:'unblock', k:'test-link-a', blockIds:['b1'] });

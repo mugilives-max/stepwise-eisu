@@ -660,7 +660,7 @@
             var content=dayInputMode==='text'&&canAI?renderNaturalHelp()+renderNaturalEntry():'<div class="row"><button class="btn-quiet" data-action="dayact" data-m="wish" data-date="'+selDate+'">授業可能</button><button class="btn-quiet" data-action="dayact" data-m="ng" data-date="'+selDate+'">授業不可</button><button class="btn-quiet" data-action="dayact" data-m="event" data-date="'+selDate+'">イベント</button></div>';
             html+=window.StepwiseCalendar.dayDialog({id:'schedule-day-editor',title:dayInputMode==='text'&&canAI?'AIで予定登録':'予定を追加',close:'dayclose',busy:busy||NL.busy,content:content});
           }
-          if ((route() === 'home' || route() === 'family') && selMode) html += renderSelBar(D, true);
+          if ((route() === 'home' || route() === 'family') && selMode) html += selMode === "event" ? window.StepwiseCalendar.dayDialog({id:"schedule-event-editor",title:"イベントを登録",close:"selcancel",busy:busy,content:renderSelBar(D, true)}) : renderSelBar(D, true);
           return html;
         }
 
@@ -848,7 +848,7 @@
             html += '<div class="row"><input type="time" id="b-wstart" value="13:00" step="900"><span class="muted">〜</span><input type="time" id="b-wend" value="18:00" step="900"><input type="text" id="b-wnote" placeholder="メモ(任意)" maxlength="100" style="flex:1;min-width:120px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "登録する") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
           } else if (selMode === "event") {
             var rangesTxt = groupDays(selDates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + "〜" + fmtDateW(g.dateTo); }).join("、");
-            html += '<div class="msg">予定を共有: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
+            html += '<div class="msg">イベント: ' + selDates.length + '日</div><div class="small muted" style="margin-bottom:8px">' + (selDates.length ? rangesTxt : selTxt) + '</div>';
             html += '<div class="row"><input type="text" id="b-etitle" placeholder="内容(例: 大会、高校見学)" maxlength="40" style="flex:1;min-width:160px"><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-etest"> テスト・模試</label><label class="small" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="b-eblock"> 授業できない日にもする</label><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "送信中…" : "先生に共有") + '</button><button class="btn-quiet" data-action="selcancel">やめる</button></div>';
           }
           return html + '</div></div>';
@@ -952,7 +952,7 @@
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
           var hintMap = { ng: "授業できない日をタップして選んでください(複数可)", wish: "授業が可能な日をタップ(複数可)。時間は下の入力欄で", event: "予定の日をタップ(複数可)。内容は下の入力欄で" };
-          html += '<h2>予定表' + (selMode ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
+          html += '<h2>予定表' + (selMode && selMode !== 'event' ? ' <span style="font-size:12.5px;color:var(--' + (selMode === "ng" ? "danger" : selMode === "wish" ? "green" : "coral") + ');font-weight:600">' + hintMap[selMode] + '</span>' : '') + '</h2>';
           html += renderCal(D.info, today, true);
           html += renderDayDetail(D, true, true);
 
@@ -1488,7 +1488,7 @@
         function studentNoticesHTML(){var items=studentNoticeItems();return '<section class="card" aria-label="生徒のお知らせ" style="margin-bottom:18px"><div class="row between"><h2 style="margin:0">お知らせ</h2><button class="btn-quiet btn-sm" data-action="student-notices">閉じる</button></div>'+ (items.length?items.map(function(x){return '<p>'+(x.required?'<span class="tag amber">要確認</span> ':'')+'<a href="'+x.url+'" data-action="student-notice-link">'+esc(x.title)+'</a></p>';}).join(''):'<p class="muted">お知らせはありません。</p>')+'</section>';}
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
-        function mountDayDialog(){var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else dayAddOpen=false;};if(d.showModal&&!d.open)d.showModal();}}
+        function mountDayDialog(){var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else dayAddOpen=false;};if(d.showModal&&!d.open)d.showModal();}}
         function mountAcceptDialog(){var d=document.getElementById('schedule-accept-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else pending=null;};if(d.showModal&&!d.open)d.showModal();}}
 
         function render() {
@@ -1614,13 +1614,13 @@
               selDate = btn.getAttribute("data-date"); selManual = true; pending = null; render(); break;
             case "dayact":
               selMode = btn.getAttribute("data-m"); panel = selMode; selDays = {}; selDays[btn.getAttribute("data-date")] = true; pending = null; dayAddOpen=false; render();
-              var calEl2 = document.querySelector(route() === "home" || route() === "family" ? ".selbar" : ".cal"); if (calEl2) calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
+              var calEl2 = document.querySelector(route() === "home" || route() === "family" ? ".selbar" : ".cal"); if (calEl2 && selMode !== "event") calEl2.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
             case "selstart":
               selMode = btn.getAttribute("data-m"); selDays = {}; pending = null; render();
               var calEl1 = document.querySelector(".cal"); if (calEl1) calEl1.scrollIntoView({ behavior: "smooth", block: "start" });
               break;
-            case "selcancel": selMode = ""; selDays = {}; render(); break;
+            case "selcancel": if(busy)break; selMode = ""; selDays = {}; render(); break;
             case "selapply":
               var chosen = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
               if (!chosen.length) { toast("日付をえらんでください"); return; }
