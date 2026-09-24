@@ -835,12 +835,7 @@
           var selTxt = selDates.length ? selDates.map(fmtDateW).join("、") : "予定表の日付をタップすると選べます(もう一度タップで取り消し)";
           var html = '<div class="confirmbar selbar ' + selMode + '"' + (inline ? ' style="position:static;margin-top:14px;padding:14px 0 0;box-shadow:none"' : '') + '><div class="inner">';
           if (selMode === "ng") {
-            var ngByDate = {};
-            blocked.forEach(function (b) { (ngByDate[b.date] = ngByDate[b.date] || []).push(b.id); });
-            var addN = selDates.filter(function (d) { return !ngByDate[d]; }).length, remN = selDates.length - addN;
-            html += '<div class="msg">授業できない日: ' + selDates.length + '日' + (selDates.length ? '(登録 ' + addN + '日' + (remN ? '・解除 ' + remN + '日' : '') + ')' : '') + '</div>';
-            html += '<div class="small muted" style="margin-bottom:8px">' + selTxt + (selDates.length ? "" : "。斜線の日をタップすると解除") + '</div>';
-            html += '<div class="row" style="margin-bottom:6px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-ngstart" step="900"><span class="muted">〜</span><input type="time" id="b-ngend" step="900"></div>';
+            html += '<div class="row"><label>日付 <input type="date" id="b-ngdate" min="'+esc(D.today)+'" value="'+esc(selDates[0]||D.today)+'"></label><label><input type="checkbox" id="b-ngall" checked> 終日</label></div><div class="row" style="margin:12px 0"><label>開始 <input type="time" id="b-ngstart" step="900" disabled></label><span>〜</span><label>終了 <input type="time" id="b-ngend" step="900" disabled></label></div>';
             html += '<div class="row"><input type="text" id="b-ngnote" placeholder="メモ(任意。例: 大会)" maxlength="50" style="flex:1;min-width:140px"><button class="btn-primary" data-action="selapply"' + (busy || !selDates.length ? " disabled" : "") + '>' + (busy ? "登録しています…" : "この内容で登録") + '</button></div>';
           } else if (selMode === "want") {
             html += wishModeField('b');
@@ -1626,13 +1621,12 @@
             case "selcancel": if(busy)break; selMode = ""; selDays = {}; render(); break;
             case "selapply":
               var chosen = Object.keys(selDays).filter(function (d) { return selDays[d]; }).sort();
-              if(selMode === "want"){var wd=val("b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
+              if(selMode === "want" || selMode === "ng"){var wd=val(selMode === "ng" ? "b-ngdate" : "b-wdate");if(!/^\d{4}-\d{2}-\d{2}$/.test(wd)||wd<S.today){toast("今日以降の日付を選んでください");return;}chosen=[wd];}
               if (!chosen.length) { toast("日付をえらんでください"); return; }
               if (selMode === "ng") {
-                var ngBy2 = {}; (S.blocked || []).forEach(function (b) { (ngBy2[b.date] = ngBy2[b.date] || []).push(b.id); });
-                var addD2 = chosen.filter(function (d) { return !ngBy2[d]; }), remIds2 = [];
-                chosen.forEach(function (d) { if (ngBy2[d]) remIds2 = remIds2.concat(ngBy2[d]); });
+                var addD2 = chosen, remIds2 = [];
                 var ngNote2 = val("b-ngnote"), ngSt = val("b-ngstart"), ngEn = val("b-ngend");
+                if((document.getElementById("b-ngall")||{}).checked){ngSt="";ngEn="";}else if(!ngSt||!ngEn){toast("開始と終了の時刻を入れてください");return;}
                 if ((ngSt && !ngEn) || (!ngSt && ngEn)) { toast("時間帯は開始と終了の両方を入れてください(終日なら両方空欄)"); return; }
                 if (ngSt && ngSt >= ngEn) { toast("時間帯は「開始 < 終了」で入れてください"); return; }
                 selMode = ""; selDays = {};
@@ -1716,6 +1710,7 @@
         app.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && (Object.prototype.hasOwnProperty.call(folds, key) || key.indexOf('hist:') === 0)) folds[key] = !!d.open; }, true);
         app.addEventListener("change", function (ev) {
           var el = ev.target;
+          if(el && el.id === "b-ngall"){["b-ngstart","b-ngend"].forEach(function(id){var input=document.getElementById(id);if(input)input.disabled=el.checked;});return;}
           if (el && el.id === "fa-child") { if(F.busy)return; F.studentId=el.value; F.confirm=null; familyRender(); return; }
           if (el && el.id === "fa-mychild") { if(F.busy)return; familySelectChild(el.value); familyRender(); return; }
           if (el && el.getAttribute("data-action") === "fa-mailpref") { if(F.busy||!F.home)return; var mp = Object.assign({}, F.home.emailPrefs || {}); mp[el.getAttribute("data-kind")] = !!el.checked; familyRequest('familyEmailPrefs', { ftoken: familyToken(), prefs: mp }, function (res) { F.home.emailPrefs = res.emailPrefs || mp; F.message = 'メール通知の設定を保存しました。'; }); return; }

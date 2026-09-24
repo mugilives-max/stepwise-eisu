@@ -350,3 +350,12 @@ test('lesson wish uses edited date and optional lesson selection', async () => {
  ui.input('b-wdate','2026-09-18');ui.input('b-wstart','17:30');ui.input('b-wmin','90');ui.input('b-wlesson','数学（講習）');ui.input('b-wnote','復習');ui.click('selapply');
  const body=ui.requests.at(-1).body;assert.deepEqual(body.dates,['2026-09-18']);assert.equal(body.note,'数学（講習）：復習');
 });
+
+test('blocked time uses editable date and adds intervals without removing existing blocks', async () => {
+ for(const allDay of [true,false]){
+ const ui=await studentReady(state());ui.click('calday',{'data-date':'2026-09-15'});ui.click('dayadd');ui.click('dayact',{'data-m':'ng'});
+ assert.equal(ui.el('b-ngall').checked,true);ui.input('b-ngdate','2026-09-18');ui.el('b-ngall').checked=allDay;
+ ui.el('b-ngstart').value='10:00';ui.el('b-ngend').value='12:00';ui.click('selapply');
+ const body=ui.requests.at(-1).body;assert.equal(body.action,'blockSet');assert.deepEqual(body.add,['2026-09-18']);assert.deepEqual(body.removeIds,[]);assert.equal(body.start,allDay?'':'10:00');assert.equal(body.end,allDay?'':'12:00');
+ }
+});
