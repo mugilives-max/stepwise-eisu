@@ -28,9 +28,9 @@
         var gradeMode = "score", examMode = "dev";
         var G = null, GX = [], gLoading = false; // 成績・模試(成績タブで初回に取得)
         var tabs = document.getElementById("tabs");
-        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts')return 'menu';return ['home','tasks','records','grades','plans','menu','settings'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts は menu 扱い
+        function parentSection(){var part=((location.hash||'').split('/')[1]||'home').split('?')[0];if(part==='billing'||part==='contacts'||part==='plans')return 'menu';return ['home','tasks','records','grades','menu','settings'].indexOf(part)>=0?part:'home';} // 旧 mypage / schedule は home、旧 billing / contacts は menu 扱い
         // 保護者ページ: ホームは子どもの生徒ページ(マイページ)を共用し、実施状況の末尾に月の実施合計を表示。旧「予定」ページは削除済み(2026-09-11)。残りの旧ページも順次削る
-        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['plans','計画'],['menu','保護者メニュー'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
+        function parentNavigation(family){var prefix=family?'#family/':'#parent/';return [['home','ホーム'],['tasks','宿題'],['records','授業の記録'],['grades','成績'],['menu','保護者メニュー'],['settings','設定']].map(function(x){return '<a href="'+prefix+x[0]+'"'+(parentSection()===x[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>';}).join('');}
         function route() { var h = location.hash || "#home"; if (location.pathname.indexOf('/hogosha')===0 || h === "#family" || h.indexOf("#family?") === 0 || h.indexOf('#family/')===0) return "family"; if(h === '#parent' || h.indexOf('#parent/')===0)return 'family'; if (h === "#student-email" || h.indexOf("#student-email?") === 0) return "student-email"; if (h === '#tasks' || h.indexOf('#tasks?') === 0) return 'tasks'; return { "#grades": "grades", "#history": "history", "#parent": "parent" }[h] || "home"; }
         // 生徒本人のページではヘッダー左上を「〇〇さんのマイページ」にする(保護者ページ・保護者向け表示は元のまま)
         function updateBrand() {
@@ -1506,7 +1506,6 @@
             if(parentSection()==='tasks'){ app.innerHTML = h + renderFamilyMypage('tasks'); return; }
             if(parentSection()==='grades'){ app.innerHTML = h + renderFamilyMypage('grades'); return; }
             if(parentSection()==='records'){ app.innerHTML = h + renderFamilyMypage('history'); return; }
-            if(parentSection()==='plans'){ app.innerHTML=h+renderFamilyPlans(); mountDayDialog(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
             h += '<div class="card"><p>'+esc((F.home.family||{}).email)+'・メール確認済み</p><button class="btn-quiet btn-sm" data-action="fa-home"'+dis+'>家族情報を更新</button> <button class="btn-quiet btn-sm" data-action="fa-mode" data-step="emailChange"'+dis+'>メールアドレスを変更</button></div>';
@@ -1514,7 +1513,8 @@
             h += '<p class="note">共用端末では利用後にログアウトしてください。</p><p><button class="btn-quiet btn-sm" data-action="fa-logout"'+dis+'>ログアウト</button></p>';
               app.innerHTML=h;return;
             }
-            // 保護者メニュー: 授業料と請求・お支払い。アカウント設定は設定タブへ。
+            // 保護者メニュー: 授業計画、授業料、請求・お支払い。
+            h += renderFamilyPlans();
             if((F.home.children||[]).length>1) h += '<p><select id="fa-child" aria-label="子どもで絞り込む"'+dis+'><option value=""'+(!F.studentId?' selected':'')+'>全員</option>'+F.home.children.map(function(c){return '<option value="'+esc(c.studentId)+'"'+(sameId(c.studentId,F.studentId)?' selected':'')+'>'+esc(c.name)+'</option>';}).join('')+'</select></p>';
             h += renderFamilyTuition();
             h += '<h2>請求・お支払い</h2>';
