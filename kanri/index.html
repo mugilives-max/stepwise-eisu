@@ -704,7 +704,7 @@
           for(var n=1;n<=days;n++){
             var date=y+'-'+pad(m+1)+'-'+pad(n), c=counts[date]||{booked:0,offered:0}, unavailable=date>bounds.last, total=c.booked+c.offered;
             var holiday=window.StepwiseCalendar.holidayName(date);
-            var label=fmtDY(date)+(holiday?'、'+holiday:'')+(date===day?'、今日':'')+(unavailable?'、ホームの表示期間外':'、確定'+c.booked+'件、案内中'+c.offered+'件');
+            var label=fmtDY(date)+(holiday?'、'+holiday:'')+(date===day?'、今日':'')+(unavailable?'、ホームの表示期間外':'、予定'+c.booked+'件、案内中'+c.offered+'件');
             h+='<button type="button" id="home-day-'+date+'" class="home-calendar-day'+(holiday?' holiday':'')+(date===day?' today':'')+'" data-action="home-cal-day" data-date="'+date+'" aria-label="'+esc(label)+'" aria-pressed="'+(date===selected)+'"'+(date===day?' aria-current="date"':'')+(unavailable?' disabled':'')+'><span class="home-calendar-number">'+n+'</span>'+(holiday?'<span class="calholiday">'+esc(holiday)+'</span>':'')+'<span class="home-calendar-count">'+(unavailable?'—':total?total+'件':'')+'</span></button>';
           }
           return h+'</div><p class="note">授業の件数（案内中を含む）。日付を選ぶと授業を表示します。</p>'+(month===bounds.maxMonth?'<p class="note">ホームでは'+fmtD(bounds.last)+'まで表示。先の予定は授業ページで確認できます。</p>':'')+'</section>';
@@ -719,7 +719,7 @@
         },true);
         function homeLesson(s, withDate) {
           var day=D.today, offered=s.status==='offered', ended=offerEnded(s,day), record=s.lessonRecordStatus;
-          var state=offered?(ended?'時間終了・実施未確認':'承認待ち'):s.req?'取消依頼中':s.done?'実施済み':'確定';
+          var state=offered?(ended?'時間終了・実施未確認':'承認待ち'):s.req?'取消依頼中':s.done?'実施済み':'予定';
           var status=offered?'amber':s.req?'red':s.done?'gray':'blue';
           var recordText=s.lessonDraftStatus==='draft'?'下書き・未公開':record==='active'?'記録済み':record==='void'?'記録無効化済み':s.date<=day?'記録未入力':'';
           var h='<article class="home-lesson" data-home-slot="'+esc(s.id)+'"><div class="home-time">'+(withDate?'<div class="small muted">'+fmtD(s.date)+'</div>':'')+esc(s.start)+'<br><span class="small muted">〜'+endTime(s.start,s.min)+'</span></div>';
@@ -759,7 +759,7 @@
           var cutoff=addDaysStr(d.today,-7), recent=prior.filter(function(s){return s.date>=cutoff;}), older=prior.filter(function(s){return s.date<cutoff;});
           var pending=(d.pending||[]).filter(function(s){return !offerEnded(s,d.today);}), cr=d.cancelReqs||[], unrecorded=d.unrecordedLessons||[], expired=d.expired||[], wishes=d.wishes||[], unpaid=d.unpaid||[];
           var h='<div class="home-work"><div class="head"><div><h1>ホーム</h1><p class="sub">'+fmtDY(d.today)+' · 今日の授業と、次にすること</p></div><div class="row"><a class="btn-primary btn-sm" href="#lessons">授業の予定表へ</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
-          h+='<div class="home-schedule">'+homeCalendar(slots,d.today)+'<section class="card home-day" aria-label="'+(isToday?'今日の授業':'選択日の授業')+'"><h2>'+fmtD(selected)+'の授業'+(isToday?' <span class="tag blue">今日</span>':'')+'</h2><p class="sub">確定 '+booked+'件'+(awaiting?' · 承認待ち '+awaiting+'件':'')+(ended?' · 時間終了・実施未確認 '+ended+'件':'')+'</p>'+(daySlots.length?daySlots.map(function(s){return homeLesson(s,false);}).join(''):'<p class="empty">'+(isToday?'今日':'この日')+'の授業はありません。</p>')+'<div class="home-day-footer"><a class="btn-quiet btn-sm" href="#lessons" data-action="home-cal-full" data-date="'+esc(selected)+'">この日の予定を詳しく見る</a></div></section></div>';
+          h+='<div class="home-schedule">'+homeCalendar(slots,d.today)+'<section class="card home-day" aria-label="'+(isToday?'今日の授業':'選択日の授業')+'"><h2>'+fmtD(selected)+'の授業'+(isToday?' <span class="tag blue">今日</span>':'')+'</h2><p class="sub">予定 '+booked+'件'+(awaiting?' · 承認待ち '+awaiting+'件':'')+(ended?' · 時間終了・実施未確認 '+ended+'件':'')+'</p>'+(daySlots.length?daySlots.map(function(s){return homeLesson(s,false);}).join(''):'<p class="empty">'+(isToday?'今日':'この日')+'の授業はありません。</p>')+'<div class="home-day-footer"><a class="btn-quiet btn-sm" href="#lessons" data-action="home-cal-full" data-date="'+esc(selected)+'">この日の予定を詳しく見る</a></div></section></div>';
           h+='<h2 class="home-section-title">確認・対応すること</h2>';
           if(cr.length)h+=homeFold('cancel','取消依頼',cr.length+'件・返事が必要',homeCancellation(cr),true);
           h+=homeFold('records','前日までの記録待ち',recent.length+'件・直近7日'+(older.length?' / 以前 '+older.length+'件':''), '<p class="note">'+fmtD(cutoff)+'〜'+fmtD(addDaysStr(d.today,-1))+'の実施済み授業で、記録が未入力または下書きのものです。宿題の反映・保護者の既読は記録画面で確認してください。</p>'+(recent.length?recent.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の記録待ちはありません。</p>')+(older.length?homeFold('older-records','それ以前の記録待ち',older.length+'件',older.map(function(s){return homeLesson(s,true);}).join('')):''),recent.length>0);
@@ -769,7 +769,7 @@
           h+=homeFold('wishes','生徒からの希望日程',wishes.length+'件',(wishes.length?wishes.slice(0,5).map(function(s){return '<div class="line"><span class="t">'+fmtD(s.date)+' '+esc(s.start)+'〜'+esc(s.end)+'</span><span class="w">'+esc(s.studentName)+(s.note?'<div class="small muted">'+esc(s.note)+'</div>':'')+'</span></div>';}).join(''):'<p class="empty">希望日程はありません。</p>')+(wishes.length>5?'<p class="note">ほか '+(wishes.length-5)+'件</p>':'')+'<a class="btn-ghost btn-sm" href="#lessons">授業ページで日程調整</a>');
           h+='<div id="home-services"></div><h2 class="home-section-title">この先の予定・運営情報</h2>';
           var week=d.lessonsWeek||[], events=d.events||[];
-          h+=homeFold('week','明日以降の確定授業',week.length+'件・7日以内',week.length?week.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の確定授業はありません。</p>');
+          h+=homeFold('week','明日以降の予定授業',week.length+'件・7日以内',week.length?week.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の予定授業はありません。</p>');
           h+=homeFold('events','生徒・保護者からの共有予定',events.length+'件・3週間以内',events.length?events.map(function(e){return '<div class="line"><span class="t">'+evRange(e)+'</span><span class="w"><a href="#s='+encodeURIComponent(e.studentId)+'">'+esc(e.studentName)+'</a> '+esc(e.title)+'</span></div>';}).join(''):'<p class="empty">共有予定はありません。</p>');
           h+=homeFold('unpaid','未入金',unpaid.length+'件'+(unpaid.length?'・'+yen(unpaid.reduce(function(sum,u){return sum+u.amount;},0)):''),unpaid.length?unpaid.map(function(u){return '<div class="line"><span class="t">'+esc(u.ym)+'</span><span class="w">'+esc(u.name)+' '+yen(u.amount)+'</span><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(u.studentId)+'&amp;tab=billing">請求・入金を確認</a></div>';}).join(''):'<p class="empty">未入金はありません。</p>');
           h+=homeFold('students','生徒ごとの今月の状況',(d.students||[]).length+'人','<div class="grid">'+(d.students||[]).map(function(s){return '<a class="card scard" href="#s='+encodeURIComponent(s.id)+'"><strong>'+esc(s.name)+'</strong><div class="small muted">'+esc([s.grade,s.school].filter(Boolean).join('・'))+'</div><div class="small">実施 '+Number(s.doneThisMonth||0)+'回 · '+yen(s.feeThisMonth||0)+'</div>'+(s.plannedThisMonth?'<div class="small">確定 '+Number(s.bookedThisMonth||0)+' / 計画 '+Number(s.plannedThisMonth)+'回'+(s.bookedThisMonth<s.plannedThisMonth?' · 残り'+(s.plannedThisMonth-s.bookedThisMonth)+'回':'')+' · '+(s.planStatus==='proposed'?'計画承認待ち':s.planStatus==='approved'?'計画承認済み':'計画未提案')+'</div>':'')+'<div class="small muted">次回 '+(s.next?fmtD(s.next.date)+' '+esc(s.next.start):'未定')+'</div>'+(s.unpaid?'<span class="tag red">未入金 '+Number(s.unpaid)+'件</span>':'')+'</a>';}).join('')+'</div><p><a href="#students">生徒一覧・生徒を追加</a></p>');
@@ -1009,7 +1009,7 @@
               var when = fmtD(l.date) + ' ' + l.start;
               if (l.status === "offered") h += dayRow('<span class="tag amber">案内</span>', time, who, canEdit ? finishRecordButton(l, tdy, s.id) + '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取り下げ</button>' : '');
               else if (l.done) h += dayRow('<span class="tag gray">実施済</span>', time, who, (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="0">未実施に戻す</button>' : ''), lessonHref(s.id, l.id), true);
-              else h += dayRow('<span class="tag green">確定</span>', time, who, meet + (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="1">実施済にする</button><button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-name="' + esc(s.name) + '" data-when="' + esc(when) + '">解除</button>' : ''), lessonHref(s.id, l.id));
+              else h += dayRow('<span class="tag green">予定</span>', time, who, meet + (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="1">実施済にする</button><button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-name="' + esc(s.name) + '" data-when="' + esc(when) + '">解除</button>' : ''), lessonHref(s.id, l.id));
             });
             dayN.forEach(function (b) { h += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && canEdit ? '<button class="btn-quiet btn-sm" data-action="sdelblock" data-id="' + esc(b.id) + '">解除</button>' : ''); });
             dayW.forEach(function (x) {
@@ -1164,7 +1164,7 @@
             upcoming.forEach(function (l) {
               html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
               html += slotDelivery(l, s.id, false, 'mode') + ' ';
-              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">確定</span>'));
+              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">予定</span>'));
               html += lessonRecordTag(l, s.id) + '</span>';
               if (l.status === "booked") {
                 html += slotDelivery(l, s.id, false, 'actions');
@@ -1252,7 +1252,7 @@
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + "</span>" : "");
           h += ' ' + slotDelivery(s, null, false, 'mode') + ' ';
-          if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : (s.done ? ' <span class="tag gray">実施済</span>' : ' <span class="tag blue">確定</span>');
+          if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : (s.done ? ' <span class="tag gray">実施済</span>' : ' <span class="tag blue">予定</span>');
           else if (s.status === "offered") h += ' <span class="tag amber">承認待ち</span>';
           else h += ' <span class="tag gray">空き枠</span>';
           h += lessonRecordTag(s);

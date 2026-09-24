@@ -62,7 +62,7 @@
         function fmtDateW(ds) { return fmtDate(ds) + "(" + WD[wdOf(ds)] + ")"; }
         function fmtDY(ds) { if (!ds || ds.length < 10) return esc(ds || ""); var p = ds.split("-"); return p[0] + "/" + (+p[1]) + "/" + (+p[2]); }
         function cT(t) { return String(t || "").replace(/^0/, "").replace(/:00$/, ""); } // 13:00→13, 09:30→9:30
-        function lessonLabel(s) { if (!s) return ""; var k = String(s.kind || ""); return String(s.subject || "") + (k && k !== "通常" ? "（" + k + "）" : ""); } // 科目＋種類(通常は省略)
+        function lessonLabel(s, full) { if (!s) return ""; var k = String(s.kind || (full ? "通常" : "")); return String(s.subject || "") + (k && (full || k !== "通常") ? "（" + k + "）" : ""); } // 一覧では通常も表示
         function planName(r) { return String(r && r.subject || "") + "（" + (r && r.kind ? r.kind : "通常") + "）"; } // 授業計画では通常も明示
         function kindTag(kind) { return '<span class="tag gray">' + esc(kind || '通常') + '</span>'; }
         function planPeriod(l) { if (l && l.period) return l.period; var st = String(l && l.startDate || ""), en = String(l && l.endDate || ""); if (!st) return ""; function md(d) { return (+d.slice(5, 7)) + "/" + (+d.slice(8)); } return (+st.slice(0, 4)) + "/" + md(st) + "〜" + md(en); }
@@ -174,7 +174,7 @@
           meetTries++;
           meetTimer = setTimeout(function () { meetTimer = null; loadState().catch(function () {}); }, 6000);
         }
-        function deliveryTag(s) { if (route() !== 'family' && s.deliveryMode === 'in_person') return ''; return ' <span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>'; }
+        function deliveryTag(s) { if (s.deliveryMode === 'in_person') return ''; return ' <span class="tag gray">' + deliveryLabel(s.deliveryMode) + '</span>'; }
         function slotSnapshot(s) { return { id: String(s.id), date: s.date, start: s.start, min: Number(s.min), subject: s.subject || '', deliveryMode: s.deliveryMode || '' }; }
         function taskDueText(t) {
           if (t.dueMode === 'nextLesson') return '次回の' + (t.dueSubject || '同じ科目の') + '授業' + (t.due ? '（' + fmtDY(t.due) + (t.dueStart ? ' ' + t.dueStart : '') + '）まで' : '（予定未定）');
@@ -636,8 +636,8 @@
             if (dayOffs.length && helpToff) html += '<div class="note" style="margin:4px 0 8px">先生の予定があるため、この時間帯には授業を登録できません。別の日時を選ぶか、先生にご相談ください。</div>';
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
-              var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
-              if (s.st === "mine") html += dayRow('<span class="tag green">確定</span>', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
+              var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s, true)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
+              if (s.st === "mine") html += dayRow('<span class="tag green">予定</span>', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
@@ -768,7 +768,7 @@
           html += '<div class="card" style="border-color:#d99a2b">';
           html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
-            html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s)) : "") + deliveryTag(s) + "</span>";
+            html += '<div class="slotline"><label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (b.selected[s.id] ? ' checked' : '') + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s, true)) : "") + deliveryTag(s) + "</span>";
             html += '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button></div>';
           });
           html += '<button class="btn-primary" data-action="batchreview"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>選んだ日時を確認する</button></div><div class="note">日時を確認してから予定します。日時が合わないときは「再調整」で先生に別の日時をお願いできます。</div></details>';
@@ -781,7 +781,7 @@
           if (upcoming.length > 1 || (upcoming.length === 1 && !(hasNextCard && next))) {
             html += '<div class="card">';
             upcoming.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s)) : "") + (s.req ? ' <span class="tag red">キャンセル申請中</span>' : "") + "</span>";
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s, true)) : "") + (s.req ? ' <span class="tag red">キャンセル申請中</span>' : "") + "</span>";
               html += deliveryTag(s);
               html += meetControl(s, false);
               html += cancelControl(s) + "</div>";
