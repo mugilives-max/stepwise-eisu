@@ -62,7 +62,7 @@ test('progress separates lessons covered by a proposed plan from genuinely outsi
  assert.ok(progress.includes('<td>通常</td><td><span class="plan-count-value"><span>4回</span><button'));
  assert.ok(progress.includes('<td>0回</td><td>1回</td><td>未承認</td>'));
  assert.equal((progress.match(/class="plan-count-warning"/g)||[]).length,1);
- assert.ok(progress.includes('この授業計画は未承認です。保護者の方に確認し、承認していただくようにお願いします。'));
+ assert.ok(progress.includes('この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。'));
  const id=/aria-controls="(progress-approval-[^"]+)"/.exec(progress)[1];
  assert.ok(progress.includes('id="'+id+'" hidden'));
 });
