@@ -51,3 +51,20 @@ test('parent preview displays API errors and permits retry without a family logi
  assert.match(ui.html(),/先生アカウントでログインし直してください/);assert.doesNotMatch(ui.html(),/家族ページを開く/);
  ui.click('fa-home');assert.equal(ui.requests.length,2);assert.equal(ui.requests[1].body.action,'preview');
 });
+
+test('parent preview reads each sibling with its own ID and the original family anchor',async()=>{
+ const ui=createUI('student',{hash:'#family/home',search:'?preview=parent:test-a',local:new Map([['sw_admt','synthetic-teacher']])});
+ let answered=0;
+ for(let round=0;round<10;round++){
+  const pending=ui.requests.slice(answered);if(!pending.length)break;answered=ui.requests.length;
+  for(const req of pending){
+   assert.equal(req.body.action,'preview');assert.equal(req.body.familyStudentId,'test-a');
+   if(req.body.view==='home')req.reply({ok:true,family:{id:'family-test',label:'【テスト】保護者'},children:[{studentId:'test-a',name:'【テスト】兄'},{studentId:'test-b',name:'【テスト】弟'}]});
+   else if(req.body.view==='student')req.reply({me:{name:req.body.studentId},today:'2026-09-24',slots:[],history:[],planLines:[]});
+   else req.reply({ok:true,data:{month:'2026-09',thisMonth:{},planLines:[],payments:[]}});
+  }await flush();
+ }
+ for(const view of ['student','parent'])assert.deepEqual([...new Set(ui.requests.filter(r=>r.body.view===view).map(r=>r.body.studentId))].sort(),['test-a','test-b']);
+ assert.match(ui.html(),/【テスト】兄さん/);assert.match(ui.html(),/【テスト】弟さん/);
+ assert.equal(ui.session.has('sw_ft_v1'),false);
+});

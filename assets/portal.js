@@ -398,7 +398,7 @@
         function previewRoute(body) {
           if (!PREVIEW || !body) return null;
           var a = String(body.action || ''), tok = lsGet('sw_admt') || '';
-          function go(view) { return fetch(WRITE_TO_WORKER && READ_API ? READ_API : API, { method: 'POST', body: JSON.stringify({ action: 'preview', token: tok, studentId: PREVIEW.studentId, view: view }) }).then(function (r) { return r.json(); }); }
+          function go(view) { return fetch(WRITE_TO_WORKER && READ_API ? READ_API : API, { method: 'POST', body: JSON.stringify({ action: 'preview', token: tok, studentId: body.studentId || PREVIEW.studentId, familyStudentId: PREVIEW.view === 'parent' ? PREVIEW.studentId : undefined, view: view }) }).then(function (r) { return r.json(); }); }
           if (a === 'state' || a === 'familyStudentState') return go('student');
           if (a === 'familyData') return go('parent');
           if (a === 'familyHome') return go('home');

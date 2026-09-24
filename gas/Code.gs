@@ -804,12 +804,20 @@ function previewOp_(req) {
   if (authMode_() !== 'account' || !tokenOk_(req.token)) return { error: '先生アカウントでログインし直してください', badAuth: true };
   var id = String(req.studentId || ''), student = findStudent_(id) || systemStudent_(id);
   if (!student) return { error: '生徒が見つかりません', errorCode: 'notFound' };
-  var view = String(req.view || 'student');
+  var view = String(req.view || 'student'), previewFamily = null;
+  if (view === 'home' || req.familyStudentId) {
+    var anchor = String(req.familyStudentId || id), families = familyRows_('familyAccounts').filter(function(a) {
+      return a.status !== 'disabled' && familyChildren_(a, false).some(function(c) { return c.studentId === anchor; });
+    });
+    if (families.length !== 1) return { error: families.length ? '複数の保護者が紐付いているため、表示する保護者を特定できません。' : 'この生徒に保護者が紐付いていません。管理画面で紐付けをご確認ください。', errorCode: 'previewFamilyUnavailable' };
+    previewFamily = families[0];
+    if (!familyChildren_(previewFamily, false).some(function(c) { return c.studentId === id; })) return { error: 'この保護者に紐付いていない生徒です。', errorCode: 'previewChildUnavailable' };
+  }
   if (view === 'student') { var st = studentState_(String(student.code || '')); if (st && typeof st === 'object') { delete st.emailStatus; st.viewer = 'preview'; } return st; }
   if (view === 'parent') { var pd = parentDataForStudent_(student); if (pd && pd.ok) pd.preview = true; return pd; }
   if (view === 'home') {
-    var kids = [{ studentId: String(student.id), name: String(student.name), active: true }];
-    return { ok: true, preview: true, family: { id: 'preview', label: '先生のプレビュー', email: '' }, children: kids, billing: familyBilling_({ id: 'preview' }, false, kids), emailPrefs: familyEmailPrefs_('') };
+    var kids = familyChildren_(previewFamily, false);
+    return { ok: true, preview: true, family: familyPublic_(previewFamily), children: kids, billing: familyBilling_(previewFamily, false), emailPrefs: familyEmailPrefs_(previewFamily.id) };
   }
   return { error: '表示する項目が正しくありません' };
 }
