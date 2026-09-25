@@ -195,8 +195,8 @@ test('student settings keeps registered-parent errors visible and late invitatio
 test('student family settings shows only other members of the current group',async()=>{
  const ui=createUI('admin',{hash:'#s=test-a&tab=settings'});ui.requests[0].reply({ok:true,data:settingsCard()});
  ui.requests[1].reply(familyList({families:[{id:'g1',label:'【テスト】家族A',children:[{studentId:'test-a',name:'本人'},{studentId:'sibling',name:'【テスト】弟'}]},{id:'g2',label:'別家族',children:[{studentId:'unrelated',name:'関係ない生徒'}]}]}));await flush();
- const section=ui.html().split('<h2>家族設定</h2>')[1];assert.match(section,/【テスト】弟/);assert.doesNotMatch(section,/本人|関係ない生徒|別家族/);assert.match(section,/#s=sibling&tab=settings/);
- ui.navigate('#s=sibling&tab=settings');ui.requests.findLast(r=>r.body.op==='kanriStudent').reply({ok:true,data:settingsCard({id:'sibling'})});ui.requests.findLast(r=>r.body.op==='familyList').reply(familyList({families:[{id:'single',label:'単独',children:[{studentId:'sibling',name:'本人'}]}]}));await flush();assert.match(ui.html(),/同じグループの他の生徒はいません/);
+ const section=ui.html();assert.doesNotMatch(section,/<h2>家族設定<\/h2>|関係ない生徒|別家族/);assert.match(section,/#s=sibling&tab=settings/);assert.match(section,/#students\?student=test-a/);
+ ui.navigate('#s=sibling&tab=settings');ui.requests.findLast(r=>r.body.op==='kanriStudent').reply({ok:true,data:settingsCard({id:'sibling'})});ui.requests.findLast(r=>r.body.op==='familyList').reply(familyList({families:[{id:'single',label:'単独',children:[{studentId:'sibling',name:'本人'}]}]}));await flush();assert.doesNotMatch(ui.html(),/<h2>家族設定<\/h2>/);assert.match(ui.html(),/#students\?student=sibling/);
 });
 
 test('group management excludes single and empty groups',async()=>{

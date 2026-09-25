@@ -1093,7 +1093,6 @@
               '</tbody></table></div>';
           }
 
-          html += studentFamilySettingsHtml(s);
           }
           if (section === 'billing') {
 
@@ -1606,25 +1605,11 @@
             return h;
           }
           function parentSettings(f){return row('保護者ページ',f&&f.configured?'<span class="tag green">登録済み</span>'+(f.lastLogin?' <span class="small">最終ログイン '+esc(fmtAuthTime(f.lastLogin))+'</span>':'')+'<p class="note">パスワードを忘れた場合は、保護者ページのログイン画面から再設定できます。</p>':studentParentInviteHtml(s,true));}
-          function table(rows){return '<table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+rows+'</tbody></table>';}
+          function table(rows){return '<table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+rows+row('家族の紐づけ','<a class="btn-quiet btn-sm" href="#students?student='+encodeURIComponent(s.id)+'">グループの変更・管理</a>')+'</tbody></table>';}
           if(FT.busy||!data)return '<div class="card">'+(FT.error?'<p role="alert">'+esc(FT.error)+'</p><button class="btn-quiet" data-action="family-settings-refresh">もう一度読み込む</button>':'<p>家族の登録情報を読み込んでいます…</p>')+studentParentInviteHtml(s,true)+'</div>';
           var groups=(data.families||[]).filter(function(f){return (f.children||[]).some(function(c){return sameId(c.studentId,s.id);});});
           if(!groups.length)return '<div class="card">'+table(person('生徒名',{studentId:s.id,familyName:s.profile['姓'],givenName:s.profile['名'],email:s.email})+parentSettings(null))+'<p class="note">保護者アカウントとの紐づけはまだありません。</p></div>';
           return groups.map(function(f){return '<div class="card">'+(groups.length>1?'<h3>'+esc(f.label)+'</h3>':'')+table(person('保護者名',f)+parentSettings(f)+(f.children||[]).map(function(c){return person('生徒名',c);}).join(''))+'</div>';}).join('');
-        }
-        function studentFamilySettingsHtml(s) {
-          var h='<h2>家族設定</h2><div class="card">', d=FT.auth===token()?FT.data:null;
-          if(FT.error) return h+'<p role="alert">'+esc(FT.error)+'</p><button class="btn-quiet" data-action="family-settings-refresh">もう一度読み込む</button></div>';
-          if(!d || FT.busy) return h+'<p>同じグループの生徒を読み込んでいます…</p></div>';
-          var groups=(d.families||[]).filter(function(f){return (f.children||[]).some(function(c){return sameId(c.studentId,s.id);});});
-          if(!groups.length) h+='<p>まだグループに登録されていません。</p>';
-          groups.forEach(function(f){
-            var others=(f.children||[]).filter(function(c){return !sameId(c.studentId,s.id);});
-            h+='<p><strong>'+esc(f.label)+'</strong></p>';
-            if(!others.length) h+='<p>同じグループの他の生徒はいません。</p>';
-            else h+='<p>同じグループの他の生徒</p><ul>'+others.map(function(c){return '<li><a href="#s='+encodeURIComponent(c.studentId)+'&tab=settings">'+esc(c.name)+'</a></li>';}).join('')+'</ul>';
-          });
-          return h+'<a class="btn-quiet btn-sm" href="#students?student='+encodeURIComponent(s.id)+'">グループの変更・管理</a></div>';
         }
         // 保護者カード: (1) メールで登録案内を送る(主経路) (2) 登録リンクを直接渡す(従来)。グループの登録状態を上に出す
         function studentParentInviteHtml(s, embedded) {
