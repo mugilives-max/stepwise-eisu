@@ -996,21 +996,14 @@
           var dayN = (s.blocked || []).filter(function (b) { return b.date === selDate; });
           var dayW = (s.wishes || []).filter(function (x) { return x.date === selDate; });
           var dayO = (s.teacherOff || []).filter(function (o) { return o.date === selDate; });
-          var dayLabel = dayHeading(selDate);
-          var h = '<div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px;font-weight:700">' + dayLabel + '</h3>' + (selDate >= tdy && canEdit ? '<button class="' + (sDayAddOpen ? 'btn-quiet' : 'btn-primary') + '" style="border-radius:999px;padding:8px 16px;font-weight:700" data-action="sdayadd" aria-label="' + fmtD(selDate) + 'の予定を追加" aria-expanded="' + (sDayAddOpen ? 'true' : 'false') + '">' + (sDayAddOpen ? '閉じる' : '＋ 予定を追加') + '</button>' : '') + '</div>';
-          var dayRow = dayRowHtml;
+          var h = window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',add:selDate>=tdy&&canEdit?{action:'sdayadd',label:'この日に予定を追加'}:null,ai:selDate>=tdy&&canEdit&&s.nlEnabled?{action:'sdayai',label:'AIで予定登録'}:null})+'<div class="card">';
+          var dayRow = function(lead,time,who,actions){return '<div class="line"><span class="t">'+time+'</span><span class="w">'+lead+' '+who+'</span>'+actions+'</div>';};
           if (!dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) h += '<div class="empty">この日の予定はありません</div>';
           else {
-            h += '<div class="daylist">';
+            h += '<div>';
             dayO.forEach(function (o) { h += dayRow('<span class="tag gray">' + (o.start ? '登録不可' : '登録不可（終日）') + '</span>', o.start ? esc(o.start) + '〜' + esc(o.end) : '', o.note ? '<span class="small muted">' + esc(o.note) + '</span>' : '<span class="small muted">先生の休み</span>', ''); });
             dayE.forEach(function (e) { h += dayRow('<span class="tag coral">重要な予定</span>', '', esc(e.title) + (e.date !== e.dateTo ? ' <span class="small muted">(' + evRange(e) + ')</span>' : ''), canEdit ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(e.id) + '">削除</button>' : ''); });
-            dayL.forEach(function (l) {
-              var time = l.start + '〜' + endTime(l.start, l.min), who = (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + (l.req ? ' <span class="tag red">取消依頼中</span>' : ''), meet = l.meetUrl ? '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(l.meetUrl) + '">Meet</a>' : '';
-              var when = fmtD(l.date) + ' ' + l.start;
-              if (l.status === "offered") h += dayRow('<span class="tag amber">案内</span>', time, who, canEdit ? finishRecordButton(l, tdy, s.id) + '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取り下げ</button>' : '');
-              else if (l.done) h += dayRow('<span class="tag gray">実施済</span>', time, who, (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="0">未実施に戻す</button>' : ''), lessonHref(s.id, l.id), true);
-              else h += dayRow('<span class="tag green">予定</span>', time, who, meet + (canEdit ? '<button class="btn-quiet btn-sm" data-action="toggledone" data-id="' + esc(l.id) + '" data-done="1">実施済にする</button><button class="btn-quiet btn-sm" data-action="unbook" data-id="' + esc(l.id) + '" data-name="' + esc(s.name) + '" data-when="' + esc(when) + '">解除</button>' : ''), lessonHref(s.id, l.id));
-            });
+            dayL.forEach(function (l) { h += lessonRow(Object.assign({},l,{studentId:s.id,studentName:s.name}),false,tdy); });
             dayN.forEach(function (b) { h += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && canEdit ? '<button class="btn-quiet btn-sm" data-action="sdelblock" data-id="' + esc(b.id) + '">解除</button>' : ''); });
             dayW.forEach(function (x) {
               var want = x.kind === "want", note = '<span class="tag ' + (want ? 'blue' : 'green') + '">' + (want ? 'この日時を希望' : 'この時間帯のどこかで') + '</span>' + (x.deliveryMode ? ' <span class="small muted">' + deliveryLabel(x.deliveryMode) + ' / ' + esc(x.duration) + '分</span>' : '') + (x.note ? ' <span class="small">' + esc(x.note) + '</span>' : '');
@@ -1019,8 +1012,11 @@
             });
             h += '</div>';
           }
-          if (selDate >= tdy && canEdit && sDayAddOpen) {
-            // 文章入力が使えるときは「文章で予定を登録」を既定にし、切り替えで手動入力(案内・授業不可)を出す
+          h += '</div>';
+          var scheduleBody = '';
+          if (selDate >= tdy && s.active !== false && sDayAddOpen) {
+            scheduleBody = h; h = '';
+            // ＋は手動、AIは文章入力で開く。対象は表示中の生徒に固定する。
             var sMode = s.nlEnabled ? sInputMode : 'manual';
             if (s.nlEnabled) h += dayInputSwitch(sMode); else h += '<h3 style="margin:12px 0 6px;font-size:15px">手動で予定入力</h3>';
             if (sMode === 'manual') h += '<div class="row" style="gap:6px"><button class="' + (sOfferOpen ? 'btn-primary' : 'btn-quiet') + ' btn-sm" data-action="dayoffer" data-date="' + selDate + '" aria-expanded="' + (sOfferOpen ? 'true' : 'false') + '">授業を案内</button><button class="' + (sBlockOpen ? 'btn-primary' : 'btn-quiet') + ' btn-sm" data-action="sblockopen" aria-expanded="' + (sBlockOpen ? 'true' : 'false') + '">授業不可を登録</button></div>';
@@ -1028,7 +1024,8 @@
             if (sMode === 'manual' && sBlockOpen) h += '<div class="row" style="margin-top:8px;gap:8px"><label>時間帯 <input type="time" id="sb-start" step="1800"> 〜 <input type="time" id="sb-end" step="1800"></label><input type="text" id="sb-note" maxlength="50" placeholder="メモ(任意)" style="flex:1;min-width:120px"><button class="btn-primary btn-sm" data-action="sblockadd" data-date="' + selDate + '">登録</button></div><p class="note" style="margin:4px 0 0">時間帯を空欄にすると終日の授業不可になります。生徒の予定表にも表示されます。</p>';
             if (sMode === 'text') h += renderTeacherNL(s);
           }
-          return h + '</div>';
+          if (scheduleBody) h = scheduleBody + window.StepwiseCalendar.dayDialog({id:'student-schedule',title:sInputMode==='text'?'AIで予定登録':'予定を追加',close:'sdayclose',busy:busy||TNL.busy,content:h});
+          return h;
         }
         function renderStudent() {
           renderNav();
@@ -1053,8 +1050,8 @@
               lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, cls: lessonCalendarClass(l, tdy), st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
               events: s.events || [], blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
-            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, adminHealth: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
-            html += '<h2>予定の編集</h2>' + renderStudentDayCard(s, tdy);
+            html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, toffText:'休み', toffLegend:'先生の休み', overlapLanes:true, adminHealth: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+            html += renderStudentDayCard(s, tdy);
           })();
 
           html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業記録を開く</a></p>';
@@ -1248,7 +1245,7 @@
           var recorded = s.lessonRecordStatus === 'active';
           return ' <a class="tag ' + (recorded ? 'blue' : 'red') + '" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '" title="授業記録を開く">' + (recorded ? '記入済' : '未記入') + '</a>';
         }
-        function lessonRow(s, withDate) {
+        function lessonRow(s, withDate, currentDay) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + "</span>" : "");
           h += ' ' + slotDelivery(s, null, false, 'mode') + ' ';
@@ -1260,7 +1257,7 @@
           if (s.status === "booked") {
             h += slotDelivery(s, null, false, 'actions');
             if (!s.done) h += lessonEntry(s);
-            if (!s.done && s.date <= A.today) h += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (s.done ? "0" : "1") + '" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
+            if (!s.done && s.date <= (currentDay || A.today)) h += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (s.done ? "0" : "1") + '" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
           } else {
             h += slotDelivery(s, null, false, 'actions') + (s.status === 'offered' ? '' : '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">' + (s.status === "offered" ? "取り下げ" : "枠を削除") + "</button>");
           }
@@ -1531,6 +1528,7 @@
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
           var planDialog=document.getElementById('plan-dialog');if(planDialog){planDialog.oncancel=function(e){e.preventDefault();if(!busy){planDetail=null;delete planEdits[cur.id];render();}};if(planDialog.showModal&&!planDialog.open)planDialog.showModal();}
+          var studentDialog=document.getElementById('student-schedule');if(studentDialog){studentDialog.oncancel=function(e){e.preventDefault();if(!busy&&!TNL.busy){sDayAddOpen=false;render();}};if(studentDialog.showModal&&!studentDialog.open)studentDialog.showModal();}
           var aiDialog=document.getElementById('ai-schedule');if(aiDialog&&aiDialog.showModal&&!aiDialog.open)aiDialog.showModal();
           var boardDialog=document.getElementById('board-editor');if(boardDialog&&boardDialog.showModal&&!boardDialog.open)boardDialog.showModal();
           if (window.StepwiseServices) {
@@ -2871,7 +2869,9 @@
               var cpw = (document.getElementById("f-curpass") || {}).value || "", npw = (document.getElementById("f-newpass") || {}).value || "";
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
               actA("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました"); break;
-            case "sdayadd": sDayAddOpen = !sDayAddOpen; if (!sDayAddOpen) { sBlockOpen = false; sOfferOpen = false; } render(); break;
+            case "sdayadd": sDayAddOpen=true;sInputMode='manual';sOfferOpen=false;sBlockOpen=false;render();break;
+            case "sdayai": sDayAddOpen=true;sInputMode='text';sOfferOpen=false;sBlockOpen=false;render();break;
+            case "sdayclose": if(!busy&&!TNL.busy){sDayAddOpen=false;sOfferOpen=false;sBlockOpen=false;render();}break;
             case "dayinput": sInputMode = btn.getAttribute("data-mode") === "manual" ? "manual" : "text"; render(); break;
             case "tnl-parse": tnlParse(); break;
             case "tnl-clear": TNL = { text: "", busy: false, proposal: null, error: "" }; render(); break;
