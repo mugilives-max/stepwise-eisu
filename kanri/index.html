@@ -1524,9 +1524,10 @@
           if(familyModal&&!familyModalActive())closeFamilyModal();
           if(familyModalActive()){
             app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)});
-            var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
           }
           app.innerHTML+=teacherBookingDialogHTML();
+            var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
+
           var bookingDialog=document.getElementById('teacher-booking-dialog');if(bookingDialog){bookingDialog.oncancel=function(e){if(busy)e.preventDefault();else teacherBookingDialog=null;};if(bookingDialog.showModal&&!bookingDialog.open)bookingDialog.showModal();}
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
           var planDialog=document.getElementById('plan-dialog');if(planDialog){planDialog.oncancel=function(e){e.preventDefault();if(!busy){planDetail=null;delete planEdits[cur.id];render();}};if(planDialog.showModal&&!planDialog.open)planDialog.showModal();}
