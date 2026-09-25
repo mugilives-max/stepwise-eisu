@@ -14,7 +14,7 @@ async function ready(homework=items(), extra={}) {
 }
 test('homework rows keep accessible names but no repeated heading or expanded deadline controls',async()=>{
   const ui=await ready();
-  const group=ui.html().split('<div class="lc-hwgroup">')[1].split('data-lc-extras')[0];
+  const group=ui.html().split('<div class="lc-hwgroup">')[1].split('<aside')[0];
   assert.equal((group.match(/基本の期限：/g)||[]).length,1);
   assert.doesNotMatch(group,/<label for="lc-title-|＋ 期限を設定|<select|<details[^>]* open/);
   assert.match(group,/data-lc-menu><summary[^>]*aria-label="宿題 1 の操作"/);
