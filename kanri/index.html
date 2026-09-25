@@ -1246,7 +1246,7 @@
           if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : '';
           else if (s.status === "offered") h += ' <button class="tag amber" data-action="teacher-book-open" data-id="'+esc(s.id)+'"'+(busy?' disabled':'')+'>承認待ち</button>';
           else h += ' <span class="tag gray">空き枠</span>';
-          if(s.status==='booked'&&s.teacherBooking)h+=' <button class="tag '+(s.teacherBooking.status==='correction'?'red':s.teacherBooking.status==='confirmed'?'gray':'amber')+'" data-action="teacher-book-open" data-id="'+esc(s.id)+'">'+({pending:'本人確認待ち',confirmed:'本人確認済み',correction:'修正依頼',registering:'登録処理を確認'}[s.teacherBooking.status]||'確認待ち')+'</button>';
+          if(s.status==='booked'&&s.teacherBooking)h+=' <button class="tag '+(s.teacherBooking.status==='correction'?'red':s.teacherBooking.status==='confirmed'?'gray':s.teacherBooking.status==='pending'?'green':'amber')+'" data-action="teacher-book-open" data-id="'+esc(s.id)+'">'+({pending:'本人確認待ち',confirmed:'本人確認済み',correction:'修正依頼',registering:'登録処理を確認'}[s.teacherBooking.status]||'確認待ち')+'</button>';
           h += lessonRecordTag(s);
           h += "</span>";
           if (s.status === "booked") {
