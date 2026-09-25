@@ -366,7 +366,7 @@ test('student settings sends the registration mail to a typed address, then show
   // rate limit and registered state
   ui.click('family-send-registration'); ui.requests.at(-1).reply({ ok: true, mailStatus: 'limited' }); await flush(); assert.match(ui.html(), /role="alert"[^>]*>送信間隔の制限中/);
   ui.requests.findLast(r => r.body.op === 'familyList').reply(familyList({ families: [{ id: 'g1', label: 'g', status: 'active', email: 'parent@example.invalid', configured: true, lastLogin: '2026-09-19T02:00:00.000Z', children: [{ studentId: 'test-a', name: '【テスト】子A' }] }] })); await flush();
-  assert.match(ui.html(), /<span class="tag green">登録済み<\/span> parent@example.invalid/); assert.equal(ui.el('parent-reg-email'), undefined); assert.doesNotMatch(ui.html(), /family-student-invite/);
+  assert.match(ui.html(), /<span class="tag green">登録済み<\/span>/); assert.match(ui.html(), /parent@example.invalid/); assert.doesNotMatch(ui.html(), /<h2>生徒・保護者のページ設定/); assert.equal(ui.el('parent-reg-email'), undefined); assert.doesNotMatch(ui.html(), /family-student-invite/);
 });
 
 test('the admin student header links to the read-only student and parent previews', async () => {
