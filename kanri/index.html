@@ -506,7 +506,7 @@
         function ngWhen(b) { return b.start ? ' ' + b.start + '〜' + b.end : ''; }
         function evRange(e) { return e.date === e.dateTo ? fmtD(e.date) : fmtD(e.date) + "〜" + fmtD(e.dateTo); }
         function eventRow(e, showName) {
-          return '<div class="line"><span class="t">' + evRange(e) + '</span><span class="w">' + (showName ? '<a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> ' : '') + '<span class="tag coral">共有予定</span> ' + esc(e.title) + '</span>' +
+          return '<div class="line"><span class="t">' + evRange(e) + '</span><span class="w">' + (showName ? '<a class="nm" href="#s=' + esc(e.studentId) + '" style="text-decoration:none;color:inherit">' + esc(e.studentName) + '</a> ' : '') + '<span class="tag coral">イベント</span> ' + esc(e.title) + '</span>' +
             '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(e.id) + '" data-sid="' + esc(e.studentId) + '">削除</button></div>';
         }
         function slotCmp(a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); }
@@ -770,7 +770,7 @@
           h+='<div id="home-services"></div><h2 class="home-section-title">この先の予定・運営情報</h2>';
           var week=d.lessonsWeek||[], events=d.events||[];
           h+=homeFold('week','明日以降の予定授業',week.length+'件・7日以内',week.length?week.map(function(s){return homeLesson(s,true);}).join(''):'<p class="empty">この期間の予定授業はありません。</p>');
-          h+=homeFold('events','生徒・保護者からの共有予定',events.length+'件・3週間以内',events.length?events.map(function(e){return '<div class="line"><span class="t">'+evRange(e)+'</span><span class="w"><a href="#s='+encodeURIComponent(e.studentId)+'">'+esc(e.studentName)+'</a> '+esc(e.title)+'</span></div>';}).join(''):'<p class="empty">共有予定はありません。</p>');
+          h+=homeFold('events','生徒・保護者からのイベント',events.length+'件・3週間以内',events.length?events.map(function(e){return '<div class="line"><span class="t">'+evRange(e)+'</span><span class="w"><a href="#s='+encodeURIComponent(e.studentId)+'">'+esc(e.studentName)+'</a> '+esc(e.title)+'</span></div>';}).join(''):'<p class="empty">イベントはありません。</p>');
           h+=homeFold('unpaid','未入金',unpaid.length+'件'+(unpaid.length?'・'+yen(unpaid.reduce(function(sum,u){return sum+u.amount;},0)):''),unpaid.length?unpaid.map(function(u){return '<div class="line"><span class="t">'+esc(u.ym)+'</span><span class="w">'+esc(u.name)+' '+yen(u.amount)+'</span><a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(u.studentId)+'&amp;tab=billing">請求・入金を確認</a></div>';}).join(''):'<p class="empty">未入金はありません。</p>');
           h+=homeFold('students','生徒ごとの今月の状況',(d.students||[]).length+'人','<div class="grid">'+(d.students||[]).map(function(s){return '<a class="card scard" href="#s='+encodeURIComponent(s.id)+'"><strong>'+esc(s.name)+'</strong><div class="small muted">'+esc([s.grade,s.school].filter(Boolean).join('・'))+'</div><div class="small">実施 '+Number(s.doneThisMonth||0)+'回 · '+yen(s.feeThisMonth||0)+'</div>'+(s.plannedThisMonth?'<div class="small">確定 '+Number(s.bookedThisMonth||0)+' / 計画 '+Number(s.plannedThisMonth)+'回'+(s.bookedThisMonth<s.plannedThisMonth?' · 残り'+(s.plannedThisMonth-s.bookedThisMonth)+'回':'')+' · '+(s.planStatus==='proposed'?'計画承認待ち':s.planStatus==='approved'?'計画承認済み':'計画未提案')+'</div>':'')+'<div class="small muted">次回 '+(s.next?fmtD(s.next.date)+' '+esc(s.next.start):'未定')+'</div>'+(s.unpaid?'<span class="tag red">未入金 '+Number(s.unpaid)+'件</span>':'')+'</a>';}).join('')+'</div><p><a href="#students">生徒一覧・生徒を追加</a></p>');
           h+=homeFold('meetings','最近の面談・連絡',(d.meetings||[]).length+'件',(d.meetings||[]).length?d.meetings.map(function(m){return '<div class="line"><span class="t">'+fmtD(m.date)+'</span><span class="w"><a href="#s='+encodeURIComponent(m.studentId)+'">'+esc(m.name)+'</a> <span class="small muted">'+esc([m.who,m.method].filter(Boolean).join('・'))+'</span><div class="small">'+esc(m.content)+'</div>'+(m.next?'<div class="small">次回：'+esc(m.next)+'</div>':'')+'</span></div>';}).join(''):'<p class="empty">記録はまだありません。生徒のカルテから登録できます。</p>');
@@ -891,7 +891,7 @@
 
         /* ---------- 生徒カルテ ---------- */
         // 予定表の下の「その日の予定」カード。生徒マイページの「予定の編集」と同じ見た目(行の形・タグ・＋ボタン)で、操作は先生ができるものに置き換える
-        // 生徒カルテの折りたたみ(今後の予定・授業履歴)。開閉は再描画をまたいで保持
+        // 生徒カルテの折りたたみ(授業履歴)。開閉は再描画をまたいで保持
         var kFolds = { upcoming: true, history: false };
         function foldHead(key, title, cnt) { return '<details class="fold " data-fold="' + key + '"' + (kFolds[key] ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>' + title + (cnt ? ' <span class="cnt">' + cnt + '</span>' : '') + '</h2></summary>'; }
         document.addEventListener("toggle", function (ev) { var d = ev.target, key = d && d.getAttribute ? d.getAttribute("data-fold") : null; if (key && Object.prototype.hasOwnProperty.call(kFolds, key)) kFolds[key] = !!d.open; }, true);
@@ -906,14 +906,14 @@
           return window.StepwiseCalendar.dayDialog({id:'ai-schedule',title:'AIで予定登録',close:'ai-close',busy:busy||TNL.busy,content:'<label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+A.students.filter(function(s){return s.active;}).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')});
         }
         var TNL = { text: "", busy: false, proposal: null, error: "" };
-        var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "予定の共有" };
+        var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "イベント" };
         function tnlDates(dates) { var out = [], cur = null; (dates || []).forEach(function (d) { if (cur && addDaysStr(cur.to, 1) === d) cur.to = d; else { cur = { from: d, to: d }; out.push(cur); } }); return out.map(function (g) { return g.from === g.to ? fmtD(g.from) : fmtD(g.from) + "〜" + fmtD(g.to); }).join("、"); }
         // ＋の中の入力方法の切り替え(生徒マイページと同じ見た目)
         function dayInputSwitch(mode) {
           return '<div class="row" style="margin:12px 0 8px;gap:8px;align-items:center"><div class="seg" role="tablist" aria-label="予定の入力方法">' +
             '<button type="button" role="tab" class="' + (mode === 'text' ? 'on' : '') + '" aria-selected="' + (mode === 'text' ? 'true' : 'false') + '" data-action="dayinput" data-mode="text">文章で予定を登録</button>' +
             '<button type="button" role="tab" class="' + (mode === 'manual' ? 'on' : '') + '" aria-selected="' + (mode === 'manual' ? 'true' : 'false') + '" data-action="dayinput" data-mode="manual">手動で入力</button></div>' + (mode === 'text' ? helpButton('tnl') : '') + '</div>' +
-            (mode === 'text' ? helpBox('tnl', '文章を書いて「内容を確認」を押すと、AIが「授業の案内」「授業不可」「予定の共有」に分けて登録の下書きを作ります。下書きは次の画面で確認・修正でき、チェックを入れた項目だけ登録されます。例:「来週の水曜17時から90分、英語の演習を案内」「20日は部活で授業不可」「25日と26日は中間テスト」。時刻や科目が読み取れない案内は確認画面で入力できます。') : '');
+            (mode === 'text' ? helpBox('tnl', '文章を書いて「内容を確認」を押すと、AIが「授業の案内」「授業不可」「イベント」に分けて登録の下書きを作ります。下書きは次の画面で確認・修正でき、チェックを入れた項目だけ登録されます。例:「来週の水曜17時から90分、英語の演習を案内」「20日は部活で授業不可」「25日と26日は中間テスト」。時刻や科目が読み取れない案内は確認画面で入力できます。') : '');
         }
         function renderTeacherNL(s) {
           var dis = TNL.busy || busy ? ' disabled' : '';
@@ -929,7 +929,7 @@
           if (p.summary) h += '<p style="margin:0 0 6px">' + esc(p.summary) + '</p>';
           if (!p.items.length) h += '<div class="empty">登録できる予定を読み取れませんでした。日付と時間を入れて書き直してください。</div>';
           p.items.forEach(function (it, i) {
-            var head = TNL_LABEL[it.kind] + (it.kind === 'event' ? '：' + esc(it.title) + (it.test ? '（テスト・模試）' : '') + (it.alsoBlock ? '（授業できない日としても登録）' : '') : '');
+            var head = TNL_LABEL[it.kind] + (it.kind === 'event' ? '：' + esc(it.title) + (it.test ? '（テスト・模試）' : '') : '');
             h += '<label class="task" style="align-items:flex-start;display:flex;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)"><input type="checkbox" data-action="tnl-item" data-i="' + i + '"' + (it.sel ? ' checked' : '') + (it.done ? ' disabled' : dis) + '><span class="tt" style="flex:1"><strong>' + head + '</strong>' + (it.done ? ' <span class="tag green">登録済み</span>' : '') + '<br>' + esc(tnlDates(it.dates));
             if (it.kind === 'offer') {
               if (it.needsTime) h += '<br><span class="small" style="color:var(--danger)">開始時刻を入れてください</span>';
@@ -940,6 +940,7 @@
             if (it.confidence === 'low') h += '<br><span class="small" style="color:var(--amber)">読み取りに自信がありません。内容を確認してください</span>';
             if (it.errors && it.errors.length) h += '<br><span class="small" style="color:var(--danger)">' + it.errors.map(esc).join('<br>') + '</span>';
             h += '</span></label>';
+            if (it.kind === 'event') h += '<label class="small"><input type="checkbox" data-action="tnl-event-block" data-i="' + i + '"' + (it.alsoBlock ? ' checked' : '') + (it.done ? ' disabled' : dis) + '>授業できない日にもする</label>';
           });
           if (p.questions && p.questions.length) h += '<ul class="small" style="margin:8px 0 0 18px;padding:0">' + p.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>';
           if (p.items.some(function (it) { return !it.done; })) h += '<div class="row" style="margin-top:10px"><button class="btn-primary" data-action="tnl-register"' + dis + '>チェックした内容で登録する</button></div>' + planPromptHtml('tnl') + '<p class="note">授業の案内は生徒ページに表示され、生徒が承認すると確定します（保護者の承認は待ちません。承認前の授業は請求できません）。授業できない日と予定は生徒の予定表にも表示されます。</p>';
@@ -951,7 +952,7 @@
           var sid = tnlStudent().id; TNL.busy = true; TNL.error = ''; TNL.proposal = null; render();
           admin('scheduleParseTeacher', { studentId: sid, text: text, subjects: LESSON_SUBJECTS }).then(function (res) {
             if (!tnlStudent() || !sameId(tnlStudent().id, sid)) return; TNL.busy = false;
-            (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'offer') { if (!it.start) it.start = '17:00'; if (!it.min) it.min = 90; } });
+            (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'event') it.alsoBlock = false; if (it.kind === 'offer') { if (!it.start) it.start = '17:00'; if (!it.min) it.min = 90; } });
             TNL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; render();
           }).catch(function (er) { if (!tnlStudent() || !sameId(tnlStudent().id, sid)) return; TNL.busy = false; TNL.error = er.message || '通信に失敗しました'; render(); });
         }
@@ -1152,30 +1153,12 @@
 
           }
           if (section === 'overview') {
-          // 今後の予定(確定・承認待ち)と案内
+          // 対応が必要な案内・イベント・授業履歴
           var tdy = s.today || today();
-          var upcoming = (s.lessons || []).filter(function (l) { return l.date >= tdy && (l.status === "booked" || l.status === "offered"); }).sort(function (a, b) { return a.date === b.date ? (a.start < b.start ? -1 : 1) : (a.date < b.date ? -1 : 1); });
           html += expiredCard((s.lessons || []).filter(function (l) { return offerEnded(l, tdy); }).map(function (l) { return Object.assign({ studentId: s.id, studentName: s.name }, l); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }), false);
-          html += foldHead('upcoming', '今後の予定', upcoming.length + '件') + '<div class="card">';
-          if (upcoming.length) {
-            upcoming.forEach(function (l) {
-              html += '<div class="line"><span class="t">' + fmtD(l.date) + ' ' + l.start + '〜' + endTime(l.start, l.min) + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span> ';
-              html += slotDelivery(l, s.id, false, 'mode') + ' ';
-              html += l.status === "offered" ? '<span class="tag amber">承認待ち</span>' : (l.req ? '<span class="tag red">取消依頼中</span>' + (l.req.reason ? ' <span class="small muted">' + esc(l.req.reason) + '</span>' : '') : (l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag blue">予定</span>'));
-              html += lessonRecordTag(l, s.id) + '</span>';
-              if (l.status === "booked") {
-                html += slotDelivery(l, s.id, false, 'actions');
-                if (!l.done) html += lessonEntry(l, s.id);
-                if (l.req) html += '<button class="btn-danger btn-sm" data-action="cancelok" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">取消を承認</button><button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">予定どおり</button>';
-                if (!l.done && l.date <= tdy) html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (l.done ? "0" : "1") + '" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
-              } else html += slotDelivery(l, s.id, false, 'actions');
-              html += '</div>';
-            });
-          } else html += '<div class="empty">今後の予定はありません</div>';
-          html += '</div></details>';
           var sev = s.events || [];
           if (sev.length) {
-            html += '<h2>' + esc(s.name) + 'さんの共有予定 <span class="cnt">' + sev.length + '件</span></h2><div class="card">' + sev.map(function (e) { return eventRow(e, false); }).join("") + '<div class="note">生徒・保護者が予定ページから共有した予定です(大会・見学など)。授業の調整の参考に。</div></div>';
+            html += '<h2>イベント <span class="cnt">' + sev.length + '件</span></h2><div class="card">' + sev.map(function (e) { return eventRow(e, false); }).join("") + '<div class="note">生徒・保護者が予定ページから共有した予定です(大会・見学など)。授業の調整の参考に。</div></div>';
           }
           var sw = s.wishes || [];
           if (sw.length) {
@@ -2793,7 +2776,7 @@
               toast(uwWant ? "希望日時をフォームに入れました。内容を確認して案内してください" : "空き時間 " + uw.window + " のあいだで開始時刻と長さを決めて案内してください");
               break;
             case "delevent":
-              if (!confirm("この共有予定を削除しますか?(生徒の画面からも消えます)")) return;
+              if (!confirm("このイベントを削除しますか?(生徒の画面からも消えます)")) return;
               if (route().page === "student") act("delEvent", { eventId: btn.getAttribute("data-id"), studentId: sid }, "削除しました", function () { cur.events = (cur.events || []).filter(function (x) { return String(x.id) !== btn.getAttribute("data-id"); }); });
               else actA("delEvent", { eventId: btn.getAttribute("data-id") }, "削除しました");
               break;
@@ -2875,6 +2858,7 @@
             case "dayinput": sInputMode = btn.getAttribute("data-mode") === "manual" ? "manual" : "text"; render(); break;
             case "tnl-parse": tnlParse(); break;
             case "tnl-clear": TNL = { text: "", busy: false, proposal: null, error: "" }; render(); break;
+            case "tnl-event-block": { var item = TNL.proposal && TNL.proposal.items[+btn.getAttribute("data-i")]; if(item && !item.done && !busy && !TNL.busy) { item.alsoBlock=!item.alsoBlock; } break; }
             case "tnl-item": { var ti = TNL.proposal && TNL.proposal.items[+btn.getAttribute("data-i")]; if (ti && !ti.done) ti.sel = !ti.sel; break; }
             case "tnl-register": tnlRegister(false); break;
             case "pp-cancel": planPrompt = null; render(); break;

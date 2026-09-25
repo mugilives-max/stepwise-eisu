@@ -193,7 +193,7 @@ test('the admin day card defaults to 文章で予定を登録 with a switch to m
   const ui = await adminReady(card({ nlEnabled: true, deliveryMode: 'online' }), 'overview');
   ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('sdayai');
   assert.match(ui.html(), /<div class="seg" role="tablist"[^>]*><button type="button" role="tab" class="on" aria-selected="true" data-action="dayinput" data-mode="text">文章で予定を登録<\/button><button type="button" role="tab" class="" aria-selected="false" data-action="dayinput" data-mode="manual">手動で入力<\/button><\/div>/);
-  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('tnl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('help-toggle', { 'data-help': 'tnl' }); assert.match(ui.html(), /<div class="card note"[^>]*>文章を書いて「内容を確認」を押すと、AIが「授業の案内」「授業不可」「予定の共有」に分けて登録の下書きを作ります。/); ui.click('help-toggle', { 'data-help': 'tnl' });
+  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('tnl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('help-toggle', { 'data-help': 'tnl' }); assert.match(ui.html(), /<div class="card note"[^>]*>文章を書いて「内容を確認」を押すと、AIが「授業の案内」「授業不可」「イベント」に分けて登録の下書きを作ります。/); ui.click('help-toggle', { 'data-help': 'tnl' });
   ui.click('dayinput', { 'data-mode': 'manual' }); assert.equal(ui.el('tnl-text'), undefined); assert.match(ui.html(), /data-action="dayoffer" data-date="2026-09-15"/); assert.match(ui.html(), /data-action="sblockopen"/);
   ui.click('dayinput', { 'data-mode': 'text' }); assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /data-action="dayoffer"/);
   ui.input('tnl-text', '来週水曜17時から90分英語の演習。20日は部活で休み。25日は中間テスト'); ui.click('tnl-parse');
@@ -204,7 +204,7 @@ test('the admin day card defaults to 文章で予定を登録 with a switch to m
     { kind: 'block', dates: ['2026-09-20'], start: '', end: '', note: '部活', confidence: 'high' },
     { kind: 'event', dates: ['2026-09-25'], title: '中間テスト', test: true, alsoBlock: false, start: '', end: '', note: '', confidence: 'high' }
   ], questions: ['木曜の時刻は？'], summary: '案内2件、授業不可1件、予定1件です。' }); await flush();
-  assert.match(ui.html(), /案内2件、授業不可1件、予定1件です。/); assert.match(ui.html(), /<strong>授業を案内<\/strong><br>9\/16\(水\)<br><input type="time" id="tnl-start-0" value="17:00"/); assert.match(ui.html(), /開始時刻を入れてください/); assert.match(ui.html(), /<strong>予定の共有：中間テスト（テスト・模試）<\/strong>/); assert.match(ui.html(), /<li>木曜の時刻は？<\/li>/);
+  assert.match(ui.html(), /案内2件、授業不可1件、予定1件です。/); assert.match(ui.html(), /<strong>授業を案内<\/strong><br>9\/16\(水\)<br><input type="time" id="tnl-start-0" value="17:00"/); assert.match(ui.html(), /開始時刻を入れてください/); assert.match(ui.html(), /<strong>イベント：中間テスト（テスト・模試）<\/strong>/); assert.match(ui.html(), /<li>木曜の時刻は？<\/li>/);
   ui.click('tnl-item', { 'data-i': '1' }); ui.click('tnl-register');
   r = ui.requests.at(-1).body; assert.equal(r.op, 'nlApplyTeacher'); assert.equal(r.studentId, 'test-a'); assert.equal(r.deliveryMode, 'online');
   assert.deepEqual(r.items, [{ kind: 'offer', dates: ['2026-09-16'], start: '17:00', min: 90, subject: '英語', lessonKind: '演習' }, { kind: 'block', dates: ['2026-09-20'], start: '', end: '', note: '部活' }, { kind: 'event', dates: ['2026-09-25'], title: '中間テスト', test: true, alsoBlock: false }]);
@@ -221,8 +221,8 @@ test('the admin day card defaults to 文章で予定を登録 with a switch to m
   assert.doesNotMatch(ui.html(), /data-action="tnl-register"|登録済み/); assert.equal(ui.el('tnl-text').value, '');
 });
 
-test('今後の予定 and 授業履歴 on the student page are collapsible folds (upcoming open, history closed by default)', async () => {
+test('admin student overview omits upcoming and retains history fold', async () => {
   const ui = await adminReady(card({ lessons: [{ id: 'p1', date: '2026-09-01', start: '17:00', min: 90, status: 'booked', done: true, subject: '英語' }, { id: 'u1', date: '2026-09-20', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語' }] }), 'overview');
-  assert.match(ui.html(), /<details class="fold " data-fold="upcoming" open><summary><h2><span class="mk" aria-hidden="true"><\/span>今後の予定 <span class="cnt">1件<\/span><\/h2><\/summary><div class="card">/);
+  assert.doesNotMatch(ui.html(), /data-fold="upcoming"|今後の予定/);
   assert.match(ui.html(), /<details class="fold " data-fold="history"><summary><h2><span class="mk" aria-hidden="true"><\/span>授業履歴 <span class="cnt">直近1件<\/span><\/h2><\/summary><div class="card">[^]*?<\/div><\/details>/);
 });

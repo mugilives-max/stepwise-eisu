@@ -200,7 +200,7 @@ test('students turn a sentence into checked proposals and register them through 
   assert.equal(ui.el('nl-text'), undefined); ui.click('calday', { 'data-date':'2026-09-15' }); ui.click('dayai');
   // the sentence entry is the default; manual buttons are behind the switch and never shown at the same time
   assert.ok(ui.el('nl-text')); assert.match(ui.html(), /<dialog id="schedule-day-editor"/);
-  assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayact"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('nl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('helpnl'); assert.match(ui.html(), /data-action="helpnl"[^>]*aria-expanded="true"/); assert.match(ui.html(), /文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。/); ui.click('helpnl'); assert.doesNotMatch(ui.html(), /文章を書いて「内容を確認」/); assert.match(ui.html(), /data-action="dayclose"[^>]*>閉じる<\/button>/);
+  assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayact"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('nl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('helpnl'); assert.match(ui.html(), /data-action="helpnl"[^>]*aria-expanded="true"/); assert.match(ui.html(), /文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「イベント」に分けて登録の下書きを作ります。/); ui.click('helpnl'); assert.doesNotMatch(ui.html(), /文章を書いて「内容を確認」/); assert.match(ui.html(), /data-action="dayclose"[^>]*>閉じる<\/button>/);
   ui.click('dayclose');ui.click('dayadd');assert.equal(ui.el('nl-text'),undefined);assert.match(ui.html(),/data-action="dayavailability"/);
   ui.click('dayclose');ui.click('dayai');assert.ok(ui.el('nl-text'));assert.doesNotMatch(ui.html(),/data-action="dayact"/);
   const text = '来週の月水は16時から19時、16と17日は部活で無理、20日に模試';
@@ -209,8 +209,8 @@ test('students turn a sentence into checked proposals and register them through 
   ui.requests.at(-1).reply({ ok:true, summary:'3件を読み取りました。', today:'2026-09-08', questions:['模試の時間は登録していません。'], items:[
     { kind:'wish', dates:['2026-09-14','2026-09-16'], start:'16:00', end:'19:00', note:'', confidence:'high', needsTime:false },
     { kind:'block', dates:['2026-09-16','2026-09-17'], start:'', end:'', note:'部活', confidence:'high' },
-    { kind:'event', dates:['2026-09-20'], start:'', end:'', note:'', title:'模試', test:true, alsoBlock:false, confidence:'low' } ] }); await flush();
-  assert.match(ui.html(), /授業できる時間帯/); assert.match(ui.html(), /予定の共有：模試（テスト・模試）/); assert.match(ui.html(), /読み取りに自信がありません/); assert.match(ui.html(), /模試の時間は登録していません/);
+    { kind:'event', dates:['2026-09-20'], start:'', end:'', note:'', title:'模試', test:true, alsoBlock:true, confidence:'low' } ] }); await flush();
+  assert.match(ui.html(), /授業できる時間帯/); assert.match(ui.html(), /イベント：模試（テスト・模試）/); assert.match(ui.html(), /読み取りに自信がありません/); assert.match(ui.html(), /模試の時間は登録していません/);
   ui.click('nl-register');
   assert.deepEqual(ui.requests.at(-1).body, { action:'wishMany', k:'test-link-a', kind:'ok', dates:['2026-09-14','2026-09-16'], start:'16:00', end:'19:00', note:'', deliveryMode:'' });
   ui.requests.at(-1).reply({ ok:true, state:s }); await flush();

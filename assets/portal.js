@@ -878,10 +878,10 @@
         }
 
         /* ---------- 文章で予定を登録(「選んだ日の予定」の＋を押すと既定で表示。GAS が AI で候補に変換 → ここで確認 → 既存の登録処理へ) ---------- */
-        var NL_LABEL = { wish: '授業できる時間帯', block: '授業できない日', event: '予定の共有' };
+        var NL_LABEL = { wish: '授業できる時間帯', block: '授業できない日', event: 'イベント' };
         function nlDates(dates) { return groupDays(dates).map(function (g) { return g.date === g.dateTo ? fmtDateW(g.date) : fmtDateW(g.date) + '〜' + fmtDateW(g.dateTo); }).join('、'); }
         // ＋の中の入力方法の切り替え(文章で予定を登録 / 手動で入力)
-        function renderNaturalHelp(){return '<button class="btn-quiet btn-sm" data-action="helpnl" aria-expanded="'+helpNl+'">使い方</button>'+(helpNl?'<p class="note">文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「予定の共有」に分けて登録の下書きを作ります。内容を確認し、チェックした項目だけ登録してください。</p>':'');}
+        function renderNaturalHelp(){return '<button class="btn-quiet btn-sm" data-action="helpnl" aria-expanded="'+helpNl+'">使い方</button>'+(helpNl?'<p class="note">文章を書いて「内容を確認」を押すと、AIが「授業できる時間帯」「授業できない日」「イベント」に分けて登録の下書きを作ります。内容を確認し、チェックした項目だけ登録してください。</p>':'');}
         function renderNaturalEntry() {
           var dis = NL.busy || busy ? ' disabled' : '';
           var h = '<div>';
@@ -897,7 +897,7 @@
           if (p.summary) h += '<p style="margin:0 0 6px">' + esc(p.summary) + '</p>';
           if (!p.items.length) h += '<div class="empty">登録できる予定を読み取れませんでした。日付と時間を入れて書き直してください。</div>';
           p.items.forEach(function (it, i) {
-            var head = NL_LABEL[it.kind] + (it.kind === 'event' ? '：' + esc(it.title) + (it.test ? '（テスト・模試）' : '') + (it.alsoBlock ? '（授業できない日としても登録）' : '') : '');
+            var head = NL_LABEL[it.kind] + (it.kind === 'event' ? '：' + esc(it.title) + (it.test ? '（テスト・模試）' : '') : '');
             h += '<label class="task" style="align-items:flex-start"><input type="checkbox" data-action="nl-item" data-i="' + i + '"' + (it.sel ? ' checked' : '') + (it.done ? ' disabled' : dis) + '><span class="tt"><strong>' + head + '</strong>' + (it.done ? ' <span class="tag green">登録済み</span>' : '') + '<br>' + esc(nlDates(it.dates));
             if (it.kind === 'wish') {
               if (it.needsTime) h += '<br><span class="small" style="color:var(--danger)">時間帯を入れてください</span>';
@@ -907,6 +907,7 @@
             if (it.note) h += '<br><span class="small muted">' + esc(it.note) + '</span>';
             if (it.confidence === 'low') h += '<br><span class="small" style="color:var(--amber)">読み取りに自信がありません。内容を確認してください</span>';
             h += '</span></label>';
+            if (it.kind === 'event') h += '<label class="small"><input type="checkbox" data-action="nl-event-block" data-i="' + i + '"' + (it.alsoBlock ? ' checked' : '') + (it.done ? ' disabled' : dis) + '>授業できない日にもする</label>';
           });
           if (p.questions && p.questions.length) h += '<ul class="small" style="margin:8px 0 0 18px;padding:0">' + p.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>';
           if (p.items.some(function (it) { return !it.done; })) h += '<div class="row" style="margin-top:10px"><button class="btn-primary" data-action="nl-register"' + dis + '>チェックした内容で登録する</button></div><p class="note">授業できる時間帯は先生への希望です。登録だけでは授業は確定しません。</p>';
@@ -919,7 +920,7 @@
           apiPost({ action: 'scheduleParse', k: k, text: text }).then(function (res) {
             if (k !== myKey()) return; NL.busy = false;
             if (res.error) NL.error = res.error;
-            else { (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'wish' && it.needsTime) { it.start = it.start || '13:00'; it.end = it.end || '18:00'; } }); NL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; }
+            else { (res.items || []).forEach(function (it) { it.sel = true; if (it.kind === 'event') it.alsoBlock = false; if (it.kind === 'wish' && it.needsTime) { it.start = it.start || '13:00'; it.end = it.end || '18:00'; } }); NL.proposal = { items: res.items || [], questions: res.questions || [], summary: res.summary || '' }; }
             render();
           }).catch(function () { if (k !== myKey()) return; NL.busy = false; NL.error = '通信に失敗しました。電波の良いところでもう一度お試しください'; render(); });
         }
@@ -1832,7 +1833,7 @@
           if(act==='student-planclose'){studentPlanId='';render();return;}
           if(act==='approval-help'){var help=document.getElementById(btn.getAttribute('aria-controls'));if(help){help.hidden=!help.hidden;btn.setAttribute('aria-expanded',String(!help.hidden));}return;}
           if (act.indexOf("fa-") === 0) { ev.preventDefault(); familyClick(act, btn); return; }
-          if (act === 'nl-item') return;
+          if (act === 'nl-item' || act === 'nl-event-block') return;
           if (act.indexOf('nl-') === 0) { ev.preventDefault(); if (act === 'nl-parse') nlParse(); else if (act === 'nl-clear') { NL.text = ''; NL.proposal = null; NL.error = ''; render(); } else if (act === 'nl-register') nlRegister(); return; }
           if (act.indexOf('se-') === 0) { ev.preventDefault(); if (act === 'se-askremove') { SE.removeConfirm = true; render(); } else if (act === 'se-cancel') { SE.removeConfirm = false; render(); } else if (act === 'se-back') { ++SE.seq; SE.challenge = ''; SE.error = ''; SE.message = ''; render(); if (myKey() && !S) loadState().catch(function () { toast('元の生徒専用ページを開き直してください'); }); } else studentEmailSend({'se-verify':'studentEmailVerify','se-resend':'studentEmailResend','se-remove':'studentEmailRemove'}[act]); return; }
           switch (act) {
@@ -1972,6 +1973,7 @@
           if (el && el.getAttribute("data-action") === "fa-mailpref") { if(F.busy||!F.home)return; var mp = Object.assign({}, F.home.emailPrefs || {}); mp[el.getAttribute("data-kind")] = !!el.checked; familyRequest('familyEmailPrefs', { ftoken: familyToken(), prefs: mp }, function (res) { F.home.emailPrefs = res.emailPrefs || mp; F.message = 'メール通知の設定を保存しました。'; }); return; }
           if (taskDraftInput(el)) { if (el.id === 'f-tdue-mode') render(); return; }
           if (el && el.getAttribute("data-accept-id")) { var b = acceptBatch(); if (!b.pending && !b.busy && !b.refreshRequired) { b.selected[el.getAttribute("data-accept-id")] = el.checked; b.review = null; render(); } return; }
+          if (el && el.getAttribute("data-action") === "nl-event-block") { var item=NL.proposal && NL.proposal.items[+el.getAttribute('data-i')]; if(item&&!item.done&&!busy&&!NL.busy)item.alsoBlock=!!el.checked; return; }
           if (el && el.getAttribute("data-action") === "nl-item") { var nlIt = NL.proposal && NL.proposal.items[+el.getAttribute('data-i')]; if (nlIt && !nlIt.done) nlIt.sel = !!el.checked; return; }
           if (el && el.getAttribute("data-action") === "se-pref") { studentEmailPrefSend(el.getAttribute("data-kind"), !!el.checked); return; }
           if (!el || el.getAttribute("data-action") !== "taskdone") return;
