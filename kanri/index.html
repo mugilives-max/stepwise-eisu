@@ -1228,13 +1228,27 @@
           var recorded = s.lessonRecordStatus === 'active';
           return ' <a class="tag ' + (recorded ? 'blue' : 'red') + '" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '" title="授業記録を開く">' + (recorded ? '記入済' : '未記入') + '</a>';
         }
+        var teacherBookingDialog = null;
+        function teacherBookingDialogHTML(){
+          var d=teacherBookingDialog;if(!d)return '';var b=d.slot.teacherBooking;
+          return window.StepwiseCalendar.dayDialog({id:'teacher-booking-dialog',title:b&&b.status!=='registering'?'登録内容の確認状況':'連絡を受けた授業を確定',close:'teacher-book-close',busy:busy,content:'<p><strong>'+esc(d.slot.studentName||'')+'</strong> '+esc(fmtD(d.slot.date)+' '+d.slot.start+'〜'+endTime(d.slot.start,d.slot.min))+'<br>'+esc(lessonLabel(d.slot))+'</p>'+(d.error?'<p role="alert">'+esc(d.error)+'</p>':'')+(b&&b.status!=='registering'?'<p>'+({pending:'生徒・保護者の確認待ちです。',confirmed:'内容に間違いないことを確認済みです。',correction:'修正依頼があります。右の「修正」から内容を確認・修正してください。'}[b.status]||'')+'</p>'+(b.note?'<p style="white-space:pre-wrap">'+esc(b.note)+'</p>':''):'<p>生徒・保護者から別途連絡を受け、この日時で合意済みの場合に確定してください。</p><p>確定後、生徒・保護者ページに内容の確認を依頼します。確認前も授業は確定済みとして扱います。</p><button class="btn-primary" data-action="teacher-book-send"'+(busy?' disabled':'')+'>この内容で確定する</button>')});
+        }
+        function teacherBookingOpen(btn){
+          var list=route().page==='student'?(cur.lessons||[]):(A&&A.slots||[]),slot=list.filter(function(x){return String(x.id)===btn.getAttribute('data-id');})[0];if(!slot)return;
+          teacherBookingDialog={slot:Object.assign({},slot,{studentId:slot.studentId||(cur&&cur.id),studentName:slot.studentName||(cur&&cur.name)}),requestId:slot.teacherBooking?slot.teacherBooking.requestId:lessonId(),error:''};render();
+        }
+        function teacherBookingSend(){
+          var d=teacherBookingDialog;if(!d||busy)return;var r=route();busy=true;d.error='';render();
+          admin('teacherBook',{studentId:d.slot.studentId,slotId:d.slot.id,requestId:d.requestId,expectedSnapshot:slotEditSnapshot(d.slot)}).then(function(res){busy=false;if(teacherBookingDialog!==d)return;teacherBookingDialog=null;cacheClear();toast('授業を確定しました。生徒・保護者の確認待ちです');if(!applyResult(res,r))load(true);else render();}).catch(function(e){busy=false;if(teacherBookingDialog===d){d.error=e.message;render();}});
+        }
         function lessonRow(s, withDate, currentDay) {
           var h = '<div class="line"><span class="t">' + (withDate ? fmtD(s.date) + " " : "") + s.start + "〜" + endTime(s.start, s.min) + "</span>";
           h += '<span class="w"><a class="nm" href="#s=' + esc(s.studentId) + '" style="text-decoration:none;color:inherit">' + esc(s.studentName) + "</a>" + (s.subject ? ' <span class="muted small">' + esc(lessonLabel(s)) + "</span>" : "");
           h += ' ' + slotDelivery(s, null, false, 'mode') + ' ';
           if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : (s.done ? ' <span class="tag gray">実施済</span>' : '');
-          else if (s.status === "offered") h += ' <span class="tag amber">承認待ち</span>';
+          else if (s.status === "offered") h += ' <button class="tag amber" data-action="teacher-book-open" data-id="'+esc(s.id)+'"'+(busy?' disabled':'')+'>承認待ち</button>';
           else h += ' <span class="tag gray">空き枠</span>';
+          if(s.status==='booked'&&s.teacherBooking)h+=' <button class="tag '+(s.teacherBooking.status==='correction'?'red':s.teacherBooking.status==='confirmed'?'gray':'amber')+'" data-action="teacher-book-open" data-id="'+esc(s.id)+'">'+({pending:'本人確認待ち',confirmed:'本人確認済み',correction:'修正依頼',registering:'登録処理を確認'}[s.teacherBooking.status]||'確認待ち')+'</button>';
           h += lessonRecordTag(s);
           h += "</span>";
           if (s.status === "booked") {
@@ -1252,6 +1266,7 @@
           return lessonNeedsAttention(s, day) ? 'needs-attention' : 'admin-ok';
         }
         function lessonNeedsAttention(s, day) {
+          if(s.teacherBooking&&['correction','registering'].indexOf(s.teacherBooking.status)>=0)return true;
           if (s.status !== 'booked' && s.status !== 'offered') return false;
           if (s.req) return true;
           if (s.done) return s.lessonRecordStatus !== 'active';
@@ -1509,6 +1524,8 @@
             app.innerHTML = slotEditHtml() + app.innerHTML;
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
+          app.innerHTML+=teacherBookingDialogHTML();
+          var bookingDialog=document.getElementById('teacher-booking-dialog');if(bookingDialog){bookingDialog.oncancel=function(e){if(busy)e.preventDefault();else teacherBookingDialog=null;};if(bookingDialog.showModal&&!bookingDialog.open)bookingDialog.showModal();}
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
           var planDialog=document.getElementById('plan-dialog');if(planDialog){planDialog.oncancel=function(e){e.preventDefault();if(!busy){planDetail=null;delete planEdits[cur.id];render();}};if(planDialog.showModal&&!planDialog.open)planDialog.showModal();}
           var studentDialog=document.getElementById('student-schedule');if(studentDialog){studentDialog.oncancel=function(e){e.preventDefault();if(!busy&&!TNL.busy){sDayAddOpen=false;render();}};if(studentDialog.showModal&&!studentDialog.open)studentDialog.showModal();}
@@ -2537,6 +2554,9 @@
           var sid = btn.getAttribute("data-sid") || (route().page === "student" && cur ? cur.id : "");
           switch (a) {
             case "notification-dismiss": notificationNotice = ""; render(); break;
+            case 'teacher-book-open': if(!busy)teacherBookingOpen(btn);break;
+            case 'teacher-book-close': if(!busy){teacherBookingDialog=null;render();}break;
+            case 'teacher-book-send': teacherBookingSend();break;
             case 'ai-open': aiScheduleOpen=true;render();break;
             case 'ai-close': if(!busy&&!TNL.busy){aiScheduleOpen=false;render();}break;
             case "login":

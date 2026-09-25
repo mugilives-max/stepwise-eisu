@@ -7,6 +7,7 @@ function ensureSchedulingSchema_() {
   billingEnsureColumns_(ss_(),'slots',['id','date','start','min','status','studentId','done','eventId','meetUrl','subject','req','deliveryMode']);
   billingEnsureColumns_(ss_(),'acceptWrites',SCHEDULING_WRITE_COLS_);
   billingEnsureColumns_(ss_(),'offerEdits',SCHEDULING_EDIT_COLS_);
+  billingEnsureColumns_(ss_(),'teacherBookings',TEACHER_BOOKING_COLS_);
   memoClear_();
 }
 function schedulingMode_(value) { return value==='in_person'||value==='online'?value:''; }
@@ -136,7 +137,7 @@ function schedulingPendingSlotMutation_(slotId,requestId,editId) {
 // restored after reload or on another device. Never return journal internals.
 function schedulingPendingForStudent_(studentId) {
   var id=String(studentId),seen=Object.create(null);
-  return readRows_('acceptWrites').filter(function(w){return String(w.studentId)===id&&w.status!=='done';}).map(function(w){
+  return readRows_('acceptWrites').filter(function(w){return String(w.studentId)===id&&w.status!=='done'&&String(w.requestId).indexOf('teacher-')!==0;}).map(function(w){
     var slots;try{slots=JSON.parse(String(w.slotsJson));}catch(e){throw new Error('一括確定の保存内容を先生が確認してください');}
     if(!Array.isArray(slots)||!slots.length||slots.length>31||slots.some(function(s){return String(s.studentId)!==id;})||seen[String(w.requestId)])throw new Error('一括確定の保存内容を先生が確認してください');
     seen[String(w.requestId)]=true;
@@ -399,9 +400,9 @@ function schedulingBatchGate_(slots,allSlots) {
   }
   return null;
 }
-function schedulingAcceptNotice_(student,slots) {
+function schedulingAcceptNotice_(student,slots,teacherRecorded) {
   MailApp.sendEmail(Session.getEffectiveUser().getEmail(),'[ステップワイズ予約] 【確定】'+student.name+'さん '+slots.length+'件',
-    student.name+'さんが案内を承認し、'+slots.length+'件の授業が確定しました。\n'+slots.map(function(s){return fmtDateJa_(s.date)+' '+s.start+'〜'+endTime_(s.start,s.min)+' '+s.subject+' ('+(s.deliveryMode==='online'?'オンライン':'対面')+')';}).join('\n'));
+    student.name+(teacherRecorded?'さんの連絡を受け、先生が登録し、':'さんが案内を承認し、')+slots.length+'件の授業が確定しました。\n'+slots.map(function(s){return fmtDateJa_(s.date)+' '+s.start+'〜'+endTime_(s.start,s.min)+' '+s.subject+' ('+(s.deliveryMode==='online'?'オンライン':'対面')+')';}).join('\n'));
 }
 function schedulingResult_(write,code,slots,completed,error) {
   var doneIds=completed.map(function(c){return c.slotId;}),result={ok:write.status==='done',pending:write.status!=='done',completed:completed.length,
@@ -416,7 +417,8 @@ function schedulingResult_(write,code,slots,completed,error) {
 function schedulingAccept_(slotId,code,expectedSnapshot) {
   return schedulingAcceptMany_({k:code,slotIds:[slotId],requestId:'single-'+String(slotId||''),expectedSnapshots:expectedSnapshot?[expectedSnapshot]:undefined});
 }
-function schedulingAcceptMany_(req) {
+function schedulingAcceptMany_(req,teacherRecorded) {
+  if(String(req.requestId||'').indexOf('teacher-')===0&&!teacherRecorded)return schedulingError_('先生の登録処理です。画面を更新してください','forbidden');
   var student=findStudentByCode_(req.k);
   if(!student)return {error:'専用リンクからひらき直してください',badCode:true};
   var ids=req.slotIds,requestId=String(req.requestId||'');
@@ -479,7 +481,7 @@ function schedulingAcceptMany_(req) {
         // Mail has no idempotency key. Claim once before sending; uncertain sends are
         // surfaced for human review instead of silently sending the same message twice.
         write.notificationState='attempting';schedulingWrite_(write);
-        try{schedulingAcceptNotice_(student,snapshots);write.notificationState='sent';}
+        try{schedulingAcceptNotice_(student,snapshots,teacherRecorded);write.notificationState='sent';}
         catch(e){write.notificationState='uncertain';}
       }
     }

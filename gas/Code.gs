@@ -70,7 +70,7 @@ function doPost(e) {
     var res;
     // 保護者ページから子どもの操作を代行: ログイン済みの保護者(ftoken)と、その家族に紐付く子ども(studentId)を確認できたときだけ、
     // その子の専用コードを k として扱う(コードは応答に含めない)。対象は生徒本人が使う操作に限る(メール設定・保護者認証は対象外)。
-    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
+    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'teacherBookingRespond', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
     var proxyErr = null, authenticatedFamilyProxy=false;delete req.familyProxy;
     if (!req.k && req.ftoken && req.studentId && FAMILY_PROXY_.indexOf(String(req.action || '')) >= 0 && typeof familyChildRequire_ === 'function') {
       var fp = familyChildRequire_(req);
@@ -88,6 +88,7 @@ function doPost(e) {
       case 'effects': res = effectsOp_(req); break; // Worker に頼まれたメール・カレンダーの代行(Sync.gs)
       case 'learningService': res = servicePublic_(req); break;
       case 'accept':  res = accept_(req.slotId, req.k, req.expectedSnapshot); break;
+      case 'teacherBookingRespond': res = teacherBookingRespond_(req); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
@@ -146,7 +147,7 @@ function studentState_(code) {
     .map(function (s) {
       var st = s.status === 'offered' ? 'offer' : 'mine';
       return {
-        id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
+        teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
         subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
         meet: st === 'mine' ? String(s.meetUrl || '') : '',
         req: st === 'mine' ? parseReq_(s.req) : null,
@@ -157,7 +158,7 @@ function studentState_(code) {
   var since = addDays_(today, -366);
   var history = all
     .filter(function (s) { return s.date < today && s.date >= since && s.status === 'booked'; })
-    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
+    .map(function (s) { return { teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
       done: String(s.done) === 'true' || s.done === true }; });
   var blocked = blockedRows_()
     .filter(function (b) {
@@ -1260,6 +1261,7 @@ function admin_(req) {
       if (ro && ro.ok && req.wishId) { delWish_(req.wishId); if (ro.admin) ro.admin.wishes = wishesForAdmin_(); }
       return kanriWrap_(req, ro, req.studentId);
     }
+    case 'teacherBook': return kanriWrap_(req, teacherBook_(req), req.studentId);
     case 'deleteSlot':  return kanriWrap_(req, adminDeleteSlot_(req), req.studentId);
     case 'unbook':      return kanriWrap_(req, adminUnbook_(req), req.studentId);
     case 'toggleDone':  return kanriWrap_(req, adminToggleDone_(req), req.studentId);
@@ -1312,7 +1314,7 @@ function adminState_() {
   backfillCodes_();
   var slots = readRows_('slots').map(function (s) {
     return {
-      id: s.id, date: s.date, start: s.start, min: Number(s.min),
+      teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min),
       status: s.status, studentId: String(s.studentId || ''),
       studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
@@ -1945,7 +1947,7 @@ function kanriDashboard_() {
   var nameOf = {};
   students.forEach(function (s) { nameOf[String(s.id)] = s.name; });
   var slim = function (s) {
-    return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
+    return { teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
       studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId),
       meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus };
@@ -2042,7 +2044,7 @@ function kanriStudent_(studentId,section) {
   if (section==='settings') return Object.assign(base,{email:String(sys.email || ''),emailStatus:studentEmailStatus_(id),rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),parentAuth:parentStatus_(id)});
   if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
-    .map(function (s) { return { id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
+    .map(function (s) { return { teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   if (section==='overview') return Object.assign(base,{

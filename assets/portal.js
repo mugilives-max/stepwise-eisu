@@ -590,7 +590,7 @@
           var slots = S.slots.slice().sort(slotCmp);
           var mine = slots.filter(function (s) { return s.st === "mine"; });
           var offers = slots.filter(function (s) { return s.st === "offer"; });
-          var hist = (S.history || []).map(function (h) { return { id: h.id, date: h.date, start: h.start, min: h.min, subject: h.subject, deliveryMode: h.deliveryMode, st: h.done ? "done" : "past" }; });
+          var hist = (S.history || []).map(function (h) { return { teacherBooking:h.teacherBooking, id: h.id, date: h.date, start: h.start, min: h.min, subject: h.subject, deliveryMode: h.deliveryMode, st: h.done ? "done" : "past" }; });
           var blocked = S.blocked || [];
           var events = (S.events || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
           var evDays = [];
@@ -621,6 +621,17 @@
         }
 
         // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)。登録不可(先生の休み)はホーム・予定の両方で出す(2026-09-11)
+        var bookingReview=null;
+        function bookingReviewButton(s){var b=s.teacherBooking;if(!b||b.status==='registering')return '';return ' <button class="tag '+(b.status==='confirmed'?'gray':b.status==='correction'?'red':'amber')+'" data-action="booking-review" data-id="'+esc(s.id)+'">'+({pending:'先生の登録内容を確認',confirmed:'先生が登録・確認済み',correction:'修正依頼中'}[b.status]||'確認')+'</button>';}
+        function bookingRequestsHTML(name){var rows=(S.slots||[]).concat(S.history||[]).filter(function(x){return x.teacherBooking&&x.teacherBooking.status==='pending'&&x.date!==selDate;});return rows.length?'<div class="card"><p>先生が登録した授業の内容をご確認ください。</p>'+rows.map(function(x){return '<p>'+esc((name?name+' ':'')+fmtDateW(x.date)+' '+x.start+' '+lessonLabel(x))+bookingReviewButton(x)+'</p>';}).join('')+'</div>':'';}
+        function bookingReviewHTML(){
+          var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}
+          var s=d.slot,b=s.teacherBooking,dis=busy||previewK?' disabled':'',parent=route()==='family',perms=S.permissions||{};
+          var content='<p>'+esc((S.me&&S.me.name||'')+' '+fmtDateW(s.date)+' '+s.start+'〜'+endTime(s.start,s.min))+'<br>'+esc(lessonLabel(s))+'</p>';
+          if(b.status==='pending')content+='<p>先生がこの授業を登録しました。内容に間違いはありませんか？</p><p class="note">回答前も授業は確定済みです。修正依頼だけでは予定は取り消されません。</p><button class="btn-primary" data-action="booking-confirm"'+dis+(!parent&&perms.booking===false?' disabled':'')+'>間違いありません</button><label style="display:block;margin-top:16px">修正してほしい内容<textarea id="booking-review-note" maxlength="500" style="width:100%"'+dis+'>'+esc(d.note||'')+'</textarea></label><button class="btn-quiet" data-action="booking-correct"'+dis+(!parent&&perms.reschedule===false?' disabled':'')+'>修正をお願いする</button>'+(!parent&&(perms.booking===false||perms.reschedule===false)?'<p class="note">権限のない操作は保護者にご相談ください。</p>':'');
+          else content+='<p>'+(b.status==='confirmed'?'内容に間違いないことを確認済みです。':'先生に修正をお願いしています。')+'</p>'+(b.note?'<p style="white-space:pre-wrap">'+esc(b.note)+'</p>':'');
+          return window.StepwiseCalendar.dayDialog({id:'booking-review-dialog',title:'先生が登録した授業の確認',close:'booking-close',busy:busy,content:content});
+        }
         function renderDayDetail(D, withActions, showToff, shared) {
           var rows=[], whoName=shared ? '<strong class="family-row-name">'+esc(shared.name)+'</strong> ' : '';
           function emitDayRow(markup,start){if(shared){rows.push({html:markup,start:/^\d{2}:\d{2}$/.test(start)?start:'00:00'});return "";}return markup;}
@@ -642,18 +653,18 @@
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s, true)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
-              if (s.st === "mine") html += dayRow('', time, who + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
+              if (s.st === "mine") html += dayRow('', time, who + bookingReviewButton(s) + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
-                var recordHtml = '<details class="slotline" style="display:block"><summary style="cursor:pointer;font-weight:600">実施済 ' + whoName + time + (s.subject ? ' ' + esc(lessonLabel(s)) : '') + '</summary><div style="padding:12px 4px">';
+                var recordHtml = '<details class="slotline" style="display:block"><summary style="cursor:pointer;font-weight:600">実施済 ' + whoName + time + (s.subject ? ' ' + esc(lessonLabel(s)) : '') + '</summary><div style="padding:12px 4px">'+bookingReviewButton(s);
                 if (record) {
                   recordHtml += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
                   recordHtml += '<h3 style="font-size:15px;margin:10px 0 6px">コメント</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
                 } else recordHtml += '<p class="muted" style="margin:0">授業の内容はまだ公開されていません。</p>';
                 html += emitDayRow(recordHtml+'</div></details>',s.start);
               }
-              else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who, '');
+              else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who+bookingReviewButton(s), '');
               else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
             dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
@@ -987,7 +998,7 @@
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
           if (!sharedCalendar) { html += '<h2>予定表</h2>'; html += renderCal(D.info, today, true); }
-          html += renderDayDetail(D, true, true);
+          html += renderDayDetail(D, true, true) + bookingRequestsHTML();
 
           var summary = renderMonthSummary(D);
           html += summary.progress;
@@ -1370,7 +1381,7 @@
           if(!children.length)return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if(current)familyHomeViews[current.studentId]=savedView;
           h+=renderFamilyCalendar(children);
-          var rows=[],dialogs='',progress='',confirms='',offers='',offerCount=0,planCount=0,remain=0,total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
+          var rows=[],bookingRequests='',dialogs='',progress='',confirms='',offers='',offerCount=0,planCount=0,remain=0,total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
           children.forEach(function(c){
             var st=F.childState[c.studentId];
             if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);return;}
@@ -1380,6 +1391,7 @@
             offsShown=true;today=today||D.today;canAI=canAI||!!st.nlEnabled||!!previewK;
             function owned(markup){return familyOwnedHtml(markup,c.studentId);}
             day.rows.forEach(function(row){rows.push({start:row.start,html:owned(row.html)});});
+            bookingRequests+=owned(bookingRequestsHTML(name));
             dialogs+=owned(day.dialogs)+owned(renderPendingBar(D,name));
             progress+='<section class="family-student-progress"><h3>'+esc(name)+'</h3>'+ (summary.progressRows?owned(summary.progressHead+summary.progressRows+'</tbody></table></div>'):'<div class="empty">送信済みの計画はありません</div>')+'</section>';confirms+=owned(summary.confirm||'');
             planCount+=summary.planCount||0;remain+=summary.remain||0;
@@ -1392,6 +1404,7 @@
           var canAdd=familyCalendar.date>=today;
           h+=window.StepwiseCalendar.dayHeading({date:familyCalendar.date,title:fmtDateW(familyCalendar.date)+'の授業',disabled:busy||NL.busy,add:canAdd?{action:'family-dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'family-dayai',label:'AIで予定登録'}:null});
           h+=rows.length?'<div class="card daylist">'+rows.sort(function(a,b){return a.start.localeCompare(b.start);}).map(function(r){return r.html;}).join('')+'</div>':'<div class="empty">この日の予定はありません</div>';
+          h+=bookingRequests;
           h+='<section class="parent-progress"><h2>授業計画・実施状況 <span class="cnt">'+planCount+'件の計画</span></h2><div class="card">';
           h+=progress||'<div class="empty">送信済みの計画はありません</div>';
           if(remain)h+='<p class="small">あと '+remain+' 回、日程調整が必要です。</p>';
@@ -1722,6 +1735,7 @@
             if(parentHeaderActions)parentHeaderActions.innerHTML='<button class="student-page-link" data-action="fa-student-pages">生徒ページへ ↗</button>'+parentHeaderActions.innerHTML;
             if(F.studentChooser)app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-student-dialog',title:'生徒ページを選択',close:'fa-student-close',busy:F.busy,content:(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+'<div class="row">'+(F.home.children||[]).map(function(c){return '<button class="btn-quiet" data-action="fa-student-pick" data-child="'+esc(c.studentId)+'"'+(F.busy?' disabled':'')+'>'+esc(c.name)+'</button>';}).join('')+'</div>'});
           }
+          app.innerHTML+=bookingReviewHTML();var reviewDialog=document.getElementById('booking-review-dialog');if(reviewDialog){reviewDialog.oncancel=function(e){if(busy)e.preventDefault();else bookingReview=null;};if(reviewDialog.showModal&&!reviewDialog.open)reviewDialog.showModal();}
           mountDayDialog(); mountAcceptDialog();
           meetWatch();
           if(!window.StepwiseServices)return;
@@ -1808,6 +1822,15 @@
           if (!btn || btn.disabled) return;
           if (!familyHomeTarget(btn)) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
+          if(act==='booking-review'){if(busy)return;var slot=(S.slots||[]).concat(S.history||[]).filter(function(x){return String(x.id)===id;})[0];if(slot&&slot.teacherBooking){bookingReview={slot:slot,scope:taskScopeKey(),note:''};render();}return;}
+          if(act==='booking-close'){if(!busy){bookingReview=null;render();}return;}
+          if(act==='booking-confirm'||act==='booking-correct'){
+            var review=bookingReview;if(!review||busy||previewK||review.scope!==taskScopeKey())return;
+            var note=act==='booking-correct'?String((document.getElementById('booking-review-note')||{}).value||'').trim():'';review.note=note;
+            if(act==='booking-correct'&&!note){toast('修正してほしい内容を入力してください');return;}
+            var receipt=review.slot.teacherBooking;
+            studentAction({action:'teacherBookingRespond',k:myKey(),slotId:review.slot.id,requestId:receipt.requestId,expectedSnapshot:receipt.snapshot,expectedRevision:receipt.revision,response:act==='booking-confirm'?'confirmed':'correction',note:note},act==='booking-confirm'?'確認済みにしました':'先生に修正をお願いしました',function(){bookingReview=null;render();});return;
+          }
           if(act==='family-calfilter'){
             if(busy||NL.busy)return;
             var childId=btn.getAttribute('data-child');
