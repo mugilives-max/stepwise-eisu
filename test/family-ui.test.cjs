@@ -195,8 +195,8 @@ test('student settings keeps registered-parent errors visible and late invitatio
 test('student family settings shows only other members of the current group',async()=>{
  const ui=createUI('admin',{hash:'#s=test-a&tab=settings'});ui.requests[0].reply({ok:true,data:settingsCard()});
  ui.requests[1].reply(familyList({families:[{id:'g1',label:'【テスト】家族A',children:[{studentId:'test-a',name:'本人'},{studentId:'sibling',name:'【テスト】弟'}]},{id:'g2',label:'別家族',children:[{studentId:'unrelated',name:'関係ない生徒'}]}]}));await flush();
- const section=ui.html();assert.doesNotMatch(section,/<h2>家族設定<\/h2>|関係ない生徒|別家族/);assert.match(section,/#s=sibling&tab=settings/);assert.match(section,/#students\?student=test-a/);
- ui.navigate('#s=sibling&tab=settings');ui.requests.findLast(r=>r.body.op==='kanriStudent').reply({ok:true,data:settingsCard({id:'sibling'})});ui.requests.findLast(r=>r.body.op==='familyList').reply(familyList({families:[{id:'single',label:'単独',children:[{studentId:'sibling',name:'本人'}]}]}));await flush();assert.doesNotMatch(ui.html(),/<h2>家族設定<\/h2>/);assert.match(ui.html(),/#students\?student=sibling/);
+ const section=ui.html();assert.doesNotMatch(section,/<h2>家族設定<\/h2>|関係ない生徒|別家族/);assert.match(section,/#s=sibling&tab=settings/);assert.match(section,/data-action="family-modal-open"/);
+ ui.navigate('#s=sibling&tab=settings');ui.requests.findLast(r=>r.body.op==='kanriStudent').reply({ok:true,data:settingsCard({id:'sibling'})});ui.requests.findLast(r=>r.body.op==='familyList').reply(familyList({families:[{id:'single',label:'単独',children:[{studentId:'sibling',name:'本人'}]}]}));await flush();assert.doesNotMatch(ui.html(),/<h2>家族設定<\/h2>/);assert.match(ui.html(),/data-action="family-modal-open"/);
 });
 
 test('group management excludes single and empty groups',async()=>{
@@ -529,3 +529,13 @@ test('learning record navigation combines parent and student menus and preserves
 });
 
 test('parent grades show all children and isolate grade responses',async()=>{const ui=await readyFamily();ui.navigate('#family/learning/grades');assert.doesNotMatch(ui.html(),/id="fa-mychild"|表示する子ども/);const requests=ui.requests.filter(r=>r.body.action==='grades');assert.deepEqual(requests.map(r=>r.body.studentId).sort(),['child-a','child-b']);requests[1].reply({ok:true,grades:[{date:'2026-09-01',test:'B専用テスト',subject:'数学',score:72,max:100,dev:null}],exams:[]});await flush();assert.match(ui.html(),/B専用テスト/);assert.match(ui.html(),/成績を読み込んでいます/);requests[0].reply({ok:true,grades:[{date:'2026-09-01',test:'A専用テスト',subject:'英語',score:85,max:100,dev:null}],exams:[]});await flush();assert.match(ui.html(),/子A<[^]*A専用テスト[^]*子B<[^]*B専用テスト/);});
+
+test('student settings manages groups in a modal without navigation',async()=>{
+ const ui=createUI('admin',{hash:'#s=test-a&tab=settings'});ui.requests[0].reply({ok:true,data:settingsCard()});
+ const list=familyList({students:[{id:'test-a',name:'【テスト】本人'},{id:'test-b',name:'【テスト】兄弟'}],families:[{id:'g1',label:'【テスト】元家族',children:[{studentId:'test-a',name:'【テスト】本人'}]},{id:'g2',label:'【テスト】移動先',children:[{studentId:'test-b',name:'【テスト】兄弟'}]}]});
+ ui.requests[1].reply(list);await flush();const hash=ui.location.hash;
+ ui.click('family-modal-open');assert.match(ui.html(),/id="family-group-dialog"/);assert.equal(ui.location.hash,hash);
+ ui.click('family-link',{'data-id':'g2'});assert.match(ui.html(),/家族の変更確認/);ui.click('family-confirm');const req=ui.requests.at(-1);assert.equal(req.body.op,'familyMoveStudent');assert.equal(req.body.studentId,'test-a');assert.equal(req.body.sourceFamilyId,'g1');assert.equal(req.body.familyId,'g2');
+ req.reply({ok:true});await flush();ui.requests.at(-1).reply(list);await flush();assert.match(ui.html(),/id="family-group-dialog"/);assert.equal(ui.location.hash,hash);ui.click('family-modal-close');assert.doesNotMatch(ui.html(),/id="family-group-dialog"/);
+ ui.click('family-modal-open');ui.navigate('#s=test-b&tab=settings');assert.doesNotMatch(ui.html(),/id="family-group-dialog"/);
+});

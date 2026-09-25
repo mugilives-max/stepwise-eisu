@@ -1521,6 +1521,11 @@
             app.innerHTML = slotEditHtml() + app.innerHTML;
           }
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
+          if(familyModal&&!familyModalActive())closeFamilyModal();
+          if(familyModalActive()){
+            app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)});
+            var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
+          }
           app.innerHTML+=teacherBookingDialogHTML();
           var bookingDialog=document.getElementById('teacher-booking-dialog');if(bookingDialog){bookingDialog.oncancel=function(e){if(busy)e.preventDefault();else teacherBookingDialog=null;};if(bookingDialog.showModal&&!bookingDialog.open)bookingDialog.showModal();}
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
@@ -1543,6 +1548,10 @@
 
         /* ---------- 家族と通知: 招待コード・メールを永続キャッシュへ入れない ---------- */
         var FT = { data: null, busy: false, error: "", edit: null, confirm: null, invite: null, auth: "", seq: 0 };
+        var familyModal=null;
+        function familyModalActive(){var r=route();return familyModal&&familyModal.auth===token()&&r.page==='student'&&r.section==='settings'&&sameId(r.id,familyModal.id);}
+        function familyTarget(){return familyModalActive()?familyModal.id:route().studentId;}
+        function closeFamilyModal(){familyModal=null;FT.edit=null;FT.confirm=null;}
         function familyAdminRender() { var r=route(); if (r.page === "families" || r.page === "students" || r.page === "student" && r.section === "settings" && cur && sameId(cur.id,r.id)) render(); }
         function loadFamilies() {
           var seq = ++FT.seq, auth = token(); FT.busy = true; FT.error = ""; familyAdminRender();
@@ -1566,7 +1575,7 @@
           var h = '<h2 id="parent-notifications">グループの管理</h2><p class="sub">同じグループに設定されている生徒を表示します。</p>';
           if (FT.error) h += '<p class="lc-notice" role="alert">' + esc(FT.error) + '</p>';
           if (!d) { h += FT.busy ? '<p>読み込んでいます…</p>' : ''; if (embedded) return h; app.innerHTML = h; return; }
-          var students = d.students || [], families = (d.families || []).filter(function(f){return new Set((f.children||[]).map(function(c){return String(c.studentId);})).size >= 2;}), targetStudent=students.filter(function(x){return sameId(x.id,route().studentId);})[0];
+          var students = d.students || [], families = (d.families || []).filter(function(f){return familyModalActive() || new Set((f.children||[]).map(function(c){return String(c.studentId);})).size >= 2;}), targetStudent=students.filter(function(x){return sameId(x.id,familyTarget());})[0];
           if(targetStudent) h += '<div class="card"><h2>'+esc(targetStudent.name)+'さんの保護者</h2><p>1人でも同じグループとして扱います。兄弟は下の移動先を選んでまとめてください。移動先の保護者ログインを引き続き使います。</p></div>';
           if (FT.confirm) h += '<div class="card" role="region" aria-label="家族の変更確認"><strong>' + esc(FT.confirm.label) + '</strong><p>' + esc(FT.confirm.description) + '</p><button class="btn-primary" data-action="family-confirm"' + dis + '>この内容で実行</button> <button class="btn-quiet" data-action="family-cancel"' + dis + '>やめる</button></div>';
           if (FT.edit) {
@@ -1605,7 +1614,7 @@
             return h;
           }
           function parentSettings(f){return row('保護者ページ',f&&f.configured?'<span class="tag green">登録済み</span>'+(f.lastLogin?' <span class="small">最終ログイン '+esc(fmtAuthTime(f.lastLogin))+'</span>':'')+'<p class="note">パスワードを忘れた場合は、保護者ページのログイン画面から再設定できます。</p>':studentParentInviteHtml(s,true));}
-          function table(rows){return '<table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+rows+row('家族の紐づけ','<a class="btn-quiet btn-sm" href="#students?student='+encodeURIComponent(s.id)+'">グループの変更・管理</a>')+'</tbody></table>';}
+          function table(rows){return '<table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+rows+row('家族の紐づけ','<button class="btn-quiet btn-sm" data-action="family-modal-open">グループの変更・管理</button>')+'</tbody></table>';}
           if(FT.busy||!data)return '<div class="card">'+(FT.error?'<p role="alert">'+esc(FT.error)+'</p><button class="btn-quiet" data-action="family-settings-refresh">もう一度読み込む</button>':'<p>家族の登録情報を読み込んでいます…</p>')+studentParentInviteHtml(s,true)+'</div>';
           var groups=(data.families||[]).filter(function(f){return (f.children||[]).some(function(c){return sameId(c.studentId,s.id);});});
           if(!groups.length)return '<div class="card">'+table(person('生徒名',{studentId:s.id,familyName:s.profile['姓'],givenName:s.profile['名'],email:s.email})+parentSettings(null))+'<p class="note">保護者アカウントとの紐づけはまだありません。</p></div>';
@@ -1655,11 +1664,13 @@
           }).catch(function(er){studentInvite.busy=false;if(token()!==auth)return;studentInvite.error=er.message;if(route().page==='student'&&route().id===id)render();});
         }
         function familyAdminClick(action, btn) {
+          if(action==='family-modal-open'){if(!FT.busy&&route().page==='student'&&route().section==='settings'){closeFamilyModal();familyModal={id:route().id,auth:token()};render();}return;}
+          if(action==='family-modal-close'){if(!FT.busy){closeFamilyModal();render();}return;}
           if(action === "family-settings-refresh" && route().page === "student" && route().section === "settings") { if(!FT.busy)loadFamilies();return; }
           if(action === "family-student-invite") { issueStudentParentInvite(); return; }
           if(action === "family-send-registration") { sendParentRegistration(); return; }
           var studentCopy = route().page === "student" && route().section === "settings" && ["family-copy","family-hidecode"].indexOf(action) >= 0 && FT.invite && FT.invite.studentId === route().id && FT.auth === token();
-          if (FT.busy || (!studentCopy && route().page !== "families" && route().page !== "students")) return;
+          if (FT.busy || (!studentCopy && !familyModalActive() && route().page !== "families" && route().page !== "students")) return;
           if (action === "family-refresh") { loadFamilies(); return; }
           if (action === "family-confirm") { familyDo(); return; }
           if (action === "family-cancel") { FT.confirm = null; render(); return; }
@@ -1668,10 +1679,10 @@
           var d = FT.data; if (!d || FT.auth !== token()) return;
           var f = (d.families || []).filter(function (x) { return sameId(x.id, btn.getAttribute("data-id")); })[0];
           if(action==='family-payment-confirm'){var pf=(d.paymentReports||[]).filter(function(x){return sameId(x.id,btn.getAttribute('data-id'));})[0],pm=pf&&(pf.months||[]).filter(function(x){return x.ym===btn.getAttribute('data-ym');})[0];if(pm)FT.confirm={op:'familyConfirmTransfer',payload:{familyId:pf.id,ym:pm.ym,signature:pm.signature},label:pf.label,description:pm.ym+'月分 '+yen(pm.amount)+'の入金を確認済みとして記録します。ご家族分をまとめてお支払い完了にします。入金確認日は本日です。'};}
-          else if (action === "family-new") { FT.edit = { id: "", label: "", children: Object.create(null) }; if(route().studentId) FT.edit.children[route().studentId]=true; }
+          else if (action === "family-new") { FT.edit = { id: "", label: "", children: Object.create(null) }; if(familyTarget()) FT.edit.children[familyTarget()]=true; }
           else if(action === 'family-help' && f){copyText('ステップワイズ 保護者ページ\n'+new URL('/hogosha/#family?mode='+(f.status==='active'?'requestReset':'resend'),location.href).href+'\n'+(f.status==='active'?'パスワードを忘れた場合は登録済みメールアドレスを入力し、届いたメールから再設定してください。通常のログインは「ログインに戻る」から行えます。':'登録したメールアドレスを入力し、確認メールを再送してください。パスワードの入力は不要です。届いたリンクからメールを確認し、パスワードを設定すると登録完了です。'),'案内をコピーしました');return;}
           else if(action==='family-single'){var sid=btn.getAttribute('data-id');FT.confirm={op:'familyEnsureGroup',payload:{studentId:sid},label:'1人の生徒グループ',description:'この生徒だけを閲覧する保護者ログインの登録案内を作成します。'};}
-          else if(action === 'family-link' && f && route().studentId){var sources=(d.families||[]).filter(function(x){return (x.children||[]).some(function(c){return sameId(c.studentId,route().studentId);});});if(sources.length>1){toast('所属が重複しています。既存グループを確認してください');return;}FT.confirm={op:'familyMoveStudent',payload:{familyId:f.id,studentId:route().studentId,sourceFamilyId:sources.length?sources[0].id:''},label:f.label,description:'この生徒を移動し、移動先「'+f.label+'」の保護者ログインで閲覧できるようにします。元グループの他の生徒は移動しません。生徒がいなくなった元グループは停止します。両グループの端末は再ログインが必要です。'};}
+          else if(action === 'family-link' && f && familyTarget()){var sources=(d.families||[]).filter(function(x){return (x.children||[]).some(function(c){return sameId(c.studentId,familyTarget());});});if(sources.length>1){toast('所属が重複しています。既存グループを確認してください');return;}FT.confirm={op:'familyMoveStudent',payload:{familyId:f.id,studentId:familyTarget(),sourceFamilyId:sources.length?sources[0].id:''},label:f.label,description:'この生徒を移動し、移動先「'+f.label+'」の保護者ログインで閲覧できるようにします。元グループの他の生徒は移動しません。生徒がいなくなった元グループは停止します。両グループの端末は再ログインが必要です。'};}
           else if (action === "family-editcancel") FT.edit = null;
           else if (action === "family-edit" && f) { FT.edit = { id: f.id, label: f.label, children: Object.create(null) }; (f.children || []).forEach(function (s) { FT.edit.children[s.studentId] = true; }); }
           else if (action === "family-save" && FT.edit) {
