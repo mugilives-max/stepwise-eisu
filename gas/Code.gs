@@ -1254,6 +1254,7 @@ function admin_(req) {
     case 'setDeliveryMode': return kanriWrap_(req, schedulingSetDeliveryMode_(req));
     case 'editLessonSubject': return kanriWrap_(req, schedulingEditLesson_(req,'editLessonSubject'));
     case 'setSlotDeliveryMode': return kanriWrap_(req, schedulingSetSlotDeliveryMode_(req));
+    case 'editBooked': return kanriWrap_(req,schedulingEditLesson_(req,'editBooked'),req.studentId);
     case 'editOffered': return kanriWrap_(req, schedulingEditOffered_(req), req.studentId);
     case 'parentIssueSetupCode': return adminParentIssueSetupCode_(req);
     case 'offer': {

@@ -79,8 +79,8 @@ test('an offer beyond the plan shows the plan prompt in the form: cancel, or sen
 
 test('slot mode changes carry the old mode and target only that student and slot', async () => {
   const s = slot('slot-a', { status: 'booked', studentId: 'test-a', done: false }); const ui = await adminReady(card({ lessons: [s] }));
-  ui.click('slotedit', { 'data-id': 'slot-a' }); assert.equal(ui.confirms(),0); ui.input('se-mode','online'); ui.click('se-save');
-  const b = ui.requests.at(-1).body; assert.equal(b.op, 'setSlotDeliveryMode'); assert.equal(b.studentId, 'test-a'); assert.equal(b.slotId, 'slot-a'); assert.equal(b.expectedMode, 'in_person'); assert.equal(b.deliveryMode, 'online');
+  ui.click('calday',{'data-date':'2026-09-10'}); ui.click('slotedit', { 'data-id': 'slot-a' }); assert.equal(ui.confirms(),0); ui.input('se-mode','online'); ui.click('se-save');
+  const b = ui.requests.at(-1).body; assert.equal(b.op, 'editBooked'); assert.equal(b.studentId, 'test-a'); assert.equal(b.slotId, 'slot-a'); assert.equal(b.expectedSnapshot.deliveryMode, 'in_person'); assert.equal(b.deliveryMode, 'online');
 });
 
 test('select all limits the batch to 31 and a single confirmation uses the same resumable API', async () => {
@@ -99,7 +99,7 @@ test('changing a student default does not send slot fields and adopts a refreshe
   ui.requests.at(-1).reply({ ok: true, data: card({ deliveryMode: 'in_person', lessons: [original] }), notificationWarning: '保存は完了しましたが通知を確認してください' }); await flush();
   assert.equal(ui.el('student-delivery').value, 'in_person'); assert.match(ui.html(), /role="alert".*通知を確認/);
   ui.navigate('#s=test-a'); ui.requests.at(-1).reply({data:card({section:'overview',deliveryMode:'in_person',lessons:[original]})}); await flush();
-  ui.click('slotedit', { 'data-id': 'slot-a' }); ui.input('se-mode','online'); ui.click('se-save'); assert.equal(ui.requests.at(-1).body.expectedMode,'in_person');
+  ui.click('calday',{'data-date':'2026-09-10'}); ui.click('slotedit', { 'data-id': 'slot-a' }); ui.input('se-mode','online'); ui.click('se-save'); assert.equal(ui.requests.at(-1).body.expectedSnapshot.deliveryMode,'in_person');
 });
 
 test('unfinished batch payload survives reload and lock-timeout responses without changing request ID', async () => {
