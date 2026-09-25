@@ -12,3 +12,35 @@ test('D1 saves teacher booking and authenticated parent acknowledgement',async()
 
 test('teacher changes a booked time and requests a fresh acknowledgement with original time',()=>{const {h,slot,req}=setup();h.admin('teacherBook',req);reply(h,slot);const before=h.snapshot(slot.id),edit={studentId:'test-a',slotId:slot.id,requestId:'edit-time-test-1',expectedSnapshot:before,date:before.date,start:'18:00',min:60,subject:before.subject,deliveryMode:before.deliveryMode,kind:'通常'};const r=h.admin('editBooked',edit);assert.equal(r.ok,true,JSON.stringify(r));assert.equal(h.admin('editBooked',edit).ok,true);const info=h.context().teacherBookingInfo_(h.rows('slots')[0]);assert.equal(info.status,'pending');assert.equal(info.previous.start,before.start);assert.equal(info.snapshot.start,'18:00');assert.equal(reply(h,slot).ok,true);assert.equal(h.admin('editBooked',edit).ok,true);assert.equal(h.context().teacherBookingInfo_(h.rows('slots')[0]).status,'confirmed');assert.equal(h.rows('offerEdits').length,1);});
 test('booked date edit rejects stale and overlapping changes',()=>{const {h,slot,req}=setup();h.admin('teacherBook',req);const before=h.snapshot(slot.id),edit={studentId:'test-a',slotId:slot.id,requestId:'edit-time-test-2',expectedSnapshot:before,date:before.date,start:'18:00',min:60,subject:before.subject,deliveryMode:before.deliveryMode};h.seedSlot({id:'other',studentId:'test-a',status:'booked',start:'18:00',min:60});assert.ok(h.admin('editBooked',edit).error);assert.equal(h.rows('slots')[0].start,before.start);assert.ok(h.admin('editBooked',{...edit,expectedSnapshot:{...before,start:'20:00'}}).error);});
+
+
+for (const online of [true, false]) test('D1 resumes an existing-calendar edit without synchronous Google reads: '+(online?'online':'in_person'),async()=>{
+  const {h,slot}=setup();
+  // Synthetic local fixture only; no external service or real account is used.
+  h.setRow('students','id','test-a',{name:'架空の受講者A',email:'fixture@example.invalid'});
+  h.context().setConfig_('calendarSync','on');
+  h.setRow('slots','id',slot.id,{status:'booked',eventId:'synthetic-calendar@google.com',deliveryMode:'online',meetUrl:'https://meet.google.com/synthetic'});
+  const before=h.snapshot(slot.id),req={studentId:'test-a',slotId:slot.id,requestId:'resume-calendar-edit',expectedSnapshot:before,date:before.date,start:'18:00',min:60,subject:before.subject,deliveryMode:online?'online':'in_person'};
+  const pending=h.requestWith(h.teacherRequest('editBooked',req),ctx=>{ctx.Calendar={Events:{get(){throw new Error('404 not found');}}};});
+  assert.equal(pending.pending,true);
+  const {createParity}=require('./helpers/parity-harness.cjs'),p=await createParity(h),{runWrite}=await import('../cf/worker/write.mjs');
+  const result=await runWrite(h.teacherRequest('editBooked',req),p.env,{now:h.now()});
+  assert.equal(result.result.ok,true,JSON.stringify(result.result));
+  const patches=result.effects.filter(e=>e.kind==='calendarPatch');
+  assert.equal(patches.length,1);
+  assert.equal(patches[0].marker,'synthetic-calendar');
+  assert.equal(patches[0].body.start.dateTime,before.date+'T18:00:00+09:00');
+  assert.equal(patches[0].body.end.dateTime,before.date+'T19:00:00+09:00');
+  assert.equal(patches[0].wantMeet,online);
+  assert.equal(patches[0].body.conferenceData,online?undefined:null);
+  const state=await p.worker({action:'state',k:'synthetic-link-a'});
+  const changed=state.slots.find(x=>x.id===slot.id);
+  assert.equal(changed.start,'18:00');
+  const stored=await p.env.DB.prepare('select meetUrl from slots where id = ?').bind(slot.id).first();
+  assert.equal(stored.meetUrl,online?'https://meet.google.com/synthetic':'');
+  assert.equal(changed.teacherBooking.status,'pending');
+  assert.equal(changed.teacherBooking.previous.start,before.start);
+  const replay=await runWrite(h.teacherRequest('editBooked',req),p.env,{now:h.now()});
+  assert.equal(replay.result.ok,true);
+  assert.equal(replay.effects.filter(e=>e.kind==='calendarPatch').length,0);
+});

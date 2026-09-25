@@ -190,15 +190,15 @@ function schedulingEditResult_(write,student,before,after,replayed,notice) {
   result.notificationStatus=notice.status;if(notice.warning)result.notificationWarning=notice.warning;
   result.admin=adminState_();return result;
 }
-function schedulingApplyCalendarMode_(desired,student) {
-    if(desired.eventId)desired.meetUrl=schedulingUpdateCalendarMode_(desired,student);
+function schedulingApplyCalendarMode_(desired,student,changeId) {
+    if(desired.eventId)desired.meetUrl=schedulingUpdateCalendarMode_(desired,student,changeId);
     else if(desired.status==='booked'&&getConfig_('calendarSync')==='on'&&!isTestStudent_(student)){
       // Legacy bookings may have no event after an old Calendar failure or while
       // sync was off. This per-slot key recovers an ambiguous create without
       // requiring a new student confirmation or creating duplicate events.
       var calendar=schedulingCalendarFor_({studentId:String(desired.studentId),requestId:'slot-mode-'+String(desired.id)},desired,student);
       desired.eventId=calendar.eventId;desired.meetUrl=calendar.meetUrl;
-      if(desired.eventId)desired.meetUrl=schedulingUpdateCalendarMode_(desired,student);
+      if(desired.eventId)desired.meetUrl=schedulingUpdateCalendarMode_(desired,student,changeId);
     } else if(desired.deliveryMode==='in_person')desired.meetUrl='';
 }
 function schedulingSetSlotDeliveryMode_(req) { return schedulingEditLesson_(req,'setSlotDeliveryMode'); }
@@ -244,7 +244,7 @@ function schedulingEditLesson_(req,op) {
     if(current!==was&&current!==will)throw new Error('途中の案内が変更されています');
     if(current===was){
       var desired=Object.assign({},r.slot,after.slot),gate=schedulingEditGate_(r.slot,desired,before.force,write.id,op);if(gate)throw new Error(gate.error);
-      if(op==='setSlotDeliveryMode'||op==='editBooked')schedulingApplyCalendarMode_(desired,student);
+      if(op==='setSlotDeliveryMode'||op==='editBooked')schedulingApplyCalendarMode_(desired,student,write.id);
       if(op==='editLessonSubject'&&desired.eventId&&!isTestStudent_(student)){
         var eventId=String(desired.eventId).split('@')[0],summary=CAL_TITLE_PREFIX+student.name+'さん '+desired.subject+' ('+(desired.deliveryMode==='online'?'オンライン':'対面')+')';
         Calendar.Events.patch({summary:summary},'primary',eventId,{sendUpdates:'none'});
@@ -371,11 +371,19 @@ function schedulingCalendarFor_(write,slot,student) {
   }
   return {eventId:String(event.iCalUID||event.id+'@google.com'),meetUrl:slot.deliveryMode==='online'?(schedulingMeetIfReady_(event)||String(slot.meetUrl||'')):''};
 }
-function schedulingUpdateCalendarMode_(slot,student) {
+function schedulingUpdateCalendarMode_(slot,student,changeId) {
   if(!slot.eventId||isTestStudent_(student))return slot.deliveryMode==='online'?String(slot.meetUrl||''):'';
-  var id=String(slot.eventId).split('@')[0],current=Calendar.Events.get('primary',id),body={},summary=CAL_TITLE_PREFIX+student.name+'さん '+(slot.subject||'授業')+' ('+(slot.deliveryMode==='online'?'オンライン':'対面')+')';
-  if(String(current.summary)!==summary)body.summary=summary;
+  var id=String(slot.eventId).split('@')[0],body={},summary=CAL_TITLE_PREFIX+student.name+'さん '+(slot.subject||'授業')+' ('+(slot.deliveryMode==='online'?'オンライン':'対面')+')';
+  body.summary=summary;
   body.start={dateTime:slot.date+'T'+slot.start+':00+09:00',timeZone:'Asia/Tokyo'};body.end={dateTime:slot.date+'T'+endTime_(slot.start,slot.min)+':00+09:00',timeZone:'Asia/Tokyo'};
+  // Worker queues updates without reading Google synchronously.
+  if(typeof Calendar.Events.deferLessonUpdate==='function'){
+    if(slot.deliveryMode!=='online')body.conferenceData=null;
+    else if(!slot.meetUrl)body.conferenceData=schedulingConferenceRequest_(id,{updated:changeId||slot.date+'|'+slot.start+'|'+slot.min});
+    Calendar.Events.deferLessonUpdate(body,id,slot.deliveryMode==='online');
+    return slot.deliveryMode==='online'?String(slot.meetUrl||''):'';
+  }
+  var current=Calendar.Events.get('primary',id);
   if(slot.deliveryMode==='online'){
     // Existing or pending conference survives retries. A later in-person -> online
     // change uses the new event etag, allowing a fresh conference after removal.

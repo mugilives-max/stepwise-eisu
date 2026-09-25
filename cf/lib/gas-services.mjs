@@ -232,6 +232,9 @@ export function createServices({ books, properties = {}, now = null, mutable = f
               // 作ったことにして返す。中身は渡された body そのもの（本人確認の印を含む）
               return { ...body, status: 'confirmed' };
             },
+            deferLessonUpdate(body, id, wantMeet) {
+              queued.push({ kind: 'calendarPatch', marker: String(id), body, wantMeet: !!wantMeet });
+            },
             patch(body, _cal, id) {
               // 題名の書き換えも、対面⇔オンラインの切り替えも控えに回す
               queued.push({ kind: 'calendarPatch', marker: String(id), body, wantMeet: !!(body && body.conferenceData) });
