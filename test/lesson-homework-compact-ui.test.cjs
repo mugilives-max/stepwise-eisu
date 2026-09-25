@@ -39,7 +39,7 @@ test('individual deadline edit preserves text and other items, closes compactly,
   ]);
 });
 test('removing a row preserves neighbors, restores focus and requires another share preview',async()=>{
-  const ui=await ready(); ui.click('lc-review'); assert.ok(ui.el('lc-share-confirm'));
+  const ui=await ready();
   ui.click('lc-remove',{'data-item':'hw-2'});
   assert.equal(ui.el('lc-share-confirm'),undefined); assert.equal(ui.requests.length,1);
   assert.equal(ui.focused(),'lc-title-1'); assert.equal(ui.el('lc-title-1').value,'ドリル p7〜10');

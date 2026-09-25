@@ -1785,12 +1785,14 @@
         }
         function lessonAdopt(e, c, mode) {
           e.context = c;
+          e.temporaryRevision=c.temporaryDraft?c.temporaryDraft.revision:0;
           if (e.preparationBody === undefined || !e.prepDirty || mode === 'preparation' || mode === 'all') { e.preparationBody = c.preparation ? c.preparation.body : ''; e.prepRevision = c.preparation ? c.preparation.revision : 0; e.prepDirty = false; }
           if (c.slot && c.slot.id) e.slotId = c.slot.id;
-          if (!e.form || !e.dirty || mode === "record" || mode === "all") {
+          if (mode!=="temporary" && (!e.form || !e.dirty || mode === "record" || mode === "all")) {
             e.form = lessonForm(c.record); e.baseRevision = c.record ? c.record.revision : 0; e.dirty = false;
             if(c.record&&c.record.outline){var saved=c.record.outline,choice=(c.outlineChoices||[]).filter(function(x){return x.lineId===saved.lineId;})[0];e.form.outline={lineId:saved.lineId,itemId:saved.itemId,expectedRevision:choice?choice.revision:0,expectedPlanRevision:choice?choice.planRevision:0,refresh:false};}
           }
+          if((mode==='all'||mode==='temporary')&&c.temporaryDraft&&c.temporaryDraft.baseRevision===e.baseRevision){e.form=JSON.parse(JSON.stringify(c.temporaryDraft.form));e.message='一時保存した内容を読み込みました。';}
           if (!e.draftDirty || mode === "report" || mode === "all") {
             e.body = c.draft ? c.draft.body : ""; e.baseDraftRevision = c.draft ? c.draft.revision : 0;
             e.sourceRevision = c.draft ? c.draft.sourceRevision : c.record ? c.record.revision : 0; e.draftDirty = false;
@@ -1836,9 +1838,10 @@
           lessonApi(pending.op, pending.payload).then(function (res) {
             if (!res.ok || !res.context) throw new Error("保存結果を確認できませんでした。同じ内容で再試行してください。");
             e.pending = null; e.latest = null;
-            lessonAdopt(e, res.context, (res.operation || pending.op) === "lessonPreparationSave" ? "preparation" : (res.operation || pending.op) === "lessonRecordSave" ? "record" : (res.operation || pending.op) === "lessonReportDraftSave" ? "report" : "");
+            lessonAdopt(e, res.context, (res.operation || pending.op) === "lessonRecordDraftSave" ? "temporary" : (res.operation || pending.op) === "lessonPreparationSave" ? "preparation" : (res.operation || pending.op) === "lessonRecordSave" ? "record" : (res.operation || pending.op) === "lessonReportDraftSave" ? "report" : "");
             if (pending.op === "lessonRecordVoid") { e.dirty = false; e.form = lessonForm(res.context.record); }
-            e.message = pending.op === "lessonPreparationSave" ? "授業準備を先生専用で保存しました。" : pending.op === "lessonHomeworkApply" ? "宿題の反映結果を確認してください。" : pending.op === "lessonHomeworkWithdraw" ? "宿題を取り下げました。" : pending.op === "lessonRecordVoid" ? "記録を無効化しました。宿題の取り下げは別操作です。" : "保存しました。";
+            if(pending.op==="lessonRecordDraftSave")e.dirty=false;
+            e.message = pending.op === "lessonRecordDraftSave" ? "一時保存しました。生徒・保護者には公開されません。" : pending.op === "lessonPreparationSave" ? "授業準備を先生専用で保存しました。" : pending.op === "lessonHomeworkApply" ? "宿題の反映結果を確認してください。" : pending.op === "lessonHomeworkWithdraw" ? "宿題を取り下げました。" : pending.op === "lessonRecordVoid" ? "記録を無効化しました。宿題の取り下げは別操作です。" : "保存しました。";
             if ((res.held || []).length) e.message += " 完了済みなどのため保留された宿題があります。";
             if(pending.share && (res.operation||pending.op)==='lessonRecordSave'){
               e.message='授業報告は公開済みです。続いて宿題を生徒の「やること」に反映しています。';
@@ -1849,7 +1852,7 @@
             e.error = (pending.sharedReport?'授業報告は公開済みですが、宿題の反映は完了していません。 ':'')+er.message;
             if (er.partial && er.context) { lessonAdopt(e, er.context, ""); e.error += " 一部の宿題だけが反映されています。現在の反映状態を確認してください。"; }
             if (er.code === "conflict" || er.code === "validation" || er.code === "notFound" || er.code === "disabled") e.pending = null;
-            if (er.code === "conflict") { e.conflict = !er.partial; e.error += " 入力を残しています。「最新を確認」で比較してください。"; }
+            if (er.code === "conflict") { e.conflict = !er.partial; e.error += " 入力を残しています。「最新の内容と比較」で確認してください。"; }
             else if (e.pending) e.error += " 入力を保持しています。別の保存をせず、同じ処理を再試行してください。";
           }).then(function () { e.busy = false;if(nextShare){e.pending=nextShare;lessonSend(e);}else lessonRender(e); });
         }
@@ -1967,7 +1970,7 @@
             });
             h += lessonDetails(e.form,readonly)+'</div>'+lessonOutlinePanel(e,readonly)+'</div>';
             if(e.sharePreview)h+=lessonSharePreview(e,readonly||e.conflict||(c.student||{}).active===false);
-            h += '<div class="lc-share-actions">' + lessonAction('review',e.busy?'処理中…':'共有する内容を確認',readonly||e.conflict||(c.student||{}).active===false,'btn-primary') + lessonAction('refresh','最新を確認',blocked) + '</div><p class="note">確認後、報告の公開と宿題の反映を続けて行います。入力はこのタブの間だけ保持します。</p><details class="lc-secondary"><summary>報告だけを公開する</summary><p class="note">宿題を「やること」に反映せず、報告だけを保存・公開します。下書き保存ではありません。</p>'+lessonAction('save','報告だけ保存して公開',readonly||e.conflict)+'</details></div>';
+            h += '<div class="lc-share-actions">' + lessonAction('publish',e.busy?'処理中…':'保存して公開',readonly||e.conflict||(c.student||{}).active===false,'btn-primary') + lessonAction('keep','一時保存',readonly||e.conflict) + (e.conflict?lessonAction('refresh','最新の内容と比較',blocked):'') + '</div><p class="note">公開すると、授業報告と宿題を生徒・保護者に共有します。一時保存の内容は先生だけが確認できます。</p><details class="lc-secondary"><summary>報告だけを公開する</summary><p class="note">宿題を「やること」に反映せず、報告だけを保存・公開します。下書き保存ではありません。</p>'+lessonAction('save','報告だけ保存して公開',readonly||e.conflict)+'</details></div>';
             if (r) {
               h += '<details class="lc-secondary"'+((c.homeworkState||[]).some(function(x){return ['new','changed','held','removed'].indexOf(x.status)>=0;})?' open':'')+'><summary>宿題の反映状態・個別操作</summary><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
               h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
@@ -2059,18 +2062,23 @@
               e.dirty = true; e.message = "新しい宿題欄を追加しました。期限を確認して記録を保存後、生徒へ反映してください。"; break;
             case 'lc-outline-refresh':
               if(e.form.outline){var ref=e.form.outline,line=(c.outlineChoices||[]).filter(function(x){return x.lineId===ref.lineId;})[0];if(line){ref.expectedRevision=line.revision;ref.expectedPlanRevision=line.planRevision;ref.refresh=true;e.dirty=true;e.sharePreview=false;}}break;
+            case 'lc-keep':
+              if(e.conflict||c.slotChanged||(c.student||{}).active===false)return;
+              lessonWrite(e,'lessonRecordDraftSave',{slotId:e.slotId,expectedRevision:e.temporaryRevision||0,body:JSON.stringify({form:e.form,baseRevision:e.baseRevision||0}),expectedSlot:{date:c.slot.date,start:c.slot.start,min:c.slot.min,subject:c.slot.subject||''}});return;
             case 'lc-review':
               var reviewError=lessonValidate(e.form);if(reviewError){e.error=reviewError;break;}e.error='';e.sharePreview=true;break;
             case 'lc-cancelshare':e.sharePreview=false;break;
             case 'lc-share':
               if(!e.sharePreview||(c.student||{}).active===false)return;
               // Falls through: the explicit preview confirmation authorizes both writes.
+            case "lc-publish":
             case "lc-save":
+              if(e.conflict||c.slotChanged||(c.student||{}).active===false)return;
               if (c && c.slot && c.slot.date > (c.today || today())) return;
               var validation = lessonValidate(e.form);
               if (validation) { e.error = validation; break; }
               var saveForm = JSON.parse(JSON.stringify(e.form)); saveForm.homework = saveForm.homework.filter(function (x) { return String(x.title || "").trim(); });
-              e.sharePreview=false;lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, record: saveForm },a==='lc-share'); return;
+              e.sharePreview=false;lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, record: saveForm },a==='lc-share'||a==='lc-publish'); return;
             case "lc-preview": if (e.dirty) { toast("先に記録を保存してください"); return; } e.preview = true; break;
             case "lc-cancelpreview": e.preview = false; break;
             case "lc-apply":

@@ -12,13 +12,11 @@ test('primary fields precede optional details; choosing outline keeps all input 
   const ui=await lessonReady();ui.input('lc-content','今回のコメント');ui.input('lc-report-actualUnit','計算');ui.input('lc-title-0','ワーク p21');ui.input('lc-teacherNote','PRIVATE_NOTE');
   ui.input('lc-outline','line-1|calc');assert.equal(ui.el('lc-content').value,'今回のコメント');assert.equal(ui.el('lc-title-0').value,'ワーク p21');assert.match(ui.html(),/今回 1 \/ 2 コマ目/);
   assert.ok(ui.html().indexOf('id="lc-title-0"')<ui.html().indexOf('id="lc-report-understanding"'));
-  ui.click('lc-review');const preview=ui.html().match(/<section class="lc-share-preview"[\s\S]*?<\/section>/)[0];
-  assert.match(preview,/今回 1 \/ 2/);assert.doesNotMatch(preview,/PRIVATE_NOTE|PRIVATE_OUTLINE/);assert.equal(ui.requests.length,1);
-  ui.click('lc-cancelshare');ui.input('lc-outline','line-1|private');ui.click('lc-review');
-  assert.doesNotMatch(ui.html().match(/<section class="lc-share-preview"[\s\S]*?<\/section>/)[0],/PRIVATE_OUTLINE/);
+  ui.click('lc-publish');assert.equal(ui.requests.at(-1).body.record.outline.itemId,'calc');
+  assert.equal(ui.requests.at(-1).body.record.teacherNote,'PRIVATE_NOTE');
 });
 test('one confirmed share chains report then homework; network retry repeats only the outstanding operation',async()=>{
-  const ui=await lessonReady();ui.input('lc-content','報告');ui.input('lc-title-0','ワーク p21');ui.click('lc-review');ui.click('lc-share');
+  const ui=await lessonReady();ui.input('lc-content','報告');ui.input('lc-title-0','ワーク p21');ui.click('lc-publish');
   const save=ui.requests.at(-1);assert.equal(save.body.op,'lessonRecordSave');const r=record(save.body.record);
   save.reply({ok:true,operation:'lessonRecordSave',context:context({record:r})});await flush();
   const apply=ui.requests.at(-1),body=copy(apply.body);assert.equal(body.op,'lessonHomeworkApply');assert.equal(body.recordId,r.id);
@@ -27,11 +25,23 @@ test('one confirmed share chains report then homework; network retry repeats onl
   ui.requests.at(-1).reply({ok:true,context:context({record:r}),held:['held-item']});await flush();assert.match(ui.html(),/宿題は変更を保留/);
   assert.equal(ui.requests.filter(x=>x.body.op==='lessonRecordSave').length,1);
 });
-test('editing after preview requires another confirmation; no hidden automatic save or attendance write',async()=>{
-  const ui=await lessonReady();ui.input('lc-content','報告');ui.click('lc-review');ui.input('lc-content','訂正');
-  assert.equal(ui.el('lc-share-confirm').disabled,true);ui.click('lc-share');assert.equal(ui.requests.length,1);
-  ui.click('lc-review');ui.click('lc-share');assert.equal(ui.requests.at(-1).body.record.content,'訂正');assert.equal(ui.requests.length,2);
+test('direct publication uses current input without a preview or attendance write',async()=>{
+ const ui=await lessonReady();ui.input('lc-content','報告');ui.input('lc-content','訂正');
+ assert.equal(ui.requests.length,1);ui.click('lc-publish');
+ assert.equal(ui.requests.at(-1).body.record.content,'訂正');assert.equal(ui.requests.length,2);
 });
+test('temporary save retains the form and reloads privately without publishing',async()=>{
+ const ui=await lessonReady();ui.input('lc-content','途中');ui.input('lc-title-0','宿題');ui.click('lc-keep');
+ const req=ui.requests.at(-1);assert.equal(req.body.op,'lessonRecordDraftSave');
+ const body=JSON.parse(req.body.body),temporaryDraft={...body,revision:1};
+ req.reply({ok:true,operation:'lessonRecordDraftSave',context:context({temporaryDraft})});await flush();
+ assert.equal(ui.el('lc-content').value,'途中');assert.equal(ui.requests.length,2);
+ const reopened=await lessonReady(context({temporaryDraft}));assert.equal(reopened.el('lc-content').value,'途中');
+ reopened.click('lc-keep');assert.equal(reopened.requests.at(-1).body.expectedRevision,1);
+ const published=await lessonReady(context({record:record({...body.form,content:'公開版'}),temporaryDraft}));
+ assert.equal(published.el('lc-content').value,'公開版');
+});
+
 test('historical position persists until explicit refresh or clearing correspondence',async()=>{
   const r=record({content:'報告',progress:'',nextFocus:'',teacherNote:'',homework:[],outline:{lineId:'line-1',itemId:'calc',position:{...position,plannedCount:5},publicPosition:{...position,plannedCount:5}}});
   const ui=await lessonReady(context({record:r}));assert.match(ui.html(),/今回 1 \/ 5/);ui.click('lc-outline-refresh');assert.match(ui.html(),/今回 1 \/ 2/);

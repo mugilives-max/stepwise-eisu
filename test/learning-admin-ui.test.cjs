@@ -127,7 +127,7 @@ async function lessonReady(record = null, extra = {}) {
 }
 
 test('lesson save explains public content and private notes while new homework defaults to the next lesson', async () => {
-  const ui = await lessonReady(); assert.match(ui.html(), /共有する内容を確認/); assert.match(ui.html(), /先生だけのメモ.*非公開/);
+  const ui = await lessonReady(); assert.match(ui.html(), /保存して公開/); assert.match(ui.html(), /先生だけのメモ.*非公開/);
   ui.input('lc-content', '化学反応式を練習'); ui.input('lc-teacherNote', 'SYNTHETIC_PRIVATE_NOTE');
   // a blank homework row is shown by default; a second one is added and left blank (ignored on save)
   // Only homework starts with a blank row; supplies/memos are optional additions.

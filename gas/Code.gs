@@ -1246,7 +1246,7 @@ function admin_(req) {
   if (String(req.op || '').indexOf('service') === 0) return serviceAdmin_(req);
   if (String(req.op || '').indexOf('family') === 0) return familyAdmin_(req);
   if (String(req.op || '').indexOf('studentEmail') === 0) return studentEmailAdmin_(req);
-  if (['planOutlineGet','planOutlineSave','lessonPairContext','lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
+  if (['planOutlineGet','planOutlineSave','lessonPairContext','lessonRecordDraftSave','lessonPreparationSave','lessonContext','lessonRecordSave','lessonHomeworkApply','lessonHomeworkWithdraw','lessonReportDraftSave','lessonRecordVoid','lessonWriteResume'].indexOf(req.op) >= 0) return lessonAdmin_(req);
   switch (req.op) {
     case 'billingPreview': { var bp = billingPreview_(String(req.studentId || ''), String(req.ym || '')); return bp.error ? bp : {ok:true,billing:bp}; }
     case 'kanriVoidInvoice': return billingMutationResult_(req,billingVoidInvoice_(req));

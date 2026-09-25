@@ -251,3 +251,28 @@ test('HTTP lock timeout has a retryable response and successful or invalid opera
   bad(JSON.parse(c.doPost({postData:{contents:JSON.stringify({...request,requestId:'bad-input',record:{content:''}})}}).getContent()),'validation');
   assert.equal(acquired,2);assert.equal(released,2);
 });
+
+test('temporary record saves privately, survives reload and rejects stale revisions',()=>{
+ const h=fixture(),expectedSlot={date:'2026-09-07',start:'13:00',min:60,subject:'英語'};
+ const body=JSON.stringify({form:record({content:''}),baseRevision:0});
+ const req={slotId:'slot-a',expectedRevision:0,requestId:'temporary-1',expectedSlot,body};
+ ok(h.lesson('lessonRecordDraftSave',req));ok(h.lesson('lessonRecordDraftSave',req));
+ assert.equal(h.rows('lessonRecords').length,0);assert.equal(h.rows('tasks').length,0);
+ const c=ok(h.contextFor()).context;
+ assert.equal(c.temporaryDraft.form.teacherNote,'PRIVATE_SENTINEL_7x');
+ assert.equal(c.temporaryDraft.form.content,'');assert.equal(c.preparation,null);
+ bad(h.lesson('lessonRecordDraftSave',{...req,requestId:'temporary-2'}),'conflict');
+ ok(save(h));
+ bad(h.lesson('lessonRecordDraftSave',{...req,expectedRevision:1,requestId:'temporary-3'}),'conflict');
+});
+
+test('Worker stores temporary records privately and retries without creating public records',async()=>{
+ const h=fixture(),{createParity}=require('./helpers/parity-harness.cjs'),p=await createParity(h),{runWrite}=await import('../cf/worker/write.mjs');
+ const req={action:'admin',op:'lessonRecordDraftSave',token:TEACHER_TOKEN,studentId:'test-a',slotId:'slot-a',expectedRevision:0,requestId:'worker-temp',body:JSON.stringify({form:record(),baseRevision:0}),expectedSlot:{date:'2026-09-07',start:'13:00',min:60,subject:'英語'}};
+ const first=await runWrite(req,p.env);ok(first.result);
+ const second=await runWrite(req,p.env);ok(second.result);
+ assert.equal(second.result.context.temporaryDraft.revision,1);
+ const publicState=await p.worker({action:'state',k:'synthetic-link-a'});
+ assert.doesNotMatch(JSON.stringify(publicState),/PRIVATE_SENTINEL_7x|temporaryDraft/);
+ assert.equal((await p.env.DB.prepare('select count(*) as n from lessonRecords').first()).n,0);
+});
