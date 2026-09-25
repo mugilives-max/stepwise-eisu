@@ -699,9 +699,9 @@
           var famChild = route() === 'family' ? familyMypageChild() : null, famLines = famChild && F.childrenData[famChild.studentId] ? (F.childrenData[famChild.studentId].planLines || []) : [];
           if (famChild && F.confirm && sameId(F.confirm.studentId, famChild.studentId)) folds.plan = true;
           function progressStatus(line,label) {
-            if(!famChild||!line)return label==='承認済み'?'<span class="tag green">承認済み</span>':esc(label);
+            if(!line)return esc(label);
             var items=[line].concat(lines.filter(function(a){return a.parentId===line.id&&a.id!==line.id;}));
-            return items.map(function(l,i){return '<button type="button" class="tag '+(l.status==='approved'?'green':'amber')+'" aria-haspopup="dialog" data-action="fa-planopen" data-child="'+esc(famChild.studentId)+'" data-line="'+esc(l.id)+'"'+(F.busy?' disabled':'')+'>'+(i?'追加：':'')+(l.status==='approved'?'承認済み':'承認待ち')+'</button>';}).join(' ');
+            return items.map(function(l,i){return '<button type="button" class="tag '+(l.status==='approved'?'green':'amber')+'" aria-haspopup="dialog" data-action="'+(famChild?'fa-planopen':'student-planopen')+'"'+(famChild?' data-child="'+esc(famChild.studentId)+'"':'')+' data-line="'+esc(l.id)+'"'+(F.busy?' disabled':'')+'>'+(i?'追加：':'')+(l.status==='approved'?'承認済み':'承認待ち')+'</button>';}).join(' ');
           }
           var ymNow = today.slice(0, 7), extra = {};
           var planCols = (famChild ? 7 : 6)+(sharedName?1:0);
@@ -761,7 +761,7 @@
           if (proposed.length) html += planTableEnd();
           html += '</div></details>';
           var planHtml = html, progressCount = (approved.length + proposed.length) ? (approved.length + proposed.length)+'件の計画' : '送信済みの計画なし';
-          html = (famChild ? '<section class="parent-progress"><h2>実施状況 <span class="cnt">'+esc(progressCount)+'</span></h2>' : foldHead('progress', '実施状況', progressCount)) + '<div class="card">';
+          html = (famChild ? '<section class="parent-progress"><h2>実施状況 <span class="cnt">'+esc(progressCount)+'</span></h2>' : '<section class="student-progress family-student-progress"><h2>授業計画・実施状況 <span class="cnt">'+esc(progressCount)+'</span></h2>') + '<div class="card">';
           var remainTotal = 0, shown = 0;
           planCols=7+(sharedName?1:0);
           var progressHead='<div class="portal-plan-wrap"><table class="portal-plan-table'+(sharedName?' family-plan-table':'')+'"><thead><tr>'+nameHead+'<th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th></tr></thead><tbody>';
@@ -782,7 +782,7 @@
           if (!shown) html += '<div class="empty">送信済みの計画はありません</div>';
           if (remainTotal) html += '<div class="small" style="color:var(--primary);margin-top:8px">あと ' + remainTotal + ' 回、日程調整が必要です。予定表で日付を選び、＋から授業可能日時を送れます。</div>';
           if (famChild && F.childrenData[famChild.studentId]) html += renderParentThisMonth(F.childrenData[famChild.studentId]);
-          return { plan: planHtml, progress: html + '</div>' + (famChild ? '</section>' : '</details>'), proposalRows:proposalRows,proposalHead:proposalHead,progressRows:progressRows,progressHead:progressHead,confirm:confirmHtml,proposalCount:proposed.length,planCount:approved.length+proposed.length,remain:remainTotal };
+          return { plan: planHtml, progress: html + '</div>' + '</section>', proposalRows:proposalRows,proposalHead:proposalHead,progressRows:progressRows,progressHead:progressHead,confirm:confirmHtml,proposalCount:proposed.length,planCount:approved.length+proposed.length,remain:remainTotal };
         }
 
         function renderOffers(D, sharedName) {
@@ -974,6 +974,12 @@
         }
 
         /* ---------- ホーム: 予定表を最優先に、予定の編集・授業登録・授業計画の案内。宿題は専用メニューへ ---------- */
+        var studentPlanId='';
+        function renderStudentPlanDialog(){
+          var l=(S&&S.planLines||[]).filter(function(x){return String(x.id)===studentPlanId;})[0];if(!l)return '';
+          var content='<p>'+esc(planPeriod(l))+'・'+esc(lessonLabel(l))+'</p><p>'+esc(l.status==='approved'?planLimit(l):l.count)+'回・'+esc(l.lessonMin||'未設定')+(l.lessonMin?'分':'')+'</p><p>'+(l.status==='approved'?'承認済み':'承認待ち：承認・回数の調整・見送りは、保護者ページから行ってください。')+'</p>'+(l.comment?'<p style="white-space:pre-wrap">'+esc(l.comment)+'</p>':'')+window.StepwiseReport.outline(l.outline);
+          return window.StepwiseCalendar.dayDialog({id:'student-plan-dialog',title:'授業計画の詳細',close:'student-planclose',content:content});
+        }
         function renderHomePage(sharedCalendar) {
           var D = schedData(), today = D.today, mine = D.mine, events = D.events;
           var html = previewBanner(true);
@@ -983,10 +989,9 @@
           html += renderDayDetail(D, true, true);
 
           var summary = renderMonthSummary(D);
-          if (route() === 'family') html += summary.progress;
+          html += summary.progress;
           html += renderOffers(D);
-          html += summary.plan;
-          if (route() !== 'family') html += summary.progress;
+          if(route()!=='family')html+=renderStudentPlanDialog();
 
           html += renderPendingBar(D);
           return html;
@@ -1689,7 +1694,7 @@
         function studentNoticesHTML(){var items=studentNoticeItems();return '<section class="card" aria-label="生徒のお知らせ" style="margin-bottom:18px"><div class="row between"><h2 style="margin:0">お知らせ</h2><button class="btn-quiet btn-sm" data-action="student-notices">閉じる</button></div>'+ (items.length?items.map(function(x){return '<p>'+(x.required?'<span class="tag amber">要確認</span> ':'')+'<a href="'+x.url+'" data-action="student-notice-link">'+esc(x.title)+'</a></p>';}).join(''):'<p class="muted">お知らせはありません。</p>')+'</section>';}
         var parentHeaderActions=document.getElementById('parent-header-actions');
         if(parentHeaderActions)parentHeaderActions.addEventListener('click',function(ev){var btn=ev.target.closest('[data-action]');if(!btn)return;if(btn.getAttribute('data-action')==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();}else if(btn.getAttribute('data-action')==='fa-student-pages')familyClick('fa-student-pages',btn);else if(btn.getAttribute('data-action')==='fa-notices')familyNoticeClick('fa-notices',btn);});
-        function mountDayDialog(){var chooser=document.getElementById("family-student-dialog");if(chooser){chooser.oncancel=function(e){if(F.busy)e.preventDefault();else F.studentChooser=false;};if(chooser.showModal&&!chooser.open)chooser.showModal();}var profile=document.getElementById("family-profile-dialog");if(profile){profile.oncancel=function(e){if(F.busy)e.preventDefault();else F.profileEdit=null;};if(profile.showModal&&!profile.open)profile.showModal();}var transfer=document.getElementById("family-transfer-dialog");if(transfer){transfer.oncancel=function(e){if(F.busy)e.preventDefault();else F.transferConfirm=null;};if(transfer.showModal&&!transfer.open)transfer.showModal();}var plan=document.getElementById("family-plan-dialog");if(plan){plan.oncancel=function(e){if(F.busy)e.preventDefault();else F.confirm=null;};if(plan.showModal&&!plan.open)plan.showModal();}var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
+        function mountDayDialog(){var sp=document.getElementById("student-plan-dialog");if(sp){sp.oncancel=function(){studentPlanId="";};if(sp.showModal&&!sp.open)sp.showModal();}var chooser=document.getElementById("family-student-dialog");if(chooser){chooser.oncancel=function(e){if(F.busy)e.preventDefault();else F.studentChooser=false;};if(chooser.showModal&&!chooser.open)chooser.showModal();}var profile=document.getElementById("family-profile-dialog");if(profile){profile.oncancel=function(e){if(F.busy)e.preventDefault();else F.profileEdit=null;};if(profile.showModal&&!profile.open)profile.showModal();}var transfer=document.getElementById("family-transfer-dialog");if(transfer){transfer.oncancel=function(e){if(F.busy)e.preventDefault();else F.transferConfirm=null;};if(transfer.showModal&&!transfer.open)transfer.showModal();}var plan=document.getElementById("family-plan-dialog");if(plan){plan.oncancel=function(e){if(F.busy)e.preventDefault();else F.confirm=null;};if(plan.showModal&&!plan.open)plan.showModal();}var ev=document.getElementById("schedule-event-editor");if(ev){ev.oncancel=function(e){if(busy)e.preventDefault();else{selMode="";selDays={};}};if(ev.showModal&&!ev.open)ev.showModal();}var d=document.getElementById('schedule-day-editor');if(d){d.oncancel=function(e){if(busy||NL.busy)e.preventDefault();else {dayAddOpen=false;familyDayChooser='';}};if(d.showModal&&!d.open)d.showModal();}}
         function mountAcceptDialog(){var d=document.getElementById('schedule-accept-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else pending=null;};if(d.showModal&&!d.open)d.showModal();}}
 
         function applyStudentPermissions() {
@@ -1823,6 +1828,8 @@
           }
           if(act==='student-notices'){studentNoticesOpen=!studentNoticesOpen;render();return;}
           if(act==='student-notice-link'){studentNoticesOpen=false;render();return;}
+          if(act==='student-planopen'){studentPlanId=btn.getAttribute('data-line');render();return;}
+          if(act==='student-planclose'){studentPlanId='';render();return;}
           if(act==='approval-help'){var help=document.getElementById(btn.getAttribute('aria-controls'));if(help){help.hidden=!help.hidden;btn.setAttribute('aria-expanded',String(!help.hidden));}return;}
           if (act.indexOf("fa-") === 0) { ev.preventDefault(); familyClick(act, btn); return; }
           if (act === 'nl-item') return;
