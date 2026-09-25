@@ -32,7 +32,7 @@ test('individual deadline edit preserves text and other items, closes compactly,
   assert.match(ui.html(),/期限：2026-10-01/); assert.equal(ui.el('lc-title-0').value,'変更した宿題');
   ui.click('lc-duetoggle',{'data-item':'hw-3'}); ui.input('lc-due-mode-2','nextLesson');
   assert.equal(ui.focused(),'lc-due-mode-2'); ui.click('lc-dueclose',{'data-item':'hw-3'});
-  ui.click('lc-save');
+  ui.click('lc-publish');
   const saved=ui.requests.at(-1).body.record.homework;
   assert.deepEqual(JSON.parse(JSON.stringify(saved)),[
     {...items()[0],title:'変更した宿題'}, {...items()[1],due:'2026-10-01'}, {...items()[2],dueMode:'nextLesson'}
@@ -43,7 +43,7 @@ test('removing a row preserves neighbors, restores focus and requires another sh
   ui.click('lc-remove',{'data-item':'hw-2'});
   assert.equal(ui.el('lc-share-confirm'),undefined); assert.equal(ui.requests.length,1);
   assert.equal(ui.focused(),'lc-title-1'); assert.equal(ui.el('lc-title-1').value,'ドリル p7〜10');
-  ui.click('lc-save'); assert.deepEqual(Array.from(ui.requests.at(-1).body.record.homework,x=>x.itemId),['hw-1','hw-3']);
+  ui.click('lc-publish'); assert.deepEqual(Array.from(ui.requests.at(-1).body.record.homework,x=>x.itemId),['hw-1','hw-3']);
   assert.equal(ui.requests.length,2,'removing from the report must not withdraw a published task');
 });
 test('read-only records show compact deadline summaries without actionable edit menus',async()=>{

@@ -11,7 +11,10 @@ function record(form,revision=1){return {id:'record-a',revision,status:'active',
 test('primary fields precede optional details; choosing outline keeps all input and snapshots public preview only',async()=>{
   const ui=await lessonReady();ui.input('lc-content','今回のコメント');ui.input('lc-report-actualUnit','計算');ui.input('lc-title-0','ワーク p21');ui.input('lc-teacherNote','PRIVATE_NOTE');
   ui.input('lc-outline','line-1|calc');assert.equal(ui.el('lc-content').value,'今回のコメント');assert.equal(ui.el('lc-title-0').value,'ワーク p21');assert.match(ui.html(),/今回 1 \/ 2 コマ目/);
-  assert.ok(ui.html().indexOf('id="lc-title-0"')<ui.html().indexOf('id="lc-report-understanding"'));
+  assert.ok(ui.html().indexOf('id="lc-title-0"')<ui.html().indexOf('data-action="lc-keep"'));
+  assert.ok(ui.html().indexOf('data-action="lc-keep"')<ui.html().indexOf('持ち物・メモを追加（任意）'));
+  assert.ok(ui.html().indexOf('持ち物・メモを追加（任意）')<ui.html().indexOf('補足・先生用メモ（任意）'));
+  assert.doesNotMatch(ui.html(),/報告だけを公開する|data-action="lc-save"/);
   ui.click('lc-publish');assert.equal(ui.requests.at(-1).body.record.outline.itemId,'calc');
   assert.equal(ui.requests.at(-1).body.record.teacherNote,'PRIVATE_NOTE');
 });
@@ -45,7 +48,7 @@ test('temporary save retains the form and reloads privately without publishing',
 test('historical position persists until explicit refresh or clearing correspondence',async()=>{
   const r=record({content:'報告',progress:'',nextFocus:'',teacherNote:'',homework:[],outline:{lineId:'line-1',itemId:'calc',position:{...position,plannedCount:5},publicPosition:{...position,plannedCount:5}}});
   const ui=await lessonReady(context({record:r}));assert.match(ui.html(),/今回 1 \/ 5/);ui.click('lc-outline-refresh');assert.match(ui.html(),/今回 1 \/ 2/);
-  ui.click('lc-save');assert.equal(ui.requests.at(-1).body.record.outline.refresh,true);
+  ui.click('lc-publish');assert.equal(ui.requests.at(-1).body.record.outline.refresh,true);
 });
 const outline=(extra={})=>({lineId:'line-1',planRevision:7,subject:'英語',kind:'',period:'2026年9月',status:'proposed',limit:4,revision:0,items:[],published:null,hasPublication:false,pending:null,...extra});
 async function planReady(o=outline()){const ui=await adminReady(card({plan:{lines:[line()],defaultRows:[]}}),'billing');ui.click('po-open',{'data-line':'line-1'});assert.equal(ui.requests.at(-1).body.op,'planOutlineGet');ui.requests.at(-1).reply({ok:true,outline:o});await flush();return ui;}

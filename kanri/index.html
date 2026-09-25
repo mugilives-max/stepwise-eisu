@@ -1958,19 +1958,22 @@
             if (!readonly) ["宿題"].forEach(function (type) { if (!e.form.homework.some(function (x) { return (x.type || "宿題") === type; })) e.form.homework.push({ itemId: lessonId(), title: "", due: "", dueMode: "nextLesson", type: type }); });
             h += '<h2>今回の記録</h2><div class="card"><div class="lc-slotinfo" style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)">' + slotInfo + '</div><div class="lc-compose"><div class="lc-main">' + lessonFields(e.form, readonly);
             // 種類ごとの欄。期限は「次の同じ科目の授業」が既定で、「日付を指定」を選んだときだけ日付欄を出す
+            var extrasHtml="";
             ["宿題", "持ち物", "メモ"].forEach(function (type) {
-              if(type==='持ち物')h+='<details class="lc-secondary" data-lc-extras data-lc-editor="'+esc(e.key)+'"'+(e.extrasOpen?' open':'')+'><summary>持ち物・メモを追加（任意）</summary>';
+              var groupHtml='';
+              if(type==='持ち物')groupHtml+='<details class="lc-secondary" data-lc-extras data-lc-editor="'+esc(e.key)+'"'+(e.extrasOpen?' open':'')+'><summary>持ち物・メモを追加（任意）</summary>';
               var rows = []; e.form.homework.forEach(function (x, i) { if ((x.type || "宿題") === type) rows.push({ x: x, i: i }); });
-              h += '<div class="lc-hwgroup"><div class="lc-hwhead"><h3>' + type + ' <span class="note">（任意）</span></h3><span class="note">基本の期限：' + (type === 'メモ' ? 'なし' : '次の同じ科目の授業まで') + '</span></div>';
+              groupHtml += '<div class="lc-hwgroup"><div class="lc-hwhead"><h3>' + type + ' <span class="note">（任意）</span></h3><span class="note">基本の期限：' + (type === 'メモ' ? 'なし' : '次の同じ科目の授業まで') + '</span></div>';
               rows.forEach(function (r, n) {
-                h += lessonHomeworkRow(e, r.x, r.i, n, type, readonly);
+                groupHtml += lessonHomeworkRow(e, r.x, r.i, n, type, readonly);
               });
-              h += '<div class="row" style="margin:4px 0 6px">' + lessonAction("add", "＋ " + type + "を追加", readonly || e.form.homework.length >= 10, "", ' data-type="' + type + '"') + '</div></div>';
-              if(type==='メモ')h+='</details>';
+              groupHtml += '<div class="row" style="margin:4px 0 6px">' + lessonAction("add", "＋ " + type + "を追加", readonly || e.form.homework.length >= 10, "", ' data-type="' + type + '"') + '</div></div>';
+              if(type==='メモ')groupHtml+='</details>';
+              if(type==='宿題')h+=groupHtml;else extrasHtml+=groupHtml;
             });
-            h += lessonDetails(e.form,readonly)+'</div>'+lessonOutlinePanel(e,readonly)+'</div>';
+            h += '</div>'+lessonOutlinePanel(e,readonly)+'</div>';
             if(e.sharePreview)h+=lessonSharePreview(e,readonly||e.conflict||(c.student||{}).active===false);
-            h += '<div class="lc-share-actions">' + lessonAction('publish',e.busy?'処理中…':'保存して公開',readonly||e.conflict||(c.student||{}).active===false,'btn-primary') + lessonAction('keep','一時保存',readonly||e.conflict) + (e.conflict?lessonAction('refresh','最新の内容と比較',blocked):'') + '</div><p class="note">公開すると、授業報告と宿題を生徒・保護者に共有します。一時保存の内容は先生だけが確認できます。</p><details class="lc-secondary"><summary>報告だけを公開する</summary><p class="note">宿題を「やること」に反映せず、報告だけを保存・公開します。下書き保存ではありません。</p>'+lessonAction('save','報告だけ保存して公開',readonly||e.conflict)+'</details></div>';
+            h += '<div class="lc-share-actions">' + lessonAction('publish',e.busy?'処理中…':'保存して公開',readonly||e.conflict||(c.student||{}).active===false,'btn-primary') + lessonAction('keep','一時保存',readonly||e.conflict) + (e.conflict?lessonAction('refresh','最新の内容と比較',blocked):'') + '</div><p class="note">公開すると、授業報告と宿題を生徒・保護者に共有します。一時保存の内容は先生だけが確認できます。</p>'+extrasHtml+lessonDetails(e.form,readonly)+'</div>';
             if (r) {
               h += '<details class="lc-secondary"'+((c.homeworkState||[]).some(function(x){return ['new','changed','held','removed'].indexOf(x.status)>=0;})?' open':'')+'><summary>宿題の反映状態・個別操作</summary><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
               h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
@@ -2072,7 +2075,6 @@
               if(!e.sharePreview||(c.student||{}).active===false)return;
               // Falls through: the explicit preview confirmation authorizes both writes.
             case "lc-publish":
-            case "lc-save":
               if(e.conflict||c.slotChanged||(c.student||{}).active===false)return;
               if (c && c.slot && c.slot.date > (c.today || today())) return;
               var validation = lessonValidate(e.form);
