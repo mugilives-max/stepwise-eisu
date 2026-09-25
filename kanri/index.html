@@ -217,6 +217,13 @@
       .lesson-pair-pane .grid2 { grid-template-columns:1fr; }
       .lesson-pair-pane .head { position:sticky; top:64px; background:var(--bg,#f6f8fb); z-index:2; padding:8px; }
       @media(max-width:900px) { .lesson-pair-grid { grid-template-columns:1fr; } .lesson-pair-pane .head { position:static; } }
+      .family-info-table,.student-info-details{width:100%;border-collapse:collapse;table-layout:fixed;text-align:left}
+      .family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{border:1px solid #b5c5d9;padding:8px 10px;font-size:14px;line-height:1.5;font-weight:400;overflow-wrap:anywhere}
+      .family-info-table thead th{background:#eaf0f6;font-weight:500}
+      .family-info-table th:first-child,.student-info-details th{width:30%}
+      .family-info-table tbody th,.student-info-details th{background:#f5f7fa;font-weight:500}
+      .family-info-table td.is-missing{background:#fff4e3;color:#945900}
+      @media(max-width:520px){.family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}}
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260924-family-monthly"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
@@ -1073,15 +1080,17 @@
           } else {
             var tel = String(p["保護者連絡先"] || "");
             var telHtml = tel ? (/^[\d\-+() ]+$/.test(tel) ? '<a href="tel:' + esc(tel.replace(/[^\d+]/g, "")) + '">' + esc(tel) + '</a>' : esc(tel)) : '<span class="muted">未登録</span>';
-            html += '<div class="card"><dl class="kv">' +
-              '<dt>ふりがな</dt><dd>' + (esc(p["ふりがな"]) || '<span class="muted">—</span>') + '</dd>' +
-              '<dt>保護者</dt><dd>' + (esc(p["保護者名"]) || '<span class="muted">未登録</span>') + '</dd>' +
-              '<dt>連絡先</dt><dd>' + telHtml + '</dd>' +
-              '<dt>メール</dt><dd>' + (p["メール"] ? '<a href="mailto:' + esc(p["メール"]) + '">' + esc(p["メール"]) + '</a>' : '<span class="muted">未登録</span>') + '</dd>' +
-              '<dt>入塾日</dt><dd>' + (p["入塾日"] ? fmtDY(p["入塾日"]) : '<span class="muted">—</span>') + '</dd>' +
-              '<dt>科目</dt><dd>' + (esc(p["科目"]) || '<span class="muted">—</span>') + '</dd>' +
-              (p["備考"] ? '<dt>備考</dt><dd>' + esc(p["備考"]).replace(/\n/g, "<br>") + '</dd>' : "") +
-              '</dl></div>';
+            html += studentFamilyInfoTable(s);
+            function detailRow(label,value){return '<tr><th scope="row">'+esc(label)+'</th><td>'+value+'</td></tr>';}
+            html += '<div class="card"><table class="student-info-details"><tbody>'+
+              detailRow('ふりがな',esc(p['ふりがな'])||'未登録')+
+              detailRow('連絡先',telHtml)+
+              detailRow('台帳の保護者名',esc(p['保護者名'])||'未登録')+
+              detailRow('台帳のメール',esc(p['メール'])||'未登録')+
+              detailRow('入塾日',p['入塾日']?fmtDY(p['入塾日']):'未登録')+
+              detailRow('科目',esc(p['科目'])||'未登録')+
+              (p['備考']?detailRow('備考',esc(p['備考']).replace(/\n/g,'<br>')):'')+
+              '</tbody></table></div>';
           }
 
           // 予約ページの設定(予約システムのstudentsシート)
@@ -1592,6 +1601,16 @@
         function familyInviteHtml() {
           if (!FT.invite || FT.auth !== token()) return '';
           return '<div class="card"><strong>' + esc(FT.invite.label) + 'の登録案内</strong><p class="note">保護者へ個別にお渡しください。登録リンクからメールアドレスを入力し、届いたメールで確認してからパスワードを設定すると利用開始です。このタブを閉じると登録リンクは消えます。</p><textarea id="family-invite-code" readonly aria-label="家族の招待コード">' + esc(FT.invite.code) + '</textarea><p>有効期限：' + esc(fmtAuthTime(FT.invite.expiresAt)) + '</p><button class="btn-ghost" data-action="family-copy">登録リンクと手順をコピー</button> <button class="btn-quiet" data-action="family-hidecode">コードを閉じる</button></div>';
+        }
+        function studentFamilyInfoTable(s){
+          var data=FT.auth===token()?FT.data:null;
+          function cell(value,span){return '<td'+(span?' colspan="2"':'')+(!value?' class="is-missing"':'')+'>'+esc(value||'未登録')+'</td>';}
+          function person(label,p){return '<tr><th scope="row">'+label+'</th>'+cell(p.familyName)+cell(p.givenName)+'</tr><tr><th scope="row">メールアドレス</th>'+cell(p.email,true)+'</tr>';}
+          function table(rows){return '<table class="family-info-table"><thead><tr><th scope="col">項目</th><th scope="col">姓</th><th scope="col">名</th></tr></thead><tbody>'+rows+'</tbody></table>';}
+          if(FT.busy||!data)return '<div class="card">'+(FT.error?'<p role="alert">'+esc(FT.error)+'</p><button class="btn-quiet" data-action="family-settings-refresh">もう一度読み込む</button>':'<p>家族の登録情報を読み込んでいます…</p>')+'</div>';
+          var groups=(data.families||[]).filter(function(f){return (f.children||[]).some(function(c){return sameId(c.studentId,s.id);});});
+          if(!groups.length)return '<div class="card">'+table(person('生徒名',{familyName:s.profile['姓'],givenName:s.profile['名'],email:s.email}))+'<p class="note">保護者アカウントとの紐づけはまだありません。</p></div>';
+          return groups.map(function(f){return '<div class="card">'+(groups.length>1?'<h3>'+esc(f.label)+'</h3>':'')+table(person('保護者名',f)+(f.children||[]).map(function(c){return person('生徒名',c);}).join(''))+'</div>';}).join('');
         }
         function studentFamilySettingsHtml(s) {
           var h='<h2>家族設定</h2><div class="card">', d=FT.auth===token()?FT.data:null;

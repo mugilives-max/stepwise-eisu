@@ -96,7 +96,8 @@ function familyPendingVerification_(a) {
   return c?{sentAt:String(c.createdAt),expiresAt:Number(c.expiresAt)}:null;
 }
 function familyView_(a) {
-  return {billing:familyBilling_(a,true),id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,pendingVerification:a.passHash?null:familyPendingVerification_(a),
+  var names=familyProfile_(a.id);
+  return {familyName:String(names.familyName||''),givenName:String(names.givenName||''),billing:familyBilling_(a,true),id:String(a.id),label:String(a.label),status:String(a.status),email:String(a.email||''),verifiedAt:String(a.verifiedAt||''),configured:!!a.passHash,pendingVerification:a.passHash?null:familyPendingVerification_(a),
     children:familyChildren_(a,true),inviteExpiresAt:a.inviteHash&&Number(a.inviteExpiresAt)>Date.now()?Number(a.inviteExpiresAt):0,createdAt:String(a.createdAt||''),lastLogin:String(a.lastLogin||'')};
 }
 function familySessions_(a) {
