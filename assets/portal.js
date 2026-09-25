@@ -1321,7 +1321,7 @@
             var st=F.childState[c.studentId];if(!st||!st.me){missing=true;return;}
             today=today||st.today;
             (st.teacherOff||[]).forEach(function(x){var key=x.date+'|'+x.start+'|'+x.end;if(!offs[key]){offs[key]=true;src.teacherOff.push(x);}});
-            if(familyCalendar.hidden[c.studentId])return;
+            if(children.length>1&&familyCalendar.hidden[c.studentId])return;
             var name=familyChildName(c);
             (st.slots||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name}));});
             (st.events||[]).forEach(function(x){src.events.push(Object.assign({},x,{title:name+' '+(x.title||'イベント')}));});
@@ -1331,7 +1331,7 @@
           if(!today)return '<h2>予定表</h2><p role="status">予定を読み込んでいます…</p>';
           if(!familyCalendar.date){familyCalendar.date=today;familyCalendar.year=+today.slice(0,4);familyCalendar.month=+today.slice(5,7)-1;}
           src.lessonLabel=function(x){return x.studentLabel+' '+lessonLabel(x);};
-          var filters='<div class="family-calendar-filter" role="group" aria-label="カレンダーに表示する生徒"><span class="small muted">表示する生徒</span>'+children.map(function(c){var visible=!familyCalendar.hidden[c.studentId];return '<button type="button" class="btn-quiet btn-sm" data-action="family-calfilter" data-child="'+esc(c.studentId)+'" aria-pressed="'+visible+'">'+esc(familyChildName(c))+'<span class="small"> '+(visible?'表示中':'非表示')+'</span></button>';}).join('')+'</div>';
+          var filters=children.length>1?'<div class="family-calendar-filter" role="group" aria-label="カレンダーに表示する生徒"><span class="small muted">表示する生徒</span>'+children.map(function(c){var visible=!familyCalendar.hidden[c.studentId];return '<button type="button" class="btn-quiet btn-sm" data-action="family-calfilter" data-child="'+esc(c.studentId)+'" aria-pressed="'+visible+'">'+esc(familyChildName(c))+'<span class="small"> '+(visible?'表示中':'非表示')+'</span></button>';}).join('')+'</div>':'';
           var h='<h2>予定表</h2>'+filters+window.StepwiseCalendar.render(window.StepwiseCalendar.buildInfo(src),{year:familyCalendar.year,month:familyCalendar.month,today:today,selDate:familyCalendar.date,showToff:true,overlapLanes:true,offerLegend:'授業（未登録）',eventLegend:'イベント'});
           h=h.replace(/data-action="cal/g,'data-action="family-cal');
           return h+(missing?'<p role="status">ほかのお子さんの予定を読み込んでいます…</p>':'');
