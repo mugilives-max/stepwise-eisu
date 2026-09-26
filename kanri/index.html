@@ -1167,21 +1167,7 @@
             if (!offerDraft) offerDraft = { studentId: s.id, date: tdy, subject: (function () { var ls = "", ld = ""; (s.lessons || []).forEach(function (l) { if (l.subject && l.date >= ld) { ld = l.date; ls = l.subject; } }); return ls; })() };
           }
 
-          // 授業履歴(実施済み・過去)
-          var pastL = (s.lessons || []).filter(function (l) { return l.date < tdy; });
-          html += foldHead('history', '授業履歴', '直近' + Math.min(20, pastL.length) + '件') + '<div class="card">';
-          if (pastL.length) {
-            pastL.slice(0, 20).forEach(function (l) {
-              html += '<div class="line"><span class="t">' + fmtDY(l.date) + ' ' + l.start + '</span><span class="w">' + (l.subject ? esc(lessonLabel(l)) : '<span class="muted">科目なし</span>') + ' <span class="muted small">' + l.min + '分</span></span>';
-              html += l.done ? '<span class="tag gray">実施済</span>' : '<span class="tag amber">実施未記録</span>';
-              html += lessonEntry(l, s.id);
-              if (l.status === "booked") html += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (l.done ? "0" : "1") + '" data-id="' + esc(l.id) + '" data-sid="' + esc(s.id) + '">' + (l.done ? "実施を取消" : "実施にする") + '</button>';
-              html += '</div>';
-            });
-          } else html += '<div class="empty">過去の授業はまだありません</div>';
-          html += '</div></details>';
-
-          // 宿題・持ち物の一覧と追加欄は廃止(2026-09-18)。宿題・持ち物・メモは授業記録ページから出す
+          html += adminHomeworkTable(s,tdy);
           }
           if (section === 'billing') html += renderBilling(s);
           if (section === 'progress') {
@@ -1508,7 +1494,7 @@
           if(familyModalActive()){
             app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)});
           }
-          app.innerHTML+=teacherBookingDialogHTML();
+          mountAdminHomework(); app.innerHTML+=teacherBookingDialogHTML();
             var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
 
           var bookingDialog=document.getElementById('teacher-booking-dialog');if(bookingDialog){bookingDialog.oncancel=function(e){if(busy)e.preventDefault();else teacherBookingDialog=null;};if(bookingDialog.showModal&&!bookingDialog.open)bookingDialog.showModal();}
@@ -1518,7 +1504,7 @@
           var aiDialog=document.getElementById('ai-schedule');if(aiDialog&&aiDialog.showModal&&!aiDialog.open)aiDialog.showModal();
           var boardDialog=document.getElementById('board-editor');if(boardDialog&&boardDialog.showModal&&!boardDialog.open)boardDialog.showModal();
           if (window.StepwiseServices) {
-            if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && ['overview','progress'].indexOf(r.section || 'overview') >= 0)) {
+            if (authM === 'ok' && (r.page === 'home' || r.page === 'student' && cur && (r.section || 'overview') === 'progress')) {
               var serviceSid=r.page==='student'?String(cur.id):'',serviceToken=token();
               window.StepwiseServices.mount(document.getElementById('home-services') || app,{key:serviceToken+'|'+serviceSid,teacher:true,inbox:!serviceSid,pendingCount:D&&D.contactPendingCount||0,studentId:serviceSid,call:function(op,payload){
                 if(token()!==serviceToken)return Promise.reject(new Error('ログインが変更されました'));
@@ -2523,6 +2509,18 @@
 
         /* ---------- 操作 ---------- */
         // 書き込み: optimistic(画面を先に書き換える関数)があれば即反映し、裏で保存。サーバーの返した最新データで置き換える
+        var homeworkDialog = null;
+        function adminHomeworkTable(s,tdy) {
+          var tasks=(s.tasks||[]).filter(function(t){return !t.done&&!t.doneAt&&!t.withdrawn&&!t.withdrawnAt&&(!t.type||t.type==='宿題');}).sort(function(a,b){return String(a.due||'9999').localeCompare(String(b.due||'9999'));});
+          return '<h2>宿題 <span class="cnt">'+tasks.length+'件</span></h2><div class="card">'+(tasks.length?'<table class="tb" style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr>'+['科目','内容','期日','残り期間','状態'].map(function(x,i){return '<th style="border:1px solid #b8c4d3;background:#edf1f5;width:'+([10,42,12,20,16][i])+'%">'+x+'</th>';}).join('')+'</tr></thead><tbody>'+tasks.map(function(t){var due=t.due||'',days=due?Math.round((Date.parse(due+'T00:00:00Z')-Date.parse(tdy+'T00:00:00Z'))/86400000):NaN;var vals=[t.subject||t.dueSubject||'—',t.title,due?Number(due.slice(5,7))+'/'+Number(due.slice(8,10)):t.dueMode==='nextLesson'?'予定未定':'期限なし',isNaN(days)?'—':days>0?'あと'+days+'日':days===0?'今日まで':-days+'日超過'];return '<tr>'+vals.map(function(v,i){return '<td style="border:1px solid #b8c4d3;overflow-wrap:anywhere;text-align:'+(i===1?'left':'center')+'">'+esc(v)+'</td>';}).join('')+'<td style="border:1px solid #b8c4d3;text-align:center"><button class="tag amber" aria-haspopup="dialog" data-action="homework-open" data-id="'+esc(t.id)+'" style="cursor:pointer;text-decoration:underline">未完了</button></td></tr>';}).join('')+'</tbody></table>':'<p class="empty">未完了の宿題はありません。</p>')+'</div>';
+        }
+        function mountAdminHomework(){
+          if(!homeworkDialog)return;
+          if(route().page!=='student'||!cur||String(cur.id)!==homeworkDialog.studentId){homeworkDialog=null;return;}
+          var t=(cur.tasks||[]).filter(function(t){return String(t.id)===homeworkDialog.id&&!t.done&&!t.doneAt;})[0];if(!t){homeworkDialog=null;return;}
+          app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'admin-homework-dialog',title:'宿題の完了登録',close:'homework-close',busy:busy,content:'<p>'+esc(t.title)+'</p><p>この宿題を完了にしますか？</p><button class="btn-primary" data-action="homework-confirm"'+(busy?' disabled':'')+'>完了として登録</button>'});
+          var d=document.getElementById('admin-homework-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else homeworkDialog=null;};if(d.showModal&&!d.open)d.showModal();}
+        }
         function act(op, extra, okMsg, optimistic, after) {
           if (busy) return;
           var r = route();
@@ -2966,6 +2964,9 @@
               if (!tkt) { toast("内容を入れてください"); return; }
               act("taskAdd", { studentId: sid, type: val("tk-type"), title: tkt, due: val("tk-due-mode") === "date" ? val("tk-due") : "", dueMode: val("tk-due-mode"), dueSubject: val("tk-due-subject") }, "登録しました");
               break;
+            case "homework-open": if(!busy&&cur){homeworkDialog={studentId:String(cur.id),id:String(btn.getAttribute('data-id'))};render();} break;
+            case "homework-close": if(!busy){homeworkDialog=null;render();} break;
+            case "homework-confirm": if(homeworkDialog&&cur&&String(cur.id)===homeworkDialog.studentId)act('taskDone',{studentId:cur.id,taskId:homeworkDialog.id,done:true},'完了にしました'); break;
             case "taskdone":
               act("taskDone", { studentId: sid, taskId: btn.getAttribute("data-id"), done: btn.getAttribute("data-done") === "1" }, "更新しました");
               break;
