@@ -5,7 +5,7 @@ function teacherBookingSave_(r){var rows=readRows_('teacherBookings'),i=rows.fin
 function teacherBookingInfo_(s){
  if(['booked','offered'].indexOf(s.status)<0)return null;var r=teacherBookingRow_(s.id);if(!r||String(r.studentId)!==String(s.studentId))return null;
  var snapshot=schedulingSnapshot_(s),same=r.responseSnapshotJson===JSON.stringify(snapshot),unfinished=readRows_('acceptWrites').some(function(w){return String(w.studentId)===String(s.studentId)&&String(w.requestId)==='teacher-'+r.requestId&&w.status!=='done';});
- return {previous:String(r.requestId).indexOf('edit-')===0?JSON.parse(r.snapshotJson):null,requestId:r.requestId,status:s.status==='offered'||unfinished?'registering':same&&r.response?r.response:'pending',note:same?String(r.responseNote||''):'',snapshot:snapshot,revision:String(r.updatedAt||''),respondedBy:same?String(r.respondedBy||''):''};
+ return {changes:teacherBookingChanges_(s),previous:String(r.requestId).indexOf('edit-')===0?JSON.parse(r.snapshotJson):null,requestId:r.requestId,status:s.status==='offered'||unfinished?'registering':same&&r.response?r.response:'pending',note:same?String(r.responseNote||''):'',snapshot:snapshot,revision:String(r.updatedAt||''),respondedBy:same?String(r.respondedBy||''):''};
 }
 function teacherBook_(req){
  var student=findStudent_(String(req.studentId||'')),row=findSlotRow_(String(req.slotId||''));
@@ -39,3 +39,5 @@ function teacherBookingEdited_(write,before,after){
  if(old&&old.requestId===id)return;
  teacherBookingSave_({slotId:String(write.slotId),studentId:String(write.studentId),requestId:id,snapshotJson:JSON.stringify(schedulingSnapshot_(before.slot)),createdAt:billingStamp_(),updatedAt:billingId_()});
 }
+
+function teacherBookingChanges_(s){return readRows_('offerEdits').filter(function(w){return String(w.studentId)===String(s.studentId)&&String(w.slotId)===String(s.id)&&w.status==='done';}).map(function(w){var a=JSON.parse(w.afterJson),b=JSON.parse(w.beforeJson);return a.op==='editBooked'?{before:schedulingSnapshot_(b.slot),after:schedulingSnapshot_(a.slot),context:a.context||null,recordedAt:w.createdAt}:null;}).filter(function(x){return !!x;});}
