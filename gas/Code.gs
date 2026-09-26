@@ -961,7 +961,8 @@ function eventRows_() {
   }).filter(function (x) { return x.id && x.date; });
 }
 
-function eventAdd_(req) {
+// teacherInitiated is an internal argument, never accepted from request data.
+function eventAdd_(req, teacherInitiated) {
   var student = findStudentByCode_(req.k);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
   var date = String(req.date || ''), dateTo = String(req.dateTo || '') || date;
@@ -979,8 +980,8 @@ function eventAdd_(req) {
   var blocked = 0;
   if (req.alsoBlock === true || String(req.alsoBlock) === 'true') blocked = addBlockRange_(student.id, date, dateTo, title);
   var when = rangeText_(date, dateTo);
-  addLog_(student.name + 'さんが予定を共有: ' + when + ' ' + title + (blocked ? '(授業できない日にも登録)' : ''));
-  if (!isTestStudent_(student)) notify_('【共有予定】' + student.name + 'さん',
+  addLog_((teacherInitiated === true ? '先生が' + student.name + 'さんのイベントを登録: ' : student.name + 'さんが予定を共有: ') + when + ' ' + title + (blocked ? '(授業できない日にも登録)' : ''));
+  if (teacherInitiated !== true && !isTestStudent_(student)) notify_('【共有予定】' + student.name + 'さん',
     student.name + 'さんから予定の共有がありました。\n' + when + ' ' + title + (blocked ? '\n(この期間は授業できない日としても登録されました)' : '') +
     '\n\n管理画面: https://www.stepwise-education.jp/kanri/');
   return { ok: true, state: studentState_(req.k) };

@@ -7,6 +7,6 @@ function documentEventAdd_(req) {
   var kind=req.test===true?'test':'event';
   var existing=eventRows_().some(function(e){return String(e.studentId)===String(student.id) && e.date===date && e.dateTo===dateTo && e.title===title && e.kind===kind;});
   if (existing) return {ok:true,existing:true};
-  var result=eventAdd_({k:student.code,date:date,dateTo:dateTo,title:title,kind:kind,alsoBlock:false});
+  var result=eventAdd_({k:student.code,date:date,dateTo:dateTo,title:title,kind:kind,alsoBlock:false},true);
   return result.error ? {error:result.error} : {ok:true};
 }

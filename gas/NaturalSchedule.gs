@@ -282,7 +282,7 @@ function nlApplyTeacher_(req) {
       var ranges = [], cur = null;
       dates.forEach(function (d) { if (cur && addDays_(cur.dateTo, 1) === d) cur.dateTo = d; else { cur = { date: d, dateTo: d }; ranges.push(cur); } });
       ranges.forEach(function (rg) {
-        var res = eventAdd_({ k: student.code, date: rg.date, dateTo: rg.dateTo, title: nlText_(it.title, 40), kind: it.test ? 'test' : 'event', alsoBlock: it.alsoBlock === true });
+        var res = eventAdd_({ k: student.code, date: rg.date, dateTo: rg.dateTo, title: nlText_(it.title, 40), kind: it.test ? 'test' : 'event', alsoBlock: it.alsoBlock === true }, true);
         if (res && res.ok) r.count++; else r.errors.push(rg.date + ': ' + String(res && res.error || '登録できませんでした'));
       });
     }
