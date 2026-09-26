@@ -53,3 +53,5 @@ function cancelFeeHistory_(sid){
 
 // Read-only history: never reinsert cancellations into billable/recordable slots.
 function cancelAttendance_(sid){return cancelFeeRows_().filter(function(r){return r.status==='confirmed'&&(!sid||String(r.studentId)===String(sid));}).map(function(r){var d=JSON.parse(r.decisionJson),s=d.quote.slot;return {id:r.id,studentId:String(r.studentId),studentName:studentName_(r.studentId),date:s.date,start:s.start,min:Number(s.min),subject:s.subject,label:d.quote.source==='teacher'?'休講':'欠席',amount:d.amount,reason:d.note||d.requestReason||'',source:d.quote.source};});}
+
+function cancelCalendar_(sid){return cancelAttendance_(sid).map(function(x){return {id:x.id,date:x.date,start:x.start,min:x.min,subject:x.subject,st:"cancelled"};});}

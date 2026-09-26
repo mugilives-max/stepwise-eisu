@@ -227,7 +227,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260924-shared-day"><script src="/assets/calendar.js?v=20260924-family-calendar"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260926-cancel-calendar"><script src="/assets/calendar.js?v=20260926-cancel-calendar"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -1058,7 +1058,7 @@
           (function () {
             var tdy = s.today || today();
             // 生徒マイページと同じ予定表(共通部品 assets/calendar.js)。授業は確定=青・案内=黄、授業不可・登録不可は斜線、授業可は緑
-            var info = window.StepwiseCalendar.buildInfo({
+            var info = window.StepwiseCalendar.buildInfo({ cancellations:s.cancellations||[],
               lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, cls: lessonCalendarClass(l, tdy), st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
               events: s.events || [], blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
@@ -1361,7 +1361,7 @@
           html += '<h2>全体の予定表</h2>';
           // 同じ共通部品。授業不可(生徒NG)は案内フォームで選んでいる生徒の分だけ出す(全員分を重ねると読めないため)
           var pickSid = offerDraft && offerDraft.studentId ? String(offerDraft.studentId) : "";
-          var linfo = window.StepwiseCalendar.buildInfo({
+          var linfo = window.StepwiseCalendar.buildInfo({ cancellations:A.cancellations||[],
             lessons: calendarSlots.map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : (s2.done ? "done" : (s2.date < today ? "past" : "mine")), cls: lessonCalendarClass(s2, today) }; }),
             events: (A.events || []).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
             blocked: pickSid ? (A.blocked || []).filter(function (b2) { return sameId(b2.studentId, pickSid); }) : [],

@@ -209,11 +209,11 @@
     src = src || {};
     var label = src.lessonLabel || defaultLabel, info = {};
     function it0(d) { return info[d] || (info[d] = { offer: 0, mine: 0, ng: 0, past: 0, ev: 0, labels: [] }); }
-    (src.lessons || []).forEach(function (s) {
+    (src.lessons || []).concat((src.cancellations||[]).map(function(x){return Object.assign({},x,{st:"cancelled"});})).forEach(function (s) {
       var it = it0(s.date);
-      if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "offer") it.offer++; else it.mine++;
+      if(s.st === "cancelled"){} else if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "offer") it.offer++; else it.mine++;
       // cls: 管理画面の全体予定表で使う追加クラス(rq=取消依頼中 / dn=実施済み)
-      it.labels.push({ text: label(s) || "授業", st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind, cls: s.cls || "" });
+      it.labels.push({ text: (label(s) || "授業")+(s.st==="cancelled"?"（取消済）":""), st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind, cls: s.cls || "" });
     });
     (src.events || []).forEach(function (e) {
       var d = e.date, to = e.dateTo || e.date;
@@ -270,7 +270,7 @@
         // 授業1つ＝1つの箱(Googleカレンダー風)。確定・実施済みは青、案内は黄、重要な予定は赤系
         lb.forEach(function (l) {
           if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
-          var lc = (l.st === "offer" ? " of" : "") + (l.cls ? " " + l.cls : "");
+          var lc = (l.st === "cancelled" ? " cancelled" : "") + (l.st === "offer" ? " of" : "") + (l.cls ? " " + l.cls : "");
           timed.push({start:l.start, end:l.end, lesson:true, html:'<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + '</span></span>'});
         });
       }

@@ -628,7 +628,7 @@
             selDate = found || today;
             var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
-          var info = window.StepwiseCalendar.buildInfo({ lessons: slots.concat(hist), events: events, blocked: blocked, teacherOff: S.teacherOff || [], wishes: S.wishes || [], lessonLabel: lessonLabel });
+          var info = window.StepwiseCalendar.buildInfo({ cancellations: S.cancellations || [], lessons: slots.concat(hist), events: events, blocked: blocked, teacherOff: S.teacherOff || [], wishes: S.wishes || [], lessonLabel: lessonLabel });
           var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
           return { today: today, slots: slots, mine: mine, offers: offers, hist: hist, blocked: blocked, events: events, byDate: byDate, info: info, upcoming: upcoming, next: upcoming[0] };
         }
@@ -1353,7 +1353,7 @@
             (st.teacherOff||[]).forEach(function(x){var key=x.date+'|'+x.start+'|'+x.end;if(!offs[key]){offs[key]=true;src.teacherOff.push(x);}});
             if(children.length>1&&familyCalendar.hidden[c.studentId])return;
             var name=familyChildName(c);
-            (st.slots||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name}));});
+            (st.slots||[]).concat(st.cancellations||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name}));});
             (st.events||[]).forEach(function(x){src.events.push(Object.assign({},x,{title:name+' '+(x.title||'イベント')}));});
             (st.blocked||[]).forEach(function(x){src.blocked.push(Object.assign({},x,{label:name+' 授業不可'}));});
             (st.wishes||[]).forEach(function(x){src.wishes.push(Object.assign({},x,{label:name+' '+(x.start||'')+'〜'+(x.end||'')+' 授業可'}));});
