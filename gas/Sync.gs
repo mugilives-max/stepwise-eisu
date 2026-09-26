@@ -166,6 +166,7 @@ function workerProxy_(req) {
 function effectsOp_(req) {
   var key = syncKey_();
   if (!key || key.length < 24 || String(req.key || '') !== key) { Utilities.sleep(300); return { error: '鍵が正しくありません', badAuth: true }; }
+  if (req.document) return studentDocumentDrive_(req.document);
   // Worker が先に作ってほしい予定（オンライン授業の Meet はここでしか作れない）
   if (Array.isArray(req.ensure)) return { ok: true, events: effectsEnsureEvents_(req.ensure) };
   var items = Array.isArray(req.items) ? req.items : [];
@@ -268,4 +269,23 @@ function effectsEnsureEvents_(wanted) {
     out[id] = JSON.parse(JSON.stringify(event));
   }
   return out;
+}
+
+// Called only by effectsOp_ after validating the Worker secret. D1 owns access rules.
+function studentDocumentDrive_(req) {
+  try {
+    if (req.op === 'store') {
+      if (!/^[a-f0-9]{64}$/.test(String(req.hash || ''))) return {error:'資料を確認してください'};
+      var saved = servicePdfStore_(req.pdf, 'schedule-' + req.hash);
+      if (saved.fileHash !== req.hash) return {error:'資料を確認してください'};
+      return {ok:true,fileId:saved.fileId};
+    }
+    if (req.op === 'read') {
+      var folder = servicePdfFolder_(), f = DriveApp.getFileById(String(req.fileId || '')), parents = f.getParents(), belongs = false;
+      while (parents.hasNext()) if (parents.next().getId() === folder.getId()) belongs = true;
+      if (!belongs || f.isTrashed() || f.getSharingAccess() !== DriveApp.Access.PRIVATE || f.getViewers().length || f.getEditors().length || f.getMimeType() !== 'application/pdf' || f.getSize() > 5*1024*1024) return {error:'資料を開けませんでした'};
+      return {ok:true,base64:Utilities.base64Encode(f.getBlob().getBytes())};
+    }
+    return {error:'資料の操作を確認してください'};
+  } catch(e) { return {error:'資料の保存先を確認してください'}; }
 }

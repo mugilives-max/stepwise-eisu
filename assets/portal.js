@@ -294,7 +294,7 @@
           return status === 'suppressed' ? 'テストのためメール送信を省略しました。' : status === 'failed' ? '登録内容は保存しましたが、確認メールを送れませんでした。時間を置いて「確認メールを再送」を押してください。' : status === 'uncertain' ? '確認メールの送信結果を確認できませんでした。まず受信箱を確認してください。届かない場合は、時間を置いて新しい確認メールを申し込めます。' : '確認メールのリンクを開いてください。';
         }
         function renderStudentEmail() {
-          var h = '<h1>設定</h1><h2>メール通知</h2><p class="sub">授業の案内・変更・取消をメールで受け取れます。</p>', dis = SE.busy || previewK ? ' disabled' : '', s = S && S.emailStatus || {};
+          var h = '<h1>設定</h1>'+ (S&&S.me?'<h2>資料</h2><div data-student-documents="'+esc(PREVIEW?PREVIEW.studentId:'')+'"></div>':'')+'<h2>メール通知</h2><p class="sub">授業の案内・変更・取消をメールで受け取れます。</p>', dis = SE.busy || previewK ? ' disabled' : '', s = S && S.emailStatus || {};
           if (previewK) h += '<p class="note">先生のプレビューでは確認のみできます。メールアドレスの登録・変更は生徒専用ページから行ってください。</p>';
           if (SE.error) h += '<p class="parent-error" role="alert">' + esc(SE.error) + '</p>';
           if (SE.message) h += '<p class="card" role="status">' + esc(SE.message) + '</p>';
@@ -1590,6 +1590,7 @@
             if(parentSection()==='records'){ app.innerHTML = h + learningNavigation(true,false) + renderFamilyRecords(); return; }
             if(parentSection()==='settings'){
             h += '<h2>保護者の設定</h2>';
+            h += '<h2>資料</h2>'+(F.home.children||[]).map(function(c){return '<h3>'+esc(c.name)+'</h3><div data-student-documents="'+esc(c.studentId)+'"></div>';}).join('');
             var account=F.home.family||{},children=F.home.children||[];
             function infoCell(value,span,person,kind){var filled=!!String(value||'').trim();return '<td'+(span?' colspan="2"':'')+(!filled?' class="is-missing"':'')+'>'+(filled?esc(value):'<button class="family-info-empty" data-action="fa-profile-open" data-child="'+esc(person.studentId||'')+'" data-kind="'+kind+'">未登録</button>')+'</td>';}
             function personRows(label,person){return '<tr><th scope="row">'+esc(label)+'</th>'+infoCell(person.familyName,false,person,'name')+infoCell(person.givenName,false,person,'name')+'</tr><tr><th scope="row">メールアドレス</th>'+infoCell(person.email,true,person,'email')+'</tr>';}
@@ -1765,6 +1766,7 @@
           app.innerHTML+=bookingReviewHTML();var reviewDialog=document.getElementById('booking-review-dialog');if(reviewDialog){reviewDialog.oncancel=function(e){if(busy)e.preventDefault();else bookingReview=null;};if(reviewDialog.showModal&&!reviewDialog.open)reviewDialog.showModal();}
           mountHomeworkReview(); mountDayDialog(); mountAcceptDialog();
           meetWatch();
+          if(window.StepwiseDocuments)window.StepwiseDocuments.mount(app,{teacher:false,auth:PREVIEW?{token:lsGet('sw_admt')||''}:route()==='family'?{ftoken:familyToken()}:{k:myKey()}});
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }
           Object.keys(familyPanels).forEach(function(key){familyPanels[key].services.clear();familyPanels[key].reads.clear();});

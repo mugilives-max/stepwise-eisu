@@ -1,3 +1,4 @@
+import { DOCUMENT_ACTIONS, handleDocuments } from './documents.mjs';
 // ステップワイズ API Worker（段階 A: 骨組みのみ）。
 // 役割: 画面(GitHub Pages)と MCP から来る {action:...} の JSON を受け、D1 から答える。
 // 段階 A では読み取り action をまだ実装していない。未実装の action は notImplemented を返し、
@@ -113,6 +114,11 @@ export default {
     }
     const action = String((body && body.action) || "");
     if (!action) return reply({ error: "action がありません" }, 400, head);
+
+    if (DOCUMENT_ACTIONS.includes(action)) {
+      try { return reply(await handleDocuments(body, env), 200, head); }
+      catch { return reply({error:'資料の処理に失敗しました。もう一度お試しください'}, 500, head); }
+    }
 
     // 通知の登録・解除。台帳は変えないので、書き込みの経路には入れない
     if (PUSH_ACTIONS.indexOf(action) >= 0) {

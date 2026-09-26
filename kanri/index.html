@@ -237,6 +237,7 @@
     <div class="wrap" id="app"><div class="loading"><div class="spinner"></div>読み込んでいます…</div></div>
     <div id="toast" role="status"></div>
 
+    <script src="/assets/student-documents.js?v=20260926"></script>
     <script src="../assets/learning-services.js?v=20260910-all-children"></script>
     <script>
       (function () {
@@ -1066,6 +1067,7 @@
           html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業記録を開く</a></p>';
           }
           if (section === 'settings') {
+          html += '<h2>資料</h2><div data-student-documents="'+esc(s.id)+'"></div>';
           html += '<h2>授業の標準形式</h2><div class="card"><label for="student-delivery">新しい案内の初期値</label> <select id="student-delivery">' + deliveryOptions(s.deliveryMode) + '</select> <button class="btn-ghost btn-sm" data-action="studentmode"' + (busy ? ' disabled' : '') + '>標準形式を保存</button><p class="note">現在：' + deliveryLabel(s.deliveryMode) + '。登録済みの各回の形式は変わりません。</p></div>';
 
           // 基本情報
@@ -1495,6 +1497,7 @@
             app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)});
           }
           mountAdminHomework(); app.innerHTML+=teacherBookingDialogHTML();
+          if(window.StepwiseDocuments)window.StepwiseDocuments.mount(app,{teacher:true,auth:{token:token()}});
             var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
 
           var bookingDialog=document.getElementById('teacher-booking-dialog');if(bookingDialog){bookingDialog.oncancel=function(e){if(busy)e.preventDefault();else teacherBookingDialog=null;};if(bookingDialog.showModal&&!bookingDialog.open)bookingDialog.showModal();}
