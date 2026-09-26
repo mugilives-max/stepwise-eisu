@@ -255,3 +255,6 @@
 .home-homework-table .btn-sm{padding:6px;white-space:normal;font-size:12px}
 @media(max-width:480px){.home-homework-table .btn-sm{font-size:11px;padding:5px 2px}}
 .home-homework-table td.home-homework-status .tag{cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* Cancelled lessons in the student and parent calendar. */
+.calbox.cancelled{background:#f3eafa;color:#74419b;border-left-color:#8954b0;}
