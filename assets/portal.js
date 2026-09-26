@@ -1381,12 +1381,14 @@
           return '<div class="card">'+(confirms||'')+(rows?head+rows+'</tbody></table></div>':'<div class="empty">新しい案内はありません</div>')+'</div>';
         }
         function renderFamilyTuition() {
-          var h='<h2>授業料</h2><div class="card"><p class="small">今月の金額の目安です。未承認の計画も含みます。請求額は「請求・お支払い」でご確認ください。</p><div class="tbwrap"><table class="tb"><thead><tr><th>名前</th><th>月</th><th>内訳</th><th>実施済み</th><th>登録分</th><th>計画分</th></tr></thead><tbody>',total=[0,0,0],complete=[true,true,true];
+          var months=[];(F.home.children||[]).forEach(function(c){var d=F.childrenData[c.studentId],st=F.childState[c.studentId],ym=d&&d.month||String(st&&st.today||'').slice(0,7);if(ym&&months.indexOf(ym)<0)months.push(ym);});
+          var monthLabel=months.sort().map(function(ym){return ym.slice(0,4)+'年'+Number(ym.slice(5,7))+'月';}).join('・');
+          var h='<h2>授業料</h2><div class="card"><p class="small">今月の金額の目安です。未承認の計画も含みます。請求額は「請求・お支払い」でご確認ください。</p><p class="tuition-month">'+esc(monthLabel)+'</p><div class="tbwrap"><table class="tb"><thead><tr><th>名前</th><th>内訳</th><th>実施済み</th><th>登録分</th><th>計画分</th></tr></thead><tbody>',total=[0,0,0],complete=[true,true,true];
           function money(v){return v==null?'確認が必要':yen(v);}
           (F.home.children||[]).forEach(function(c){
             var d=F.childrenData[c.studentId],st=F.childState[c.studentId];
             if(!st&&!F.stateBusy&&!F.error)familyLoadChildState(c.studentId);
-            if(!d||!st){h+='<tr><td>'+esc(familyChildName(c))+'</td><td colspan="5">'+(F.error?'料金を読み込めませんでした'+(!d?'<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">再試行</button>':''):'読み込み中…')+'</td></tr>';complete=[false,false,false];return;}
+            if(!d||!st){h+='<tr><td>'+esc(familyChildName(c))+'</td><td colspan="4">'+(F.error?'料金を読み込めませんでした'+(!d?'<button class="btn-quiet" data-action="fa-refresh" data-child="'+esc(c.studentId)+'">再試行</button>':''):'読み込み中…')+'</td></tr>';complete=[false,false,false];return;}
             var ym=d.month||String(st.today||'').slice(0,7),lines=(d.planLines||[]).filter(function(l){return l.status==='approved'||l.status==='proposed';});
             function rate(l){return l.rate30!=null&&Number.isFinite(Number(l.rate30))&&Number(l.rate30)>=0?Number(l.rate30):l.lessonFee!=null&&Number(l.lessonMin)>0?Number(l.lessonFee)*30/Number(l.lessonMin):null;}
             function sum(items,calc){var n=0;for(var i=0;i<items.length;i++){var v=calc(items[i]);if(v==null||!Number.isFinite(v))return null;n+=v;}return n;}
@@ -1399,11 +1401,10 @@
             if(d.thisMonth&&d.thisMonth.count!=null&&Number(d.thisMonth.count)!==done.length){values[0]=null;values[1]=null;}
             var cancellationFee=values.pop(),subtotals=values.map(function(v){return v==null||cancellationFee==null?null:v+cancellationFee;});
             subtotals.forEach(function(v,i){if(v==null)complete[i]=false;else total[i]+=v;});
-            h+='<tr><td rowspan="3">'+esc(familyChildName(c))+'</td><td rowspan="3">'+esc(ym)+'</td><th scope="row">授業</th>'+values.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
+            h+='<tr><td rowspan="2">'+esc(familyChildName(c))+'</td><td rowspan="3">'+esc(ym)+'</td><th scope="row">授業</th>'+values.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
             h+='<tr><th scope="row">キャンセル料</th>'+values.map(function(){return '<td>'+money(cancellationFee)+'</td>';}).join('')+'</tr>';
-            h+='<tr><th scope="row">小計</th>'+subtotals.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
           });
-          h+='</tbody><tfoot><tr><th colspan="3">合計</th>'+total.map(function(v,i){return '<td>'+money(complete[i]?v:null)+'</td>';}).join('')+'</tr></tfoot></table></div><p class="small">実施済み：実施した授業 ／ 登録分：実施済み＋今後の登録済み授業（返事前の案内は含みません） ／ 計画分：今月にかかる送信済み計画の全回数分。小計・合計は各列の授業料にキャンセル料を加えた金額です。列同士は足し合わせません。キャンセル料は当月の授業について、減額・免除を反映した現在の金額です。減額・免除の申請中は審査前の金額を表示します。</p><p class="small">計画の単価と授業時間で計算します。単価が未設定・特定できない場合は「確認が必要」と表示します。</p></div>';return h;
+          h+='</tbody><tfoot><tr><th colspan="2">合計</th>'+total.map(function(v,i){return '<td>'+money(complete[i]?v:null)+'</td>';}).join('')+'</tr></tfoot></table></div><p class="small">実施済み：実施した授業 ／ 登録分：実施済み＋今後の登録済み授業（返事前の案内は含みません） ／ 計画分：今月にかかる送信済み計画の全回数分。合計は各列の授業料にキャンセル料を加えた金額です。列同士は足し合わせません。キャンセル料は当月の授業について、減額・免除を反映した現在の金額です。減額・免除の申請中は審査前の金額を表示します。</p><p class="small">計画の単価と授業時間で計算します。単価が未設定・特定できない場合は「確認が必要」と表示します。</p></div>';return h;
         }
         function renderFamilyPlans() {
           var children=F.home.children||[],savedId=F.studentId,savedS=S,rows='',head='',confirms='',missing=[];

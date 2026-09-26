@@ -9,5 +9,5 @@ test('family tuition sums current cancellation amounts for the displayed month i
  ctx.F.childState.a.history=[{id:'lesson-a',done:true,date:'2026-09-01',min:90}];
  ctx.lessonLabel=()=>'';ctx.planCovers=()=>true;ctx.planLimit=()=>2;
  vm.createContext(ctx);vm.runInContext(code,ctx);const html=ctx.renderFamilyTuition();
- assert.match(html,new RegExp('<th scope="row">キャンセル料</th>'));assert.ok(html.includes('<td>1000円</td>'));assert.ok(html.includes('<td>4500円</td>'));assert.ok(html.includes('<td>4000円</td>'));assert.ok(html.includes('<td>8500円</td>'));assert.ok(html.includes('<td>11500円</td>'));assert.ok(!html.includes('9000円'));assert.ok(html.includes('審査前の金額'));
+ assert.match(html,new RegExp('<th scope="row">キャンセル料</th>'));assert.ok(html.includes('<td>1000円</td>'));assert.ok(html.includes('<td>4500円</td>'));assert.ok(!html.includes('小計'));assert.ok(!html.includes('<th>月</th>'));assert.ok(html.includes('2026年9月'));assert.ok(html.includes('rowspan="2"'));assert.ok(html.includes('<td>8500円</td>'));assert.ok(html.includes('<td>11500円</td>'));assert.ok(!html.includes('9000円'));assert.ok(html.includes('審査前の金額'));
 });
