@@ -2629,7 +2629,7 @@
             ev.preventDefault();
             if (a === "se-resume") { var pendingEdit = slotEditPending().filter(function (p) { return p.requestId === btn.getAttribute("data-request"); })[0]; if (pendingEdit && !(slotEdit && (slotEdit.pending || slotEdit.busy))) slotEditResume(pendingEdit); }
             else if(a==='se-content'){slotEdit.details=false;render();}
-            else if(a==='se-context'){slotEdit.contextIndex=Number(btn.getAttribute('data-index'));slotEdit.contextForm=Object.assign({},slotEdit.before.changes[slotEdit.contextIndex].context||{});render();}
+            else if(a==='se-context'){slotEdit.contextIndex=Number(btn.getAttribute('data-index'));var change=slotEdit.before.changes[slotEdit.contextIndex];slotEdit.contextForm=Object.assign({},change.context||{});if(!slotEdit.contextForm.receivedAt){var todayJst=new Date(Date.now()+9*3600000).toISOString().slice(0,10);slotEdit.contextForm.receivedAt=change.before.date<todayJst?change.before.date:todayJst;}render();}
             else if(a==='se-context-cancel'){slotEdit.contextIndex=null;slotEdit.error='';render();}
             else if(a==='se-context-save'){saveChangeContext();}
             else if (a === "se-save" || a === "se-retry" || a === "se-force") slotEditSend(a === "se-force");
