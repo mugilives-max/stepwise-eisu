@@ -337,7 +337,7 @@
           if (!hideLabel && s.deliveryMode === 'online') mode = s.meetUrl
             ? '<button type="button" class="small" data-action="copymeet" data-url="' + esc(s.meetUrl) + '" aria-label="Meetリンクをコピー" title="Meetリンクをコピー" style="color:var(--primary);background:none;border:0;padding:4px 2px;border-radius:0;font:inherit;font-size:var(--small,0.85em);cursor:pointer">WEB</button>'
             : '<span class="small" style="color:var(--primary)" title="Meetリンクはまだ発行されていません">WEB</span>';
-          if (s.status === 'offered' || s.status === 'booked') actions = '<button class="btn-quiet btn-sm" data-action="slotedit"' + attrs + '>修正</button>';
+          if (s.status === 'offered' || s.status === 'booked') actions = '<button class="btn-quiet btn-sm" data-action="slotedit"' + attrs + '>詳細</button>';
           return part === 'mode' ? mode : part === 'actions' ? actions : mode + actions;
         }
 
@@ -353,7 +353,7 @@
           var existing = slotEditPending().filter(function (p) { return String(p.slotId) === btn.getAttribute("data-id"); })[0];
           if (existing) { slotEditResume(existing); return; }
           var s; try { s = JSON.parse(btn.getAttribute("data-snapshot")); } catch (e) { load(true); return; }
-          slotEdit = { done: btn.getAttribute("data-done") === "1", auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: Object.assign({},s,btn.getAttribute("data-done")==="1"?{done:"true"}:{}), form: Object.assign({}, s, {kind:btn.getAttribute('data-kind') || '通常'}), pending: null, busy: false, error: "" };
+          slotEdit = { details:true, done: btn.getAttribute("data-done") === "1", auth: token(), op: op, studentId: btn.getAttribute("data-sid"), before: Object.assign({},s,btn.getAttribute("data-done")==="1"?{done:"true"}:{}), form: Object.assign({}, s, {kind:btn.getAttribute('data-kind') || '通常'}), pending: null, busy: false, error: "" };
           render();
           var editFirst = document.getElementById(op === 'editOffered' ? 'se-date' : 'se-mode');
           if (editFirst) editFirst.focus();
@@ -363,7 +363,12 @@
           pending.forEach(function (p) { if (e && e.pending && e.pending.requestId === p.requestId) return; h += '<div class="lc-notice">確認が必要な授業変更：' + fmtDY(p.after.date) + ' ' + esc(p.after.start) + ' ' + esc(p.after.subject) + ' <button class="btn-quiet btn-sm" data-action="se-resume" data-request="' + esc(p.requestId) + '">変更の続きを確認</button></div>'; });
           if (!e || e.auth !== token()) return h;
           var dis = busy || e.busy || e.pending ? ' disabled' : '', modeOnly = e.op === "setSlotDeliveryMode", f = e.form;
-          h += '<dialog id="slot-editor" class="board-editor" aria-label="授業変更"><div class="row between"><h2>' + (e.done || e.op === 'editLessonSubject' || e.op==='editBooked' ? '授業を修正' : '案内を修正') + '</h2><button class="btn-quiet" data-action="se-close"' + dis + '>閉じる</button></div><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
+          h += '<dialog id="slot-editor" class="board-editor" aria-label="授業変更"><div class="row between"><h2>' + (e.details ? '授業の詳細' : (e.done || e.op === 'editLessonSubject' || e.op==='editBooked' ? '授業を修正' : '案内を修正')) + '</h2><button class="btn-quiet" data-action="se-close"' + dis + '>閉じる</button></div><p class="small">変更前：' + fmtDY(e.before.date) + ' ' + esc(e.before.start) + '・' + esc(e.before.min) + '分・' + esc(e.before.subject || '科目未登録') + '・' + deliveryLabel(e.before.deliveryMode) + '</p>';
+          if(e.details){var rows=[['授業日時',fmtDY(e.before.date)+' '+e.before.start+'〜'+endTime(e.before.start,e.before.min)],['科目',e.before.subject],['授業形式',deliveryLabel(e.before.deliveryMode)],['実施状況',e.done?'実施済み':e.op==='editOffered'?'案内中':'予定']];h+='<table style="width:100%;border-collapse:collapse">'+rows.map(function(r){return '<tr><th style="border:1px solid #b8c8df;background:#edf1f5;padding:10px;text-align:left">'+esc(r[0])+'</th><td style="border:1px solid #b8c8df;padding:10px">'+esc(r[1])+'</td></tr>';}).join('')+'</table>';
+            (e.before.changes||[]).forEach(function(c,i){h+='<h3>日時変更の経緯</h3>'+changeHistoryTable([c])+'<button class="btn-quiet" data-action="se-context" data-index="'+i+'">経緯を記録・編集</button>';});
+            if(e.contextIndex!=null){var c=e.before.changes[e.contextIndex],x=e.contextForm;h+='<p>生徒・保護者にも表示されます。</p><label>連絡受付日時<input id="context-time" type="datetime-local" value="'+esc(x.receivedAt||'')+'"'+dis+'></label><label>変更理由<input id="context-reason" maxlength="100" value="'+esc(x.reason||'')+'"'+dis+'></label><label>経緯<textarea id="context-note" maxlength="1000"'+dis+'>'+esc(x.note||'')+'</textarea></label><button class="btn-primary" data-action="se-context-save"'+dis+'>経緯を保存</button>';}
+            if(e.error)h+='<p role="alert">'+esc(e.error)+'</p>';return h+'<p><button class="btn-primary" data-action="se-content"'+dis+'>授業内容を修正</button></p></dialog>';
+          }
           if (e.op === "editLessonSubject") {
             if(e.error)h+='<p role="alert">'+esc(e.error)+'</p>';
             h+='<p class="note">授業記録が未作成・未請求の授業の科目を変更できます。</p>';
@@ -388,6 +393,7 @@
           if (!e.pending && !e.busy) h += ' <button class="btn-danger" data-action="se-delete"' + dis + '>' + (modeOnly || e.op==='editBooked' ? '欠席・キャンセルを登録' : 'この案内を取り下げる') + '</button>';
           return h + '</dialog>';
         }
+        function saveChangeContext(){var e=slotEdit;if(!e||e.busy||busy||e.auth!==token())return;var c=e.before.changes[e.contextIndex],x={receivedAt:val('context-time'),reason:val('context-reason'),note:val('context-note')};e.contextForm=x;e.busy=true;render();admin('serviceChangeContextSave',{studentId:e.studentId,slotId:e.before.id,changeId:c.id,revision:c.revision,changeReceivedAt:x.receivedAt,changeReason:x.reason,changeNote:x.note}).then(function(){if(slotEdit!==e)return;e.busy=false;slotEdit=null;cacheClear();toast('経緯を保存しました');load(true);}).catch(function(err){if(slotEdit!==e)return;e.busy=false;e.error=err.message;render();});}
         function slotEditDelete(undoDone) {
           var e = slotEdit;
           if (!e || busy || e.busy || e.pending || e.auth !== token()) return;
@@ -2617,6 +2623,9 @@
           if (a.indexOf("se-") === 0) {
             ev.preventDefault();
             if (a === "se-resume") { var pendingEdit = slotEditPending().filter(function (p) { return p.requestId === btn.getAttribute("data-request"); })[0]; if (pendingEdit && !(slotEdit && (slotEdit.pending || slotEdit.busy))) slotEditResume(pendingEdit); }
+            else if(a==='se-content'){slotEdit.details=false;render();}
+            else if(a==='se-context'){slotEdit.contextIndex=Number(btn.getAttribute('data-index'));slotEdit.contextForm=Object.assign({},slotEdit.before.changes[slotEdit.contextIndex].context||{});render();}
+            else if(a==='se-context-save'){saveChangeContext();}
             else if (a === "se-save" || a === "se-retry" || a === "se-force") slotEditSend(a === "se-force");
             else if (a === "se-delete") slotEditDelete();
             else if (a === "se-undone") slotEditDelete(true);

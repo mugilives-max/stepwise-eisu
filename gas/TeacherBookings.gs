@@ -40,4 +40,16 @@ function teacherBookingEdited_(write,before,after){
  teacherBookingSave_({slotId:String(write.slotId),studentId:String(write.studentId),requestId:id,snapshotJson:JSON.stringify(schedulingSnapshot_(before.slot)),createdAt:billingStamp_(),updatedAt:billingId_()});
 }
 
-function teacherBookingChanges_(s){return readRows_('offerEdits').filter(function(w){return String(w.studentId)===String(s.studentId)&&String(w.slotId)===String(s.id)&&w.status==='done';}).map(function(w){var a=JSON.parse(w.afterJson),b=JSON.parse(w.beforeJson);return a.op==='editBooked'?{before:schedulingSnapshot_(b.slot),after:schedulingSnapshot_(a.slot),context:a.context||null,recordedAt:w.createdAt}:null;}).filter(function(x){return !!x;});}
+function teacherBookingChanges_(s){return readRows_('offerEdits').filter(function(w){return String(w.studentId)===String(s.studentId)&&String(w.slotId)===String(s.id)&&w.status==='done';}).map(function(w){var a=JSON.parse(w.afterJson),b=JSON.parse(w.beforeJson);return a.op==='editBooked'?{id:w.id,revision:schedulingHash_(w.afterJson),before:schedulingSnapshot_(b.slot),after:schedulingSnapshot_(a.slot),context:a.context||null,recordedAt:w.createdAt}:null;}).filter(function(x){return !!x;});}
+
+function teacherChangeContextSave_(req){
+ var slot=findSlotRow_(req.slotId);if(!slot||String(slot.slot.studentId)!==String(req.studentId))return {error:'授業が見つかりません'};
+ var rows=readRows_('offerEdits'),w=rows.filter(function(x){return x.id===req.changeId&&String(x.slotId)===String(req.slotId)&&String(x.studentId)===String(req.studentId)&&x.status==='done';})[0];
+ if(!w)return {error:'日時変更の記録が見つかりません'};
+ var a=JSON.parse(w.afterJson),context;try{context=schedulingChangeContext_(req);}catch(e){return {error:e.message};}
+ if(a.op!=='editBooked')return {error:'日時変更の記録を選んでください'};
+ if(JSON.stringify(a.context||{})===JSON.stringify(context))return {ok:true};
+ if(req.revision!==schedulingHash_(w.afterJson))return {error:'経緯が更新されています。詳細を開き直してください'};
+ a.contextHistory=a.contextHistory||[];a.contextHistory.push({context:a.context||null,at:new Date().toISOString()});a.context=context;
+ w.afterJson=JSON.stringify(a);w._row=rows.findIndex(function(x){return x.id===w.id;})+2;schedulingEditWrite_(w);return {ok:true};
+}
