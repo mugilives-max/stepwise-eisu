@@ -267,3 +267,9 @@
 /* Available time uses the same striped treatment as unavailable time. */
 .calbox.wi,.calday > .callbl.wi,.callegend .wiswatch{background:repeating-linear-gradient(135deg,#e6f4ea 0 4px,transparent 4px 8px);color:#2f8a4c;border-left-color:#2f8a4c;}
 .callegend .wiswatch{padding:0 4px;}
+
+.day-record{display:block;}
+.day-record > summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;list-style:none;}
+.day-record > summary::-webkit-details-marker{display:none;}
+.day-record-toggle{flex-shrink:0;}
+.day-record > summary:focus-visible{outline:2px solid var(--primary);outline-offset:4px;}
