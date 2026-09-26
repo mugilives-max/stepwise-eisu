@@ -213,7 +213,7 @@
       var it = it0(s.date);
       if(s.st === "cancelled"){} else if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "offer") it.offer++; else it.mine++;
       // cls: 管理画面の全体予定表で使う追加クラス(rq=取消依頼中 / dn=実施済み)
-      it.labels.push({ text: (label(s) || "授業")+(s.st==="cancelled"?"（取消）":""), st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind, cls: s.cls || "" });
+      it.labels.push({ text: (label(s) || "授業")+(s.st==="cancelled"?"（キャンセル済み）":""), st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", kind: s.kind, cls: s.cls || "" });
     });
     (src.events || []).forEach(function (e) {
       var d = e.date, to = e.dateTo || e.date;
