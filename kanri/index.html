@@ -392,6 +392,11 @@
           if (!e.pending && !e.busy) h += ' <button class="btn-danger" data-action="se-delete"' + dis + '>' + (modeOnly || e.op==='editBooked' ? '欠席・キャンセルを登録' : 'この案内を取り下げる') + '</button>';
           return h + '</dialog>';
         }
+        document.addEventListener('keydown',function(ev){
+          if(ev.key!=='Enter'||ev.isComposing||ev.keyCode===229||ev.shiftKey||ev.ctrlKey||ev.altKey||ev.metaKey||!slotEdit||!slotEdit.details||slotEdit.contextIndex==null||slotEdit.busy||busy)return;
+          var order=['context-month','context-day','context-time','context-reason','context-note'],at=order.indexOf(ev.target&&ev.target.id);if(at<0||at===order.length-1)return;
+          var next=document.getElementById(order[at+1]);if(next&&!next.disabled){ev.preventDefault();next.focus();}
+        });
         function contextDateValue(month,day,time,previous,now){
           if(!month&&!day&&!time)return '';
           var m=Number(month),d=Number(day);if(!month||!day||!/^\d{2}:\d{2}$/.test(time)||m<1||m>12||d<1||d>31||m%1||d%1||Number(time.slice(0,2))>23||Number(time.slice(3))>59)throw Error('月・日・時刻を入力してください');
