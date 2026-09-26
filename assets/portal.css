@@ -249,7 +249,8 @@
 
 .learning-navigation{display:flex;gap:8px;margin:0 0 20px;flex-wrap:wrap}.learning-navigation a{display:inline-block;padding:9px 16px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--muted)}.learning-navigation a.on{background:var(--soft);color:var(--primary);border-color:var(--primary);font-weight:600}
 .home-homework-table{table-layout:fixed}
-.home-homework-table td:first-child,.home-homework-table td:nth-child(2){text-align:left;overflow-wrap:anywhere}
-.home-homework-table td:nth-child(2){font-size:12px;line-height:1.5}
+.home-homework-table td{overflow-wrap:anywhere}
+.home-homework-table td:first-child{text-align:left}
+
 .home-homework-table .btn-sm{padding:6px;white-space:normal;font-size:12px}
 @media(max-width:480px){.home-homework-table .btn-sm{font-size:11px;padding:5px 2px}}
