@@ -447,6 +447,7 @@ function slotCancellationPending_(slotId){
   })?{error:'先生がこの授業の取消を処理中です。同じ取消操作を再送してください',errorCode:'pending'}:null;
 }
 function slotCancellationNotice_(w){
+  cancelFeeConfirm_(w);
   if(typeof serviceCancelDecided_==='function')serviceCancelDecided_(w);
   var before=JSON.parse(w.beforeJson),student=systemStudent_(w.studentId),notice;
   if(!student||!before.studentId)notice={status:'skipped',recorded:true};
@@ -477,8 +478,9 @@ function slotCancellation_(req,operation){
       if(operation==='cancelDeclined'&&!parseReq_(current.req))return {error:'取消依頼が見つかりません'};
       var before=slotCancellationSnapshot_(current),after=operation==='cancelDeclined'?Object.assign({},before,{req:''}):null;
       w={id:schedulingHash_(operation+'|'+JSON.stringify(before)),studentId:String(before.studentId),slotId:String(before.id),operation:operation,beforeJson:JSON.stringify(before),afterJson:JSON.stringify(after),status:'pending',createdAt:new Date().toISOString()};
+      if(operation==='resolveCancel'){var fee=cancelFeePrepare_(req,w);if(fee.error)return fee;}
       slotCancellationWrite_(w);
-    }
+    } else if(operation==='resolveCancel'){var savedFee=cancelFeeRows_().filter(function(x){return x.id===w.id;})[0];if(savedFee){var savedDecision=JSON.parse(savedFee.decisionJson);if(!cancelFeeRetryMatches_(req,savedDecision))return billingError_('同じ取消内容で再送してください','conflict');}}
     var original=JSON.parse(w.beforeJson),desired=JSON.parse(w.afterJson);
     if(!slotCancellationMatches_(desired,current)){
       if(!slotCancellationMatches_(original,current))return {error:'元の授業が変更されています。取消処理を確認してください',errorCode:'conflict'};
@@ -1953,7 +1955,7 @@ function kanriDashboard_() {
       studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId),
       meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus };
   };
-  var cancelReqs = slots.filter(function (s) { return s.status === 'booked' && s.date >= today && parseReq_(s.req); }).map(slim).sort(slotSort_);
+  var cancelReqs = slots.filter(function (s) { return s.status === 'booked' && parseReq_(s.req); }).map(slim).sort(slotSort_);
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var lessonsWeek = slots.filter(function (s) { return s.date > today && s.date < weekEnd && s.status === 'booked'; }).map(slim).sort(slotSort_);
   var pending = slots.filter(function (s) { return s.date >= today && s.status === 'offered'; }).map(slim).sort(slotSort_);
@@ -2059,7 +2061,7 @@ function kanriStudent_(studentId,section) {
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });
   var payments = ledgerRows_('入金管理').filter(function (p) { return String(p['生徒ID']) === id; })
-    .map(function (p) { return { paymentRevision:Number(p['入金版'])||0, lessons:billingSavedLessons_(p), id:String(p['請求ID']||''), voidedAt:String(p['取消日時']||''), voidReason:String(p['取消理由']||''), row: p._row, ym: String(p['年月']), amount: Number(p['請求額'] || 0), billDate: p['請求日'] || '',
+    .map(function (p) { return { paymentRevision:Number(p['入金版'])||0, lessons:billingInvoiceView_(p).lessons, fees:billingInvoiceView_(p).fees, id:String(p['請求ID']||''), voidedAt:String(p['取消日時']||''), voidReason:String(p['取消理由']||''), row: p._row, ym: String(p['年月']), amount: Number(p['請求額'] || 0), billDate: p['請求日'] || '',
       paidDate: p['入金日'] || '', method: p['入金方法'] || '', status: p['状態'] || '', note: p['備考'] || '' }; })
     .sort(function (a, b) { return a.ym < b.ym ? 1 : -1; });
   var fee = studentFee_(id, minutes, month), billingMonths = billingMonths_(id);

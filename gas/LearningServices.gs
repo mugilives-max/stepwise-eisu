@@ -65,6 +65,7 @@ function serviceAdmin_(req){
   if(req.op==='serviceInbox')return {ok:true,messages:serviceRows_('contactMessages').map(function(m){return Object.assign({},m,{studentName:studentName_(m.studentId)});}).reverse()};
   if(!systemStudent_(sid))return {error:'生徒が見つかりません'};
   switch(req.op){
+    case 'serviceCancelQuote':return cancelQuote_(req);
     case 'serviceList':return serviceList_(sid,true);
     case 'servicePdf':return servicePdfGet_(req,sid);
     case 'serviceExamSave':return serviceExamSave_(req,sid);
@@ -133,7 +134,7 @@ function serviceCancelRequest_(req,auth){
   var pending=schedulingPendingSlotMutation_(r.slot.id);if(pending)return pending;
   var current=parseReq_(r.slot.req);if(current&&current.id!==id)return {error:'この授業はすでに取消申請中です'};
   var row=old;
-  if(!row){var now=req._receivedAt||Date.now(),deadline=Date.parse(r.slot.date+'T'+r.slot.start+':00+09:00')-CANCEL_DEADLINE_H*36e5;if(!isFinite(deadline))throw Error('授業日時を確認してください');
+  if(!row){var now=req._receivedAt||Date.now(),deadline=cancelDeadline_(r.slot);if(!isFinite(deadline))throw Error('授業日時を確認してください');
     row={id:id,studentId:sid,slotId:String(r.slot.id),receivedAt:new Date(now).toISOString(),deadlineAt:new Date(deadline).toISOString(),requestType:now<=deadline?'normal':'exception',reason:reason,senderRole:auth.role,senderId:auth.senderId,slotJson:JSON.stringify(slotCancellationSnapshot_(r.slot)),status:'received',decidedAt:''};serviceWrite_('cancellationRequests',row);
   }
   var original=JSON.parse(row.slotJson);if(original.date!==r.slot.date||original.start!==r.slot.start||Number(original.min)!==Number(r.slot.min))return {error:'授業日時が変更されました。最新の予定から再申請してください',errorCode:'conflict'};

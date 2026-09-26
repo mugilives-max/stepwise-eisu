@@ -132,7 +132,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 - 生徒側 action: accept / decline / cancelReq / wish / unwish / wishMany / eventAdd / eventAddMany / eventDel / block / unblock / blockSet / taskAdd / taskDone / taskDel / grades。保護者actionと先生のコード発行opは [PARENT_AUTH.md API](PARENT_AUTH.md#api)。
 - 予約・通知APIには、生徒側 `acceptMany` / `studentEmail*`、先生側 `setDeliveryMode` / `setSlotDeliveryMode` / `editOffered` / `studentEmailNotifications` / `studentEmailRetryNotification`、家族認証・子ども切替・通知管理の `family*` がある。予約の契約は5-2節、家族APIの詳細は [PARENT_AUTH.md](PARENT_AUTH.md) に置く。
 - 先生側 op: state / offer / deleteSlot / unbook / toggleDone / finishOffered(返事がないまま日付が過ぎた案内を確定・実施済みにする) / addStudent / setEmail / setFee / newCode / addBlock / delBlock / addOff / delOff(先生の休み) / hideStudent / changePass / resolveCancel / delWish / delEvent / planSet / planPropose / planApproveTeacher / taskAdd / taskDone / taskDel / kanriDashboard / kanriStudent / kanriSaveProfile / kanriAddGrade / kanriAddExam / kanriAddPayment / kanriSetPaid / kanriAddMeeting / kanriDeleteRow / kanriSetActive / logout。ログイン前: login / setupAccount / resetRequest / resetConfirm
-- 確定授業の取消は生徒からの「依頼」で先生が承認（締切は授業の24時間前 `CANCEL_DEADLINE_H`）。月間承認と請求の制御は次節。
+- 確定授業の取消は生徒からの「依頼」で先生が承認（無料の連絡期限は前日23時まで、日本時間）。月間承認と請求の制御は次節。
 - 授業記録の先生専用op・返却範囲は [授業サイクル仕様](LESSON_CYCLE_PHASE1_SPEC.md)。通常のカルテ・予定・MCPには内部メモや下書き本文を含めない。
 - エディタから手で実行する関数: `setup`(初回のシート作成)、`resetTeacherLogin`(先生ログイン初期化)、`kanriSelfTest`、`mcpRotateKey`(MCP 用キーの発行・更新)、`mcpDisable`(MCP 停止)、`mcpEnableWrites` / `mcpRestrictWritesToTest`(MCP 登録の範囲切替)。
 - MCP 用の入口: `action:"admin"` + `mcpKey`(Script Properties の `MCP_KEY`)。実行できる op は `MCP_READ_OPS`(mcpPing / mcpStudents / mcpSchedule / mcpStudent / mcpPending / mcpBilling / mcpTeacherOff / mcpWishes)と `MCP_WRITE_OPS`(v52〜: mcpOfferLessons / mcpAddTeacherOff / mcpAddStudentNg / mcpAddStudentWishes。項目ごとの検証と結果、既存と同じ日時は登録済み扱い。v54〜: mcpInboxClaim / mcpInboxResolve と閲覧の mcpInboxList。連絡欄の処理はシート `contactProcessing` に記録)のホワイトリストのみ。書き込み範囲は Script Properties `MCP_WRITE_SCOPE`(test/all。エディタの `mcpEnableWrites` / `mcpRestrictWritesToTest`)。呼び出しは `mcpLog` シートに記録。返却値に専用リンクコード・メール・トークンは含めない。仕様は [MCP_OPERATIONS.md 2章](MCP_OPERATIONS.md#2-いま使える機能)。
@@ -446,7 +446,7 @@ Google公式 [clasp](https://github.com/google/clasp) 3.4.1をdevDependencyに�
 
 ### 取消申請
 
-理由は必須（1,000文字まで）、期限内も含め先生が承認するまで予約枠を維持する。開始24時間前ちょうどまでは通常申請、その後は例外申請。サーバー入口の受付時刻を保存し、排他待ちや先生の確認遅延で区分を変えない。ブラウザ申告時刻は使用しない。病気・大幅な交通遅延等の妥当性は先生が判断する。
+理由は必須（1,000文字まで）、期限内も含め先生が承認するまで予約枠を維持する。前日23時ちょうどまでは通常申請、その後は期限後申請（2026-09-26改定）。サーバー入口の受付時刻を保存し、排他待ちや先生の確認遅延で区分を変えない。ブラウザ申告時刻は使用しない。病気・大幅な交通遅延等の妥当性は先生が判断する。
 
 申請IDと受付記録を先に保存し、途中失敗時は同じIDで再送できる。管理画面で理由・受付時刻・区分を確認し、既存の取消承認/却下操作で決定する。本人・保護者にも申請結果を表示する。既存の生徒画面からの申請取り下げも記録する。旧申請の履歴を推測で埋めない。取消申請の通知先は管理画面で、新規申請時の先生宛メールは送らない。取消後の既存通知処理は維持する。実施済み・請求・取消料は自動変更しない。
 
@@ -1069,3 +1069,16 @@ PDF抽出方針の絞り込み: 解析版2は学習計画・授業調整に関�
 
 管理者のイベント登録通知: PDF候補の登録と管理画面の手動/文章からのイベント登録は管理者宛てメールを送らない。eventAdd_の内部引数で登録者を区別し、生徒・保護者からの登録通知は維持する。クライアントから通知抑止フラグは受け付けない。操作ログは先生による登録と記録する。
 通知修正公開: 実装b54813a、Worker 4312e410-c2c9-40c1-bf80-f4b4115be868。関連16テスト・構文検査通過。Workerバンドルに反映し、GAS単独配信は未反映。既存の登録済みイベントと送信済みメールは変更しない。
+
+
+### キャンセル料（2026-09-26実装）
+
+既存契約の規定を継承する。前日23時まで無料、それを過ぎて開始前までは1回1,000円、開始時刻以降・無断欠席は承認済み計画の授業料相当額。急病等は先生が理由を記録して免除できる。既存データへの一括課金はしない。
+
+- 生徒・保護者のキャンセルボタンで料金条件と現在の目安を表示し、理由を添えて申請する。先生の承認までは授業を保持する。
+- 先生は承認モーダルでサーバー算定額を確認し、請求・免除を選ぶ。LINE等の外部連絡日時（日本時間）、無断欠席、先生都合も同じモーダルで扱う。外部連絡・無断欠席・先生都合・免除は理由必須。未実施授業の「修正→解除」からも開く。
+- 判定はマイページ申請のサーバー受付時刻、または先生が記録した外部連絡時刻。教師の処理時刻で不利に変えない。前日23時は `cancelDeadline_` が計算する。旧 `cancelDeadlineH` は互換値で料金判定には使用しない。
+- `gas/CancellationFees.gs` / D1 `0013_cancellation_fees.sql`。`cancellationFees` に元の授業、受付時刻、料金根拠、選択・理由を保存する。取消ジャーナルのIDをキーとし、取消が保存された後のみ料金を有効化する。再送で金額・理由等は変更できない。
+- 請求スナップショットの `実績JSON` は `type:cancellation` を別明細として保持。APIでは `fees` と `lessons` に分ける。実施回数・時間や計画消化数にキャンセルを加算しない。料金だけの請求、未請求料金の繰越、請求取消後の再請求に対応。保護者の請求内訳と先生の請求画面・コピー文にキャンセル料を表示する。
+- 開始後の授業料相当額は承認済み計画が必要。単価未確定なら請求確定を止める。料金確定後の個別減免・訂正画面は未実装で、保存前に免除を判断する。
+- 本番D1を非公開バックアップに退避し、SQLite復元・整合性と既存61表の保持を検証。0013適用済み、Worker `28b980a8-3e3b-4565-9f1f-853949627007` を公開。新表のみ追加し既存料金は変更しない。関連76テスト・構文検査通過。別の既存UIテスト7件は変更前でも同じ失敗を確認。認証済み本番操作・実メール送信は未検証。画面の公開は自動承認レビューがGitHub mainへのpushを拒否したため未実施。公開先は https://github.com/mugilives-max/stepwise-eisu.git 。

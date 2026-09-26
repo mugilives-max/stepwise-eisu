@@ -225,7 +225,7 @@
       .family-info-table td.is-missing{background:#fff4e3;color:#945900}
       @media(max-width:520px){.family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}}
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260924-family-monthly"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260926-cancellation-fees"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
 <link rel="stylesheet" href="/assets/calendar.css?v=20260924-shared-day"><script src="/assets/calendar.js?v=20260924-family-calendar"></script>
 </head>
@@ -238,7 +238,7 @@
     <div id="toast" role="status"></div>
 
     <script src="/assets/student-documents.js?v=20260926-parse"></script>
-    <script src="../assets/learning-services.js?v=20260910-all-children"></script>
+    <script src="../assets/learning-services.js?v=20260926-cancellation-fees"></script>
     <script>
       (function () {
         "use strict";
@@ -388,6 +388,7 @@
           var e = slotEdit;
           if (!e || busy || e.busy || e.pending || e.auth !== token()) return;
           var booked = (e.op === 'setSlotDeliveryMode'||e.op==='editBooked');
+          if(booked&&!undoDone&&!e.done){slotEdit=null;cancelOpen(e.before.id,e.studentId);return;}
           if (!confirm(undoDone ? 'この授業の実施を取り消しますか？' : booked ? 'この授業を解除しますか？\nカレンダーの予定も削除されます。生徒への連絡は別途お願いします。' : 'この案内を取り下げますか？')) return;
           var r = route(), auth = token(); e.busy = true; e.error = ''; render();
           admin(undoDone ? 'toggleDone' : booked ? 'unbook' : 'deleteSlot', {slotId:e.before.id, studentId:e.studentId, done:false}).then(function(res) {
@@ -749,7 +750,7 @@
         function homeCancellation(list) {
           return '<p class="note">承認するまでは予定を保持します。理由を確認して返事をしてください。</p>'+list.map(function(s) {
             var q=s.req||{};
-            return '<div class="line"><span class="t">'+fmtD(s.date)+' '+esc(s.start)+'〜'+endTime(s.start,s.min)+'</span><span class="w"><a href="#s='+encodeURIComponent(s.studentId)+'">'+esc(s.studentName)+'</a> '+esc(lessonLabel(s))+'<div class="small"><strong>'+(q.requestType==='exception'?'期限後の例外申請':q.requestType==='normal'?'24時間前までの通常申請':'取消依頼')+'</strong> '+esc(q.reason||'理由なし')+(q.at?'・受付 '+esc(fmtAuthTime(q.at)):'')+'</div></span><button class="btn-danger btn-sm" data-action="cancelok" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'"'+(busy?' disabled':'')+'>取消を承認</button><button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'"'+(busy?' disabled':'')+'>予定どおり行う</button></div>';
+            return '<div class="line"><span class="t">'+fmtD(s.date)+' '+esc(s.start)+'〜'+endTime(s.start,s.min)+'</span><span class="w"><a href="#s='+encodeURIComponent(s.studentId)+'">'+esc(s.studentName)+'</a> '+esc(lessonLabel(s))+'<div class="small"><strong>'+(q.requestType==='exception'?'期限後の例外申請':q.requestType==='normal'?'期限内の通常申請':'取消依頼')+'</strong> '+esc(q.reason||'理由なし')+(q.at?'・受付 '+esc(fmtAuthTime(q.at)):'')+'</div></span><button class="btn-danger btn-sm" data-action="cancelok" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'"'+(busy?' disabled':'')+'>取消を承認</button><button class="btn-quiet btn-sm" data-action="cancelkeep" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'"'+(busy?' disabled':'')+'>予定どおり行う</button></div>';
           }).join('')+'<p class="note">返事は受信確認済みの生徒メールへ通知します。取消の承認は予定の削除を伴います。</p>';
         }
         function renderHome() {
@@ -1214,6 +1215,36 @@
           var recorded = s.lessonRecordStatus === 'active';
           return ' <a class="tag ' + (recorded ? 'blue' : 'red') + '" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '" title="授業記録を開く">' + (recorded ? '記入済' : '未記入') + '</a>';
         }
+        var cancelDialog=null;
+        function cancelOpen(slotId,studentId){
+          cancelDialog={auth:token(),routeKey:location.hash,slotId:slotId,studentId:studentId,source:'',receivedAt:'',note:'',choice:'charge',quote:null,error:''};cancelQuoteLoad();
+        }
+        function cancelQuoteLoad(){
+          var d=cancelDialog;if(!d||busy||d.auth!==token()||d.routeKey!==location.hash)return;busy=true;d.error='';d.quote=null;render();
+          admin('serviceCancelQuote',{slotId:d.slotId,studentId:d.studentId,source:d.source,receivedAt:d.receivedAt,note:d.note}).then(function(r){if(cancelDialog!==d||d.auth!==token()||d.routeKey!==location.hash){busy=false;return;}busy=false;d.quote=r;d.source=r.quote.source;d.receivedAt=r.quote.receivedAt;render();}).catch(function(e){busy=false;if(cancelDialog===d){d.error=e.message;render();}});
+        }
+        function cancelDialogHTML(){
+          var d=cancelDialog;if(!d||d.auth!==token()||d.routeKey!==location.hash)return '';var q=d.quote&&d.quote.quote,dis=busy||d.sent?' disabled':'';
+          return window.StepwiseCalendar.dayDialog({id:'cancel-fee-dialog',title:'授業の取消・キャンセル料',close:'cf-close',busy:busy||!!d.sent,content:
+            (q?'<p>'+esc(fmtD(q.slot.date)+' '+q.slot.start+' '+q.slot.subject)+'</p>':'')+
+            '<p>前日23時まで無料／開始前1,000円／開始後・無断欠席は授業料相当額。実施回数には含めません。</p>'+
+            '<label>連絡方法<select id="cf-source"'+dis+'>'+[['request','マイページからの申請'],['external','LINE・電話などで連絡済み'],['noshow','無断欠席'],['teacher','先生都合・料金なし']].map(function(x){return '<option value="'+x[0]+'"'+(d.source===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></label> '+
+            '<label>外部で連絡を受けた日時<input type="datetime-local" id="cf-time" value="'+esc(d.receivedAt?new Date(Date.parse(d.receivedAt)+9*3600000).toISOString().slice(0,16):'')+'"'+dis+'></label><p><button class="btn-quiet" data-action="cf-quote"'+dis+'>この条件で料金を確認</button></p>'+
+            (q?'<p><strong>キャンセル料：'+yen(q.amount)+'</strong></p><label>扱い<select id="cf-choice"'+dis+'><option value="charge"'+(d.choice==='charge'?' selected':'')+'>この金額で請求</option><option value="waive"'+(d.choice==='waive'?' selected':'')+'>免除する（0円）</option></select></label>':'')+
+            '<p><label>理由・連絡方法（免除・外部連絡・無断欠席の場合は必須）<textarea id="cf-note" maxlength="1000"'+dis+'>'+esc(d.note)+'</textarea></label></p>'+
+            (d.error?'<p role="alert">'+esc(d.error)+'</p>':'')+
+            (q?'<button class="btn-danger" data-action="cf-save"'+(busy?' disabled':'')+'>'+(d.sent?'同じ内容で結果を確認':'取消を確定する')+'</button>':'')});
+        }
+        function cancelSend(){
+          var d=cancelDialog;if(!d||busy||!d.quote||d.auth!==token()||d.routeKey!==location.hash)return;
+          if(!d.sent){
+            if(val('cf-source')!==d.source||(d.source==='external'&&Date.parse(val('cf-time')+':00+09:00')!==Date.parse(d.receivedAt))){d.error='連絡方法・日時を変更した場合は、料金を確認してください';render();return;}
+            d.choice=val('cf-choice');d.note=val('cf-note');d.sent={slotId:d.slotId,studentId:d.studentId,approve:true,source:d.source,receivedAt:d.receivedAt,note:d.note,feeChoice:d.choice,cancelSignature:d.quote.signature};
+          }
+          busy=true;d.error='';render();var r=route();
+          admin('resolveCancel',d.sent).then(function(res){busy=false;cancelDialog=null;cacheClear();toast('取消とキャンセル料を記録しました');if(!applyResult(res,r))load(true);else render();}).catch(function(e){busy=false;if(cancelDialog===d){d.error=e.message;if(e.code!=='pending')d.sent=null;render();}});
+        }
+
         var teacherBookingDialog = null;
         function teacherBookingDialogHTML(){
           var d=teacherBookingDialog;if(!d)return '';var b=d.slot.teacherBooking;
@@ -1496,10 +1527,11 @@
           if(familyModalActive()){
             app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)});
           }
-          mountAdminHomework(); app.innerHTML+=teacherBookingDialogHTML();
+          mountAdminHomework(); app.innerHTML+=teacherBookingDialogHTML()+cancelDialogHTML();
           if(window.StepwiseDocuments)window.StepwiseDocuments.mount(app,{teacher:true,auth:{token:token()}});
             var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
 
+          var cancelModal=document.getElementById('cancel-fee-dialog');if(cancelModal){cancelModal.oncancel=function(e){e.preventDefault();if(!busy&&!cancelDialog.sent){cancelDialog=null;render();}};if(cancelModal.showModal&&!cancelModal.open)cancelModal.showModal();}
           var bookingDialog=document.getElementById('teacher-booking-dialog');if(bookingDialog){bookingDialog.oncancel=function(e){if(busy)e.preventDefault();else teacherBookingDialog=null;};if(bookingDialog.showModal&&!bookingDialog.open)bookingDialog.showModal();}
           var slotDialog=document.getElementById('slot-editor');if(slotDialog&&slotDialog.showModal&&!slotDialog.open)slotDialog.showModal();
           var planDialog=document.getElementById('plan-dialog');if(planDialog){planDialog.oncancel=function(e){e.preventDefault();if(!busy){planDetail=null;delete planEdits[cur.id];render();}};if(planDialog.showModal&&!planDialog.open)planDialog.showModal();}
@@ -2401,6 +2433,7 @@
           if (e.pending) h += '<p class="lc-notice">保存結果の確認が必要です。' + billingButton("retry", e.pending.op === "kanriAddPayment" ? "同じ請求を再試行" : "同じ入金・取消処理を再試行", e.busy, "", "btn-primary") + '</p>';
           if (b) {
             h += '<div class="card" style="margin-top:12px"><strong>' + esc(b.ym) + '分　' + yen(b.amount) + '</strong><p class="small">' + (b.mode === "recorded" ? '過去の請求記録（当時の料金条件は未記録）' : (b.mode === "monthly" ? '月謝 ' + yen(b.monthly) : '30分 ' + yen(b.rate30) + ' × 実施 ' + esc(b.minutes) + '分') + '・' + esc(b.count) + '回') + '</p>';
+            h += ((b.invoice?b.invoice.fees:b.fees)||[]).map(function(f){return '<p class="small">'+fmtDY(f.date)+' '+esc(f.start)+' '+esc(f.subject)+' キャンセル料 '+yen(f.amount)+'</p>';}).join('');
             h += (b.invoice ? b.invoice.lessons || [] : b.lessons || []).map(function (l) { return '<div class="small">' + fmtDY(l.date) + ' ' + esc(l.start) + ' ' + esc(l.subject || "") + ' ' + esc(l.min) + '分' + (l.carried ? ' <span class="tag gray">繰越</span>' : '') + '</div>'; }).join("");
             if ((b.pending || []).length) {
               h += '<div class="small" style="margin-top:8px"><span class="tag amber">承認待ち（請求対象外）</span> ' + b.pending.length + '件・' + yen(b.pendingAmount || 0) + '</div>';
@@ -2456,7 +2489,7 @@
             billingSend(sid, e);
           } else if (a === "billing-copy") {
             var invoice = (s.payments || []).filter(function (p) { return String(p.id || p.invoiceId) === id; })[0];
-            if (invoice) copyText("【" + invoice.ym + "分 授業料のご案内】" + s.name + "さん\n請求額: " + yen(invoice.amount) + "\n" + (invoice.lessons || []).map(function (l) { return "・" + fmtDY(l.date) + " " + l.start + " " + (l.subject || "") + " " + l.min + "分"; }).join("\n") + "\n" + (invoice.note || ""), "請求記録の金額と実績で文面をコピーしました");
+            if (invoice) copyText("【" + invoice.ym + "分 授業料のご案内】" + s.name + "さん\n請求額: " + yen(invoice.amount) + "\n" + (invoice.lessons || []).map(function (l) { return "・" + fmtDY(l.date) + " " + l.start + " " + (l.subject || "") + " " + l.min + "分"; }).join("\n") + "\n" + (invoice.fees||[]).map(function(f){return "・"+fmtDY(f.date)+" "+f.start+" キャンセル料 "+yen(f.amount);}).join("\n") + "\n" + (invoice.note || ""), "請求記録の金額と実績で文面をコピーしました");
           } else if (a === "billing-paid" || a === "billing-void" || a === "billing-correct") {
             if (!id) return;
             var isVoid = a === "billing-void", correction = a === "billing-correct";
@@ -2582,6 +2615,9 @@
           switch (a) {
             case "notification-dismiss": notificationNotice = ""; render(); break;
             case 'teacher-book-open': if(!busy)teacherBookingOpen(btn);break;
+            case 'cf-close': if(!busy&&cancelDialog&&!cancelDialog.sent){cancelDialog=null;render();}break;
+            case 'cf-quote': if(cancelDialog&&!busy&&!cancelDialog.sent){cancelDialog.source=val('cf-source');cancelDialog.receivedAt=val('cf-time')?val('cf-time')+':00+09:00':'';cancelDialog.note=val('cf-note');cancelQuoteLoad();}break;
+            case 'cf-save': cancelSend();break;
             case 'teacher-book-close': if(!busy){teacherBookingDialog=null;render();}break;
             case 'teacher-book-send': teacherBookingSend();break;
             case 'ai-open': aiScheduleOpen=true;render();break;
@@ -2752,7 +2788,7 @@
             case "cancelok":
             case "cancelkeep":
               var csl = btn.getAttribute("data-id"), approve = a === "cancelok";
-              if (approve && !confirm("この授業を取消にしますか?\nカレンダーの予定も削除されます。")) return;
+              if (approve) { cancelOpen(csl,sid); return; }
               act("resolveCancel", { slotId: csl, approve: approve, studentId: sid }, approve ? "取消にしました" : "予定どおり行うことにしました", function () {
                 if (!D) return;
                 D.cancelReqs = (D.cancelReqs || []).filter(function (x) { return String(x.id) !== String(csl); });

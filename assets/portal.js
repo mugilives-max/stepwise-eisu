@@ -872,17 +872,19 @@
             html += '<div class="msg">' + esc(when) + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
             html += '<div class="row"><button class="btn-danger" data-action="dodecline"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "再調整をお願いする") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "cancel") {
-            var deadline = S.cancelDeadlineH || 24;
-            var late = (new Date(s.date + 'T' + s.start + ':00+09:00').getTime() - Date.now()) / 3600000 < deadline;
+            var deadline = Date.parse(s.date+'T23:00:00+09:00')-86400000;
+            var late = Date.now()>deadline;
+            html = '<dialog id="schedule-accept-dialog" class="schedule-day-dialog" aria-label="キャンセル申請"><div class="inner">';
             html += '<div class="msg">' + esc(when) + ' のキャンセル申請</div>';
-            html += '<p>' + (late ? '授業開始まで' + deadline + '時間を切っています。病気や大幅な電車の遅れなど、やむを得ない事情がある場合は記載してください。' : 'キャンセルの理由を記入してください。') + '</p>';
+            html += '<p><strong>'+(!late?'現在は無料の受付期間です。':Date.now()<Date.parse(s.date+'T'+s.start+':00+09:00')?'現在のキャンセル料は1,000円です。':'現在は授業料相当額の対象です。')+'</strong></p>';
+            html += '<p>前日23時までのご連絡は無料です。それを過ぎて授業開始前までのキャンセルは1回1,000円、開始後・無断欠席は授業料相当額がかかります。</p><p>急病・災害などの事情がある場合は、理由を記入してください。先生が確認して請求または免除を決めます。申請だけでは取消は確定しません。</p>';
             html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px">';
             html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + '>' + (busy ? '申請しています…' : 'キャンセルを申請する') + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "withdraw") {
             html += '<div class="msg">' + esc(when) + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
             html += '<div class="row"><button class="btn-primary" data-action="dowithdraw"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "依頼を取り下げる") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           }
-          return html + "</div></div>";
+          return html + (pending.kind==='cancel'?' </div></dialog>':'</div></div>');
         }
 
         // 予定ページの画面下: 日付を選択中のバー(授業できない日・希望・予定共有)
@@ -1040,7 +1042,7 @@
 
         function cancelControl(s, compact) {
           if (s.req) return '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">依頼を取り下げる</button>';
-          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : '例外取消を申請') + '</button>';
+          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : 'キャンセル') + '</button>';
           return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : '取消を依頼') + '</button>';
         }
 
@@ -1233,7 +1235,7 @@
           if(section==='plans'){
           var pls = d.planLines || [];
           var approvalHelpId='approval-help-'+encodeURIComponent(childId||'parent');
-          html += '<h2>授業計画の案内<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業計画の案内について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その期間に実施できる授業回数の上限を確認するものです。案内は科目・種類・期間ごとに届き、それぞれ承認できます。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、事前にキャンセルが成立した授業の料金は発生しません。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
+          html += '<h2>授業計画の案内<button type="button" class="approval-help-button" data-action="approval-help" aria-label="授業計画の案内について" aria-expanded="false" aria-controls="'+approvalHelpId+'">?</button></h2><div id="'+approvalHelpId+'" class="card note" hidden><p>この承認は、契約上、その期間に実施できる授業回数の上限を確認するものです。案内は科目・種類・期間ごとに届き、それぞれ承認できます。</p><p>授業料は、実際に実施した授業の分だけ発生します。承認した回数分の料金が、すべて発生するわけではありません。</p><p>予定を入れなかった分や、キャンセルは連絡の時刻に応じてキャンセル料がかかる場合があります。キャンセルには理由の記入と先生の承認が必要です。</p></div>';
           if (!pls.length) html += '<div class="empty">承認をお願いする予定はいまありません</div>';
           else {
             html += '<div class="card">';

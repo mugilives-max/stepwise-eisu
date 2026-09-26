@@ -93,7 +93,7 @@ function billingSavedLessons_(p) {
   try { var data=JSON.parse(String(p['実績JSON']||'[]'));return Array.isArray(data)?data:[]; } catch(e){return [];}
 }
 function billingInvoiceView_(p) {
-  return {id:String(p['請求ID']||''),ym:String(p['年月']),amount:Number(p['請求額'])||0,status:String(p['状態']||''),billDate:String(p['請求日']||''),paidDate:String(p['入金日']||''),method:String(p['入金方法']||''),revision:Number(p['承認版'])||0,paymentRevision:Number(p['入金版'])||0,voidedAt:String(p['取消日時']||''),voidReason:String(p['取消理由']||''),lessons:billingSavedLessons_(p)};
+  return {id:String(p['請求ID']||''),ym:String(p['年月']),amount:Number(p['請求額'])||0,status:String(p['状態']||''),billDate:String(p['請求日']||''),paidDate:String(p['入金日']||''),method:String(p['入金方法']||''),revision:Number(p['承認版'])||0,paymentRevision:Number(p['入金版'])||0,voidedAt:String(p['取消日時']||''),voidReason:String(p['取消理由']||''),lessons:billingSavedLessons_(p).filter(function(l){return l.type!=='cancellation';}),fees:billingSavedLessons_(p).filter(function(l){return l.type==='cancellation';})};
 }
 // 実施済み授業ごとに、該当する承認済みの案内の単価で計算する。案内のない授業は生徒の基本単価で仮計算(provisional)
 // 対象月までの実施済み・未請求の授業を、承認済みの行に割り当てて金額を出す。
@@ -116,8 +116,9 @@ function billingMonthCalc_(id,ym) {
       pending.push({id:String(s.id),date:s.date,start:s.start,min:Number(s.min),subject:String(s.subject||''),kind:kindNorm_(s.kind),amount:est,rate30:rate,lineId:pl?pl.id:'',status:pl?'proposed':'none',carried:carried});
     }
   });
+  var fees=cancelFeeOpen_(id,ym);amount+=fees.reduce(function(n,f){return n+f.amount;},0);
   var keys=Object.keys(rates);
-  return {amount:amount,pendingAmount:pendingAmount,provisional:pending.length>0,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,pending:pending,slots:slots,done:done,lines:lines,assign:assign,invoiced:inv};
+  return {amount:amount,pendingAmount:pendingAmount,provisional:pending.length>0,rate30:keys.length===1?Number(keys[0]):(keys.length?0:base),lessons:lessons,fees:fees,pending:pending,slots:slots,done:done,lines:lines,assign:assign,invoiced:inv};
 }
 function billingFee_(studentId,minutes,ym) {
   ym=ym||todayStr_().slice(0,7);
@@ -137,15 +138,16 @@ function billingPreview_(studentId,ym) {
     if(slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
     if(!reason && slots.some(function(s){return !(s.done===true||String(s.done)==='true');}))reason='未実施の確定授業が残っています。実施・取消の確認後に請求してください';
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';
-    if(!reason && !(fee.amount>0))reason='請求対象の授業料がありません'+(calc.pending.length?'（承認待ちの授業 '+calc.pending.length+'件は保護者の承認後に請求できます）':'');
+    if(!reason && !(fee.amount>0))reason='請求対象の授業料・キャンセル料がありません'+(calc.pending.length?'（承認待ちの授業 '+calc.pending.length+'件は保護者の承認後に請求できます）':'');
   }
   return {ym:ym,amount:fee.amount,pendingAmount:fee.locked?0:calc.pendingAmount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:fee.locked?Number(invoices[0]['実施回数'])||0:calc.lessons.length,doneCount:done.length,planStatus:info.status,revision:0,canBill:!reason,reason:reason,provisional:!!fee.provisional,
     invoice:invoices.length?billingInvoiceView_(invoices[0]):null,
-    lessons:fee.locked?billingSavedLessons_(invoices[0]):calc.lessons,pending:fee.locked?[]:calc.pending,carried:fee.locked?0:calc.lessons.filter(function(l){return l.carried;}).length,lines:info.lines};
+    fees:fee.locked?billingInvoiceView_(invoices[0]).fees:calc.fees,lessons:fee.locked?billingInvoiceView_(invoices[0]).lessons:calc.lessons,pending:fee.locked?[]:calc.pending,carried:fee.locked?0:calc.lessons.filter(function(l){return l.carried;}).length,lines:info.lines};
 }
 function billingMonths_(id) {
   var seen={},current=todayStr_().slice(0,7);seen[current]=true;seen[nextYm_(current)]=true;
   readRows_('slots').forEach(function(s){if(String(s.studentId)===String(id)&&billingMonthValid_(s.date.slice(0,7)))seen[s.date.slice(0,7)]=true;});
+  cancelFeeItems_(id).forEach(function(f){seen[f.date.slice(0,7)]=true;});
   planLinesFor_(String(id)).forEach(function(l){planLineMonths_(l).forEach(function(ym){seen[ym]=true;});});
   billingInvoiceRows_(id).forEach(function(p){if(billingMonthValid_(String(p['年月'])))seen[String(p['年月'])]=true;});
   return Object.keys(seen).sort().reverse().map(function(ym){return billingPreview_(id,ym);});
@@ -177,7 +179,7 @@ function billingAddInvoice_(req) {
   var invoiceId=billingId_(),st=systemStudent_(id),a=billingInvoiceAudit_(id,ym,invoiceId,0,{planJson:billingInvoiceLineRefs_(preview.lessons),rate30:preview.rate30});
   LEDGER_COLS['入金管理']=BILLING_PAYMENT_COLS_.slice();
   var o={'年月':ym,'生徒ID':id,'氏名':st.name,'請求額':preview.amount,'請求日':todayStr_(),'状態':'未入金','備考':billingText_(String(req.note||'').slice(0,200)),
-    '請求ID':invoiceId,'承認版':0,'料金方式':preview.mode,'確定単価(30分)':preview.rate30,'確定月謝':preview.monthly,'実施分数':preview.minutes,'実施回数':preview.count,'実績JSON':JSON.stringify(preview.lessons),'処理ID':requestId};
+    '請求ID':invoiceId,'承認版':0,'料金方式':preview.mode,'確定単価(30分)':preview.rate30,'確定月謝':preview.monthly,'実施分数':preview.minutes,'実施回数':preview.count,'実績JSON':JSON.stringify(preview.lessons.concat(preview.fees||[])),'処理ID':requestId};
   // 請求の根拠・処理IDを1行に保存。後続ログが失敗しても再送はこの行を見つける。
   ledgerAppend_('入金管理',o);
   billingAudit_(a,'invoiced',invoiceId+':issued',{invoiceId:invoiceId,amount:preview.amount,minutes:preview.minutes});

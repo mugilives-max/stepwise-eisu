@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict'),h=require('./helpers/operations-ui-harness.cjs');
+test('teacher reviews fee and waiver before sending cancellation; retry retains exact payload',async()=>{
+ const u=h.createUI('admin',{hash:'#home'});u.requests[0].reply({data:{today:'2026-09-08',slots:[],lessonsToday:[],lessonsWeek:[],pending:[],unpaid:[],students:[],meetings:[],cancelReqs:[{id:'fee-slot',studentId:'test-a',studentName:'【テスト】A',date:'2026-09-08',start:'13:00',min:60,req:{reason:'都合',requestType:'exception'}}]}});await h.flush();u.click('cancelok',{'data-id':'fee-slot','data-sid':'test-a'});
+ assert.equal(u.requests.at(-1).body.op,'serviceCancelQuote');u.requests.at(-1).reply({ok:true,signature:'quote-1',quote:{source:'request',receivedAt:'2026-09-08T01:00:00Z',slot:{date:'2026-09-08',start:'13:00',subject:'英語'},amount:1000}});await h.flush();
+ assert.match(u.html(),/キャンセル料：1,000円/);u.input('cf-choice','waive');u.input('cf-note','急病');u.click('cf-save');const sent=JSON.parse(JSON.stringify(u.requests.at(-1).body));assert.equal(sent.feeChoice,'waive');assert.equal(sent.note,'急病');assert.equal(sent.op,'resolveCancel');
+ u.requests.at(-1).reply({error:'処理中',errorCode:'pending'});await h.flush();assert.match(u.html(),/同じ内容で結果を確認/);u.click('cf-save');assert.deepEqual(JSON.parse(JSON.stringify(u.requests.at(-1).body)),sent);
+});

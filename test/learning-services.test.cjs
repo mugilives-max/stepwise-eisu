@@ -31,10 +31,10 @@ test('message intake preserves raw content and original timestamp on retries wit
  ok(h.admin('serviceMessageReply',{studentId:'test-a',id:first.message.id,expectedRevision:1,status:'needs_confirmation',reply:'何日の希望ですか？'}));assert.equal(h.public('list').messages[0].reply,'何日の希望ですか？');
  assert.equal(h.admin('serviceMessageReply',{studentId:'test-a',id:first.message.id,expectedRevision:1,status:'closed',reply:'古い更新'}).errorCode,'conflict');
 });
-test('24 hour boundary uses server receipt, reason mandatory, and late exceptions keep booking',()=>{
+test('previous-day 23:00 boundary uses server receipt, reason mandatory, and late exceptions keep booking',()=>{
  const h=fixture();h.slot();assert.ok(h.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-01',reason:''}).error);
  const first=ok(h.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-01',reason:'学校行事'}));assert.equal(first.cancellation.requestType,'normal');h.advance(1);const again=ok(h.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-01',reason:'学校行事'}));assert.equal(again.cancellation.receivedAt,first.cancellation.receivedAt);assert.equal(h.rows('slots')[0].status,'booked');assert.equal(h.rows('cancellationRequests').length,1);
- const late=fixture();late.slot();late.advance(1);assert.equal(ok(late.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-02',reason:'発熱'})).cancellation.requestType,'exception');assert.equal(late.rows('slots')[0].status,'booked');assert.ok(late.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-03',reason:'発熱',k:'synthetic-link-b'}).error);
+ const late=fixture();late.slot();late.advance(10*3600000+1);assert.equal(ok(late.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-02',reason:'発熱'})).cancellation.requestType,'exception');assert.equal(late.rows('slots')[0].status,'booked');assert.ok(late.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-request-03',reason:'発熱',k:'synthetic-link-b'}).error);
 });
 test('receipt recovers slot write failure, preserves deadline and teacher decision history',()=>{
  const h=fixture();h.slot();const sh=h.spreadsheet.getSheetByName('slots'),get=sh.getRange.bind(sh);let fail=true;sh.getRange=(...args)=>{const r=get(...args),set=r.setValue.bind(r);r.setValue=v=>{if(args[1]===11&&fail){fail=false;throw Error('synthetic interrupted slot write');}return set(v);};return r;};
@@ -64,7 +64,7 @@ test('deadline excludes server lock wait and rejects a caller-supplied receipt t
  const h=fixture();h.slot();const c=h.context(),ensure=c.ensureSchema_;c.ensureSchema_=()=>{h.advance(60000);return ensure();};
  const r=JSON.parse(c.doPost({postData:{contents:JSON.stringify({action:'learningService',op:'cancelRequest',k:'synthetic-link-a',slotId:'svc-slot',requestId:'cancel-boundary-01',reason:'行事',_receivedAt:1})}}).getContent());
  assert.equal(ok(r).cancellation.requestType,'normal');assert.equal(r.cancellation.receivedAt,'2026-09-07T04:00:00.000Z');
- const late=fixture();late.slot();late.advance(1);assert.equal(ok(late.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-forged-time',reason:'発熱',_receivedAt:1})).cancellation.requestType,'exception');
+ const late=fixture();late.slot();late.advance(10*3600000+1);assert.equal(ok(late.public('cancelRequest',{slotId:'svc-slot',requestId:'cancel-forged-time',reason:'発熱',_receivedAt:1})).cancellation.requestType,'exception');
 });
 
 test('legacy student cancel form preserves receipt time across schema wait',()=>{

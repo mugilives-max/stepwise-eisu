@@ -19,7 +19,7 @@ function familyBillingClosedMonths_(a,months,children) {
   readRows_('slots').forEach(function(s){var ym=String(s.date||'').slice(0,7);if(ym<'2026-09'||ym>=current||s.status!=='booked'||!children.some(function(c){return String(c.studentId)===String(s.studentId);}))return;
     var m=map[ym];if(!m)m=map[ym]={ym:ym,amount:null,unpaid:null,children:[],status:'review',signature:''};
     if(!m.children.some(function(c){return String(c.studentId)===String(s.studentId);}))m.status='review';
-  });return Object.keys(map).sort().reverse().map(function(ym){return map[ym];});
+  });children.forEach(function(c){cancelFeeItems_(c.studentId).forEach(function(f){var ym=f.date.slice(0,7);if(!f.amount||ym>=current)return;var m=map[ym];if(!m)m=map[ym]={ym:ym,amount:null,unpaid:null,children:[],status:'review',signature:''};if(!m.children.some(function(x){return String(x.studentId)===String(c.studentId);}))m.status='review';});});return Object.keys(map).sort().reverse().map(function(ym){return map[ym];});
 }
 // Internal Worker trigger only; never exposed through HTTP dispatch.
 function familyCloseMonths_() {
@@ -27,10 +27,11 @@ function familyCloseMonths_() {
   familyRows_('familyAccounts').filter(function(a){return a.status==='active';}).forEach(function(a){
     var children=familyChildren_(a,false),months={},slots=readRows_('slots');
     slots.forEach(function(s){var ym=String(s.date||'').slice(0,7);if(ym>='2026-09'&&ym<current&&s.status==='booked'&&children.some(function(c){return String(c.studentId)===String(s.studentId);}))months[ym]=true;});
+    children.forEach(function(c){cancelFeeItems_(c.studentId).forEach(function(f){var ym=f.date.slice(0,7);if(f.amount>0&&ym<current){if(billingActiveInvoices_(c.studentId,ym).length)ym=Utilities.formatDate(new Date(Date.parse(current+'-01T00:00:00+09:00')-86400000),TZ,'yyyy-MM');months[ym]=true;}});});
     Object.keys(months).sort().forEach(function(ym){
       var candidates=[],blocked=false;
       children.forEach(function(c){var p=billingPreview_(c.studentId,ym);if(billingActiveInvoices_(c.studentId,ym).length>1){blocked=true;return;}if(p.invoice)return;
-        if(!slots.some(function(s){return String(s.studentId)===String(c.studentId)&&String(s.date).slice(0,7)===ym&&s.status==='booked';}))return;
+        if(!(p.fees||[]).length&&!slots.some(function(s){return String(s.studentId)===String(c.studentId)&&String(s.date).slice(0,7)===ym&&s.status==='booked';}))return;
         if(!p.canBill||p.provisional||p.carried>0){blocked=true;return;}candidates.push({id:c.studentId,preview:p});
       });if(blocked){result.pending++;return;}
       candidates.forEach(function(c){var r=billingAddInvoice_({studentId:c.id,ym:ym,requestId:'monthly_'+ym+'_'+c.id,silent:true});if(r.error)throw new Error(r.error);result.issued++;});
