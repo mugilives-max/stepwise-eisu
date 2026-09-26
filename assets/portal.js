@@ -704,7 +704,7 @@
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
-                var recordHtml = '<details class="slotline day-record"><summary><span class="time">' + time + '</span><span class="who">' + whoName + who + '</span><span class="btn-quiet btn-sm day-record-toggle">授業記録</span></summary><div style="padding:12px 4px">'+bookingReviewButton(s);
+                var recordHtml = '<details class="slotline day-record"><summary><span class="time">' + time + '</span><span class="who">' + whoName + who + bookingReviewButton(s) + '</span><span class="btn-quiet btn-sm day-record-toggle">授業記録</span></summary><div style="padding:12px 4px">';
                 if (record) {
                   recordHtml += window.StepwiseReport.view({actualUnit:(record.report || {}).actualUnit || '未記入'});
                   recordHtml += '<h3 style="font-size:15px;margin:10px 0 6px">コメント</h3><p style="white-space:pre-wrap;margin:0">' + esc(record.content || 'コメントはまだありません。') + '</p>';
