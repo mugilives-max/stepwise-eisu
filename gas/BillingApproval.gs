@@ -138,6 +138,7 @@ function billingPreview_(studentId,ym) {
     if(slots.some(function(s){return !billingSlotValid_(s);}))reason='授業の日付・時刻・分数・科目に不正な記録があります';
     if(!reason && slots.some(function(s){return !(s.done===true||String(s.done)==='true');}))reason='未実施の確定授業が残っています。実施・取消の確認後に請求してください';
     if(!reason && done.some(function(s){return hoursUntil_(s.date,s.start)>0;}))reason='開始前の授業が実施済みになっています';
+    if(!reason && cancelReliefPending_(id,ym).length)reason='キャンセル料の減額・免除申請を審査してから請求してください';
     if(!reason && !(fee.amount>0))reason='請求対象の授業料・キャンセル料がありません'+(calc.pending.length?'（承認待ちの授業 '+calc.pending.length+'件は保護者の承認後に請求できます）':'');
   }
   return {ym:ym,amount:fee.amount,pendingAmount:fee.locked?0:calc.pendingAmount,mode:fee.mode,rate30:fee.rate30,monthly:fee.monthly,minutes:minutes,count:fee.locked?Number(invoices[0]['実施回数'])||0:calc.lessons.length,doneCount:done.length,planStatus:info.status,revision:0,canBill:!reason,reason:reason,provisional:!!fee.provisional,

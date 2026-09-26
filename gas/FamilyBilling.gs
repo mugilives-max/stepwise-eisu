@@ -30,7 +30,7 @@ function familyCloseMonths_() {
     children.forEach(function(c){cancelFeeItems_(c.studentId).forEach(function(f){var ym=f.date.slice(0,7);if(f.amount>0&&ym<current){if(billingActiveInvoices_(c.studentId,ym).length)ym=Utilities.formatDate(new Date(Date.parse(current+'-01T00:00:00+09:00')-86400000),TZ,'yyyy-MM');months[ym]=true;}});});
     Object.keys(months).sort().forEach(function(ym){
       var candidates=[],blocked=false;
-      children.forEach(function(c){var p=billingPreview_(c.studentId,ym);if(billingActiveInvoices_(c.studentId,ym).length>1){blocked=true;return;}if(p.invoice)return;
+      children.forEach(function(c){var p=billingPreview_(c.studentId,ym);if(billingActiveInvoices_(c.studentId,ym).length>1){blocked=true;return;}if(p.invoice)return;if(cancelReliefPending_(c.studentId,ym).length){blocked=true;return;}
         if(!(p.fees||[]).length&&!slots.some(function(s){return String(s.studentId)===String(c.studentId)&&String(s.date).slice(0,7)===ym&&s.status==='booked';}))return;
         if(!p.canBill||p.provisional||p.carried>0){blocked=true;return;}candidates.push({id:c.studentId,preview:p});
       });if(blocked){result.pending++;return;}

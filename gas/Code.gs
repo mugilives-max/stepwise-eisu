@@ -70,7 +70,7 @@ function doPost(e) {
     var res;
     // 保護者ページから子どもの操作を代行: ログイン済みの保護者(ftoken)と、その家族に紐付く子ども(studentId)を確認できたときだけ、
     // その子の専用コードを k として扱う(コードは応答に含めない)。対象は生徒本人が使う操作に限る(メール設定・保護者認証は対象外)。
-    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'teacherBookingRespond', 'cancelAcknowledge', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
+    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'teacherBookingRespond', 'cancelAcknowledge', 'cancelReliefRequest', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
     var proxyErr = null, authenticatedFamilyProxy=false;delete req.familyProxy;
     if (!req.k && req.ftoken && req.studentId && FAMILY_PROXY_.indexOf(String(req.action || '')) >= 0 && typeof familyChildRequire_ === 'function') {
       var fp = familyChildRequire_(req);
@@ -88,6 +88,7 @@ function doPost(e) {
       case 'effects': res = effectsOp_(req); break; // Worker に頼まれたメール・カレンダーの代行(Sync.gs)
       case 'learningService': res = servicePublic_(req); break;
       case 'accept':  res = accept_(req.slotId, req.k, req.expectedSnapshot); break;
+      case 'cancelReliefRequest': res = cancelReliefRequest_(req); break;
       case 'cancelAcknowledge': res = cancelAcknowledge_(req); break;
       case 'teacherBookingRespond': res = teacherBookingRespond_(req); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;

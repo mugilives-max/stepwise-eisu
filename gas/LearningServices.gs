@@ -65,6 +65,7 @@ function serviceAdmin_(req){
   if(req.op==='serviceInbox')return {ok:true,messages:serviceRows_('contactMessages').map(function(m){return Object.assign({},m,{studentName:studentName_(m.studentId)});}).reverse()};
   if(!systemStudent_(sid))return {error:'生徒が見つかりません'};
   switch(req.op){
+    case 'serviceCancelReliefReview':return cancelReliefReview_(req);
     case 'serviceCancelQuote':return cancelQuote_(req);
     case 'serviceList':return serviceList_(sid,true);
     case 'servicePdf':return servicePdfGet_(req,sid);
