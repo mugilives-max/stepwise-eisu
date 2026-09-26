@@ -646,7 +646,7 @@
         var bookingReview=null;
         function bookingReviewButton(s){var b=s.teacherBooking;if(!b||b.status==='registering')return '';if(b.status==='pending')return ' <button type="button" class="plan-count-warning" data-action="booking-review" data-id="'+esc(s.id)+'" aria-label="先生の登録内容を確認" title="先生の登録内容を確認"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>';return ' <button class="tag '+(b.status==='confirmed'?'gray':b.status==='correction'?'red':'amber')+'" data-action="booking-review" data-id="'+esc(s.id)+'">'+({pending:'先生の登録内容を確認',confirmed:'先生が登録・確認済み',correction:'修正依頼中'}[b.status]||'確認')+'</button>';}
         function bookingReviewHTML(){
-          var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}
+          var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}if(d.slot.st==='cancelled')return window.StepwiseCalendar.dayDialog({id:'booking-review-dialog',title:'キャンセル内容の確認',close:'booking-close',busy:busy,content:'<p>'+esc(d.slot.date+' '+d.slot.start+'〜'+endTime(d.slot.start,d.slot.min)+' '+d.slot.subject)+'</p><p>この授業はキャンセル済みです。</p><p>キャンセル料：'+esc(String(d.slot.amount))+'円</p><button class="btn-primary" data-action="cancel-confirm"'+(busy||previewK?' disabled':'')+'>確認しました</button>'});
           var s=d.slot,b=s.teacherBooking,dis=busy||previewK?' disabled':'',parent=route()==='family',perms=S.permissions||{};
           var content='<p>'+esc((S.me&&S.me.name||'')+' '+fmtDateW(s.date)+' '+s.start+'〜'+endTime(s.start,s.min))+'<br>'+esc(lessonLabel(s))+'</p>';
           if(b.previous)content+='<p>変更前：'+esc(fmtDateW(b.previous.date)+' '+b.previous.start+'〜'+endTime(b.previous.start,b.previous.min))+'<br>変更後：'+esc(fmtDateW(s.date)+' '+s.start+'〜'+endTime(s.start,s.min))+'</p>';
@@ -675,7 +675,7 @@
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s, true)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
-              if (s.st === "cancelled") html += dayRow('', time, esc(s.subject||'')+' <span class="tag gray">取消済</span>', '');
+              if (s.st === "cancelled") html += dayRow('', time, esc(s.subject||'')+' <span class="tag gray">キャンセル済み</span>'+(!s.confirmed?bookingReviewButton({id:s.id,teacherBooking:{status:'pending'}}).replace('booking-review','cancel-review').replace(/先生の登録内容を確認/g,'キャンセル内容を確認'):''), '');
               else if (s.st === "mine") html += dayRow('', time, who + bookingReviewButton(s) + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
@@ -1228,7 +1228,7 @@
           if (!pays.length) html += '<div class="empty">請求・入金の記録はまだありません</div>';
           else {
             html += '<div class="card tbwrap"><table class="tb"><tr><th>月</th><th>金額</th><th>状態</th><th>入金日</th></tr>';
-            pays.forEach(function (p) { html += '<tr><td>' + esc(p.ym) + '</td><td>' + yen(p.amount) + '</td><td>' + (p.status === "取消" ? '<span class="tag gray">取消済み</span>' : p.status === "入金済" ? '<span class="tag green">入金済</span>' : '<span class="tag red">未入金</span>') + '</td><td>' + (p.paidDate ? fmtDY(p.paidDate) : "—") + '</td></tr>'; });
+            pays.forEach(function (p) { html += '<tr><td>' + esc(p.ym) + '</td><td>' + yen(p.amount) + '</td><td>' + (p.status === "取消" ? '<span class="tag gray">キャンセル済みみ</span>' : p.status === "入金済" ? '<span class="tag green">入金済</span>' : '<span class="tag red">未入金</span>') + '</td><td>' + (p.paidDate ? fmtDY(p.paidDate) : "—") + '</td></tr>'; });
             html += '</table></div>';
           }
 
@@ -1854,6 +1854,8 @@
           if (!btn || btn.disabled) return;
           if (!familyHomeTarget(btn)) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
+          if(act==='cancel-review'){if(busy)return;var cs=(S.cancellations||[]).filter(function(x){return String(x.id)===id;})[0];if(cs){bookingReview={slot:cs,scope:taskScopeKey()};render();}return;}
+          if(act==='cancel-confirm'){if(!bookingReview||busy||previewK||bookingReview.scope!==taskScopeKey()||bookingReview.slot.st!=='cancelled')return;studentAction({action:'cancelAcknowledge',k:myKey(),cancellationId:bookingReview.slot.id},'確認済みにしました',function(){bookingReview=null;render();});return;}
           if(act==='booking-review'){if(busy)return;var slot=(S.slots||[]).concat(S.history||[]).filter(function(x){return String(x.id)===id;})[0];if(slot&&slot.teacherBooking){bookingReview={slot:slot,scope:taskScopeKey(),note:''};render();}return;}
           if(act==='booking-close'){if(!busy){bookingReview=null;render();}return;}
           if(act==='booking-confirm'||act==='booking-correct'){
