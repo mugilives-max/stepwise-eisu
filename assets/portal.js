@@ -225,8 +225,8 @@
           h += '<section class="card homework-panel" aria-label="宿題一覧">' + (shown.length ? renderTaskRows(shown) : '<p class="empty">' + (filter === 'done' ? '表示できる完了済みの宿題はありません。' : filter === 'all' ? '登録されている宿題・持ち物・メモはありません。' : '未完了の宿題・持ち物・メモはありません。') + '</p>') + '</section>';
           if (filter !== 'open') h += '<p class="note">完了済みは現在取得できた範囲を表示しています。過去の全履歴ではありません。</p>';
           h += '<p class="note">持ち物・自分用メモもここで確認できます。完了は自己チェックで、理解度の判定や先生の添削完了ではありません。</p>';
-          if (previewK) h += '<p class="note">先生のプレビューでは表示のみです。完了・追加・削除はできません。</p>';
-          return h + '<section class="card homework-add">' + renderTaskAdd() + '</section>';
+          if (previewK) h += '<p class="note">先生のプレビューでは表示のみです。完了・削除はできません。</p>';
+          return h;
         }
         function taskToggle(id, done) {
           if (busy || previewK) return;

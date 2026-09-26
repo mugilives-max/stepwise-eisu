@@ -167,7 +167,9 @@ test('invalid record deadline modes and forged anchors reject before any journal
 
 test('real public/teacher task routes resolve deadlines and preserve ownership and completion snapshots',()=>{
   const h=fixture();h.slot('next','2026-09-09','16:00');
-  const added=ok(h.request({action:'taskAdd',k:'synthetic-link-a',title:'本人の宿題',dueMode:'nextLesson',dueSubject:'英語'}));
+  assert.ok(h.request({action:'taskAdd',k:'synthetic-link-a',title:'本人の宿題'}).error); assert.equal(h.rows('tasks').length,0);
+  ok(h.admin('taskAdd',{studentId:'test-a',title:'先生の宿題',dueMode:'nextLesson',dueSubject:'英語'}));
+  const added={state:h.get({action:'state',k:'synthetic-link-a'})};
   assert.equal(added.state.tasks[0].due,'2026-09-09');assert.equal(added.state.tasks[0].dueSubject,'英語');
   const task=h.rows('tasks')[0];assert.equal(task.dueAfter,'2026-09-07T13:00');
   assert.ok(h.request({action:'taskDone',k:'synthetic-link-b',taskId:task.id,done:true}).error);

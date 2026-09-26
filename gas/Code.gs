@@ -899,9 +899,7 @@ function taskAddCore_(studentId, type, title, due, by, req) {
 function taskAdd_(req) {
   var student = findStudentByCode_(req.k);
   if (!student) return { error: '専用リンクからひらき直してください', badCode: true };
-  var res = taskAddCore_(student.id, req.type, req.title, req.due, 'student', req);
-  if (res.error) return res;
-  return { ok: true, state: studentState_(req.k) };
+  return { error: '宿題の追加は先生が行います' };
 }
 function taskDone_(req) {
   var student = findStudentByCode_(req.k);

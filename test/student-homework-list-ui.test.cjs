@@ -146,7 +146,7 @@ test('student and parent homes prioritize the calendar and keep homework in its 
     view.navigate(href);
     assert.match(view.html(), /<h1>宿題<\/h1>/);
     assert.equal(toggleIds(view).length, 5);
-    assert.ok(view.el('f-ttitle'), 'self-add remains on the dedicated homework page');
+    assert.doesNotMatch(view.html(), /data-action="taskadd"|id="f-ttitle"/);
   }
 });
 
@@ -499,49 +499,7 @@ test('student and parent teacher-previews disable homework changes and never iss
   }
 });
 
-test('self-add draft survives homework filter and page navigation, then uses the existing taskAdd contract', async () => {
-  const ui = await ready([]);
-  ui.input('f-ttitle', '【テスト】自分のノート <確認>');
-  ui.change('f-ttype', '持ち物');
-  ui.change('f-tdue-mode', 'date');
-  ui.input('f-tdue', '2026-09-29');
-  ui.navigate('#tasks?filter=done');
-  ui.navigate('#history');
-  ui.navigate('#home');
-  assert.doesNotMatch(ui.html(), /id="f-ttitle"/);
-  ui.navigate('#tasks');
-  assert.equal(ui.el('f-ttitle').value, '【テスト】自分のノート <確認>');
-  assert.equal(ui.el('f-ttype').value, '持ち物');
-  assert.equal(ui.el('f-tdue-mode').value, 'date');
-  assert.equal(ui.el('f-tdue').value, '2026-09-29');
-  ui.navigate('#tasks');
-  ui.click('taskadd');
-  assert.deepEqual(ui.requests.at(-1).body, { action: 'taskAdd', k: 'test-link-a', type: '持ち物', title: '【テスト】自分のノート <確認>', due: '2026-09-29', dueMode: 'date', dueSubject: '' });
-  ui.requests.at(-1).reply({ error: '【テスト】もう一度追加してください' });
-  await flush();
-  assert.equal(ui.el('f-ttitle').value, '【テスト】自分のノート <確認>');
-  ui.click('taskadd');
-  ui.requests.at(-1).reply({ ok: true, state: taskState([task('self', { title: '【テスト】自分のノート <確認>', type: '持ち物', createdBy: 'student' })]) });
-  await flush();
-  assert.equal(ui.el('f-ttitle').value, '');
-  assert.match(ui.html(), /自分のノート &lt;確認&gt;/);
-});
-
-test('family self-add drafts are separated by selected child and remain available after returning', async () => {
-  const ui = await familyReady([]);
-  ui.input('f-ttitle', '【テスト】子Aの下書き');
-  ui.change('f-tdue-mode', 'none');
-  ui.change('fa-mychild', 'child-b');
-  ui.requests.findLast(request => request.body.action === 'familyStudentState' && request.body.studentId === 'child-b').reply({ ...taskState([], '【テスト】子B'), viewer: 'family' });
-  await flush();
-  assert.equal(ui.el('f-ttitle').value, '');
-  ui.input('f-ttitle', '【テスト】子Bの下書き');
-  ui.change('fa-mychild', 'child-a');
-  assert.equal(ui.el('f-ttitle').value, '【テスト】子Aの下書き');
-  assert.equal(ui.el('f-tdue-mode').value, 'none');
-  ui.change('fa-mychild', 'child-b');
-  assert.equal(ui.el('f-ttitle').value, '【テスト】子Bの下書き');
-});
+test('student and family homework have no self-add form', async () => { for (const ui of [await ready([]), await familyReady([])]) assert.doesNotMatch(ui.html(), /data-action="taskadd"|自分で追加する/); });
 
 test('home shows only incomplete homework after daily lessons and removes completed items', async () => {
   const ui = await ready([task('open'), task('done', {done:true}), task('removed', {withdrawn:true}), task('bag', {type:'持ち物'}), task('memo', {type:'メモ'})], '#home');
