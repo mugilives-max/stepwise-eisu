@@ -658,7 +658,7 @@
           var rows=[], whoName=shared ? '<strong class="family-row-name">'+esc(shared.name)+'</strong> ' : '';
           function emitDayRow(markup,start){if(shared){rows.push({html:markup,start:/^\d{2}:\d{2}$/.test(start)?start:'00:00'});return "";}return markup;}
           var today = D.today;
-          var ds2 = (D.byDate[selDate] || []).slice().sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
+          var ds2 = (D.byDate[selDate] || []).concat((S.cancellations||[]).filter(function(x){return x.date===selDate;})).sort(function (a, b) { return (a.start || "99") < (b.start || "99") ? -1 : 1; });
           var dayNg = D.blocked.filter(function (b) { return b.date === selDate; });
           var dayOffs = showToff ? (S.teacherOff || []).filter(function (o) { return o.date === selDate; }) : [];
           var dayWishes = (S.wishes || []).filter(function (w) { return w.date === selDate; });
@@ -675,7 +675,8 @@
             ds2.forEach(function (s) {
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s, true)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
-              if (s.st === "mine") html += dayRow('', time, who + bookingReviewButton(s) + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
+              if (s.st === "cancelled") html += dayRow('', time, esc(s.subject||'')+' <span class="tag gray">取消済</span>', '');
+              else if (s.st === "mine") html += dayRow('', time, who + bookingReviewButton(s) + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
