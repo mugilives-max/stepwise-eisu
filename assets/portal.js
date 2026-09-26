@@ -670,9 +670,9 @@
 
         function changeHistoryTable(changes){return (changes||[]).map(function(c){
           var x=c.context||{},cell=' style="border:1px solid #b8c8df;padding:10px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere"';
-          function lessonRow(label,v){return '<tr><th scope="row"'+cell+'>'+esc(label)+'</th><td'+cell+'>'+esc(v.date+' '+v.start+'〜'+endTime(v.start,v.min))+'</td><td'+cell+'>'+esc(v.subject||'—')+'</td><td'+cell+'>'+esc(v.kind||'通常')+'</td></tr>';}
-          var rows=[['連絡受付日時',x.receivedAt?x.receivedAt.replace('T',' ')+'（日本時間）':'記録なし'],['変更理由',x.reason||'記録なし'],['経緯',x.note||'記録なし']];
-          return '<table class="portal-plan-table" style="width:100%;border-collapse:collapse;margin:12px 0"><thead><tr><th>項目</th><th>日時</th><th>科目</th><th>種類</th></tr></thead><tbody>'+ (c.before?lessonRow('変更前',c.before):'')+lessonRow(c.before?'変更後':'授業',c.after)+(c.before?rows.map(function(r){return '<tr><th scope="row"'+cell+'>'+esc(r[0])+'</th><td colspan="3"'+cell+'>'+esc(r[1])+'</td></tr>';}).join(''):'')+'</tbody></table>';
+          function lessonRow(label,v){return '<tr><th scope="row"'+cell+'>'+esc(label)+'</th>'+[v.subject||'—',v.kind||'通常',v.date,v.start+'〜'+endTime(v.start,v.min)].map(function(value){return '<td'+cell+'>'+esc(value)+'</td>';}).join('')+'</tr>';}
+          var received=String(x.receivedAt||'').replace('T',' '),date=received.slice(0,10),time=received.slice(11,16),reason=[x.reason,x.note].filter(Boolean).join('\n');
+          return '<table class="portal-plan-table" style="width:100%;border-collapse:collapse;margin:12px 0"><tbody>'+(c.before?lessonRow('変更前',c.before):'')+lessonRow(c.before?'変更後':'授業',c.after)+(c.before?'<tr><th scope="row"'+cell+'>連絡受付日時</th><td colspan="2"'+cell+'>'+esc(date||'記録なし')+'</td><td colspan="2"'+cell+'>'+esc(time||'—')+'</td></tr><tr><th scope="row"'+cell+'>理由</th><td colspan="4"'+cell+'>'+esc(reason||'記録なし')+'</td></tr>':'')+'</tbody></table>';
         }).join('');}
         function bookingReviewHTML(){
           var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}if(d.slot.st==='cancelled')return window.StepwiseCalendar.dayDialog({id:'booking-review-dialog',title:'キャンセル内容の確認',close:'booking-close',busy:busy,content:cancelReviewDetails(d.slot)+cancelReliefForm(d)});
