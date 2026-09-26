@@ -276,3 +276,25 @@ test('Worker stores temporary records privately and retries without creating pub
  assert.doesNotMatch(JSON.stringify(publicState),/PRIVATE_SENTINEL_7x|temporaryDraft/);
  assert.equal((await p.env.DB.prepare('select count(*) as n from lessonRecords').first()).n,0);
 });
+
+test('publishing with attendance marks the lesson done and retries only once',()=>{
+ const h=fixture();h.admin('state');h.context().ensureSchedulingSchema_();h.setRow('slots','id','slot-a',{deliveryMode:'in_person'});const result=ok(save(h,{markDone:true}));
+ assert.equal(String(h.rows('slots')[0].done),'true');
+ ok(save(h,{markDone:true}));assert.equal(h.rows('lessonRecords').length,1);
+ assert.equal(result.context.slot.done,true);
+});
+
+test('attendance publication resumes after a private-note write failure',()=>{
+ const h=fixture();h.admin('state');h.context().ensureSchedulingSchema_();h.setRow('slots','id','slot-a',{deliveryMode:'in_person'});
+ failWrite(h,'lessonPrivateNotes',()=>true);
+ assert.notEqual(save(h,{markDone:true}).ok,true);
+ assert.equal(String(h.rows('slots')[0].done),'true');
+ ok(save(h,{markDone:true}));assert.equal(h.rows('lessonRecords').length,1);
+});
+test('Worker publication records attendance and returns completed state',async()=>{
+ const h=fixture();h.admin('state');h.context().ensureSchedulingSchema_();h.setRow('slots','id','slot-a',{deliveryMode:'in_person'});
+ const {createParity}=require('./helpers/parity-harness.cjs'),p=await createParity(h),{runWrite}=await import('../cf/worker/write.mjs');
+ const req={action:'admin',op:'lessonRecordSave',token:TEACHER_TOKEN,studentId:'test-a',slotId:'slot-a',expectedRevision:0,requestId:'worker-publish-attendance',record:record(),markDone:true};
+ const res=await runWrite(req,p.env);ok(res.result);assert.equal(res.result.context.slot.done,true);
+ ok((await runWrite(req,p.env)).result);
+});

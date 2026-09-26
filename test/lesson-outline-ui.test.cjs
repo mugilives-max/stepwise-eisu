@@ -20,7 +20,7 @@ test('primary fields precede optional details; choosing outline keeps all input 
 });
 test('one confirmed share chains report then homework; network retry repeats only the outstanding operation',async()=>{
   const ui=await lessonReady();ui.input('lc-content','報告');ui.input('lc-title-0','ワーク p21');ui.click('lc-publish');
-  const save=ui.requests.at(-1);assert.equal(save.body.op,'lessonRecordSave');const r=record(save.body.record);
+  const save=ui.requests.at(-1);assert.equal(save.body.op,'lessonRecordSave');assert.equal(save.body.markDone,true);const r=record(save.body.record);
   save.reply({ok:true,operation:'lessonRecordSave',context:context({record:r})});await flush();
   const apply=ui.requests.at(-1),body=copy(apply.body);assert.equal(body.op,'lessonHomeworkApply');assert.equal(body.recordId,r.id);
   apply.fail();await flush();assert.match(ui.html(),/報告は公開済みですが、宿題の反映は完了していません/);

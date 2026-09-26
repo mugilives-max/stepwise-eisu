@@ -174,7 +174,7 @@ function lessonPayload_(req) {
     planOutlineSave:['lineId','expectedRevision','expectedPlanRevision','items','publication'],
     lessonPreparationSave:['slotId','expectedRevision','body','expectedSlot'],
     lessonRecordDraftSave:['slotId','expectedRevision','body','expectedSlot'],
-    lessonRecordSave:['slotId','expectedRevision','record'],
+    lessonRecordSave:['slotId','expectedRevision','record','markDone'],
     lessonHomeworkApply:['recordId','expectedRevision'],
     lessonHomeworkWithdraw:['recordId','itemId','expectedRevision'],
     lessonReportDraftSave:['recordId','expectedDraftRevision','sourceRevision','body'],
@@ -194,6 +194,8 @@ function lessonPayload_(req) {
     p.expectedSlot={date:lessonDate_(req.expectedSlot.date),start:lessonText_(req.expectedSlot.start,5,true),min:lessonInteger_(req.expectedSlot.min,1),subject:lessonText_(req.expectedSlot.subject,80,false)};
   } else if (req.op === 'lessonRecordSave') {
     p.slotId = lessonId_(req.slotId); p.expectedRevision = lessonInteger_(req.expectedRevision,0);
+    if(req.markDone!==undefined&&typeof req.markDone!=='boolean')lessonFail_('validation','実施登録の指定を確認してください');
+    p.markDone=req.markDone===true;
     lessonOnly_(req.record,['content','progress','nextFocus','teacherNote','homework','report','outline']);
     p.record = { content:lessonText_(req.record.content,2000,true), progress:lessonText_(req.record.progress,1000,false), nextFocus:lessonText_(req.record.nextFocus,1000,false), teacherNote:lessonText_(req.record.teacherNote,2000,false), homework:lessonHomework_(req.record.homework === undefined ? [] : req.record.homework) };
     if(req.record.report !== undefined) p.record.report=lessonReportFields_(req.record.report);
@@ -288,6 +290,11 @@ function lessonPlan_(p,requestId,hash) {
     r = records[0] || null;
     if (!r && !lessonActive_(student)) lessonFail_('validation','停止中の生徒へ新規記録は作成できません');
     slot = lessonCurrentSlot_(p.studentId,p.slotId,r); lessonRevision_(r,p.expectedRevision);
+    if(p.markDone&&!(slot.done===true||String(slot.done)==='true')){
+      var gate=billingSlotMutable_(slot)||schedulingPendingSlotMutation_(slot.id)||schedulingCapacityError_(slot,undefined,slot.id);
+      if(gate)lessonFail_('validation',gate.error);
+      if(!billingSlotValid_(slot)||hoursUntil_(slot.date,slot.start)>0)lessonFail_('validation','開始前の授業、または授業情報を確認してください');
+    }
   } else {
     r = lessonOwnedRecord_(p.recordId,p.studentId); p.slotId = String(r.slotId);
     if (p.expectedRevision !== undefined) lessonRevision_(r,p.expectedRevision);
@@ -313,6 +320,7 @@ function lessonPlan_(p,requestId,hash) {
     if(p.record.report !== undefined) saved.reportJson=JSON.stringify(p.record.report);
     saved.revision=p.expectedRevision+1; saved.updatedBy=plan.actor; saved.updatedAt=now; saved.lastRequestId=requestId; saved.lastRequestHash=hash;
     p.record.homework.forEach(function (item) { lessonDueFields_(item,p.studentId,String(saved.subject || ''),String(saved.lessonDate)+'T'+String(saved.lessonStart)); });
+    plan.markDone=p.markDone===true;
     plan.record=saved; plan.note={recordId:plan.recordId,teacherNote:p.record.teacherNote};
     // Only newly accepted saves opt into publication. Old pending journals do
     // not gain this field on resume; old report drafts never become public.
@@ -356,6 +364,13 @@ function lessonExecute_(plan) {
     // snapshot. Fresh writes still require the current booking to match.
     var existing=lessonFind_('lessonRecords','id',plan.recordId);
     if (existing && (String(existing.studentId) !== plan.studentId || String(existing.slotId) !== plan.slotId)) lessonFail_('pending','記録の対象が変更されたため再開を停止しました');
+    if(plan.markDone){
+      var attendanceSlot=lessonCurrentSlot_(plan.studentId,plan.slotId,plan.record);
+      if(!(attendanceSlot.done===true||String(attendanceSlot.done)==='true')){
+        var attendance=adminToggleDone_({slotId:plan.slotId,studentId:plan.studentId,done:true});
+        if(!attendance.ok)lessonFail_('pending',attendance.error||'実施登録を完了できませんでした');
+      }
+    }
     lessonPut_('lessonPrivateNotes','recordId',plan.recordId,plan.note);
     if (plan.outlineLink) lessonPut_('lessonOutlineLinks','recordId',plan.recordId,plan.outlineLink);
     if (plan.outlineSnapshot) {

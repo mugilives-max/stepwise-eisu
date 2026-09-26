@@ -1973,7 +1973,7 @@
             });
             h += '</div>'+lessonOutlinePanel(e,readonly)+'</div>';
             if(e.sharePreview)h+=lessonSharePreview(e,readonly||e.conflict||(c.student||{}).active===false);
-            h += '<div class="lc-share-actions">' + lessonAction('publish',e.busy?'処理中…':'保存して公開',readonly||e.conflict||(c.student||{}).active===false,'btn-primary') + lessonAction('keep','一時保存',readonly||e.conflict) + (e.conflict?lessonAction('refresh','最新の内容と比較',blocked):'') + '</div><p class="note">公開すると、授業報告と宿題を生徒・保護者に共有します。一時保存の内容は先生だけが確認できます。</p>'+extrasHtml+lessonDetails(e.form,readonly)+'</div>';
+            h += '<div class="lc-share-actions">' + lessonAction('publish',e.busy?'処理中…':'保存して公開',readonly||e.conflict||(c.student||{}).active===false,'btn-primary') + lessonAction('keep','一時保存',readonly||e.conflict) + (e.conflict?lessonAction('refresh','最新の内容と比較',blocked):'') + '</div><p class="note">公開すると実施済みに登録し、授業報告と宿題を生徒・保護者に共有します。一時保存の内容は先生だけが確認できます。</p>'+extrasHtml+lessonDetails(e.form,readonly)+'</div>';
             if (r) {
               h += '<details class="lc-secondary"'+((c.homeworkState||[]).some(function(x){return ['new','changed','held','removed'].indexOf(x.status)>=0;})?' open':'')+'><summary>宿題の反映状態・個別操作</summary><div class="card"><p class="small">公開先: ' + esc((c.student || {}).name) + 'さんのマイページ「やること」。保存済みの第' + esc(r.revision) + '版から反映します。</p>' + renderLessonHomework(e);
               h += '<div class="row" style="margin-top:10px">' + lessonAction("preview", "反映する内容を確認", blocked || e.dirty || c.slotChanged || r.status === "void" || (c.student || {}).active === false || !(r.homework || []).length, "btn-ghost") + '</div>';
@@ -2086,7 +2086,7 @@
               var validation = lessonValidate(e.form);
               if (validation) { e.error = validation; break; }
               var saveForm = JSON.parse(JSON.stringify(e.form)); saveForm.homework = saveForm.homework.filter(function (x) { return String(x.title || "").trim(); });
-              e.sharePreview=false;lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, record: saveForm },a==='lc-share'||a==='lc-publish'); return;
+              e.sharePreview=false;lessonWrite(e, "lessonRecordSave", { slotId: e.slotId, expectedRevision: e.baseRevision || 0, markDone:true, record: saveForm },a==='lc-share'||a==='lc-publish'); return;
             case "lc-preview": if (e.dirty) { toast("先に記録を保存してください"); return; } e.preview = true; break;
             case "lc-cancelpreview": e.preview = false; break;
             case "lc-apply":
