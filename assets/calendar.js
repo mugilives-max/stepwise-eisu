@@ -262,7 +262,7 @@
       if (it && it.ngAll) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">'+esc(it.ngNames?it.ngNames.join(' / '):'授業不可')+'</span>';
       var timed = [];
       if (it && it.ngT) it.ngT.forEach(function (b) { timed.push({start:b.start, end:b.end, html:unavailableBox(b, b.label || '授業不可', 'ng')}); });
-      if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += '<span class="callbl wi">授業可</span>'; }
+      if (it && it.wish && !past) { if (it.wishL) it.wishL.slice(0, 3).forEach(function (t) { marks += '<span class="calbox wi">' + esc(t) + '</span>'; }); else marks += opts.compactAvailabilityLegend ? '<span class="calbox wi">授業可能時間帯</span>' : '<span class="callbl wi">授業可</span>'; }
       if (showToff && it && it.toff) marks += '<span class="callbl to" style="white-space:normal;overflow-wrap:anywhere">' + esc(toffText) + '</span>';
       if (showToff && it && it.toffT) it.toffT.forEach(function (o) { timed.push({start:o.start, end:o.end, html:unavailableBox(o, toffText, 'toff')}); });
       if (hasItems) {
@@ -288,8 +288,8 @@
     if (opts.adminHealth) h += '<span><span class="callbl rq" style="display:inline">要対応</span> 実施未登録・記録なし・取消依頼</span>';
     h += '<span><span class="callbl of" style="display:inline">' + esc(opts.offerLegend || "授業（未承認）") + '</span></span>';
     h += '<span><span class="callbl ev" style="display:inline">' + esc(opts.eventLegend || "予定") + '</span>' + (opts.eventLegend ? "" : " 重要な予定（テスト・行事など）") + '</span>';
-    h += '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
-    h += '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';
+    h += opts.compactAvailabilityLegend ? '<span><span class="callbl wi wiswatch" style="display:inline">授業可能時間帯</span></span>' : '<span><span class="callbl wi" style="display:inline">授業可</span> 授業できる時間帯（返事待ち）</span>';
+    h += opts.compactAvailabilityLegend ? '<span><span class="callbl to ngswatch" style="display:inline">授業不可能な時間帯</span></span>' : '<span><span class="callbl to ngswatch" style="display:inline">授業不可</span> 授業できない日</span>';
     if (showToff) h += '<span><span class="callbl to toffswatch" style="display:inline">' + esc(toffText) + '</span> ' + esc(toffLegend) + '</span>';
     if (opts.legendReq) h += '<span><span class="callbl rq" style="display:inline">取消依頼</span> 生徒から取消の依頼あり</span>';
     h += "</div>";

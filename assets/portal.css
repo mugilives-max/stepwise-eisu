@@ -263,3 +263,7 @@
 .calbox.cancelled{border-left-style:solid;}
 .calbox.cancelled .t{text-decoration:none;}
 .callbl.cancelled{color:#74419b;}
+
+/* Available time uses the same striped treatment as unavailable time. */
+.calbox.wi,.calday > .callbl.wi,.callegend .wiswatch{background:repeating-linear-gradient(135deg,#e6f4ea 0 4px,transparent 4px 8px);color:#2f8a4c;border-left-color:#2f8a4c;}
+.callegend .wiswatch{padding:0 4px;}
