@@ -652,7 +652,7 @@
           return '<table class="portal-plan-table" style="width:100%;table-layout:fixed"><tbody>'+rows.map(function(r){return '<tr><th scope="row" style="width:38%;text-align:left">'+esc(r[0])+'</th><td style="text-align:left;overflow-wrap:anywhere">'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>';
         }
         function bookingReviewHTML(){
-          var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}if(d.slot.st==='cancelled')return window.StepwiseCalendar.dayDialog({id:'booking-review-dialog',title:'キャンセル内容の確認',close:'booking-close',busy:busy,content:cancelReviewDetails(d.slot)+'<p><button class="btn-primary" data-action="cancel-confirm"'+(busy||previewK?' disabled':'')+'>確認しました</button></p>'});
+          var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}if(d.slot.st==='cancelled')return window.StepwiseCalendar.dayDialog({id:'booking-review-dialog',title:'キャンセル内容の確認',close:'booking-close',busy:busy,content:cancelReviewDetails(d.slot)+'<p><label for="cancel-circumstances">先生に伝えたい事情（任意）</label><textarea id="cancel-circumstances" maxlength="1000" style="width:100%;min-height:90px" placeholder="急病・災害など、やむを得ない事情がある場合はご記入ください。"'+(busy||previewK?' disabled':'')+'>'+esc(d.reason||'')+'</textarea></p><p class="note">記入した内容は先生に送信します。料金は先生が確認するまで変わりません。</p><p><button class="btn-primary" data-action="cancel-confirm"'+(busy||previewK?' disabled':'')+'>確認しました</button></p>'});
           var s=d.slot,b=s.teacherBooking,dis=busy||previewK?' disabled':'',parent=route()==='family',perms=S.permissions||{};
           var content='<p>'+esc((S.me&&S.me.name||'')+' '+fmtDateW(s.date)+' '+s.start+'〜'+endTime(s.start,s.min))+'<br>'+esc(lessonLabel(s))+'</p>';
           if(b.previous)content+='<p>変更前：'+esc(fmtDateW(b.previous.date)+' '+b.previous.start+'〜'+endTime(b.previous.start,b.previous.min))+'<br>変更後：'+esc(fmtDateW(s.date)+' '+s.start+'〜'+endTime(s.start,s.min))+'</p>';
@@ -1861,7 +1861,7 @@
           if (!familyHomeTarget(btn)) return;
           var act = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
           if(act==='cancel-review'){if(busy)return;var cs=(S.cancellations||[]).filter(function(x){return String(x.id)===id;})[0];if(cs){bookingReview={slot:cs,scope:taskScopeKey()};render();}return;}
-          if(act==='cancel-confirm'){if(!bookingReview||busy||previewK||bookingReview.scope!==taskScopeKey()||bookingReview.slot.st!=='cancelled')return;studentAction({action:'cancelAcknowledge',k:myKey(),cancellationId:bookingReview.slot.id},'確認済みにしました',function(){bookingReview=null;render();});return;}
+          if(act==='cancel-confirm'){if(!bookingReview||busy||previewK||bookingReview.scope!==taskScopeKey()||bookingReview.slot.st!=='cancelled')return;bookingReview.reason=String((document.getElementById('cancel-circumstances')||{}).value||'').trim();studentAction({action:'cancelAcknowledge',k:myKey(),cancellationId:bookingReview.slot.id,reason:bookingReview.reason},'確認済みにしました',function(){bookingReview=null;render();});return;}
           if(act==='booking-review'){if(busy)return;var slot=(S.slots||[]).concat(S.history||[]).filter(function(x){return String(x.id)===id;})[0];if(slot&&slot.teacherBooking){bookingReview={slot:slot,scope:taskScopeKey(),note:''};render();}return;}
           if(act==='booking-close'){if(!busy){bookingReview=null;render();}return;}
           if(act==='booking-confirm'||act==='booking-correct'){
