@@ -63,3 +63,17 @@ test('family monthly close issues a fee-only statement once and shows a separate
  h.advance(Date.parse('2026-10-01T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,1);assert.equal(h.context().familyCloseMonths_().issued,0);
  const m=h.context().familyBilling_(a,false)[0];assert.equal(m.amount,1000);assert.equal(m.children[0].invoice.fees[0].amount,1000);assert.equal(m.children[0].invoice.lessons.length,0);
 });
+
+test('adjusted fees validate bounds, keep exact retry, bill actual amount and expose only student history',()=>{
+ const h=fixture();h.advance(10*3600000+1);request(h);const q=quote(h);
+ for(const amount of [-1,1001,0.5,'',null,'bad'])assert.ok(decide(h,q,{feeChoice:'adjust',feeAmount:amount,note:'減額'}).error);
+ assert.ok(decide(h,q,{feeChoice:'adjust',feeAmount:500}).error);
+ ok(decide(h,q,{feeChoice:'adjust',feeAmount:500,note:'初回のため減額'}));
+ ok(decide(h,q,{feeChoice:'adjust',feeAmount:500,note:'初回のため減額'}));
+ assert.ok(decide(h,q,{feeChoice:'adjust',feeAmount:400,note:'初回のため減額'}).error);
+ assert.equal(bill(h).amount,500);
+ h.seedSlot({id:'next-slot',date:'2026-09-09',start:'13:00',status:'booked'});
+ const next=quote(h,{slotId:'next-slot'});assert.equal(next.history.count,1);assert.equal(next.history.items[0].amount,500);assert.equal(next.history.items[0].requestReason,'都合が悪いため');
+ h.seedSlot({id:'other-slot',studentId:'test-b',date:'2026-09-09',start:'15:00',status:'booked'});const other=ok(h.admin('serviceCancelQuote',{studentId:'test-b',slotId:'other-slot'}));assert.equal(other.history.items.length,0);
+});
+test('zero adjustment is waiver and creates no invoice charge',()=>{const h=fixture();h.advance(10*3600000+1);request(h);const q=quote(h);ok(decide(h,q,{feeChoice:'adjust',feeAmount:0,note:'急病のため'}));assert.equal(bill(h).amount,0);});

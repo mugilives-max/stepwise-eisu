@@ -24,7 +24,7 @@ function cancelQuote_(req){
   rate=Number(line.rate30);amount=Math.round(Number(s.min)/30*rate);
  }
  var quote={policy:'previous-day-23-v1',slot:slotCancellationSnapshot_(s),source:source,receivedAt:source==='teacher'?'':new Date(at).toISOString(),deadlineAt:new Date(cancelDeadline_(s)).toISOString(),type:type,amount:amount,rate30:rate,lineId:typeof line!=='undefined'&&line?line.id:'',lineRevision:typeof line!=='undefined'&&line?line.revision:0};
- return {ok:true,quote:quote,signature:schedulingHash_(JSON.stringify(quote))};
+ return {ok:true,history:cancelFeeHistory_(String(s.studentId)),quote:quote,signature:schedulingHash_(JSON.stringify(quote))};
 }
 function cancelFeePrepare_(req,w){
  var old=cancelFeeRows_().filter(function(x){return x.id===w.id;})[0];
@@ -32,14 +32,21 @@ function cancelFeePrepare_(req,w){
  var result=cancelQuote_(req);if(result.error)return result;
  var q=result.quote,choice=req.feeChoice||(q.amount===0?'charge':''),note=String(req.note||'').trim();
  if(req.cancelSignature&&req.cancelSignature!==result.signature)return billingError_('授業または料金が変わりました。内容を再確認してください','conflict');
- if(['charge','waive'].indexOf(choice)<0||q.amount>0&&!req.cancelSignature)return billingError_('キャンセル料を確認して請求・免除を選んでください','feeDecisionRequired');
- if((choice==='waive'||q.source==='external'||q.source==='noshow'||q.source==='teacher')&&!note)return billingError_('免除理由・連絡方法などを入力してください');
+ if(['charge','waive','adjust'].indexOf(choice)<0||q.amount>0&&!req.cancelSignature)return billingError_('キャンセル料を確認して請求・免除を選んでください','feeDecisionRequired');
+ var amount=choice==='waive'?0:choice==='adjust'?Number(req.feeAmount):q.amount;
+ if(choice==='adjust'&&(req.feeAmount===undefined||req.feeAmount===null||String(req.feeAmount).trim()===''||!isFinite(amount)||Math.floor(amount)!==amount||amount<0||amount>q.amount))return billingError_('請求額は0円から規定額までの整数で入力してください');
+ if((choice==='waive'||choice==='adjust'||q.source==='external'||q.source==='noshow'||q.source==='teacher')&&!note)return billingError_('免除理由・連絡方法などを入力してください');
  if(note.length>1000)return billingError_('理由は1000文字以内で入力してください');
- var d={signature:result.signature,choice:choice,note:note,quote:q,amount:choice==='waive'?0:q.amount};
+ var d={signature:result.signature,choice:choice,note:note,quote:q,amount:amount,requestReason:String(parseReq_(q.slot.req)&&parseReq_(q.slot.req).reason||'')};
  cancelFeeWrite_({id:w.id,studentId:w.studentId,slotId:w.slotId,status:'pending',decisionJson:JSON.stringify(d),createdAt:new Date().toISOString()});return {ok:true};
 }
 function cancelFeeConfirm_(w){var row=cancelFeeRows_().filter(function(x){return x.id===w.id;})[0];if(row&&row.status==='pending'){row.status='confirmed';cancelFeeWrite_(row);}}
-function cancelFeeItems_(sid){return cancelFeeRows_().filter(function(x){return String(x.studentId)===String(sid)&&x.status==='confirmed';}).map(function(x){var d=JSON.parse(x.decisionJson),s=d.quote.slot;return {id:'cancel-fee:'+x.id,type:'cancellation',date:s.date,start:s.start,subject:s.subject,min:0,amount:d.amount,reason:d.note,waived:d.choice==='waive',receivedAt:d.quote.receivedAt};});}
+function cancelFeeItems_(sid){return cancelFeeRows_().filter(function(x){return String(x.studentId)===String(sid)&&x.status==='confirmed';}).map(function(x){var d=JSON.parse(x.decisionJson),s=d.quote.slot;return {id:'cancel-fee:'+x.id,type:'cancellation',date:s.date,start:s.start,subject:s.subject,min:0,amount:d.amount,reason:d.note,waived:d.amount===0,receivedAt:d.quote.receivedAt};});}
 function cancelFeeOpen_(sid,ym){var inv=billingInvoicedIds_(sid);return cancelFeeItems_(sid).filter(function(x){return x.amount>0&&x.date.slice(0,7)<=ym&&!inv.ids[x.id];});}
 
-function cancelFeeRetryMatches_(req,d){return (!req.cancelSignature||req.cancelSignature===d.signature)&&(!req.feeChoice||req.feeChoice===d.choice)&&String(req.note||'').trim()===d.note&&(!req.source||req.source===d.quote.source)&&(!req.receivedAt||Date.parse(req.receivedAt)===Date.parse(d.quote.receivedAt))&&(!d.quote.amount||!!req.cancelSignature);}
+function cancelFeeRetryMatches_(req,d){return (d.choice!=='adjust'||req.feeAmount!==undefined&&req.feeAmount!==null&&String(req.feeAmount).trim()!==''&&Number(req.feeAmount)===d.amount)&&(!req.cancelSignature||req.cancelSignature===d.signature)&&(!req.feeChoice||req.feeChoice===d.choice)&&String(req.note||'').trim()===d.note&&(!req.source||req.source===d.quote.source)&&(!req.receivedAt||Date.parse(req.receivedAt)===Date.parse(d.quote.receivedAt))&&(!d.quote.amount||!!req.cancelSignature);}
+
+function cancelFeeHistory_(sid){
+ var month=Utilities.formatDate(new Date(),'Asia/Tokyo','yyyy-MM'),items=cancelFeeRows_().filter(function(r){return String(r.studentId)===sid&&r.status==='confirmed';}).map(function(r){var d=JSON.parse(r.decisionJson),s=d.quote.slot,request=parseReq_(s.req);return {date:s.date,start:s.start,subject:s.subject,amount:d.amount,reason:d.note||'',requestReason:d.requestReason||(request&&request.reason)||'',source:d.quote.source};}).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
+ return {month:month,count:items.filter(function(x){return x.date.slice(0,7)===month&&x.source!=='teacher';}).length,items:items};
+}

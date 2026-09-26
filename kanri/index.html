@@ -225,7 +225,7 @@
       .family-info-table td.is-missing{background:#fff4e3;color:#945900}
       @media(max-width:520px){.family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}}
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260926-cancellation-fees"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260926-cancellation-adjust"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
 <link rel="stylesheet" href="/assets/calendar.css?v=20260924-shared-day"><script src="/assets/calendar.js?v=20260924-family-calendar"></script>
 </head>
@@ -238,7 +238,7 @@
     <div id="toast" role="status"></div>
 
     <script src="/assets/student-documents.js?v=20260926-parse"></script>
-    <script src="../assets/learning-services.js?v=20260926-cancellation-fees"></script>
+    <script src="../assets/learning-services.js?v=20260926-cancellation-adjust"></script>
     <script>
       (function () {
         "use strict";
@@ -1221,7 +1221,7 @@
         }
         function cancelQuoteLoad(){
           var d=cancelDialog;if(!d||busy||d.auth!==token()||d.routeKey!==location.hash)return;busy=true;d.error='';d.quote=null;render();
-          admin('serviceCancelQuote',{slotId:d.slotId,studentId:d.studentId,source:d.source,receivedAt:d.receivedAt,note:d.note}).then(function(r){if(cancelDialog!==d||d.auth!==token()||d.routeKey!==location.hash){busy=false;return;}busy=false;d.quote=r;d.source=r.quote.source;d.receivedAt=r.quote.receivedAt;render();}).catch(function(e){busy=false;if(cancelDialog===d){d.error=e.message;render();}});
+          admin('serviceCancelQuote',{slotId:d.slotId,studentId:d.studentId,source:d.source,receivedAt:d.receivedAt,note:d.note}).then(function(r){if(cancelDialog!==d||d.auth!==token()||d.routeKey!==location.hash){busy=false;return;}busy=false;d.quote=r;d.source=r.quote.source;d.receivedAt=r.quote.receivedAt;d.amount=r.quote.amount;d.choice='charge';render();}).catch(function(e){busy=false;if(cancelDialog===d){d.error=e.message;render();}});
         }
         function cancelDialogHTML(){
           var d=cancelDialog;if(!d||d.auth!==token()||d.routeKey!==location.hash)return '';var q=d.quote&&d.quote.quote,dis=busy||d.sent?' disabled':'';
@@ -1230,16 +1230,20 @@
             '<p>前日23時まで無料／開始前1,000円／開始後・無断欠席は授業料相当額。実施回数には含めません。</p>'+
             '<label>連絡方法<select id="cf-source"'+dis+'>'+[['request','マイページからの申請'],['external','LINE・電話などで連絡済み'],['noshow','無断欠席'],['teacher','先生都合・料金なし']].map(function(x){return '<option value="'+x[0]+'"'+(d.source===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></label> '+
             '<label>外部で連絡を受けた日時<input type="datetime-local" id="cf-time" value="'+esc(d.receivedAt?new Date(Date.parse(d.receivedAt)+9*3600000).toISOString().slice(0,16):'')+'"'+dis+'></label><p><button class="btn-quiet" data-action="cf-quote"'+dis+'>この条件で料金を確認</button></p>'+
-            (q?'<p><strong>キャンセル料：'+yen(q.amount)+'</strong></p><label>扱い<select id="cf-choice"'+dis+'><option value="charge"'+(d.choice==='charge'?' selected':'')+'>この金額で請求</option><option value="waive"'+(d.choice==='waive'?' selected':'')+'>免除する（0円）</option></select></label>':'')+
-            '<p><label>理由・連絡方法（免除・外部連絡・無断欠席の場合は必須）<textarea id="cf-note" maxlength="1000"'+dis+'>'+esc(d.note)+'</textarea></label></p>'+
+            (q?'<p><strong>規定のキャンセル料：'+yen(q.amount)+'</strong></p><label>扱い<select id="cf-choice"'+dis+'><option value="charge"'+(d.choice==='charge'?' selected':'')+'>この金額で請求</option><option value="adjust"'+(d.choice==='adjust'?' selected':'')+'>請求額を調整する</option><option value="waive"'+(d.choice==='waive'?' selected':'')+'>免除する（0円）</option></select></label> <label>調整後の請求額（0円で免除）<input id="cf-amount" type="number" min="0" max="'+q.amount+'" step="1" value="'+esc(d.amount)+'"'+dis+'></label>':'')+
+            '<p><label>理由・連絡方法（減額・免除・外部連絡・無断欠席の場合は必須）<textarea id="cf-note" maxlength="1000"'+dis+'>'+esc(d.note)+'</textarea></label></p>'+
+            (q?cancelHistoryHTML(d.quote.history):'')+
             (d.error?'<p role="alert">'+esc(d.error)+'</p>':'')+
             (q?'<button class="btn-danger" data-action="cf-save"'+(busy?' disabled':'')+'>'+(d.sent?'同じ内容で結果を確認':'取消を確定する')+'</button>':'')});
+        }
+        function cancelHistoryHTML(h){
+          if(!h)return '';return '<h3>今月のキャンセル：'+esc(h.count)+'回</h3><p>授業日が'+esc(h.month)+'の確定した取消（先生都合を除く）。今回の申請は含みません。この機能で記録した取消のみを表示します。回数による自動増額はありません。</p><details><summary>過去のキャンセル・請求額</summary>'+(!h.items.length?'<p>記録はありません。</p>':'<div style="overflow-x:auto"><table><thead><tr><th>授業日</th><th>科目</th><th>理由</th><th>請求額</th></tr></thead><tbody>'+h.items.map(function(x){return '<tr><td>'+esc(x.date+' '+x.start)+(x.source==='teacher'?'（先生都合）':'')+'</td><td>'+esc(x.subject)+'</td><td>'+esc(x.requestReason||'')+(x.reason?'<br>先生：'+esc(x.reason):'')+'</td><td>'+yen(x.amount)+'</td></tr>';}).join('')+'</tbody></table></div>')+'</details>';
         }
         function cancelSend(){
           var d=cancelDialog;if(!d||busy||!d.quote||d.auth!==token()||d.routeKey!==location.hash)return;
           if(!d.sent){
             if(val('cf-source')!==d.source||(d.source==='external'&&Date.parse(val('cf-time')+':00+09:00')!==Date.parse(d.receivedAt))){d.error='連絡方法・日時を変更した場合は、料金を確認してください';render();return;}
-            d.choice=val('cf-choice');d.note=val('cf-note');d.sent={slotId:d.slotId,studentId:d.studentId,approve:true,source:d.source,receivedAt:d.receivedAt,note:d.note,feeChoice:d.choice,cancelSignature:d.quote.signature};
+            d.choice=val('cf-choice');d.amount=val('cf-amount');d.note=val('cf-note');d.sent={slotId:d.slotId,studentId:d.studentId,approve:true,source:d.source,receivedAt:d.receivedAt,note:d.note,feeChoice:d.choice,feeAmount:d.choice==='adjust'?d.amount:undefined,cancelSignature:d.quote.signature};
           }
           busy=true;d.error='';render();var r=route();
           admin('resolveCancel',d.sent).then(function(res){busy=false;cancelDialog=null;cacheClear();toast('取消とキャンセル料を記録しました');if(!applyResult(res,r))load(true);else render();}).catch(function(e){busy=false;if(cancelDialog===d){d.error=e.message;if(e.code!=='pending')d.sent=null;render();}});

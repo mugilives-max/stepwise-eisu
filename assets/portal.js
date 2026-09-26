@@ -876,8 +876,8 @@
             var late = Date.now()>deadline;
             html = '<dialog id="schedule-accept-dialog" class="schedule-day-dialog" aria-label="キャンセル申請"><div class="inner">';
             html += '<div class="msg">' + esc(when) + ' のキャンセル申請</div>';
-            html += '<p><strong>'+(!late?'現在は無料の受付期間です。':Date.now()<Date.parse(s.date+'T'+s.start+':00+09:00')?'現在のキャンセル料は1,000円です。':'現在は授業料相当額の対象です。')+'</strong></p>';
-            html += '<p>前日23時までのご連絡は無料です。それを過ぎて授業開始前までのキャンセルは1回1,000円、開始後・無断欠席は授業料相当額がかかります。</p><p>急病・災害などの事情がある場合は、理由を記入してください。先生が確認して請求または免除を決めます。申請だけでは取消は確定しません。</p>';
+            html += '<p><strong>キャンセル料は、申請理由を確認したうえで確定します。</strong></p>';
+            html += '<p>前日23時を過ぎて授業開始前までのキャンセルは、原則として1回1,000円、授業開始後・無断欠席は授業料相当額がかかります。</p><p>急病・災害などの事情がある場合は、理由を記入してください。先生が事情を確認し、キャンセル料の減額・免除を含めて判断します。</p><p>申請後、先生の確認をもってキャンセルが確定します。</p>';
             html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px">';
             html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + '>' + (busy ? '申請しています…' : 'キャンセルを申請する') + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "withdraw") {
