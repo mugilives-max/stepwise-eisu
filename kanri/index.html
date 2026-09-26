@@ -1365,23 +1365,6 @@
 
           html += expiredCard(slots.filter(function (s) { return offerEnded(s, today); }).slice().reverse(), true);
 
-          // 先生の休み
-          html += '<details><summary>先生の授業不可時間を登録</summary><div class="card"><div class="row">';
-          html += '<input type="date" id="o-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="o-date2" min="' + today + '">';
-          html += '<input type="text" id="o-note" placeholder="メモ(任意。例: 学会、旅行)" maxlength="50" style="flex:1;min-width:140px"></div>';
-          html += '<div class="row" style="margin-top:8px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="o-start" step="900"><span class="muted">〜</span><input type="time" id="o-end" step="900"><button class="btn-ghost btn-sm" data-action="taddoff"' + (busy ? " disabled" : "") + '>登録</button></div>';
-          html += '<div class="note">1日だけなら左の日付のみでOK。時間帯を入れると、その時間に重なる案内だけ警告になります。カレンダーには「休」(終日)や「休13-17」(時間帯)と表示され、生徒のページにも出ます(メモは生徒には見えません)。</div></div>';
-
-          html += '</details>';
-          // NG日
-          html += '<details><summary>生徒の授業不可時間を代理登録</summary><div class="card"><div class="row">';
-          html += '<select id="b-student"><option value="">生徒</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>'; }).join("") + '</select>';
-          html += '<input type="date" id="b-date" min="' + today + '"><span class="muted">〜</span><input type="date" id="b-date2" min="' + today + '">';
-          html += '<input type="text" id="b-note" placeholder="メモ(任意)" maxlength="50" style="flex:1;min-width:120px"></div>';
-          html += '<div class="row" style="margin-top:8px"><span class="small muted">時間帯(任意。空欄なら終日)</span><input type="time" id="b-start" step="900"><span class="muted">〜</span><input type="time" id="b-end" step="900"><button class="btn-ghost btn-sm" data-action="taddblock"' + (busy ? " disabled" : "") + '>登録</button></div>';
-          html += '<div class="note">生徒も自分のページから登録できます。カレンダーに×で表示され、その日に案内しようとすると警告が出ます。</div></div>';
-
-          html += '</details>';
           // 実施の記録
           html += '<h2>実施の記録と請求</h2>';
           var pastBooked = past.filter(function (s) { return s.status === "booked"; });
