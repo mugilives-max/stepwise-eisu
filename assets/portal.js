@@ -210,8 +210,11 @@
         function renderHomeHomeworkTable(tasks) {
           var dis = busy || previewK ? ' disabled' : '', today = S.today || '';
           return '<table class="portal-plan-table home-homework-table"><colgroup><col style="width:52%"><col style="width:32%"><col style="width:16%"></colgroup><thead><tr><th scope="col">内容</th><th scope="col">期限</th><th scope="col">完了</th></tr></thead><tbody>' + tasks.map(function(t) {
-            var status = t.due && today && t.due < today ? '期限超過' : t.due === today ? '今日まで' : '';
-            return '<tr><td>' + esc(t.title) + '</td><td>' + esc(taskDueText(t)) + (status ? '<br><span class="tag amber">' + status + '</span>' : '') + '</td><td><button class="btn-ghost btn-sm" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>完了にする</button></td></tr>';
+            var due = /^\d{4}-\d{2}-\d{2}$/.test(t.due || '') ? t.due : '';
+            var days = due && today ? Math.round((Date.parse(due + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000) : NaN;
+            var status = isNaN(days) ? '' : days > 0 ? 'あと' + days + '日' : days === 0 ? '今日まで' : -days + '日超過';
+            var dueLabel = due ? Number(due.slice(5, 7)) + '/' + Number(due.slice(8, 10)) : t.dueMode === 'nextLesson' ? '予定未定' : '期限なし';
+            return '<tr><td>' + esc(t.title) + '</td><td>' + esc(dueLabel) + (status ? ' <span class="' + (days <= 0 ? 'tag amber' : 'small muted') + '">' + status + '</span>' : '') + '</td><td><button class="btn-ghost btn-sm" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>完了にする</button></td></tr>';
           }).join('') + '</tbody></table>';
         }
         function renderTasksPage() {
