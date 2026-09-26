@@ -1047,3 +1047,5 @@ APIは保護者セッションと生徒所属を毎回確認。生徒の書き�
 メタデータはD1の `_studentDocuments`、PDF本体は既存 `EXAM_PDF_FOLDER_ID` の非公開Driveフォルダ。Workerの `documentList/Upload/Read/Remove` が管理者セッション、生徒専用リンク、現在の家族紐付けを検証し、Drive IDや公開URLを返さない。先生のプレビューは閲覧のみ。Drive操作は既存の共有鍵で認証したGAS `effects` 内のdocument処理へ中継する。ファイル名は表示時にエスケープし、形式・サイズ・PDFヘッダーを検証する。
 
 生徒IDと内容ハッシュから登録IDを作り、同じPDFの再送では重複しない。削除は一覧からの非表示（原本は非公開で保持）。PDF本体は既存Drive原資料バックアップの対象。紐付けメタデータはD1全体のエクスポートで保存し、旧Sheetsへの台帳コピーには含めない。
+
+公開確認: 実装 `90ad127`、GAS v108、Worker `23ae7106-f24e-4571-b4d4-b13d7cd37e3b`。GASは更新直後の版確認が遅延したため、実際の版108を読み取り確認し、同じリリースIDで照合を完了した。退避は `.verification/releases/2026-09-26T07-38-34-669Z/` と `.verification/before-student-documents.sql`。D1退避の復元・整合性と追加DDL後の既存生徒件数保持を確認。関連13テスト、構文検査、公開4アセットの一致、未認証4操作の拒否、テスト生徒設定の資料一覧表示を確認した。本番の実PDF選択はブラウザツールの `Not allowed` で停止したため、実Drive保存・再閲覧のE2Eは未確認。Claude APIは今回の機能では呼ばない。
