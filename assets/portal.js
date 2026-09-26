@@ -622,7 +622,7 @@
 
         // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)。登録不可(先生の休み)はホーム・予定の両方で出す(2026-09-11)
         var bookingReview=null;
-        function bookingReviewButton(s){var b=s.teacherBooking;if(!b||b.status==='registering')return '';return ' <button class="tag '+(b.status==='confirmed'?'gray':b.status==='correction'?'red':'amber')+'" data-action="booking-review" data-id="'+esc(s.id)+'">'+({pending:'先生の登録内容を確認',confirmed:'先生が登録・確認済み',correction:'修正依頼中'}[b.status]||'確認')+'</button>';}
+        function bookingReviewButton(s){var b=s.teacherBooking;if(!b||b.status==='registering')return '';if(b.status==='pending')return ' <button type="button" class="plan-count-warning" data-action="booking-review" data-id="'+esc(s.id)+'" aria-label="先生の登録内容を確認" title="先生の登録内容を確認"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>';return ' <button class="tag '+(b.status==='confirmed'?'gray':b.status==='correction'?'red':'amber')+'" data-action="booking-review" data-id="'+esc(s.id)+'">'+({pending:'先生の登録内容を確認',confirmed:'先生が登録・確認済み',correction:'修正依頼中'}[b.status]||'確認')+'</button>';}
         function bookingRequestsHTML(name){var rows=(S.slots||[]).concat(S.history||[]).filter(function(x){return x.teacherBooking&&x.teacherBooking.status==='pending'&&x.date!==selDate;});return rows.length?'<div class="card"><p>先生が登録した授業の内容をご確認ください。</p>'+rows.map(function(x){return '<p>'+esc((name?name+' ':'')+fmtDateW(x.date)+' '+x.start+' '+lessonLabel(x))+bookingReviewButton(x)+'</p>';}).join('')+'</div>':'';}
         function bookingReviewHTML(){
           var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}
