@@ -284,6 +284,7 @@
     }
     h += '</div><div class="callegend">';
     h += '<span><span class="callbl" style="display:inline">授業</span></span>';
+    if (opts.cancelLegend) h += '<span><span class="callbl cancelled" style="display:inline">キャンセル済み</span></span>';
     if (opts.adminHealth) h += '<span><span class="callbl rq" style="display:inline">要対応</span> 実施未登録・記録なし・取消依頼</span>';
     h += '<span><span class="callbl of" style="display:inline">' + esc(opts.offerLegend || "授業（未承認）") + '</span></span>';
     h += '<span><span class="callbl ev" style="display:inline">' + esc(opts.eventLegend || "予定") + '</span>' + (opts.eventLegend ? "" : " 重要な予定（テスト・行事など）") + '</span>';

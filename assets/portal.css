@@ -258,3 +258,8 @@
 
 /* Cancelled lessons in the student and parent calendar. */
 .calbox.cancelled{background:#f3eafa;color:#74419b;border-left-color:#8954b0;}
+
+.calday > .calbox{width:calc(100% - 6px);box-sizing:border-box;}
+.calbox.cancelled{border-left-style:solid;}
+.calbox.cancelled .t{text-decoration:none;}
+.callbl.cancelled{color:#74419b;}
