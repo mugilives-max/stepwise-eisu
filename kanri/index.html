@@ -1246,13 +1246,12 @@
           if (s.status === "booked") h += s.req ? ' <span class="tag red">取消依頼中</span>' : '';
           else if (s.status === "offered") h += ' <button class="tag amber" data-action="teacher-book-open" data-id="'+esc(s.id)+'"'+(busy?' disabled':'')+'>承認待ち</button>';
           else h += ' <span class="tag gray">空き枠</span>';
-          if(s.status==='booked'&&s.teacherBooking)h+=' <button class="tag '+(s.teacherBooking.status==='correction'?'red':s.teacherBooking.status==='confirmed'?'gray':s.teacherBooking.status==='pending'?'green':'amber')+'" data-action="teacher-book-open" data-id="'+esc(s.id)+'">'+({pending:'本人確認待ち',confirmed:'本人確認済み',correction:'修正依頼',registering:'登録処理を確認'}[s.teacherBooking.status]||'確認待ち')+'</button>';
+          if(s.status==='booked'&&s.teacherBooking&&s.teacherBooking.status!=='pending')h+=' <button class="tag '+(s.teacherBooking.status==='correction'?'red':s.teacherBooking.status==='confirmed'?'gray':s.teacherBooking.status==='pending'?'green':'amber')+'" data-action="teacher-book-open" data-id="'+esc(s.id)+'">'+({pending:'本人確認待ち',confirmed:'本人確認済み',correction:'修正依頼',registering:'登録処理を確認'}[s.teacherBooking.status]||'確認待ち')+'</button>';
           h += lessonRecordTag(s);
           h += "</span>";
           if (s.status === "booked") {
             h += slotDelivery(s, null, false, 'actions');
             if (!s.done) h += lessonEntry(s);
-            if (!s.done && s.date <= (currentDay || A.today)) h += '<button class="btn-quiet btn-sm" data-action="toggledone" data-done="' + (s.done ? "0" : "1") + '" data-id="' + esc(s.id) + '">' + (s.done ? "実施を取消" : "実施にする") + "</button>";
           } else {
             h += slotDelivery(s, null, false, 'actions') + (s.status === 'offered' ? '' : '<button class="btn-quiet btn-sm" data-action="delslot" data-id="' + esc(s.id) + '">' + (s.status === "offered" ? "取り下げ" : "枠を削除") + "</button>");
           }
@@ -1948,6 +1947,7 @@
           var slot = r ? Object.assign({}, c.slot, { date: r.date || c.slot.date, start: r.start || c.slot.start, min: r.min || c.slot.min, subject: r.subject || c.slot.subject }) : c.slot;
           // 生徒名・日時・科目・状態。授業記録では「今回の記録」カードの先頭に入れる(授業準備ではそのまま1枚のカード)
           var slotInfo = '<strong>' + esc((c.student || {}).name) + '</strong>　' + fmtDY(slot.date) + ' ' + esc(slot.start) + '　' + esc(slot.subject || "科目なし") + '　' + esc(slot.min || "") + '分 <span class="tag ' + (slot.done ? "gray" : "blue") + '">' + (slot.done ? "実施済み" : "未実施") + '</span>';
+          if(slot.status==='booked'&&!slot.done&&slot.date<=(c.today||today()))slotInfo+=' '+lessonAction('done','実施にする',blocked||c.slotChanged,'btn-quiet');
           h += '<div class="note">' + (r && r.status !== 'void' ? (r.publishedRevision ? '生徒・保護者へ公開済み（第' + esc(r.publishedRevision) + '版）・' : '未公開（次の保存で公開）・') : '') + (r ? (r.status === "void" ? "無効化済み" : "記録済み") + '・第' + esc(r.revision) + '版・' + esc(fmtAuthTime(r.updatedAt)) : future ? "授業前・準備内容は非公開です" : "授業記録は未入力です") + '</div>';
           if (future) h += '<div class="card" style="margin-top:14px">' + slotInfo + '</div>';
           if (c.slotChanged) h += '<p class="lc-notice">元の予約が取消／変更されています。内容の保存はできません。宿題の取り下げは別に行えます。</p>';
@@ -2036,6 +2036,12 @@
           var itemId = btn.getAttribute("data-item"), focusId = '';
           var itemAt = e.form ? e.form.homework.findIndex(function (x) { return x.itemId === itemId; }) : -1;
           switch (a) {
+            case "lc-done":
+              if(c.slotChanged||!c.slot||c.slot.status!=='booked'||c.slot.done||c.slot.date>(c.today||today()))return;
+              e.busy=true;e.error='';lessonRender(e);
+              admin('toggleDone',{slotId:e.slotId,studentId:e.studentId,done:true}).then(function(){
+                c.slot.done=true;e.message='実施済みにしました。';cacheClear();
+              }).catch(function(err){e.error=err.message+' 入力は保持しています。実施の登録を再試行できます。';}).then(function(){e.busy=false;lessonRender(e);});return;
             case "lc-prep-save":
               if (e.conflict || !c || !c.slot || c.slot.status !== 'booked' || (c.student || {}).active === false) return;
               if ((e.preparationBody || '').length > 4000) { e.error='準備は4,000文字以内にしてください。'; break; }

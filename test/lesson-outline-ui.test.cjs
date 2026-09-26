@@ -78,3 +78,12 @@ test('late outline response cannot switch the current student screen or target a
   assert.match(ui.html(),/生徒B/);assert.doesNotMatch(ui.html(),/Aの下書き/);
   ui.click('po-open',{'data-line':'line-b'});assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.lineId,'line-b');
 });
+
+test('attendance is recorded inside the editor without losing unsaved input',async()=>{
+ const c=context();c.slot.done=false;const ui=await lessonReady(c);
+ ui.input('lc-content','編集中');ui.click('lc-done');
+ assert.equal(ui.requests.at(-1).body.op,'toggleDone');assert.equal(ui.requests.at(-1).body.done,true);
+ ui.requests.at(-1).reply({ok:true});await flush();
+ assert.equal(ui.el('lc-content').value,'編集中');assert.doesNotMatch(ui.html(),/data-action="lc-done"/);
+ assert.match(ui.html(),/実施済み/);assert.equal(ui.requests.filter(x=>x.body.op==='lessonRecordSave').length,0);
+});
