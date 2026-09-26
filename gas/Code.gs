@@ -1350,7 +1350,7 @@ function adminState_() {
     });
   return {
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [],
-    lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
+    cancellations: cancelAttendance_(), lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
     billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
   };
@@ -1996,7 +1996,7 @@ function kanriDashboard_() {
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
-  return { today: today, lessonKinds: lessonKindsPublic_(), pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
+  return { cancellations: cancelAttendance_(), today: today, lessonKinds: lessonKindsPublic_(), pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
     contactPendingCount: readRows_('contactMessages').filter(function(m){return m.status==='received'||m.status==='failed';}).length,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
@@ -2077,7 +2077,7 @@ function kanriStudent_(studentId,section) {
     emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(id) : null,
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_(id) : [],
     parentAuth: parentStatus_(id),
-    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, lessons: lessons.slice(0, 60), grades: progressData.grades, exams: progressData.exams, payments: payments, meetings: progressData.meetings,
+    code: String(sys.code || ''), active: !(String(sys.active) === 'false' || sys.active === false), profile: profile, cancellations: cancelAttendance_(studentId), lessons: lessons.slice(0, 60), grades: progressData.grades, exams: progressData.exams, payments: payments, meetings: progressData.meetings,
     today: today, wishes: wishesForAdmin_().filter(function (x) { return x.studentId === id; }),
     blocked: blockedRows_().filter(function (b) { return String(b.studentId) === id && b.date >= today; }).map(function (b) { return { id: b.id, date: b.date, start: b.start, end: b.end, note: String(b.note || '') }; }),
     teacherOff: teacherOff_(today, true),

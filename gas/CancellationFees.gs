@@ -50,3 +50,6 @@ function cancelFeeHistory_(sid){
  var month=Utilities.formatDate(new Date(),'Asia/Tokyo','yyyy-MM'),items=cancelFeeRows_().filter(function(r){return String(r.studentId)===sid&&r.status==='confirmed';}).map(function(r){var d=JSON.parse(r.decisionJson),s=d.quote.slot,request=parseReq_(s.req);return {date:s.date,start:s.start,subject:s.subject,amount:d.amount,reason:d.note||'',requestReason:d.requestReason||(request&&request.reason)||'',source:d.quote.source};}).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
  return {month:month,count:items.filter(function(x){return x.date.slice(0,7)===month&&x.source!=='teacher';}).length,items:items};
 }
+
+// Read-only history: never reinsert cancellations into billable/recordable slots.
+function cancelAttendance_(sid){return cancelFeeRows_().filter(function(r){return r.status==='confirmed'&&(!sid||String(r.studentId)===String(sid));}).map(function(r){var d=JSON.parse(r.decisionJson),s=d.quote.slot;return {id:r.id,studentId:String(r.studentId),studentName:studentName_(r.studentId),date:s.date,start:s.start,min:Number(s.min),subject:s.subject,label:d.quote.source==='teacher'?'休講':'欠席',amount:d.amount,reason:d.note||d.requestReason||'',source:d.quote.source};});}

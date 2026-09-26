@@ -77,3 +77,5 @@ test('adjusted fees validate bounds, keep exact retry, bill actual amount and ex
  h.seedSlot({id:'other-slot',studentId:'test-b',date:'2026-09-09',start:'15:00',status:'booked'});const other=ok(h.admin('serviceCancelQuote',{studentId:'test-b',slotId:'other-slot'}));assert.equal(other.history.items.length,0);
 });
 test('zero adjustment is waiver and creates no invoice charge',()=>{const h=fixture();h.advance(10*3600000+1);request(h);const q=quote(h);ok(decide(h,q,{feeChoice:'adjust',feeAmount:0,note:'急病のため'}));assert.equal(bill(h).amount,0);});
+
+test('confirmed absence remains visible but is not a lesson awaiting records',()=>{const h=fixture();h.advance(10*3600000+1);request(h);const q=quote(h);ok(decide(h,q,{feeChoice:'waive',note:'急病'}));const d=ok(h.admin('kanriDashboard')).data;assert.equal(d.cancellations[0].label,'欠席');assert.equal(d.cancellations[0].amount,0);assert.ok(!d.slots.some(x=>x.id==='fee-slot'));assert.ok(!d.unrecordedLessons.some(x=>x.id==='fee-slot'));const a=ok(h.admin('state'));assert.equal(a.admin.cancellations[0].label,'欠席');});
