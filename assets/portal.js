@@ -1401,7 +1401,7 @@
             if(d.thisMonth&&d.thisMonth.count!=null&&Number(d.thisMonth.count)!==done.length){values[0]=null;values[1]=null;}
             var cancellationFee=values.pop(),subtotals=values.map(function(v){return v==null||cancellationFee==null?null:v+cancellationFee;});
             subtotals.forEach(function(v,i){if(v==null)complete[i]=false;else total[i]+=v;});
-            h+='<tr><td rowspan="2">'+esc(familyChildName(c))+'</td><td rowspan="3">'+esc(ym)+'</td><th scope="row">授業</th>'+values.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
+            h+='<tr><td rowspan="2">'+esc(familyChildName(c))+'</td><th scope="row">授業</th>'+values.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
             h+='<tr><th scope="row">キャンセル料</th>'+values.map(function(){return '<td>'+money(cancellationFee)+'</td>';}).join('')+'</tr>';
           });
           h+='</tbody><tfoot><tr><th colspan="2">合計</th>'+total.map(function(v,i){return '<td>'+money(complete[i]?v:null)+'</td>';}).join('')+'</tr></tfoot></table></div><p class="small">実施済み：実施した授業 ／ 登録分：実施済み＋今後の登録済み授業（返事前の案内は含みません） ／ 計画分：今月にかかる送信済み計画の全回数分。合計は各列の授業料にキャンセル料を加えた金額です。列同士は足し合わせません。キャンセル料は当月の授業について、減額・免除を反映した現在の金額です。減額・免除の申請中は審査前の金額を表示します。</p><p class="small">計画の単価と授業時間で計算します。単価が未設定・特定できない場合は「確認が必要」と表示します。</p></div>';return h;
