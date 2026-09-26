@@ -140,7 +140,7 @@ test('student and parent homes prioritize the calendar and keep homework in its 
   for (const [view, href] of [[ui, '#tasks'], [parent, '#family/tasks']]) {
     assert.match(view.html(), /<h2>予定表<\/h2>[^]*<h2 class="schedule-day-heading">/);
     assert.equal(view.html().match(/<h[12][^>]*>(.*?)<\/h[12]>/)?.[1], '予定表');
-    assert.equal(toggleIds(view).length, 0);
+    assert.equal(toggleIds(view).length, view === ui ? 4 : 0);
     assert.doesNotMatch(view.html(), /homework-summary|取り組む宿題|f-ttitle|【テスト】完了した宿題/);
     assert.ok(view.el('tabs').innerHTML.includes(`href="${href}"`));
     view.navigate(href);
@@ -232,7 +232,7 @@ test('the explicit retry survives filter and home navigation and resends the sam
   assert.equal(toggleIds(ui).length, 0);
   assert.match(ui.html(), /保存結果を確認できませんでした/);
   ui.navigate('#home');
-  assert.doesNotMatch(ui.html(), /data-action="taskretry"/);
+  assert.match(ui.html(), /data-action="taskretry"/);
   ui.navigate('#tasks');
   assert.match(ui.html(), /data-action="taskretry"/);
   ui.click('taskretry');
@@ -466,7 +466,7 @@ test('logout hides homework and a late family write response cannot restore priv
   const ui = await familyReady([task('before-logout')]);
   ui.click('tasktoggle', { 'data-id': 'before-logout', 'data-done': 'true' });
   const old = ui.requests.at(-1);
-  ui.navigate('#family/menu');
+  ui.navigate('#family/settings');
   ui.click('fa-logout');
   const logout = ui.requests.at(-1);
   assert.equal(logout.body.action, 'familyLogout');
@@ -541,4 +541,15 @@ test('family self-add drafts are separated by selected child and remain availabl
   assert.equal(ui.el('f-tdue-mode').value, 'none');
   ui.change('fa-mychild', 'child-b');
   assert.equal(ui.el('f-ttitle').value, '【テスト】子Bの下書き');
+});
+
+test('home shows only incomplete homework after daily lessons and removes completed items', async () => {
+  const ui = await ready([task('open'), task('done', {done:true}), task('removed', {withdrawn:true}), task('bag', {type:'持ち物'}), task('memo', {type:'メモ'})], '#home');
+  assert.deepEqual(toggleIds(ui), ['open']);
+  assert.ok(ui.html().indexOf('schedule-day-heading') < ui.html().indexOf('aria-label="未完了の宿題"'));
+  ui.click('tasktoggle', {'data-id':'open','data-done':'true'});
+  ui.requests.at(-1).reply({ok:true,state:taskState([task('open',{done:true})])});
+  await flush();
+  assert.deepEqual(toggleIds(ui), []);
+  assert.match(ui.html(), /未完了の宿題はありません/);
 });

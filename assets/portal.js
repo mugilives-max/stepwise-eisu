@@ -999,7 +999,13 @@
 
           // 予定表と日付ごとの登録。日を選ぶモード中は見出しに案内を出す
           if (!sharedCalendar) { html += '<h2>予定表</h2>'; html += renderCal(D.info, today, true); }
-          html += renderDayDetail(D, true, true) + bookingRequestsHTML();
+          html += renderDayDetail(D, true, true);
+          if (route() !== 'family') {
+            var homework = visibleTasks().filter(function (t) { return !t.done && (!t.type || t.type === '宿題'); });
+            html += '<h2>宿題 <span class="cnt">' + homework.length + '件</span></h2>' + taskFeedback();
+            html += '<section class="card homework-panel" aria-label="未完了の宿題">' + (homework.length ? renderTaskRows(homework) : '<p class="empty">未完了の宿題はありません。</p>') + '</section>';
+          }
+          html += bookingRequestsHTML();
 
           var summary = renderMonthSummary(D);
           html += summary.progress;
