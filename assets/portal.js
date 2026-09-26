@@ -202,9 +202,9 @@
         function renderTaskRows(tasks) {
           var dis = busy || previewK ? ' disabled' : '', today = S.today || '';
           return '<ul class="homework-list">' + tasks.map(function (t) {
-            var status = t.done ? '<span class="tag green">完了</span>' : t.due && today && t.due < today ? '<span class="tag amber">期限を過ぎています</span>' : t.due && t.due === today ? '<span class="tag amber">今日まで</span>' : '';
-            var verb = t.done ? '未完了に戻す' : '完了にする';
-            return '<li class="homework-row' + (t.done ? ' is-done' : '') + '"><div class="homework-content"><div class="homework-meta"><span class="tag ' + (t.type === '持ち物' ? 'coral' : t.type === 'メモ' ? 'gray' : 'blue') + '">' + esc(t.type || '宿題') + '</span>' + status + (t.createdBy === 'teacher' ? '<span class="small muted">先生から</span>' : '') + '</div><strong class="homework-title">' + esc(t.title) + '</strong><div class="homework-due">' + esc(taskDueText(t)) + (t.done && taskDoneDate(t.doneAt) ? '・' + esc(taskDoneDate(t.doneAt)) + ' に完了' : '') + '</div></div><div class="homework-actions"><button class="' + (t.done ? 'btn-quiet' : 'btn-ghost') + '" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="' + (!t.done) + '" aria-label="' + esc(t.title + '：' + verb) + '"' + dis + '>' + verb + '</button>' + (t.createdBy === 'student' && !t.done ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" aria-label="' + esc(t.title + 'を削除') + '"' + dis + '>削除</button>' : '') + '</div></li>';
+            var status = t.reviewedAt ? '<span class="tag green">確認済み</span>' : t.done ? '<span class="tag amber">先生の確認待ち</span>' : t.due && today && t.due < today ? '<span class="tag amber">期限を過ぎています</span>' : t.due && t.due === today ? '<span class="tag amber">今日まで</span>' : '';
+            var verb = t.done ? '申告を取り消す' : 'できた';
+            return '<li class="homework-row' + (t.done ? ' is-done' : '') + '"><div class="homework-content"><div class="homework-meta"><span class="tag ' + (t.type === '持ち物' ? 'coral' : t.type === 'メモ' ? 'gray' : 'blue') + '">' + esc(t.type || '宿題') + '</span>' + status + (t.createdBy === 'teacher' ? '<span class="small muted">先生から</span>' : '') + '</div><strong class="homework-title">' + esc(t.title) + '</strong>' + (t.reviewNote ? '<p>先生から：' + esc(t.reviewNote) + '</p>' : '') + '<div class="homework-due">' + esc(taskDueText(t)) + (t.done && taskDoneDate(t.doneAt) ? '・' + esc(taskDoneDate(t.doneAt)) + ' に申告' : '') + '</div></div><div class="homework-actions"><button class="' + (t.done ? 'btn-quiet' : 'btn-ghost') + '" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="' + (!t.done) + '" aria-label="' + esc(t.title + '：' + verb) + '"' + dis + (t.reviewedAt ? ' disabled' : '') + '>' + verb + '</button>' + (t.createdBy === 'student' && !t.done ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" aria-label="' + esc(t.title + 'を削除') + '"' + dis + '>削除</button>' : '') + '</div></li>';
           }).join('') + '</ul>';
         }
         function renderHomeHomeworkTable(tasks) {
@@ -216,17 +216,17 @@
             var dueLabel = due ? Number(due.slice(5, 7)) + '/' + Number(due.slice(8, 10)) : t.dueMode === 'nextLesson' ? '予定未定' : '期限なし';
             var source = (S.lessonRecords || []).filter(function(r) { return t.sourceRecordId && String(r.recordId) === String(t.sourceRecordId); })[0];
             var subject = t.subject || (source && source.subject) || t.dueSubject || '—';
-            return '<tr><td>' + esc(subject) + '</td><td>' + esc(t.title) + '</td><td>' + esc(dueLabel) + '</td><td>' + esc(status || '—') + '</td><td class="home-homework-status"><button type="button" class="tag amber" aria-haspopup="dialog" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>未完了</button></td></tr>';
+            return '<tr><td>' + esc(subject) + '</td><td>' + esc(t.title) + (t.reviewNote ? '<br><span class="small">先生から：' + esc(t.reviewNote) + '</span>' : '') + '</td><td>' + esc(dueLabel) + '</td><td>' + esc(status || '—') + '</td><td class="home-homework-status"><button type="button" class="tag amber" aria-haspopup="dialog" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>未完了</button></td></tr>';
           }).join('') + '</tbody></table>';
         }
         function renderTasksPage() {
           var filter = taskFilter(), tasks = visibleTasks(), open = tasks.filter(function (t) { return !t.done; }), done = tasks.filter(function (t) { return t.done; });
           var shown = filter === 'done' ? done : filter === 'all' ? tasks : open;
-          var h = '<h1>宿題</h1><p class="sub">期限の近い順に確認できます。完了にしても、未完了へ戻せます。</p>' + taskFeedback();
-          h += '<nav class="homework-filters" aria-label="宿題の表示">' + [['open','未完了',open.length],['done','完了した宿題',done.length],['all','すべて',tasks.length]].map(function (x) { return '<a href="' + taskPageHref(x[0]) + '"' + (filter === x[0] ? ' class="on" aria-current="page"' : '') + '>' + x[1] + '<span class="cnt">' + x[2] + '</span></a>'; }).join('') + '</nav>';
-          h += '<section class="card homework-panel" aria-label="宿題一覧">' + (shown.length ? renderTaskRows(shown) : '<p class="empty">' + (filter === 'done' ? '表示できる完了済みの宿題はありません。' : filter === 'all' ? '登録されている宿題・持ち物・メモはありません。' : '未完了の宿題・持ち物・メモはありません。') + '</p>') + '</section>';
+          var h = '<h1>宿題</h1><p class="sub">「できた」で先生に申告し、先生の確認で確認済みになります。</p>' + taskFeedback();
+          h += '<nav class="homework-filters" aria-label="宿題の表示">' + [['open','未完了',open.length],['done','確認待ち・確認済み',done.length],['all','すべて',tasks.length]].map(function (x) { return '<a href="' + taskPageHref(x[0]) + '"' + (filter === x[0] ? ' class="on" aria-current="page"' : '') + '>' + x[1] + '<span class="cnt">' + x[2] + '</span></a>'; }).join('') + '</nav>';
+          h += '<section class="card homework-panel" aria-label="宿題一覧">' + (shown.length ? renderTaskRows(shown) : '<p class="empty">' + (filter === 'done' ? '確認待ち・確認済みの宿題はありません。' : filter === 'all' ? '登録されている宿題・持ち物・メモはありません。' : '未完了の宿題・持ち物・メモはありません。') + '</p>') + '</section>';
           if (filter !== 'open') h += '<p class="note">完了済みは現在取得できた範囲を表示しています。過去の全履歴ではありません。</p>';
-          h += '<p class="note">持ち物・自分用メモもここで確認できます。完了は自己チェックで、理解度の判定や先生の添削完了ではありません。</p>';
+          h += '<p class="note">持ち物・自分用メモもここで確認できます。「できた」は本人の申告です。先生が確認すると正式な完了になります。</p>';
           if (previewK) h += '<p class="note">先生のプレビューでは表示のみです。完了・削除はできません。</p>';
           return h;
         }
@@ -236,15 +236,15 @@
           if (route() !== 'home' || homeworkReview.scope !== taskScopeKey()) { homeworkReview = null; return; }
           var t = visibleTasks().filter(function(t) { return String(t.id) === homeworkReview.id && !t.done; })[0];
           if (!t) { homeworkReview = null; return; }
-          app.innerHTML += window.StepwiseCalendar.dayDialog({id:'homework-review-dialog',title:'宿題の完了登録',close:'homework-close',busy:busy,content:'<p>' + esc(t.title) + '</p><p>この宿題を完了にしますか？</p>' + taskFeedback() + '<button class="btn-primary" data-action="homework-confirm"' + (busy || previewK ? ' disabled' : '') + '>完了として登録</button>'});
+          app.innerHTML += window.StepwiseCalendar.dayDialog({id:'homework-review-dialog',title:'宿題のできた報告',close:'homework-close',busy:busy,content:'<p>' + esc(t.title) + '</p><p>この宿題ができたことを先生に報告しますか？</p>' + taskFeedback() + '<button class="btn-primary" data-action="homework-confirm"' + (busy || previewK ? ' disabled' : '') + '>できたと報告</button>'});
           var d = document.getElementById('homework-review-dialog');
           if (d) { d.oncancel=function(e){if(busy)e.preventDefault();else homeworkReview=null;}; if(d.showModal&&!d.open)d.showModal(); }
         }
         function taskToggle(id, done) {
           if (busy || previewK) return;
           var task = visibleTasks().filter(function (t) { return String(t.id) === String(id); })[0];
-          if (!task) { toast('現在の宿題一覧を確認してください'); return; }
-          studentAction({action:'taskDone',k:myKey(),taskId:id,done:done}, done ? 'できた! ✓' : '未完了に戻しました');
+          if (!task || task.reviewedAt) { toast('現在の宿題一覧を確認してください'); return; }
+          studentAction({action:'taskDone',k:myKey(),taskId:id,done:done}, done ? '先生の確認待ちになりました' : '未完了に戻しました');
         }
         function taskDraft() {
           var k = taskScopeKey(), next = S && schedData().next;
@@ -277,7 +277,7 @@
           var h = '<details class="card"' + (trackRead ? ' data-parent-record="' + esc(r.recordId) + '" data-record-revision="' + esc(r.revision) + '"' : '') + '><summary>' + (trackRead ? '<span data-read-label class="tag">確認中</span> ' : '') + fmtDateW(r.date) + ' ' + esc(r.start) + ' ' + esc(lessonLabel(r)) + (rep.actualUnit ? ' <span class="small muted">' + esc(rep.actualUnit) + '</span>' : '') + '</summary>';
           h += window.StepwiseReport.position(r.outline);
           h += window.StepwiseReport.body(r,!editable);
-          if ((r.homework || []).length) h += '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn ? '<input type="checkbox" aria-label="' + esc(x.title) + 'の完了" data-action="taskdone" data-id="' + esc(x.taskId) + '"' + (x.done ? ' checked' : '') + '>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({ dueSubject: r.subject }, x))) + '</span></li>'; }).join('') + '</ul>';
+          if ((r.homework || []).length) h += '<h3>宿題</h3><ul>' + r.homework.map(function (x) { return '<li>' + (editable && x.taskId && !x.withdrawn && !x.reviewedAt ? '<input type="checkbox" aria-label="' + esc(x.title) + 'の完了" data-action="taskdone" data-id="' + esc(x.taskId) + '"' + (x.done ? ' checked' : '') + '>' : x.done ? '☑ ' : '□ ') + esc(x.title) + ' <span class="small muted">' + esc(taskDueText(Object.assign({ dueSubject: r.subject }, x))) + '</span></li>'; }).join('') + '</ul>';
           return h + '</details>';
         }
 
@@ -1025,6 +1025,8 @@
             var homework = visibleTasks().filter(function (t) { return !t.done && (!t.type || t.type === '宿題'); });
             html += '<h2>宿題 <span class="cnt">' + homework.length + '件</span></h2>' + taskFeedback();
             html += '<section class="card homework-panel" aria-label="未完了の宿題">' + (homework.length ? renderHomeHomeworkTable(homework) : '<p class="empty">未完了の宿題はありません。</p>') + '</section>';
+            var waiting=visibleTasks().filter(function(t){return t.done&&!t.reviewedAt&&(!t.type||t.type==='宿題');});
+            if(waiting.length)html+='<details><summary>先生の確認待ち '+waiting.length+'件</summary><div class="card">'+renderTaskRows(waiting)+'</div></details>';
           }
 
           var summary = renderMonthSummary(D);
@@ -1976,10 +1978,10 @@
               if (dm === 'date' && !td) { toast('期限の日付を入れてください'); return; }
               if (dm === 'nextLesson' && !ds) { toast('期限にする授業の科目を入れてください'); return; }
               studentAction({ action: "taskAdd", k: myKey(), type: ty, title: tt, due: td, dueMode: dm, dueSubject: ds }, "追加しました", function () { delete taskDrafts[taskKey]; }); break;
-            case "tasktoggle": if(route()==='home'){if(!busy){homeworkReview={id:String(id),scope:taskScopeKey()};render();}}else taskToggle(id, btn.getAttribute('data-done') === 'true'); break;
+            case "tasktoggle": if(route()==='home'&&btn.getAttribute('data-done')==='true'){if(!busy){homeworkReview={id:String(id),scope:taskScopeKey()};render();}}else taskToggle(id, btn.getAttribute('data-done') === 'true'); break;
             case "homework-close": if(!busy){homeworkReview=null;render();} break;
             case "homework-confirm": if(homeworkReview && homeworkReview.scope===taskScopeKey())taskToggle(homeworkReview.id,true); break;
-            case "taskretry": { var tn = taskNotices[taskScopeKey()]; if (tn && tn.retry && !previewK) studentAction(Object.assign({},tn.retry), tn.retry.done ? 'できた! ✓' : '未完了に戻しました'); break; }
+            case "taskretry": { var tn = taskNotices[taskScopeKey()]; if (tn && tn.retry && !previewK) studentAction(Object.assign({},tn.retry), tn.retry.done ? '先生の確認待ちになりました' : '未完了に戻しました'); break; }
             case "taskdel": studentAction({ action: "taskDel", k: myKey(), taskId: id }, "削除しました"); break;
             case "delblock": {
               var sids = btn.getAttribute("data-ids"), bids = sids ? sids.split(",") : [id], db = (S.blocked || []).filter(function (b) { return String(b.id) === String(bids[0]); })[0];

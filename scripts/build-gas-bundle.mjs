@@ -93,6 +93,10 @@ export function schemaMap() {
     // 台帳の読み書きの対象ではないので外す。目印は写しの管理列 _sheetRow
     if (columns.length && columns.some(c => c.name === '_sheetRow')) out[name] = columns;
   }
+  for (const m of stripped.matchAll(/ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)\s+(TEXT|INTEGER|REAL)\s+NOT NULL\s+DEFAULT\s+(?:''|(-?\d+))\s*;/gi)) {
+    if (!out[m[1]]) throw new Error('Unknown table in additive migration: ' + m[1]);
+    out[m[1]].push({name:m[2],type:m[3].toUpperCase(),isPk:false,defaultValue:m[4] ? Number(m[4]) : 0});
+  }
   return out;
 }
 

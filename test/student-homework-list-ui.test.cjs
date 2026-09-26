@@ -117,8 +117,8 @@ test('completion dates use Japan time for timestamps and preserve date-only valu
     task('date-only', { done: true, doneAt: '2026-09-08' }),
     task('invalid-date', { done: true, doneAt: 'not-a-date' })
   ], '#tasks?filter=done');
-  assert.match(ui.html(), /2026\/9\/23 に完了/);
-  assert.match(ui.html(), /2026\/9\/8 に完了/);
+  assert.match(ui.html(), /2026\/9\/23 に申告/);
+  assert.match(ui.html(), /2026\/9\/8 に申告/);
   assert.doesNotMatch(ui.html(), /T16:00|not-a-date|Invalid Date/);
 });
 
@@ -140,8 +140,8 @@ test('student and parent homes prioritize the calendar and keep homework in its 
   for (const [view, href] of [[ui, '#tasks'], [parent, '#family/tasks']]) {
     assert.match(view.html(), /<h2>予定表<\/h2>[^]*<h2 class="schedule-day-heading">/);
     assert.equal(view.html().match(/<h[12][^>]*>(.*?)<\/h[12]>/)?.[1], '予定表');
-    assert.equal(toggleIds(view).length, view === ui ? 4 : 0);
-    assert.doesNotMatch(view.html(), /homework-summary|取り組む宿題|f-ttitle|【テスト】完了した宿題/);
+    assert.equal(toggleIds(view).length, view === ui ? 5 : 0);
+    assert.doesNotMatch(view.html(), /homework-summary|取り組む宿題|f-ttitle/);
     assert.ok(view.el('tabs').innerHTML.includes(`href="${href}"`));
     view.navigate(href);
     assert.match(view.html(), /<h1>宿題<\/h1>/);
@@ -503,14 +503,15 @@ test('student and family homework have no self-add form', async () => { for (con
 
 test('home shows only incomplete homework after daily lessons and removes completed items', async () => {
   const ui = await ready([task('open'), task('done', {done:true}), task('removed', {withdrawn:true}), task('bag', {type:'持ち物'}), task('memo', {type:'メモ'})], '#home');
-  assert.deepEqual(toggleIds(ui), ['open']);
+  assert.deepEqual(toggleIds(ui), ['open', 'done']);
   assert.ok(ui.html().indexOf('schedule-day-heading') < ui.html().indexOf('aria-label="未完了の宿題"'));
   ui.click('tasktoggle', {'data-id':'open','data-done':'true'});
   assert.equal(ui.requests.length, 1);
-  assert.match(ui.html(), /宿題の完了登録/);
+  assert.match(ui.html(), /宿題のできた報告/);
   ui.click('homework-confirm');
   ui.requests.at(-1).reply({ok:true,state:taskState([task('open',{done:true})])});
   await flush();
-  assert.deepEqual(toggleIds(ui), []);
+  assert.deepEqual(toggleIds(ui), ['open']);
+  assert.match(ui.html(), /先生の確認待ち/);
   assert.match(ui.html(), /未完了の宿題はありません/);
 });

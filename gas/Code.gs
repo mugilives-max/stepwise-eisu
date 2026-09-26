@@ -874,12 +874,12 @@ function taskRows_() {
   return readRows_('tasks').filter(function (x) { return !x.withdrawnAt; }).map(function (x) {
     return Object.assign({ id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), title: String(x.title || ''),
       due: normDate_(x.due) || '', createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '', createdBy: String(x.createdBy || ''),
-      done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' }, typeof lessonTaskDueView_ === 'function' ? lessonTaskDueView_(x) : {});
+      reviewedAt:String(x.reviewedAt||''),reviewNote:String(x.reviewNote||''),done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' }, typeof lessonTaskDueView_ === 'function' ? lessonTaskDueView_(x) : {});
   }).filter(function (x) { return x.id && x.title; });
 }
 function tasksFor_(studentId, sinceDays) {
   var since = addDays_(todayStr_(), -(sinceDays || 45));
-  return taskRows_().filter(function (t) { return t.studentId === String(studentId) && (!t.done || (t.due || todayStr_()) >= since); })
+  return taskRows_().filter(function (t) { return t.studentId === String(studentId) && (!t.reviewedAt || (t.due || todayStr_()) >= since); })
     .sort(function (a, b) { return (a.due || '9999') < (b.due || '9999') ? -1 : 1; });
 }
 function taskAddCore_(studentId, type, title, due, by, req) {
@@ -948,7 +948,7 @@ function adminTaskDel_(req) {
 function adminTaskDone_(req) {
   var rows = readRows_('tasks');
   for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(req.studentId) && !rows[i].withdrawnAt) { try { if (typeof lessonSetTaskDone_ === 'function') return lessonSetTaskDone_(rows[i],req.done === true || String(req.done) === 'true'); sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; } catch (e) { return lessonError_(e); } }
+    if (String(rows[i].id) === String(req.taskId) && String(rows[i].studentId) === String(req.studentId) && !rows[i].withdrawnAt) { try { if (typeof lessonSetTaskDone_ === 'function') return lessonSetTaskDone_(rows[i],req.done === true || String(req.done) === 'true',true,req.reviewNote); sheet_('tasks').getRange(i + 2, 8).setValue(req.done === true || String(req.done) === 'true' ? new Date() : ''); return { ok: true }; } catch (e) { return lessonError_(e); } }
   }
   return { error: '見つかりません' };
 }
