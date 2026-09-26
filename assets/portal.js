@@ -216,7 +216,7 @@
             var dueLabel = due ? Number(due.slice(5, 7)) + '/' + Number(due.slice(8, 10)) : t.dueMode === 'nextLesson' ? '予定未定' : '期限なし';
             var source = (S.lessonRecords || []).filter(function(r) { return t.sourceRecordId && String(r.recordId) === String(t.sourceRecordId); })[0];
             var subject = t.subject || (source && source.subject) || t.dueSubject || '—';
-            return '<tr><td>' + esc(subject) + '</td><td>' + esc(t.title) + '</td><td>' + esc(dueLabel) + '</td><td>' + esc(status || '—') + '</td><td class="home-homework-status"><button type="button" class="home-homework-status-button" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>未完了</button></td></tr>';
+            return '<tr><td>' + esc(subject) + '</td><td>' + esc(t.title) + '</td><td>' + esc(dueLabel) + '</td><td>' + esc(status || '—') + '</td><td class="home-homework-status"><button type="button" class="tag amber" aria-haspopup="dialog" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>未完了</button></td></tr>';
           }).join('') + '</tbody></table>';
         }
         function renderTasksPage() {
@@ -229,6 +229,16 @@
           h += '<p class="note">持ち物・自分用メモもここで確認できます。完了は自己チェックで、理解度の判定や先生の添削完了ではありません。</p>';
           if (previewK) h += '<p class="note">先生のプレビューでは表示のみです。完了・削除はできません。</p>';
           return h;
+        }
+        var homeworkReview = null;
+        function mountHomeworkReview() {
+          if (!homeworkReview) return;
+          if (route() !== 'home' || homeworkReview.scope !== taskScopeKey()) { homeworkReview = null; return; }
+          var t = visibleTasks().filter(function(t) { return String(t.id) === homeworkReview.id && !t.done; })[0];
+          if (!t) { homeworkReview = null; return; }
+          app.innerHTML += window.StepwiseCalendar.dayDialog({id:'homework-review-dialog',title:'宿題の完了登録',close:'homework-close',busy:busy,content:'<p>' + esc(t.title) + '</p><p>この宿題を完了にしますか？</p>' + taskFeedback() + '<button class="btn-primary" data-action="homework-confirm"' + (busy || previewK ? ' disabled' : '') + '>完了として登録</button>'});
+          var d = document.getElementById('homework-review-dialog');
+          if (d) { d.oncancel=function(e){if(busy)e.preventDefault();else homeworkReview=null;}; if(d.showModal&&!d.open)d.showModal(); }
         }
         function taskToggle(id, done) {
           if (busy || previewK) return;
@@ -1751,7 +1761,7 @@
             if(F.studentChooser)app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-student-dialog',title:'生徒ページを選択',close:'fa-student-close',busy:F.busy,content:(F.error?'<p role="alert">'+esc(F.error)+'</p>':'')+'<div class="row">'+(F.home.children||[]).map(function(c){return '<button class="btn-quiet" data-action="fa-student-pick" data-child="'+esc(c.studentId)+'"'+(F.busy?' disabled':'')+'>'+esc(c.name)+'</button>';}).join('')+'</div>'});
           }
           app.innerHTML+=bookingReviewHTML();var reviewDialog=document.getElementById('booking-review-dialog');if(reviewDialog){reviewDialog.oncancel=function(e){if(busy)e.preventDefault();else bookingReview=null;};if(reviewDialog.showModal&&!reviewDialog.open)reviewDialog.showModal();}
-          mountDayDialog(); mountAcceptDialog();
+          mountHomeworkReview(); mountDayDialog(); mountAcceptDialog();
           meetWatch();
           if(!window.StepwiseServices)return;
           if(route()==='family' && F.home && F.step==='home') { renderFamilyPanels(); return; }
@@ -1966,7 +1976,9 @@
               if (dm === 'date' && !td) { toast('期限の日付を入れてください'); return; }
               if (dm === 'nextLesson' && !ds) { toast('期限にする授業の科目を入れてください'); return; }
               studentAction({ action: "taskAdd", k: myKey(), type: ty, title: tt, due: td, dueMode: dm, dueSubject: ds }, "追加しました", function () { delete taskDrafts[taskKey]; }); break;
-            case "tasktoggle": taskToggle(id, btn.getAttribute('data-done') === 'true'); break;
+            case "tasktoggle": if(route()==='home'){if(!busy){homeworkReview={id:String(id),scope:taskScopeKey()};render();}}else taskToggle(id, btn.getAttribute('data-done') === 'true'); break;
+            case "homework-close": if(!busy){homeworkReview=null;render();} break;
+            case "homework-confirm": if(homeworkReview && homeworkReview.scope===taskScopeKey())taskToggle(homeworkReview.id,true); break;
             case "taskretry": { var tn = taskNotices[taskScopeKey()]; if (tn && tn.retry && !previewK) studentAction(Object.assign({},tn.retry), tn.retry.done ? 'できた! ✓' : '未完了に戻しました'); break; }
             case "taskdel": studentAction({ action: "taskDel", k: myKey(), taskId: id }, "削除しました"); break;
             case "delblock": {

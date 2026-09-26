@@ -506,6 +506,9 @@ test('home shows only incomplete homework after daily lessons and removes comple
   assert.deepEqual(toggleIds(ui), ['open']);
   assert.ok(ui.html().indexOf('schedule-day-heading') < ui.html().indexOf('aria-label="未完了の宿題"'));
   ui.click('tasktoggle', {'data-id':'open','data-done':'true'});
+  assert.equal(ui.requests.length, 1);
+  assert.match(ui.html(), /宿題の完了登録/);
+  ui.click('homework-confirm');
   ui.requests.at(-1).reply({ok:true,state:taskState([task('open',{done:true})])});
   await flush();
   assert.deepEqual(toggleIds(ui), []);
