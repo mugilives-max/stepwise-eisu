@@ -645,14 +645,28 @@
         // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)。登録不可(先生の休み)はホーム・予定の両方で出す(2026-09-11)
         var bookingReview=null;
         function bookingReviewButton(s){var b=s.teacherBooking;if(!b||b.status==='registering')return '';if(b.status==='pending')return ' <button type="button" class="plan-count-warning" data-action="booking-review" data-id="'+esc(s.id)+'" aria-label="先生の登録内容を確認" title="先生の登録内容を確認"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>';return ' <button class="tag '+(b.status==='confirmed'?'gray':b.status==='correction'?'red':'amber')+'" data-action="booking-review" data-id="'+esc(s.id)+'">'+({pending:'先生の登録内容を確認',confirmed:'先生が登録・確認済み',correction:'修正依頼中'}[b.status]||'確認')+'</button>';}
+        function cancelReviewNotice(s){
+          var amount=Number(s.amount),standard=Number(s.standardAmount),known=s.standardAmount!=null&&Number.isFinite(standard),at=Date.parse(s.receivedAt),start=Date.parse(s.date+'T'+s.start+':00+09:00'),deadline=Date.parse(s.date+'T23:00:00+09:00')-86400000;
+          var reason=s.source==='teacher'?'教室都合のキャンセルのため':s.source==='noshow'?'無断欠席として登録されているため':Number.isFinite(at)&&at>=start?'授業開始後のキャンセルのため':Number.isFinite(at)&&at>deadline?'前日23時を過ぎて授業開始前までのキャンセルのため':Number.isFinite(at)?'前日23時までにご連絡いただいたため':'';
+          var text='';
+          if(known&&standard>amount)text=reason+'、規定のキャンセル料は'+yen(standard)+'ですが、'+(amount===0?'全額免除となり、キャンセル料は0円です。':yen(standard-amount)+'減額し、キャンセル料は'+yen(amount)+'となっています。');
+          else if(amount===0)text=(reason?reason+'、':'')+'キャンセル料はかかりません。';
+          else text=(reason?reason+'、':'')+'キャンセル料が'+yen(amount)+'発生します。';
+          if(text.charAt(0)==='、')text=text.slice(1);
+          var intro=s.confirmed?'キャンセル内容は確認済みです。':'キャンセル登録されました。内容をご確認の上、問題がなければ「承認する」ボタンを押してください。';
+          var h='<p>'+intro+'</p><p>'+esc(text)+'</p>';
+          if(s.relief&&s.relief.status==='pending')h+='<p>減額・免除の申請を確認中です。表示金額は審査前の金額です。</p>';
+          else if(!s.relief&&amount>0)h+='<p>急病・災害などの事情があり、減額・免除を申請する場合は「減額・免除を申請する」から申請をお願いします。</p>';
+          return h;
+        }
         function cancelReviewDetails(s){
           var stamp='記録なし';if(s.source==='noshow')stamp='連絡なし';else if(s.source==='teacher')stamp='対象外（先生都合）';else if(s.receivedAt){var t=new Date(Date.parse(s.receivedAt)+9*3600000);if(!isNaN(t.getTime()))stamp=t.toISOString().slice(0,16).replace('T',' ').replace(/-/g,'/')+'（日本時間）';}
           var standard=Number(s.standardAmount),amount=Number(s.amount),known=s.standardAmount!=null,reduction=known&&standard>amount?standard-amount:0;
           var rows=[['授業日時',s.date.replace(/-/g,'/')+' '+s.start+'〜'+endTime(s.start,s.min)],['科目',s.subject||'—'],['状態','キャンセル済み'],['連絡受付日時',stamp],['連絡方法',({request:'マイページからの申請',external:'LINE・電話など',noshow:'連絡なし（無断欠席）',teacher:'先生都合'})[s.source]||'記録なし'],['規定のキャンセル料',known?yen(standard):'記録なし'],['減額・免除',reduction?(amount===0?'全額免除':'減額')+'（'+yen(reduction)+'）':'なし'],['適用中のキャンセル料',yen(amount)]];
           if(s.relief){rows.push(['減額・免除の申請',s.relief.status==='pending'?'確認中（請求確定を保留）':({unchanged:'規定どおり',reduced:'減額承認',waived:'免除承認'})[s.relief.status]||'審査済み']);rows.push(['申請理由',s.relief.reason]);if(s.relief.response)rows.push(['先生の回答',s.relief.response]);}
-          return '<table class="portal-plan-table" style="width:100%;table-layout:fixed"><tbody>'+rows.map(function(r){return '<tr><th scope="row" style="width:38%;text-align:left">'+esc(r[0])+'</th><td style="text-align:left;overflow-wrap:anywhere">'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>';
+          return cancelReviewNotice(s)+'<table class="portal-plan-table" style="width:100%;table-layout:fixed"><tbody>'+rows.map(function(r){return '<tr><th scope="row" style="width:38%;text-align:left">'+esc(r[0])+'</th><td style="text-align:left;overflow-wrap:anywhere">'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>';
         }
-        function cancelReliefForm(d){var dis=busy||previewK?' disabled':'',s=d.slot;return (!s.confirmed?'<p><button class="btn-primary" data-action="cancel-confirm"'+dis+'>確認しました</button></p>':'<p>確認済みです。</p>')+(!s.relief&&s.amount>0?'<details'+(d.reason?' open':'')+'><summary>減額・免除を申請する</summary><p>急病・災害など、やむを得ない事情がある場合は理由をご記入ください。確認済みでも申請できます。</p><textarea id="cancel-circumstances" maxlength="1000" style="width:100%;min-height:90px"'+dis+'>'+esc(d.reason||'')+'</textarea><button class="btn-quiet" data-action="cancel-relief-send"'+dis+'>減額・免除を申請する</button><p class="note">キャンセルは確定済みのまま、料金の請求確定を先生の審査まで保留します。</p></details>':'');}
+        function cancelReliefForm(d){var dis=busy||previewK?' disabled':'',s=d.slot;return (!s.confirmed?'<p><button class="btn-primary" data-action="cancel-confirm"'+dis+'>承認する</button></p>':'<p>確認済みです。</p>')+(!s.relief&&s.amount>0?'<details'+(d.reason?' open':'')+'><summary>減額・免除を申請する</summary><p>急病・災害など、やむを得ない事情がある場合は理由をご記入ください。確認済みでも申請できます。</p><textarea id="cancel-circumstances" maxlength="1000" style="width:100%;min-height:90px"'+dis+'>'+esc(d.reason||'')+'</textarea><button class="btn-quiet" data-action="cancel-relief-send"'+dis+'>減額・免除を申請する</button><p class="note">キャンセルは確定済みのまま、料金の請求確定を先生の審査まで保留します。</p></details>':'');}
 
         function changeHistoryTable(changes){return (changes||[]).map(function(c){var x=c.context||{},stamp=function(s){return s.date+' '+s.start+'〜'+endTime(s.start,s.min);};var rows=[['変更前',stamp(c.before)],['変更後',stamp(c.after)],['連絡受付日時',x.receivedAt?x.receivedAt.replace('T',' ')+'（日本時間）':'記録なし'],['変更理由',x.reason||'記録なし'],['経緯',x.note||'記録なし']];return '<table class="portal-plan-table" style="width:100%;border-collapse:collapse;margin:12px 0"><tbody>'+rows.map(function(r){return '<tr><th scope="row" style="border:1px solid #b8c8df;background:#edf1f5;padding:10px;text-align:left;width:28%">'+esc(r[0])+'</th><td style="border:1px solid #b8c8df;padding:10px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere">'+esc(r[1])+'</td></tr>';}).join('')+'</tbody></table>';}).join('');}
         function bookingReviewHTML(){
