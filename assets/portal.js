@@ -207,6 +207,13 @@
             return '<li class="homework-row' + (t.done ? ' is-done' : '') + '"><div class="homework-content"><div class="homework-meta"><span class="tag ' + (t.type === '持ち物' ? 'coral' : t.type === 'メモ' ? 'gray' : 'blue') + '">' + esc(t.type || '宿題') + '</span>' + status + (t.createdBy === 'teacher' ? '<span class="small muted">先生から</span>' : '') + '</div><strong class="homework-title">' + esc(t.title) + '</strong><div class="homework-due">' + esc(taskDueText(t)) + (t.done && taskDoneDate(t.doneAt) ? '・' + esc(taskDoneDate(t.doneAt)) + ' に完了' : '') + '</div></div><div class="homework-actions"><button class="' + (t.done ? 'btn-quiet' : 'btn-ghost') + '" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="' + (!t.done) + '" aria-label="' + esc(t.title + '：' + verb) + '"' + dis + '>' + verb + '</button>' + (t.createdBy === 'student' && !t.done ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" aria-label="' + esc(t.title + 'を削除') + '"' + dis + '>削除</button>' : '') + '</div></li>';
           }).join('') + '</ul>';
         }
+        function renderHomeHomeworkTable(tasks) {
+          var dis = busy || previewK ? ' disabled' : '', today = S.today || '';
+          return '<table class="portal-plan-table home-homework-table"><colgroup><col style="width:52%"><col style="width:32%"><col style="width:16%"></colgroup><thead><tr><th scope="col">内容</th><th scope="col">期限</th><th scope="col">完了</th></tr></thead><tbody>' + tasks.map(function(t) {
+            var status = t.due && today && t.due < today ? '期限超過' : t.due === today ? '今日まで' : '';
+            return '<tr><td>' + esc(t.title) + '</td><td>' + esc(taskDueText(t)) + (status ? '<br><span class="tag amber">' + status + '</span>' : '') + '</td><td><button class="btn-ghost btn-sm" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>完了にする</button></td></tr>';
+          }).join('') + '</tbody></table>';
+        }
         function renderTasksPage() {
           var filter = taskFilter(), tasks = visibleTasks(), open = tasks.filter(function (t) { return !t.done; }), done = tasks.filter(function (t) { return t.done; });
           var shown = filter === 'done' ? done : filter === 'all' ? tasks : open;
@@ -1002,7 +1009,7 @@
           if (route() !== 'family') {
             var homework = visibleTasks().filter(function (t) { return !t.done && (!t.type || t.type === '宿題'); });
             html += '<h2>宿題 <span class="cnt">' + homework.length + '件</span></h2>' + taskFeedback();
-            html += '<section class="card homework-panel" aria-label="未完了の宿題">' + (homework.length ? renderTaskRows(homework) : '<p class="empty">未完了の宿題はありません。</p>') + '</section>';
+            html += '<section class="card homework-panel" aria-label="未完了の宿題">' + (homework.length ? renderHomeHomeworkTable(homework) : '<p class="empty">未完了の宿題はありません。</p>') + '</section>';
           }
 
           var summary = renderMonthSummary(D);
