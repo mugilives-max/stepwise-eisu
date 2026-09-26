@@ -1427,6 +1427,7 @@ function adminUnbook_(req) {
 
 function adminToggleDone_(req) {
   var r = findSlotRow_(req.slotId);
+  if(req.expectedSnapshot&&(!r||String(r.slot.studentId)!==String(req.studentId)||!schedulingExpectedMatches_(req.expectedSnapshot,r.slot)))return {error:'授業情報が変わっています。詳細を開き直してください'};
   if (!r || r.slot.status !== 'booked') return { error: '確定した授業を選んでください' };
   var pending = typeof schedulingPendingSlotMutation_ === 'function' ? schedulingPendingSlotMutation_(r.slot.id) : null; if (pending) return pending;
   var gate = billingSlotMutable_(r.slot); if (gate) return gate;
