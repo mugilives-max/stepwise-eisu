@@ -69,8 +69,8 @@ export function schemaMap() {
   const sql = fs.readdirSync(dir).filter(n => n.endsWith('.sql')).sort()
     .map(n => fs.readFileSync(path.join(dir, n), 'utf8')).join('\n');
   const stripped = sql.replace(/--[^\n]*/g, '');
-  const out = {};
-  const table = /CREATE TABLE\s+(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\(([\s\S]*?)\n\);/g;
+  const out = {}, internal = new Set();
+  const table = /CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\(([\s\S]*?)\n\);/g;
   for (const m of stripped.matchAll(table)) {
     const name = m[1] || m[2];
     const columns = [];
@@ -92,8 +92,10 @@ export function schemaMap() {
     // シートの写しである表だけを載せる。Worker 自身の表（_ledger, _effects, pushSubs …）は
     // 台帳の読み書きの対象ではないので外す。目印は写しの管理列 _sheetRow
     if (columns.length && columns.some(c => c.name === '_sheetRow')) out[name] = columns;
+    else internal.add(name);
   }
   for (const m of stripped.matchAll(/ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)\s+(TEXT|INTEGER|REAL)\s+NOT NULL\s+DEFAULT\s+(?:''|(-?\d+))\s*;/gi)) {
+    if (internal.has(m[1])) continue;
     if (!out[m[1]]) throw new Error('Unknown table in additive migration: ' + m[1]);
     out[m[1]].push({name:m[2],type:m[3].toUpperCase(),isPk:false,defaultValue:m[4] ? Number(m[4]) : 0});
   }

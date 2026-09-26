@@ -12,7 +12,7 @@ test('authenticated teacher parsing calls Anthropic from the Worker without iden
   const calls = [], oldFetch = global.fetch;
   global.fetch = async (url, init) => {
     calls.push({ url: String(url), headers: init.headers, body: JSON.parse(init.body) });
-    return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'propose_schedule', input: { items: [{ kind: 'offer', dates: ['2026-09-24'], start: '17:00', min: 90, subject: '英語' }], questions: [], summary: '英語の授業です' } }], usage: { input_tokens: 100, output_tokens: 30 } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'propose_schedule', input: { items: [{ kind: 'offer', dates: [new Date(Date.now()+2*86400000).toISOString().slice(0,10)], start: '17:00', min: 90, subject: '英語' }], questions: [], summary: '英語の授業です' } }], usage: { input_tokens: 100, output_tokens: 30 } }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   try {
     const env = { ...p.env, NL_ENABLED: '1', ANTHROPIC_API_KEY: 'synthetic-api-key', WRITE_MODE: 'worker' };

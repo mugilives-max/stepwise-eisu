@@ -22,7 +22,7 @@ const MAX_ATTEMPTS = 3;
 
 export class LedgerConflict extends Error {}
 
-async function takeNaturalScheduleQuota(db, scope, limit) {
+export async function takeNaturalScheduleQuota(db, scope, limit) {
   const cutoff = new Date(Date.now() - 3600000).toISOString(), now = new Date().toISOString();
   await db.prepare('delete from _nl_usage where createdAt < ?').bind(cutoff).run();
   const inserted = await db.prepare('insert into _nl_usage (scope, createdAt) select ?, ? where (select count(*) from _nl_usage where scope = ? and createdAt >= ?) < ?')

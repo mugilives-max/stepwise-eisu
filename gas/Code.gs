@@ -1269,6 +1269,7 @@ function admin_(req) {
     case 'delEvent':    return kanriWrap_(req, { ok: delEvent_(req.eventId) }, req.studentId);
     case 'planSet':     return kanriWrap_(req, planSet_(req), req.studentId);
     case 'scheduleParseTeacher': return scheduleParseTeacher_(req);
+    case 'documentEventAdd': return documentEventAdd_(req);
     case 'nlApplyTeacher': { var na = nlApplyTeacher_(req); if (na.error) return na; var nw = kanriWrap_(req, na, req.studentId); if (nw && nw.ok) { nw.results = na.results; nw.added = na.added; } return nw; }
     case 'planLineSave': return kanriWrap_(req, planLineSave_(req), req.studentId);
     case 'planLineDelete': return kanriWrap_(req, planLineDelete_(req), req.studentId);

@@ -1,7 +1,8 @@
+import { parseDocument } from './document-parse.mjs';
 import { createRuntime } from './read.mjs';
 import { Buffer } from 'node:buffer';
 
-export const DOCUMENT_ACTIONS = ['documentList', 'documentUpload', 'documentRead', 'documentRemove'];
+export const DOCUMENT_ACTIONS = ['documentList', 'documentUpload', 'documentRead', 'documentRemove', 'documentParse'];
 const fail = error => ({ error });
 async function drive(env, document, fetcher) {
   if (!env.SYNC_KEY || env.SYNC_KEY.length < 24 || !/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(env.GAS_URL || '')) throw Error('storage unavailable');
@@ -45,6 +46,7 @@ export async function handleDocuments(body, env, options = {}) {
     await db.prepare("insert into _studentDocuments (id,studentId,name,fileId,fileHash,size,createdAt,removedAt) values (?,?,?,?,?,?,?,'') on conflict(id) do update set removedAt = ''").bind(id,sid,name,stored.fileId,hash,bytes.length,new Date().toISOString()).run();
     return {ok:true,id};
   }
+  if (body.action === 'documentParse' && !teacher) return fail('資料の読み取りは先生が行います');
   if (body.action === 'documentRemove' && !teacher) return fail('資料の削除は先生が行います');
   const row = await db.prepare("select * from _studentDocuments where id = ? and studentId = ? and removedAt = ''").bind(String(body.id || ''),sid).first();
   if (!row) return fail('資料が見つかりません');
@@ -52,6 +54,7 @@ export async function handleDocuments(body, env, options = {}) {
     await db.prepare('update _studentDocuments set removedAt = ? where id = ? and studentId = ?').bind(new Date().toISOString(),row.id,sid).run();
     return {ok:true};
   }
+  if (body.action === 'documentParse') return parseDocument(body,env,row,()=>drive(env,{op:'read',fileId:row.fileId},options.fetcher || fetch),{...options,grade:String((gas.ledgerRows_('生徒台帳').find(p=>String(p['生徒ID'])===sid)||{})['学年'] || '')});
   const file = await drive(env,{op:'read',fileId:row.fileId},options.fetcher || fetch);
   if (typeof file.base64 !== 'string') throw Error('storage unavailable');
   return {ok:true,name:row.name,mime:'application/pdf',base64:file.base64};
