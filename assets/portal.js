@@ -623,7 +623,6 @@
         // 選んだ日の内訳。withActions=true なら「この日に:」のボタン(予定ページ)。登録不可(先生の休み)はホーム・予定の両方で出す(2026-09-11)
         var bookingReview=null;
         function bookingReviewButton(s){var b=s.teacherBooking;if(!b||b.status==='registering')return '';if(b.status==='pending')return ' <button type="button" class="plan-count-warning" data-action="booking-review" data-id="'+esc(s.id)+'" aria-label="先生の登録内容を確認" title="先生の登録内容を確認"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle class="warning-dot" cx="12" cy="17" r=".8"/></svg></button>';return ' <button class="tag '+(b.status==='confirmed'?'gray':b.status==='correction'?'red':'amber')+'" data-action="booking-review" data-id="'+esc(s.id)+'">'+({pending:'先生の登録内容を確認',confirmed:'先生が登録・確認済み',correction:'修正依頼中'}[b.status]||'確認')+'</button>';}
-        function bookingRequestsHTML(name){var rows=(S.slots||[]).concat(S.history||[]).filter(function(x){return x.teacherBooking&&x.teacherBooking.status==='pending'&&x.date!==selDate;});return rows.length?'<div class="card"><p>先生が登録した授業の内容をご確認ください。</p>'+rows.map(function(x){return '<p>'+esc((name?name+' ':'')+fmtDateW(x.date)+' '+x.start+' '+lessonLabel(x))+bookingReviewButton(x)+'</p>';}).join('')+'</div>':'';}
         function bookingReviewHTML(){
           var d=bookingReview;if(!d)return '';if(d.scope!==taskScopeKey()){bookingReview=null;return '';}
           var s=d.slot,b=s.teacherBooking,dis=busy||previewK?' disabled':'',parent=route()==='family',perms=S.permissions||{};
@@ -1005,7 +1004,6 @@
             html += '<h2>宿題 <span class="cnt">' + homework.length + '件</span></h2>' + taskFeedback();
             html += '<section class="card homework-panel" aria-label="未完了の宿題">' + (homework.length ? renderTaskRows(homework) : '<p class="empty">未完了の宿題はありません。</p>') + '</section>';
           }
-          html += bookingRequestsHTML();
 
           var summary = renderMonthSummary(D);
           html += summary.progress;
@@ -1388,7 +1386,7 @@
           if(!children.length)return '<p>子どもの紐付けを先生にご依頼ください。</p>';
           if(current)familyHomeViews[current.studentId]=savedView;
           h+=renderFamilyCalendar(children);
-          var rows=[],bookingRequests='',dialogs='',progress='',confirms='',offers='',offerCount=0,planCount=0,remain=0,total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
+          var rows=[],dialogs='',progress='',confirms='',offers='',offerCount=0,planCount=0,remain=0,total={count:0,minutes:0},month='',today='',canAI=false,offsShown=false;
           children.forEach(function(c){
             var st=F.childState[c.studentId];
             if(!st||!st.me){if(!F.stateBusy)familyLoadChildState(c.studentId);return;}
@@ -1398,7 +1396,6 @@
             offsShown=true;today=today||D.today;canAI=canAI||!!st.nlEnabled||!!previewK;
             function owned(markup){return familyOwnedHtml(markup,c.studentId);}
             day.rows.forEach(function(row){rows.push({start:row.start,html:owned(row.html)});});
-            bookingRequests+=owned(bookingRequestsHTML(name));
             dialogs+=owned(day.dialogs)+owned(renderPendingBar(D,name));
             progress+='<section class="family-student-progress"><h3>'+esc(name)+'</h3>'+ (summary.progressRows?owned(summary.progressHead+summary.progressRows+'</tbody></table></div>'):'<div class="empty">送信済みの計画はありません</div>')+'</section>';confirms+=owned(summary.confirm||'');
             planCount+=summary.planCount||0;remain+=summary.remain||0;
@@ -1411,7 +1408,6 @@
           var canAdd=familyCalendar.date>=today;
           h+=window.StepwiseCalendar.dayHeading({date:familyCalendar.date,title:fmtDateW(familyCalendar.date)+'の授業',disabled:busy||NL.busy,add:canAdd?{action:'family-dayadd',label:'この日に予定を追加'}:null,ai:canAdd&&canAI?{action:'family-dayai',label:'AIで予定登録'}:null});
           h+=rows.length?'<div class="card daylist">'+rows.sort(function(a,b){return a.start.localeCompare(b.start);}).map(function(r){return r.html;}).join('')+'</div>':'<div class="empty">この日の予定はありません</div>';
-          h+=bookingRequests;
           h+='<section class="parent-progress"><h2>授業計画・実施状況 <span class="cnt">'+planCount+'件の計画</span></h2><div class="card">';
           h+=progress||'<div class="empty">送信済みの計画はありません</div>';
           if(remain)h+='<p class="small">あと '+remain+' 回、日程調整が必要です。</p>';
