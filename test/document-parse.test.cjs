@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {createHarness,TEACHER_TOKEN}=require('./gas-harness.cjs');
 const {createParity}=require('./helpers/parity-harness.cjs');
 test.before(async()=>{(await import('../scripts/build-gas-bundle.mjs')).generate();});
-const event={date:'2026-10-01',dateTo:'2026-10-01',title:'中間テスト',audience:'target',test:true};
+const event={category:'exam',date:'2026-10-01',dateTo:'2026-10-01',title:'中間テスト',audience:'target',test:true};
 async function setup(){
  const h=createHarness();h.admin('state');h.admin('kanriSaveProfile',{studentId:'test-a',profile:{'学年':'中学3年生'}});
  const p=await createParity(h);await p.d1.prepare("insert into _studentDocuments (id,studentId,name,fileId,fileHash,size,createdAt) values ('doc','test-a','test.pdf','file','hash',50,'2026-09-26')").run();
@@ -47,4 +47,16 @@ test('missing grade is conservative, grade/year changes bypass cache, truncated 
  assert.equal((await s.call({...req,year:2027})).cached,undefined);assert.equal(s.counts().ai,2);
  await s.p.d1.prepare("update _studentDocuments set analysis = ''").run();s.options.aiFetch=async()=>Response.json({stop_reason:'max_tokens',content:[]});assert.match((await s.call(req)).error,/分けたPDF/);
  assert.equal((await s.p.d1.prepare('select analysis from _studentDocuments').first()).analysis,'');
+});
+
+test('routine school items are omitted while tutoring-relevant events remain',async()=>{
+ const {normalizeEvents}=await import('../cf/worker/document-parse.mjs');
+ const excluded=['尿検査','学校公開（平日）','給食開始日','歯科検診'];
+ const items=excluded.map(title=>({...event,title,category:'major_event'})).concat([{...event,title:'朝会',category:'other'},event,{...event,title:'夏休み',category:'vacation'},{...event,title:'修学旅行',category:'trip'},{...event,title:'体育祭',category:'major_event'},{...event,title:'学校公開に伴う休日登校',category:'schedule_change'}]);
+ assert.deepEqual(normalizeEvents({events:items},2026).events.map(e=>e.title),['中間テスト','夏休み','修学旅行','体育祭','学校公開に伴う休日登校']);
+});
+test('old broad extraction cache is replaced with the narrowed policy',async()=>{
+ const s=await setup();await s.p.d1.prepare('update _studentDocuments set analysis = ?').bind(JSON.stringify({key:JSON.stringify([1,2026,'中学3年生']),result:{ok:true,events:[{title:'尿検査'}]}})).run();
+ const result=await s.call(req);assert.equal(result.cached,undefined);assert.equal(s.counts().ai,1);assert.ok(!result.events.some(e=>e.title==='尿検査'));assert.match(s.payload().system,/学習計画・授業日時/);
+ assert.equal((await s.call(req)).cached,true);
 });
