@@ -767,11 +767,10 @@
             h+=ended?finishRecordButton(s,day,s.studentId):slotDelivery(s,null,true);
           } else {
             var label=s.lessonDraftStatus==='draft'?'記録を再開':record==='active'?'記録を見る':record==='void'?'記録を確認':'記録を入力';
-            if(s.date<=day)h+='<a class="'+(record==='active' && s.lessonDraftStatus!=='draft'?'btn-quiet':'btn-primary')+' btn-sm" href="'+esc(lessonHref(s.studentId,s.id))+'">'+label+'</a>';
+            if(s.date<=day)h+='<a class="'+(record==='active' && s.lessonDraftStatus!=='draft'?'btn-quiet':'btn-primary')+' btn-sm" href="'+esc(lessonHref(s.studentId,s.id)+(hasConcurrentLesson(s)?'&multiple=1':''))+'">'+label+'</a>';
             if (s.meetUrl && !s.done) h+='<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="'+esc(s.meetUrl)+'">Meet</a>';
             h+='<details><summary class="small" style="cursor:pointer;padding:8px">その他</summary>';
             if (s.date<=day) h+='<button class="btn-quiet btn-sm" data-action="toggledone" data-id="'+esc(s.id)+'" data-sid="'+esc(s.studentId)+'" data-done="'+(s.done?'0':'1')+'"'+(busy?' disabled':'')+'>'+(s.done?'未実施に戻す':'実施済みにする')+'</button>';
-            if(hasConcurrentLesson(s) && s.date>=day) h+='<a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>';
             h+='<a class="btn-quiet btn-sm" href="#s='+encodeURIComponent(s.studentId)+'">生徒の予定を確認</a></details>';
           }
           return h+'</div></article>';
@@ -1243,7 +1242,7 @@
         function lessonRecordTag(s, studentId) {
           if (!s.done) return '';
           var recorded = s.lessonRecordStatus === 'active';
-          return ' <a class="tag ' + (recorded ? 'blue' : 'red') + '" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '" title="授業記録を開く">' + (recorded ? '記入済' : '未記入') + '</a>';
+          return ' <a class="tag ' + (recorded ? 'blue' : 'red') + '" href="' + esc(lessonHref(studentId || s.studentId, s.id)+(hasConcurrentLesson(s,studentId)?'&multiple=1':'')) + '" title="授業記録を開く">' + (recorded ? '記入済' : '未記入') + '</a>';
         }
         var cancelDialog=null;
         var reliefDialog=null;
@@ -1770,7 +1769,7 @@
         }
         function renderLessonPair() {
           renderNav();var p=lessonPair,r=route();
-          var h='<div class="head"><div><h1>同時受講の授業記録</h1><p class="sub">保存・公開は生徒ごとに行います。先生メモは非公開です。</p></div><a href="#home" class="btn-quiet btn-sm">ホームへ</a></div>';
+          var h='<div class="head"><div><h1>複数授業を記録</h1><p class="sub">保存・公開は生徒ごとに行います。先生メモは非公開です。</p></div><a href="#home" class="btn-quiet btn-sm">ホームへ</a></div>';
           if(!p){app.innerHTML=h;return;}
           if(p.error)h+='<p class="lc-notice" role="alert">'+esc(p.error)+'</p><button class="btn-quiet" data-action="reload">再確認</button>';
           if(p.busy)h+='<p>同時受講の予定を確認しています…</p>';
@@ -1804,7 +1803,7 @@
           var page = route().page, day = (page === 'student' && cur ? cur.today : page === 'lessons' ? A.today : D && D.today) || today();
           if (s.date > day) return "";
           var label = s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "記録未入力" : "授業記録";
-          return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>' + (hasConcurrentLesson(s,studentId) && s.date>=day ? ' <a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(s.id)+'">同時受講の記録</a>' : '');
+          return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>';
         }
         function lessonEditor(r) {
           r = r || route();
@@ -1990,6 +1989,7 @@
           var blocked = e.busy || !!e.pending || !!c.pending, readonly = blocked || !c.slot || c.slotChanged || (r && r.status === "void") || (!r && c.student && c.student.active === false);
           if (!c.slot) { return h + '<div class="card" style="margin-top:14px">記録できる確定授業はまだありません。授業を確定してから開いてください。</div>'; }
           var slot = r ? Object.assign({}, c.slot, { date: r.date || c.slot.date, start: r.start || c.slot.start, min: r.min || c.slot.min, subject: r.subject || c.slot.subject }) : c.slot;
+          if(!e.panePrefix&&slot.status==='booked'&&slot.deliveryMode==='in_person'&&(hasConcurrentLesson(slot,e.studentId)||/[?&]multiple=1(?:&|$)/.test(location.hash)))h+='<p><a class="btn-quiet btn-sm" href="#lesson-pair?slot='+encodeURIComponent(slot.id)+'">複数授業を記録</a></p>';
           // 生徒名・日時・科目・状態。授業記録では「今回の記録」カードの先頭に入れる(授業準備ではそのまま1枚のカード)
           var slotInfo = '<strong>' + esc((c.student || {}).name) + '</strong>　' + fmtDY(slot.date) + ' ' + esc(slot.start) + '　' + esc(slot.subject || "科目なし") + '　' + esc(slot.min || "") + '分 <span class="tag ' + (slot.done ? "gray" : "blue") + '">' + (slot.done ? "実施済み" : "未実施") + '</span>';
           if(slot.status==='booked'&&!slot.done&&slot.date<=(c.today||today()))slotInfo+=' '+lessonAction('done','実施にする',blocked||c.slotChanged,'btn-quiet');
