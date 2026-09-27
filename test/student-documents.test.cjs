@@ -62,3 +62,5 @@ test('GAS storage refuses callers without the bridge secret and shared files',()
  assert.ok(ctx.effectsOp_({key:'wrong',document:{op:'read',fileId:'private'}}).badAuth);assert.equal(reads,0);
  assert.ok(ctx.effectsOp_({key:'x'.repeat(32),document:{op:'read',fileId:'outside-folder'}}).error);
 });
+
+test('exam metadata is validated, stored and readable without enabling event extraction',async()=>{const s=await setup(),details={category:'mock',title:'模試結果',examDate:'2026-09-27',subject:'英語・数学',note:'復習対象'};const r=await s.call({action:'documentUpload',...admin,pdf,details});assert.equal(r.ok,true);const list=await s.call({action:'documentList',k:'synthetic-link-a'});assert.deepEqual(list.documents[0].details,details);assert.ok((await s.call({action:'documentParse',...admin,id:r.id})).error);assert.ok((await s.call({action:'documentUpload',...admin,pdf,details:{...details,examDate:'2026-02-30'}})).error);assert.ok((await s.call({action:'documentUpload',...admin,pdf,details:{...details,category:'bad'}})).error);});

@@ -10,14 +10,14 @@ test('student settings provide document entry without relying on a public studen
 
 test('PDF component uploads, reloads and opens without an AI request',async()=>{
  const vm=require('node:vm'),fs=require('node:fs');let click,requests=[],popup={opener:null,location:{},close(){}};
- const file={name:'【テスト】予定表.pdf',size:20,type:'application/pdf'},host={innerHTML:'',getAttribute:()=> 'test-a',addEventListener:(t,f)=>{click=f;},querySelector:()=>({files:[file]})};
+ const file={name:'【テスト】予定表.pdf',size:20,type:'application/pdf'},host={innerHTML:'',getAttribute:()=> 'test-a',addEventListener:(t,f)=>{click=f;},querySelector:q=>q==='[data-doc-file]'?{files:[file]}:{value:({'[data-doc-category]':'mock','[data-doc-title]':'模試結果','[data-doc-date]':'2026-09-27','[data-doc-subject]':'数学','[data-doc-note]':'復習用'})[q]||''}};
  const window={open:()=>popup,confirm:()=>true};
  const ctx={window,Uint8Array,Blob,URL:{createObjectURL:()=> 'blob:synthetic',revokeObjectURL(){}},atob:s=>Buffer.from(s,'base64').toString('binary'),setTimeout(){},FileReader:class{readAsDataURL(){this.result='data:application/pdf;base64,JVBERi0x';this.onload();}},fetch:async(_u,c)=>{const b=JSON.parse(c.body);requests.push(b);return {json:async()=> b.action==='documentList'?{documents:[{id:'doc',name:file.name,createdAt:'2026-09-26T00:00:00Z'}]}:b.action==='documentRead'?{name:file.name,base64:'JVBERi0x'}:{ok:true}};}};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync('assets/student-documents.js','utf8'),ctx);
  window.StepwiseDocuments.mount({querySelectorAll:()=>[host]},{teacher:true,auth:{token:'test-token'}});
  const wait=()=>new Promise(r=>setImmediate(r));await wait();assert.match(host.innerHTML,/予定表.pdf/);
  const press=(key,val='')=>click({target:{closest:()=>({hasAttribute:k=>k===key,getAttribute:()=>val})}});
- press('data-doc-upload');await wait();assert.equal(requests[1].action,'documentUpload');assert.equal(requests[1].studentId,'test-a');assert.equal(requests[2].action,'documentList');
+ press('data-doc-upload');await wait();assert.equal(requests[1].action,'documentUpload');assert.equal(requests[1].studentId,'test-a');assert.equal(requests[1].details.category,'mock');assert.equal(requests[1].details.examDate,'2026-09-27');assert.equal(requests[1].details.title,'模試結果');assert.equal(requests[2].action,'documentList');
  press('data-doc-open','doc');await wait();assert.equal(popup.location.href,'blob:synthetic');assert.equal(requests[3].action,'documentRead');
  assert.ok(requests.every(r=>r.action.startsWith('document')));
 });

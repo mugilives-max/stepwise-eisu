@@ -13,21 +13,24 @@
         return fetch(endpoint,{method:'POST',body:JSON.stringify(Object.assign({},payload,auth,{action:action}))}).then(function(r){return r.json();}).then(function(r){if(r.error)throw Error(r.error);return r;});
       }
       function draw() {
-        host.innerHTML = '<div class="card"><p class="note">学校の予定表など、先生が登録した資料です。</p>' + (error ? '<p role="alert">'+esc(error)+'</p>' : '') +
-          (options.teacher ? '<label>PDF（5MBまで） <input type="file" accept="application/pdf,.pdf" data-doc-file'+(busy?' disabled':'')+'></label> <button type="button" class="btn-primary btn-sm" data-doc-upload'+(busy?' disabled':'')+'>アップロード</button><p class="note">この生徒と保護者も閲覧できます。</p>' : '') +
-          (!loaded ? '<p role="status">読み込んでいます…</p>' : rows.length ? '<ul style="padding-left:1.3em">'+rows.map(function(d){return '<li style="margin:12px 0;overflow-wrap:anywhere"><button type="button" class="btn-quiet btn-sm" data-doc-open="'+esc(d.id)+'"'+(busy?' disabled':'')+'>'+esc(d.name)+'</button> <span class="note">'+esc(d.createdAt.slice(0,10).replace(/-/g,'/'))+'</span>'+(options.teacher?' <button type="button" class="btn-quiet btn-sm" data-doc-parse="'+esc(d.id)+'"'+(busy?' disabled':'')+'>イベントを読み取る</button> <button type="button" class="btn-quiet btn-sm" data-doc-remove="'+esc(d.id)+'"'+(busy?' disabled':'')+'>削除</button>':'')+'</li>';}).join('')+'</ul>' : '<p>資料はまだありません。</p>') +
+        host.innerHTML = '<div class="card"><p class="note">予定表・模試・テスト結果など、先生が登録した資料です。</p>' + (error ? '<p role="alert">'+esc(error)+'</p>' : '') +
+          (options.teacher ? '<p><label>区分 <select data-doc-category><option value="schedule">学校の予定表</option><option value="mock">模試結果</option><option value="test">定期テスト結果</option><option value="other">その他の成績資料</option></select></label></p><p><label>タイトル <input data-doc-title maxlength="100" placeholder="例：第3回模試（省略時はファイル名）"></label></p><p><label>受験日（任意） <input type="date" data-doc-date></label> <label>科目（任意） <input data-doc-subject maxlength="100" placeholder="例：英語・数学"></label></p><p><label>メモ（任意） <textarea data-doc-note maxlength="1000"></textarea></label></p><label>PDF（5MBまで） <input type="file" accept="application/pdf,.pdf" data-doc-file'+(busy?' disabled':'')+'></label> <button type="button" class="btn-primary btn-sm" data-doc-upload'+(busy?' disabled':'')+'>アップロード</button><p class="note">この生徒と保護者も閲覧できます。</p>' : '') +
+          (!loaded ? '<p role="status">読み込んでいます…</p>' : rows.length ? '<ul style="padding-left:1.3em">'+rows.map(function(d){var m=d.details||{},kind=({schedule:'学校の予定表',mock:'模試結果',test:'定期テスト結果',other:'その他の成績資料'})[m.category]||'資料';return '<li style="margin:12px 0;overflow-wrap:anywhere"><button type="button" class="btn-quiet btn-sm" data-doc-open="'+esc(d.id)+'"'+(busy?' disabled':'')+'>'+esc(m.title||d.name)+'</button> <span class="note">'+esc(kind+' ／ '+(m.examDate?'受験日 '+m.examDate:d.createdAt.slice(0,10))+(m.subject?' ／ '+m.subject:''))+'</span>'+(m.note?'<p style="white-space:pre-wrap">'+esc(m.note)+'</p>':'')+(options.teacher?((!m.category||m.category==='schedule')?' <button type="button" class="btn-quiet btn-sm" data-doc-parse="'+esc(d.id)+'"'+(busy?' disabled':'')+'>イベントを読み取る</button>':'')+' <button type="button" class="btn-quiet btn-sm" data-doc-remove="'+esc(d.id)+'"'+(busy?' disabled':'')+'>削除</button>':'')+'</li>';}).join('')+'</ul>' : '<p>資料はまだありません。</p>') +
           (busy?'<p role="status">処理中です…</p>':'<button type="button" class="btn-quiet btn-sm" data-doc-refresh>再読み込み</button>')+'</div>';
       }
-      function load() { return call('documentList').then(function(r){rows=r.documents;loaded=true;}); }
+      function load() { return call('documentList').then(function(r){rows=r.documents;rows.sort(function(a,b){return String((b.details||{}).examDate||b.createdAt).localeCompare(String((a.details||{}).examDate||a.createdAt));});loaded=true;}); }
       function finish(e) { busy=false;if(e)error=e.message || '処理に失敗しました';draw(); }
       host.addEventListener('click',function(event) {
         var el=event.target.closest('button');if(!el||busy)return;
         if(el.hasAttribute('data-doc-upload')) {
           var file=host.querySelector('[data-doc-file]').files[0];
           if(!file||file.size>5*1024*1024||!file.size||!(/\.pdf$/i.test(file.name)||file.type==='application/pdf')){error='5MB以下のPDFを選んでください';draw();return;}
+          var uploadDetails={category:value('[data-doc-category]')||'schedule',title:value('[data-doc-title]'),examDate:value('[data-doc-date]'),subject:value('[data-doc-subject]'),note:value('[data-doc-note]')};
           busy=true;error='';draw();
+          function value(selector){return host.querySelector(selector).value||'';}
+          var details=uploadDetails;
           var reader=new FileReader();reader.onerror=function(){finish(Error('ファイルを読み込めませんでした'));};
-          reader.onload=function(){call('documentUpload',{pdf:{name:file.name,mime:'application/pdf',base64:String(reader.result).split(',')[1]}}).then(load).then(function(){finish();},finish);};reader.readAsDataURL(file);
+          reader.onload=function(){call('documentUpload',{details:details,pdf:{name:file.name,mime:'application/pdf',base64:String(reader.result).split(',')[1]}}).then(load).then(function(){finish();},finish);};reader.readAsDataURL(file);
         } else if(el.hasAttribute('data-doc-open')) {
           var popup=window.open('','_blank');if(popup)popup.opener=null;
           busy=true;error='';draw();

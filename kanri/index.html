@@ -237,7 +237,7 @@
     <div class="wrap" id="app"><div class="loading"><div class="spinner"></div>読み込んでいます…</div></div>
     <div id="toast" role="status"></div>
 
-    <script src="/assets/student-documents.js?v=20260926-parse"></script>
+    <script src="/assets/student-documents.js?v=20260927-exam-documents"></script>
     <script src="../assets/learning-services.js?v=20260926-attendance"></script>
     <script>
       (function () {
@@ -760,7 +760,7 @@
           var day=D.today, offered=s.status==='offered', ended=offerEnded(s,day), record=s.lessonRecordStatus;
           var state=offered?(ended?'時間終了・実施未確認':'承認待ち'):s.req?'取消依頼中':s.done?'実施済み':'予定';
           var status=offered?'amber':s.req?'red':s.done?'gray':'blue';
-          var recordText=s.lessonDraftStatus==='draft'?'下書き・未公開':record==='active'?'記録済み':record==='void'?'記録無効化済み':s.date<=day?'記録未入力':'';
+          var recordText=s.lessonDraftStatus==='draft'?'下書き・未公開':record==='active'?'記録済み':record==='void'?'記録無効化済み':s.date<=day?'未記録':'';
           var h='<article class="home-lesson" data-home-slot="'+esc(s.id)+'"><div class="home-time">'+(withDate?'<div class="small muted">'+fmtD(s.date)+'</div>':'')+esc(s.start)+'<br><span class="small muted">〜'+endTime(s.start,s.min)+'</span></div>';
           h+='<div class="home-person"><a href="#s='+encodeURIComponent(s.studentId)+'">'+esc(s.studentName)+'</a><div class="home-meta">'+esc(lessonLabel(s)||'科目未登録')+' · '+deliveryLabel(s.deliveryMode)+'</div><div class="row" style="gap:6px;margin-top:5px"><span class="tag '+status+'">'+state+'</span>'+(!offered && recordText?'<span class="small muted">'+recordText+'</span>':'')+'</div></div><div class="home-actions">';
           if (offered) {
@@ -1802,7 +1802,7 @@
           if (s.status !== "booked" && s.lessonRecordStatus !== "active" && s.lessonRecordStatus !== "void") return "";
           var page = route().page, day = (page === 'student' && cur ? cur.today : page === 'lessons' ? A.today : D && D.today) || today();
           if (s.date > day) return "";
-          var label = s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "記録未入力" : "授業記録";
+          var label = s.lessonDraftStatus === "draft" ? "下書き・未公開" : s.lessonRecordStatus === "active" ? "記録済み" : s.lessonRecordStatus === "void" ? "無効化済み" : s.lessonRecordStatus === "none" || (s.done && s.date < day) ? "未記録" : "授業記録";
           return '<a class="btn-ghost btn-sm" href="' + esc(lessonHref(studentId || s.studentId, s.id)) + '">' + label + '</a>';
         }
         function lessonEditor(r) {
