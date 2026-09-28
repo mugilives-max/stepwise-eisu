@@ -2342,12 +2342,18 @@
         // 追加案内(トッピング): 承認済みの案内と同じ科目・種類・時間・料金で、期間は元の案内の中。回数だけ足す
         function planEditAddon(s, parent) { var f = planEditOf(s, parent); f.lineId = ""; f.revision = null; f.status = ""; f.parentId = parent.id; f.parent = parent; f.count = 1; f.comment = ""; if (f.startDate < today() && today() <= f.endDate) f.startDate = today(); return f; }
         function planEditOf(s, l) { return { parentId: l.parentId || "", parent: l.parentId ? planLineById(s, l.parentId) : null, lineId: l.id, subject: l.subject, kind: l.kind || "通常", count: l.count, startDate: l.startDate, endDate: l.endDate, lessonMin: l.lessonMin || 90, lessonFee: l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * (l.lessonMin || 90) / 30), comment: l.comment || "", revision: l.revision, status: l.status, error: "" }; }
+        function planAdditionCandidates(s,f){return planLines(s).filter(function(l){return !l.parentId&&l.status!=='declined'&&l.subject===f.subject&&(l.kind||'通常')===(f.kind||'通常')&&l.startDate<=f.endDate&&l.endDate>=f.startDate;});}
         function renderPlanEditor(s, f, cells) {
           var pr = f.parentId ? (f.parent || planLineById(s, f.parentId)) : null, lock = f.parentId ? ' disabled' : '';
           var h = '<div class="card" style="margin:8px 0;background:var(--bg-soft,#f7f8fa)" id="plan-editor"><strong>' + (f.parentId ? (f.lineId ? '追加案内を編集' : '追加案内（トッピング）') : (f.lineId ? '案内を編集' : '新しい案内')) + '</strong>';
           if (f.parentId) h += '<p class="note">' + (pr ? esc(planLabel(pr)) + ' ' + esc(planPeriod(pr)) + ' ' + esc(pr.count) + '回' : '元の案内') + ' への追加です。科目・種類は同じで、期間は元の案内の中に収めます。承認済みの元の案内はそのまま有効で、追加分だけ保護者に承認してもらいます。なぜ追加が必要かをコメントに書いてください。</p>';
           if (f.status === "approved") h += '<p class="note">承認済みの案内です。保存すると承認が失効し、あらためて保護者の承認が必要です。</p>';
           else if (f.status === "proposed") h += '<p class="note">送信済みの案内です。保存すると内容が変わり、再送信または再承認が必要です。</p>';
+          if(f.additionPrompt){
+            h+='<div class="lc-notice" role="status"><p>同じ期間の計画があります。今回入力した'+esc(f.count)+'回を、既存の計画への追加として案内しますか？</p><p class="small">回数は追加分です。元の計画は変更せず、追加分だけ保護者に承認してもらいます。</p>';
+            planAdditionCandidates(s,f).forEach(function(l){var fits=f.startDate>=l.startDate&&f.endDate<=l.endDate;h+='<p>'+esc(planLabel(l)+' '+planPeriod(l)+' '+l.count+'回')+'</p><button class="btn-primary btn-sm" data-action="pe-addition-send" data-line="'+esc(l.id)+'"'+(busy||!fits?' disabled':'')+'>'+esc(f.count)+'回を追加して案内する</button>'+(fits?'':'<p class="small">追加の期間を、この計画の期間内に調整してください。</p>');});
+            h+='</div>';
+          }
           if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。</p>';
           h += '<div class="row"><label>科目 <select id="pe-subject" data-pe-field="subject"' + lock + '>' + [""].concat(LESSON_SUBJECTS.indexOf(f.subject) < 0 && f.subject ? [f.subject] : [], LESSON_SUBJECTS).map(function (o) { return '<option value="' + esc(o) + '"' + (o === f.subject ? ' selected' : '') + '>' + (o || '科目を選択') + '</option>'; }).join("") + '</select></label>';
           h += '<label>種類 <select id="pe-kind" data-pe-field="kind"' + lock + '>' + kindOptions(f.kind || "通常") + '</select></label><label>回数 <input type="number" id="pe-count" data-pe-field="count" min="1" max="99" value="' + esc(f.count) + '" style="width:64px"> 回</label></div>';
@@ -2567,6 +2573,7 @@
           if (!f.startDate || !f.endDate || f.endDate < f.startDate) { toast("期間の開始日と終了日を確認してください"); return; }
           if (!Number.isInteger(lm) || lm < 30 || lm > 240 || lm % 30) { toast("1回の授業時間は30分刻みで入力してください"); return; }
           if (!Number.isInteger(fee) || fee < 0) { toast("1回の授業料を入力してください"); return; }
+          if(propose&&!f.lineId&&!f.parentId&&planAdditionCandidates(cur,f).length){f.additionPrompt=true;f.error='';render();return;}
           if (f.status === "approved" && !confirm("承認済みの案内です。保存すると承認が失効" + (propose ? "し、保護者に案内を再送信します" : "します（案内は送りません）") + "。よろしいですか？")) return;
           if (!propose && f.status === "proposed" && !confirm("送信済みの案内です。下書きとして保存すると、その案内は取り下げられます。よろしいですか？")) return;
           var payload = { subject: f.subject, kind: f.kind || "通常", count: count, startDate: f.startDate, endDate: f.endDate, lessonMin: lm, lessonFee: fee, comment: f.comment || "", propose: !!propose };
@@ -3041,6 +3048,11 @@
             case "pe-cancel": delete planEdits[cur.id]; render(); break;
             case "pe-month": { var pmF = planEdits[cur.id], pmYm = btn.getAttribute("data-ym"); if (!pmF || !pmYm) return; pmF.startDate = pmYm + "-01"; pmF.endDate = monthEnd(pmYm); render(); break; }
             case "pe-draft": planEditSubmit(false); break;
+            case "pe-addition-send": {
+              if(busy)return;var af=planEdits[cur.id],ap=af&&planAdditionCandidates(cur,af).filter(function(l){return l.id===btn.getAttribute('data-line');})[0];
+              if(!af||af.lineId||af.parentId||!ap||af.startDate<ap.startDate||af.endDate>ap.endDate)return;
+              af.parentId=ap.id;af.parent=ap;af.additionPrompt=false;af.error='';planDetail={studentId:cur.id,lineId:ap.id};planEditSubmit(true);break;
+            }
             case "pe-send": planEditSubmit(true); break;
             case "pl-send": { var psL = planLineById(cur, btn.getAttribute("data-line")); if (!psL) return; planEdits[cur.id] = planEditOf(cur, psL); planEditSubmit(true); break; }
             case "pe-delete": { var pdF = planEdits[cur.id], pdL = pdF && pdF.lineId ? planLineById(cur, pdF.lineId) : null; if (!pdL) return; if (!confirm(planLabel(pdL) + " " + planPeriod(pdL) + " の案内を削除しますか？")) return; planLineWrite("planLineDelete", { lineId: pdL.id, expectedRevision: pdL.revision }, "案内を削除しました"); break; }
