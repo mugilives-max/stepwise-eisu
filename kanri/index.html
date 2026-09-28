@@ -590,17 +590,17 @@
         function offerForm(today, students, fixedStudent) {
           var d = offerDraft || {};
           var student = fixedStudent || students.filter(function (s) { return sameId(s.id, d.studentId); })[0] || {};
-          var h = '<div class="card"><div class="form">';
-          if (fixedStudent) h += '<input type="hidden" id="f-student" value="' + esc(fixedStudent.id) + '">';
-          else h += '<label for="f-student">生徒</label><select id="f-student"><option value="">えらんでください</option>' + students.map(function (x) { return '<option value="' + esc(x.id) + '"' + (sameId(d.studentId, x.id) ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>';
-          h += '<label for="f-subject">科目（必須）</label><select id="f-subject" required aria-required="true"><option value="">科目を選択</option>' + LESSON_SUBJECTS.map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select>';
-          h += '<label for="f-kind">種類（必須）</label><select id="f-kind" required>' + kindOptions(d.kind) + '</select>';
-          h += '<label for="f-delivery">この回の形式</label><select id="f-delivery" required>' + deliveryOptions(d.deliveryMode || student.deliveryMode) + '</select>';
-          h += '<label for="f-date">日付</label><input type="date" id="f-date" min="' + today + '" value="' + (d.date || today) + '">';
-          h += '<label for="f-start">開始</label><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300">';
-          h += '<label for="f-min">長さ</label><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
-          h += '<label for="f-rep">くり返し</label><select id="f-rep">' + [1, 2, 4, 8, 12].map(function (n) { return '<option value="' + n + '"' + (n === (+d.repeat || 1) ? ' selected' : '') + '>' + (n === 1 ? 'この日だけ' : '毎週×' + n + '回') + '</option>'; }).join('') + '</select>';
-          h += '</div>' + consecutiveRowsHTML(d) + '<button class="btn-quiet" data-action="offer-add"'+(busy?' disabled':'')+'>＋ 続けて授業を追加</button><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" id="offer-send" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : (d.extra&&d.extra.length ? ((d.extra.length+1)*(+d.repeat||1))+"件まとめて案内する" : "この内容で案内する")) + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
+          var h = '<div class="card"><table class="student-info-details plan-prompt-table"><tbody>';
+          if (fixedStudent) h += '<tr><th scope="row">生徒</th><td>'+esc(fixedStudent.name)+'<input type="hidden" id="f-student" value="'+esc(fixedStudent.id)+'"></td></tr>';
+          else h += '<tr><th scope="row"><label for="f-student">生徒</label></th><td><select id="f-student"><option value="">えらんでください</option>' + students.map(function (x) { return '<option value="' + esc(x.id) + '"' + (sameId(d.studentId, x.id) ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></td></tr>';
+          h += '<tr><th scope="row"><label for="f-subject">科目（必須）</label></th><td><select id="f-subject" required aria-required="true"><option value="">科目を選択</option>' + LESSON_SUBJECTS.map(function (s) { return '<option' + (d.subject === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select></td></tr>';
+          h += '<tr><th scope="row"><label for="f-kind">種類（必須）</label></th><td><select id="f-kind" required>' + kindOptions(d.kind) + '</select></td></tr>';
+          h += '<tr><th scope="row"><label for="f-delivery">この回の形式</label></th><td><select id="f-delivery" required>' + deliveryOptions(d.deliveryMode || student.deliveryMode) + '</select></td></tr>';
+          h += '<tr><th scope="row"><label for="f-date">日付</label></th><td><input type="date" id="f-date" min="' + today + '" value="' + (d.date || today) + '"></td></tr>';
+          h += '<tr><th scope="row"><label for="f-start">開始</label></th><td><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300"></td></tr>';
+          h += '<tr><th scope="row"><label for="f-min">長さ</label></th><td><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select></td></tr>';
+          h += '<tr><th scope="row"><label for="f-rep">くり返し</label></th><td><select id="f-rep">' + [1, 2, 4, 8, 12].map(function (n) { return '<option value="' + n + '"' + (n === (+d.repeat || 1) ? ' selected' : '') + '>' + (n === 1 ? 'この日だけ' : '毎週×' + n + '回') + '</option>'; }).join('') + '</select></td></tr>';
+          h += '</tbody></table>' + consecutiveRowsHTML(d) + '<button class="btn-quiet" data-action="offer-add"'+(busy?' disabled':'')+'>＋ 続けて授業を追加</button><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" id="offer-send" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : (d.extra&&d.extra.length ? ((d.extra.length+1)*(+d.repeat||1))+"件まとめて案内する" : "この内容で案内する")) + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
           if(d.extra&&d.extra.length)h+='<p class="small muted">日付とくり返しは、上の授業すべてに適用されます。</p>';
           h += planPromptHtml('offer');
           var warningData=A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]};
@@ -676,7 +676,7 @@
             var editing = editProfile || editEmail || editFee;
             if (r.page === "student") { if (!editing || !cached) cur = data; } else if (isLessons(r)) A = data; else D = data;
             authM = "ok"; busy = false; syncMsg = ""; render();
-            if (r.page === "lessons" && pendingDayOffer) { var selectedDay=pendingDayOffer;pendingDayOffer=null;boardOpenOffer(selectedDay,"17:00",60); }
+            if (r.page === "lessons" && pendingDayOffer) { var selectedDay=pendingDayOffer;pendingDayOffer=null;boardOpenOffer(selectedDay,"17:00",90); }
           }).catch(function (e) {
             if (seq !== loadSeq) return;
             busy = false; syncMsg = "";
@@ -1373,7 +1373,7 @@
         }
         function performedForm(){
           var h=offerForm('',A.students.filter(function(s){return s.active;}),null);
-          h=h.slice(0,h.indexOf('<label for="f-rep">'))+'</div><p class="note">実施した授業を追加し、続けて授業記録を入力します。授業回数・料金に反映されます。予約通知は送信しません。</p><button class="btn-primary" data-action="performed-save"'+(busy?' disabled':'')+'>実施済みで追加</button>'+(offerDraft.error?'<p role="alert">'+esc(offerDraft.error)+'</p>':'')+'</div>';
+          h=h.slice(0,h.indexOf('<tr><th scope="row"><label for="f-rep">'))+'</tbody></table><p class="note">実施した授業を追加し、続けて授業記録を入力します。授業回数・料金に反映されます。予約通知は送信しません。</p><button class="btn-primary" data-action="performed-save"'+(busy?' disabled':'')+'>実施済みで追加</button>'+(offerDraft.error?'<p role="alert">'+esc(offerDraft.error)+'</p>':'')+'</div>';
           return h;
         }
         function lessonOfferDialogHTML(){
@@ -2901,7 +2901,7 @@
             case "calnext": calM++; if (calM > 11) { calM = 0; calY++; } render(); break;
             case "calendar-add":
               var chosenDay=btn.getAttribute('data-date');
-              if(route().page==='lessons')boardOpenOffer(chosenDay,'17:00',60);
+              if(route().page==='lessons')boardOpenOffer(chosenDay,'17:00',90);
               else {pendingDayOffer=chosenDay;location.hash='#lessons';}
               break;
             case "calday":
