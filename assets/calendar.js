@@ -278,7 +278,7 @@
       else timed.sort(byStart).forEach(function(item) { marks += item.html; });
       if (holiday) marks = '<span class="calholiday">' + esc(holiday) + '</span>' + marks;
       var hasMarks = !!holiday || hasItems || !!(it && (it.ngAll || it.ngT || (showToff && (it.toff || it.toffT))));
-      var clickable = !past || hasMarks; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)。過去は何かある日だけ
+      var clickable = !!opts.allowPastSelection || !past || hasMarks; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)。過去は何かある日だけ
       if (!clickable) h += '<span class="' + cls + " off" + '">' + d + marks + "</span>";
       else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
     }

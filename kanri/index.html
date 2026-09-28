@@ -227,7 +227,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260926-cancel-calendar"><script src="/assets/calendar.js?v=20260926-cancel-confirm"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260926-cancel-calendar"><script src="/assets/calendar.js?v=20260928-performed"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -1362,15 +1362,20 @@
         var boardOpen = false;
         function boardOpenOffer(date,start,min) {
           if(busy)return;
-          if(date<A.today){toast('過去の授業は案内できません');return;}
+          if(date<A.today){offerDraft={date:date,start:start,min:min,performed:true,requestId:lessonId()};boardOpen=true;render();return;}
           offerDraft=Object.assign({},offerDraft||{},{date:date,start:start,min:Math.min(120,min,1320-window.StepwiseBoard.minutes(start))});
           selDate=date;selManual=true;var selectedMonth=date.split('-');calY=+selectedMonth[0];calM=+selectedMonth[1]-1;
           boardOpen=true;render();
           var el=document.getElementById('board-editor');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});
         }
+        function performedForm(){
+          var h=offerForm('',A.students.filter(function(s){return s.active;}),null);
+          h=h.slice(0,h.indexOf('<label for="f-rep">'))+'</div><p class="note">実施した授業を追加し、続けて授業記録を入力します。授業回数・料金に反映されます。予約通知は送信しません。</p><button class="btn-primary" data-action="performed-save"'+(busy?' disabled':'')+'>実施済みで追加</button>'+(offerDraft.error?'<p role="alert">'+esc(offerDraft.error)+'</p>':'')+'</div>';
+          return h;
+        }
         function lessonOfferDialogHTML(){
           if(!boardOpen)return '';
-          return window.StepwiseCalendar.dayDialog({id:'board-editor',title:'授業の案内',close:'board-close',busy:busy,content:offerForm(A.today,A.students.filter(function(s){return s.active;}),null)});
+          return window.StepwiseCalendar.dayDialog({id:'board-editor',title:offerDraft&&offerDraft.performed?'実施済みの授業を追加':'授業の案内',close:'board-close',busy:busy,content:offerDraft&&offerDraft.performed?performedForm():offerForm(A.today,A.students.filter(function(s){return s.active;}),null)});
         }
         function renderLessons() {
           renderNav();
@@ -1402,8 +1407,8 @@
             wishes: (A.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
             lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
-          html += window.StepwiseCalendar.render(linfo, { year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, overlapLanes: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
-          html += window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',add:selDate>=today?{action:'calendar-add',label:'この日に予定を追加'}:null,ai:selDate>=today?{action:'ai-open',label:'AIで予定登録'}:null});
+          html += window.StepwiseCalendar.render(linfo, { allowPastSelection:true, year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, overlapLanes: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          html += window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',add:{action:'calendar-add',label:selDate<today?'実施済みの授業を追加':'この日に予定を追加'},ai:selDate>=today?{action:'ai-open',label:'AIで予定登録'}:null});
           html+=reliefQueue(A.cancellations);var dayRows = byDate[selDate] || [], cancelledRows=cancellationRows(A.cancellations,selDate);
           html += dayRows.length || cancelledRows ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + cancelledRows + '</div>' : '<div class="empty">この日の授業はありません。' + (selDate >= today ? '「＋」からこの日の授業を案内できます。' : '') + '</div>';
           var dayWish = (A.wishes || []).filter(function (x) { return x.date === selDate; });
@@ -2887,6 +2892,10 @@
               planPrompt=null;render();break;
             case "offer-remove":
               captureOfferDraft().extra.splice(+btn.getAttribute('data-index'),1);planPrompt=null;render();break;
+            case "performed-save": {
+              if(busy)return;var pd=captureOfferDraft();busy=true;render();
+              admin('addPerformedLesson',pd).then(function(res){busy=false;boardOpen=false;offerDraft=null;cacheClear();location.hash=lessonHref(pd.studentId,res.slotId);}).catch(function(e){busy=false;pd.error=e.message;offerDraft=pd;render();});break;
+            }
             case "offerslot":
               var od=captureOfferDraft(), offerRows=[od].concat(od.extra);
               if(!od.studentId){toast('生徒をえらんでください');return;}
