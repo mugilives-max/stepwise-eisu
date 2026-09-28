@@ -765,7 +765,7 @@
           function progressStatus(line,label) {
             if(!line)return esc(label);
             var items=[line].concat(lines.filter(function(a){return a.parentId===line.id&&a.id!==line.id;}));
-            return items.map(function(l,i){return '<button type="button" class="tag '+(l.status==='approved'?'green':'amber')+'" aria-haspopup="dialog" data-action="'+(famChild?'fa-planopen':'student-planopen')+'"'+(famChild?' data-child="'+esc(famChild.studentId)+'"':'')+' data-line="'+esc(l.id)+'"'+(F.busy?' disabled':'')+'>'+(i?'追加：':'')+(l.status==='approved'?'承認済み':'承認待ち')+'</button>';}).join(' ');
+            return items.map(function(l,i){return '<button type="button" class="tag '+(l.status==='approved'?'green':'amber')+'" aria-haspopup="dialog" data-action="'+(famChild?'fa-planopen':'student-planopen')+'"'+(famChild?' data-child="'+esc(famChild.studentId)+'"':'')+' data-line="'+esc(l.id)+'"'+(F.busy?' disabled':'')+'>'+(i&&l.status!=='approved'?'追加申請あり':(i?'追加：':'')+(l.status==='approved'?'承認済み':'承認待ち'))+'</button>';}).join(' ');
           }
           var ymNow = today.slice(0, 7), extra = {};
           var planCols = (famChild ? 7 : 6)+(sharedName?1:0);
