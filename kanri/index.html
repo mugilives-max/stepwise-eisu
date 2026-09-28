@@ -152,6 +152,9 @@
       .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
       .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px 12px; font-size: 13px; }
       .seg button.on { background: var(--soft); color: var(--primary); font-weight: 700; }
+      .plan-prompt-table{margin-top:12px;background:#fff}
+      .plan-prompt-table input,.plan-prompt-table select{width:100%;min-width:0;box-sizing:border-box;border:0;border-radius:0;background:transparent;font:inherit;padding:6px}
+      .plan-prompt-table label{color:inherit}
       table.tb { border-collapse: collapse; width: 100%; font-size: 13.5px; }
       table.tb th, table.tb td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
       table.tb th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
@@ -1522,15 +1525,14 @@
           var h = '<div class="lc-notice plan-prompt" role="alert" style="margin-top:10px"><strong>授業計画の上限を超えていますが案内しますか？</strong><div class="small" style="margin-top:4px">' + esc(planLabel(sg)) + ' ' + (sg.dates || []).map(fmtDY).join('、') + ' の ' + (sg.count || 0) + '件が、承認済み・案内中の授業計画に収まりません。承認前の授業は請求できません。</div>';
           if (!pp.open) h += '<div class="row" style="margin-top:8px;gap:6px"><button class="btn-quiet btn-sm" data-action="pp-cancel"' + dis + '>キャンセル</button><button class="btn-primary btn-sm" data-action="pp-open"' + dis + '>授業計画の案内をして授業を実施する</button></div>';
           else {
-            h += '<div class="form" style="margin-top:8px">';
             h += '<div class="small">' + (sg.parentId ? esc(sg.parentLabel || "") + ' への追加案内として送ります' : esc(planLabel(sg)) + ' の新しい案内を保護者に送ります') + '</div>';
-            h += '<label for="pp-start">開始日</label><input type="date" id="pp-start" value="' + esc(sg.startDate || "") + '"' + dis + '>';
-            h += '<label for="pp-end">終了日</label><input type="date" id="pp-end" value="' + esc(sg.endDate || "") + '"' + dis + '>';
-            h += '<label for="pp-count">回数</label><input type="number" id="pp-count" min="1" max="99" value="' + (sg.count || 1) + '"' + dis + '>';
-            h += '<label for="pp-min">1回の授業時間</label><select id="pp-min"' + dis + '>' + [30, 60, 90, 120, 150, 180, 210, 240].map(function (m) { return '<option value="' + m + '"' + (m === (+sg.lessonMin || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select>';
-            h += '<label for="pp-fee">1回の授業料</label><input type="number" id="pp-fee" min="0" step="100" value="' + (+sg.lessonFee || 0) + '"' + dis + '>';
-            h += '<label for="pp-comment">コメント（保護者向け）</label><input id="pp-comment" maxlength="500" placeholder="例: 定期テスト前に演習を増やすため"' + dis + '>';
-            h += '</div><div class="row" style="margin-top:8px;gap:6px"><button class="btn-quiet btn-sm" data-action="pp-cancel"' + dis + '>キャンセル</button><button class="btn-primary btn-sm" data-action="pp-send"' + dis + '>' + (busy ? "送信中…" : "計画を案内して授業を案内する") + '</button></div>';
+            h += '<table class="student-info-details plan-prompt-table"><tbody><tr><th scope="row"><label for="pp-start">開始日</label></th><td><input type="date" id="pp-start" value="' + esc(sg.startDate || "") + '"' + dis + '></td></tr>';
+            h += '<tr><th scope="row"><label for="pp-end">終了日</label></th><td><input type="date" id="pp-end" value="' + esc(sg.endDate || "") + '"' + dis + '></td></tr>';
+            h += '<tr><th scope="row"><label for="pp-count">回数</label></th><td><input type="number" id="pp-count" min="1" max="99" value="' + (sg.count || 1) + '"' + dis + '></td></tr>';
+            h += '<tr><th scope="row"><label for="pp-min">1回の授業時間</label></th><td><select id="pp-min"' + dis + '>' + [30, 60, 90, 120, 150, 180, 210, 240].map(function (m) { return '<option value="' + m + '"' + (m === (+sg.lessonMin || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select></td></tr>';
+            h += '<tr><th scope="row"><label for="pp-fee">1回の授業料</label></th><td><input type="number" id="pp-fee" min="0" step="100" value="' + (+sg.lessonFee || 0) + '"' + dis + '></td></tr>';
+            h += '<tr><th scope="row"><label for="pp-comment">コメント（保護者向け）</label></th><td><input id="pp-comment" maxlength="500" placeholder="例: 定期テスト前に演習を増やすため"' + dis + '></td></tr>';
+            h += '</tbody></table><div class="row" style="margin-top:8px;gap:6px"><button class="btn-quiet btn-sm" data-action="pp-cancel"' + dis + '>キャンセル</button><button class="btn-primary btn-sm" data-action="pp-send"' + dis + '>' + (busy ? "送信中…" : "計画を案内して授業を案内する") + '</button></div>';
           }
           if (pp.error) h += '<p class="small" role="alert" style="color:var(--danger);margin:6px 0 0">' + esc(pp.error) + '</p>';
           return h + '</div>';
