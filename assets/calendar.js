@@ -213,7 +213,7 @@
       var it = it0(s.date);
       if(s.st === "cancelled"){} else if (s.st === "done" || s.st === "past") it.past++; else if (s.st === "offer") it.offer++; else it.mine++;
       // cls: 管理画面の全体予定表で使う追加クラス(rq=取消依頼中 / dn=実施済み)
-      it.labels.push({ text: (label(s) || "授業")+(s.st==="cancelled"?"（キャンセル済み）":""), st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", reviewPending:!!src.showReviewAlerts && (s.st==="cancelled"?!s.confirmed:!!(s.teacherBooking&&s.teacherBooking.status==="pending")), kind: s.kind, cls: s.cls || "" });
+      it.labels.push({ text: (label(s) || "授業")+(s.st==="cancelled"?"（キャンセル済み）":""), st: s.st, start: s.start, end: s.start && s.min ? endTime(s.start, s.min) : "", reviewId:s.id,reviewOwner:s.reviewOwner,reviewPending:!!src.showReviewAlerts && (s.st==="cancelled"?!s.confirmed:!!(s.teacherBooking&&s.teacherBooking.status==="pending")), kind: s.kind, cls: s.cls || "" });
     });
     (src.events || []).forEach(function (e) {
       var d = e.date, to = e.dateTo || e.date;
@@ -271,7 +271,7 @@
         lb.forEach(function (l) {
           if (l.st === "event") { marks += '<span class="calbox ev">' + esc(l.text) + "</span>"; return; }
           var lc = (l.st === "cancelled" ? " cancelled" : "") + (l.st === "offer" ? " of" : "") + (l.cls ? " " + l.cls : "");
-          timed.push({start:l.start, end:l.end, lesson:true, html:'<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + (l.reviewPending?' <span role="img" aria-label="内容の確認が必要" title="内容の確認が必要" style="display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;border:1.5px solid #a66a00;border-radius:50%;color:#a66a00;background:#fff;font-size:11px;line-height:1;vertical-align:middle">!</span>':'') + '</span></span>'});
+          timed.push({start:l.start, end:l.end, lesson:true, html:'<span class="calbox' + lc + '"><span class="t">' + esc(l.start) + (l.end ? '-<wbr>' + esc(l.end) : '') + '</span><span class="s">' + esc(l.text) + (l.reviewPending?' <button type="button" data-action="'+(l.st==='cancelled'?'cancel-review':'booking-review')+'" data-id="'+esc(l.reviewId)+'"'+(l.reviewOwner?' data-home-child="'+esc(l.reviewOwner)+'"':'')+' aria-label="内容の確認が必要" title="内容の確認が必要" style="display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;border:1.5px solid #a66a00;border-radius:50%;color:#a66a00;background:#fff;font-size:11px;line-height:1;vertical-align:middle;padding:0;cursor:pointer">!</button>':'') + '</span></span>'});
         });
       }
       if(opts.overlapLanes) marks += overlapMarkup(timed);
@@ -280,6 +280,7 @@
       var hasMarks = !!holiday || hasItems || !!(it && (it.ngAll || it.ngT || (showToff && (it.toff || it.toffT))));
       var clickable = !!opts.allowPastSelection || !past || hasMarks; // 今日以降はどの日もタップ可(その日の操作ボタンが出る)。過去は何かある日だけ
       if (!clickable) h += '<span class="' + cls + " off" + '">' + d + marks + "</span>";
+      else if(it && it.labels && it.labels.some(function(l){return l.reviewPending;})) h += '<div role="button" tabindex="0" class="'+cls+'" data-action="calday" data-date="'+ds+'">'+d+marks+'</div>';
       else h += '<button class="' + cls + '" data-action="calday" data-date="' + ds + '">' + d + marks + "</button>";
     }
     h += '</div><div class="callegend">';

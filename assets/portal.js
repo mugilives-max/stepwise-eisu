@@ -1384,7 +1384,7 @@
             (st.teacherOff||[]).forEach(function(x){var key=x.date+'|'+x.start+'|'+x.end;if(!offs[key]){offs[key]=true;src.teacherOff.push(x);}});
             if(children.length>1&&familyCalendar.hidden[c.studentId])return;
             var name=familyChildName(c);
-            (st.slots||[]).concat(st.cancellations||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name}));});
+            (st.slots||[]).concat(st.cancellations||[]).concat((st.history||[]).map(function(x){return Object.assign({},x,{st:x.done?'done':'past'});})).forEach(function(x){src.lessons.push(Object.assign({},x,{studentLabel:name,reviewOwner:c.studentId}));});
             (st.events||[]).forEach(function(x){src.events.push(Object.assign({},x,{title:name+' '+(x.title||'イベント')}));});
             (st.blocked||[]).forEach(function(x){src.blocked.push(Object.assign({},x,{label:name+' 授業不可'}));});
             (st.wishes||[]).forEach(function(x){src.wishes.push(Object.assign({},x,{label:name+' '+(x.start||'')+'〜'+(x.end||'')+' 授業可'}));});
@@ -1886,6 +1886,7 @@
         });
 
         /* ---------- 操作 ---------- */
+        app.addEventListener('keydown',function(ev){var el=ev.target;if((ev.key==='Enter'||ev.key===' ')&&el.getAttribute('role')==='button'&&/^(family-)?calday$/.test(el.getAttribute('data-action')||'')){ev.preventDefault();el.click();}});
         app.addEventListener("click", function (ev) {
           var btn = ev.target.closest("[data-action]");
           if (!btn || btn.disabled) return;
