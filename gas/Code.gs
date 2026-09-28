@@ -2073,7 +2073,7 @@ function kanriStudent_(studentId,section) {
       defaultRows: rows.filter(function (x) { return x.studentId === id && x.ym === 'default'; }),
       lines: planLinesFor_(id).sort(planLineSort_).map(planLineView_), usage: planUsage_(id) }; })();
   var thisMonth={count:doneMonth.length,minutes:minutes,fee:fee.amount,mode:fee.mode,billed:payments.some(function(p){return p.ym===month && p.status!=='取消';})};
-  if (section==='billing') return Object.assign(base,{rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),payments:payments,billing:billingPreview_(id,month),billingMonths:billingMonths,plan:plan,thisMonth:thisMonth});
+  if (section==='billing') return Object.assign(base,{tuition:{today:today,history:doneMonth,slots:lessons.filter(function(l){return l.status==='booked'&&!l.done;}).map(function(l){return Object.assign({},l,{st:'mine'});}),cancellations:cancelCalendar_(id)},rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),payments:payments,billing:billingPreview_(id,month),billingMonths:billingMonths,plan:plan,thisMonth:thisMonth});
   var progressData=kanriStudentProgress_(id);
   return {
     section:section, billing:billingPreview_(id,month), billingMonths:billingMonths,
