@@ -944,7 +944,7 @@
         function aiScheduleHtml() {
           if (!aiScheduleOpen) return '';
           var student=tnlStudent(), dis=busy || TNL.busy ? ' disabled' : '';
-          return window.StepwiseCalendar.dayDialog({id:'ai-schedule',title:'AIで予定登録',close:'ai-close',busy:busy||TNL.busy,content:'<label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+A.students.filter(function(s){return s.active;}).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')});
+          return window.StepwiseCalendar.dayDialog({id:'ai-schedule',title:'AIで予定登録',close:'ai-close',busy:busy||TNL.busy,content:'<label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+(route().page==='student'?[cur]:A.students.filter(function(s){return s.active;})).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')});
         }
         var TNL = { text: "", busy: false, proposal: null, error: "" };
         var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "イベント" };
@@ -1069,6 +1069,12 @@
           }
           if (scheduleBody) h = scheduleBody + window.StepwiseCalendar.dayDialog({id:'student-schedule',title:sInputMode==='text'?'AIで予定登録':'予定を追加',close:'sdayclose',busy:busy||TNL.busy,content:h});
           return h;
+        }
+        function studentPlanSummary(s){
+          var lines=planLines(s).filter(function(l){return l.status==='approved'||l.status==='proposed';}),usage=s.plan&&s.plan.usage||{};
+          var h='<h2>授業計画・実施状況</h2><div class="card">';if(!lines.length)return h+'<p class="empty">授業計画はありません</p></div>';
+          h+='<div style="overflow-x:auto"><table class="family-info-table"><thead><tr>'+['期間','科目','種類','計画回数','登録回数','実施回数','状態'].map(function(x){return '<th>'+x+'</th>';}).join('')+'</tr></thead><tbody>';
+          lines.filter(function(l){return !l.parentId||!lines.some(function(p){return p.id===l.parentId&&p.status===l.status;});}).forEach(function(l){var group=[l].concat(lines.filter(function(a){return a.parentId===l.id&&a.status===l.status;})),done=0,planned=0,goal=0;group.forEach(function(a){var u=usage[a.id]||{};done+=Number(u.done)||0;planned+=Number(u.planned)||0;goal+=planLimit(a);});h+='<tr><td>'+esc(planPeriodShort(l))+'</td><td>'+esc(l.subject)+(l.parentId?'（追加）':'')+'</td><td>'+esc(l.kind||'通常')+'</td><td>'+goal+'回</td><td>'+(done+planned)+'回</td><td>'+done+'回</td><td>'+esc(l.status==='approved'?'承認済み':'承認待ち')+'</td></tr>'+(l.comment?'<tr><td colspan="7"><details><summary>計画のコメント</summary><p style="white-space:pre-wrap">'+esc(l.comment)+'</p></details></td></tr>':'');});return h+'</tbody></table></div></div>';
         }
         function renderStudent() {
           renderNav();
@@ -1223,6 +1229,7 @@
             '</div><div class="row" style="margin-top:12px"><button class="btn-primary" data-action="addmeeting"' + (busy ? " disabled" : "") + '>記録する</button></div></div></details></div>';
 
           }
+          if(section==='overview')html+=studentPlanSummary(s)+lessonOfferDialogHTML()+aiScheduleHtml();
           app.innerHTML = html;
         }
 
@@ -1378,7 +1385,7 @@
         }
         function lessonOfferDialogHTML(){
           if(!boardOpen)return '';
-          return window.StepwiseCalendar.dayDialog({id:'board-editor',title:offerDraft&&offerDraft.performed?'実施済みの授業を追加':'授業の案内',close:'board-close',busy:busy,content:offerDraft&&offerDraft.performed?performedForm():offerForm(A.today,A.students.filter(function(s){return s.active;}),null)});
+          return window.StepwiseCalendar.dayDialog({id:'board-editor',title:offerDraft&&offerDraft.performed?'実施済みの授業を追加':'授業の案内',close:'board-close',busy:busy,content:offerDraft&&offerDraft.performed?performedForm():offerForm(route().page==='student'?cur.today:A.today,route().page==='student'?[cur]:A.students.filter(function(s){return s.active;}),route().page==='student'?cur:null)});
         }
         function renderLessons() {
           renderNav();
@@ -3020,8 +3027,8 @@
               var cpw = (document.getElementById("f-curpass") || {}).value || "", npw = (document.getElementById("f-newpass") || {}).value || "";
               if (npw.length < 8) { toast("新しいパスワードは8文字以上にしてください"); return; }
               actA("changePass", { current: cpw, newPass: npw }, "パスワードを変更しました"); break;
-            case "sdayadd": sDayAddOpen=true;sInputMode='manual';sOfferOpen=false;sBlockOpen=false;render();break;
-            case "sdayai": sDayAddOpen=true;sInputMode='text';sOfferOpen=false;sBlockOpen=false;render();break;
+            case "sdayadd": offerDraft={studentId:cur.id,date:selDate,start:'17:00',min:90,deliveryMode:cur.deliveryMode};boardOpen=true;render();break;
+            case "sdayai": aiStudentId=cur.id;aiScheduleOpen=true;render();break;
             case "sdayclose": if(!busy&&!TNL.busy){sDayAddOpen=false;sOfferOpen=false;sBlockOpen=false;render();}break;
             case "dayinput": sInputMode = btn.getAttribute("data-mode") === "manual" ? "manual" : "text"; render(); break;
             case "tnl-parse": tnlParse(); break;
