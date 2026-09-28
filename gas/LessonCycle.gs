@@ -12,7 +12,7 @@ var LESSON_HEADERS_ = {
   lessonReportDrafts: ['recordId','body','sourceRevision','revision','updatedAt'],
   lessonWrites: ['requestId','operation','payloadHash','payloadJson','status','resultJson','createdAt','updatedAt'],
   lessonPublicSnapshots: ['id','recordId','studentId','slotId','revision','lessonDate','lessonStart','lessonMin','subject','content','progress','nextFocus','homeworkJson','publishedAt','sourceRequestId'],
-  tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime','reviewedAt','reviewNote','material']
+  tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime','reviewedAt','reviewNote','material','manualEditedAt']
 };
 var LESSON_SCHEMA_BOOK_ = null; // Per-execution only; never CacheService.
 LESSON_HEADERS_.lessonRecords.push('reportJson');
@@ -403,7 +403,7 @@ function lessonExecute_(plan) {
     plan.items.forEach(function (entry) {
       var item=entry.item, task=lessonTask_(plan.recordId,item.itemId,plan.studentId);
       if (task && task.withdrawnAt) { result.withdrawn.push(item.itemId); return; }
-      if (task && task.doneAt && !lessonTaskSame_(task,item)) { result.held.push(item.itemId); return; }
+      if (task && (task.doneAt || task.manualEditedAt) && !lessonTaskSame_(task,item)) { result.held.push(item.itemId); return; }
       if (task && lessonTaskSame_(task,item) && Number(task.sourceRevision) === plan.sourceRevision) { result.unchanged.push(item.itemId); return; }
       var next=task ? lessonCopy_(task) : { id:entry.taskId,studentId:plan.studentId,createdAt:plan.now,createdBy:'teacher',doneAt:'',withdrawnAt:'',sourceRecordId:plan.recordId,sourceItemId:item.itemId };
       next.material=item.material || ''; next.title=item.title; next.type=item.type; next.sourceRevision=plan.sourceRevision;
@@ -567,7 +567,7 @@ function lessonContextData_(studentId,slotId,recordId) {
     var ids={};
     current.homework.forEach(function (item) {
       ids[item.itemId]=true; var t=lessonTask_(current.id,item.itemId,studentId), due=lessonHomeworkDueView_(item,r,t);
-      state.push({itemId:item.itemId,taskId:t ? String(t.id) : '',title:item.title,material:item.material || '',due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:item.type,done:!!(t && t.doneAt),withdrawn:!!(t && t.withdrawnAt),status:!t ? 'new' : t.withdrawnAt ? 'withdrawn' : t.doneAt && !lessonTaskSame_(t,item) ? 'held' : lessonTaskSame_(t,item) ? 'applied' : 'changed'});
+      state.push({itemId:item.itemId,taskId:t ? String(t.id) : '',title:item.title,material:item.material || '',due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:item.type,done:!!(t && t.doneAt),withdrawn:!!(t && t.withdrawnAt),status:!t ? 'new' : t.withdrawnAt ? 'withdrawn' : (t.doneAt || t.manualEditedAt) && !lessonTaskSame_(t,item) ? 'held' : lessonTaskSame_(t,item) ? 'applied' : 'changed'});
     });
     lessonRawTasks_(current.id).forEach(function (t) { if (!ids[String(t.sourceItemId)] && String(t.studentId) === studentId) {
       var due=lessonTaskDueView_(t);

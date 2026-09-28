@@ -949,6 +949,29 @@ function adminTaskDel_(req) {
   }
   return {error:'見つかりません'};
 }
+function taskEditToken_(t) {
+  return JSON.stringify(['title','material','due','dueMode','dueSubject','dueAfter','doneAt','reviewedAt','withdrawnAt','sourceRevision','manualEditedAt'].map(function(k){return String(t[k] || '');}));
+}
+function adminTasksFor_(id,days) {
+  var rows=readRows_('tasks');
+  return tasksFor_(id,days).map(function(t){var raw=rows.filter(function(x){return String(x.id)===String(t.id);})[0];t.editToken=taskEditToken_(raw);return t;});
+}
+function adminTaskEdit_(req) {
+  try {
+    ensureLessonSchema_();
+    var t=lessonFind_('tasks','id',String(req.taskId || ''));
+    if(!t || String(t.studentId)!==String(req.studentId) || t.withdrawnAt || t.reviewedAt)return {error:'編集できる宿題が見つかりません'};
+    var title=lessonText_(req.title,80,true).trim(),material=lessonText_(req.material,120,false).trim();
+    var due=lessonDate_(req.due),mode=lessonDueMode_(req.dueMode,due),subject=mode==='nextLesson'?lessonText_(req.dueSubject,80,true).trim():'';
+    if(title===String(t.title)&&material===String(t.material||'')&&mode===lessonDueMode_(t.dueMode,normDate_(t.due)||'')&&(mode!=='date'||due===(normDate_(t.due)||''))&&(mode!=='nextLesson'||subject===String(t.dueSubject||'')))return {ok:true};
+    if(typeof req.editToken!=='string'||req.editToken!==taskEditToken_(t))return {error:'宿題が更新されています。閉じて最新の内容を確認してから編集してください'};
+    var next=lessonCopy_(t),fields;
+    if(mode==='nextLesson'&&t.dueMode==='nextLesson'&&subject===String(t.dueSubject||''))fields={due:t.due,dueMode:mode,dueSubject:subject,dueAfter:t.dueAfter,dueTime:t.dueTime};
+    else fields=lessonTaskAddFields_({due:due,dueMode:mode,dueSubject:subject},String(t.studentId));
+    Object.keys(fields).forEach(function(k){next[k]=fields[k];});next.title=title;next.material=material;next.manualEditedAt=new Date().toISOString();
+    lessonPut_('tasks','id',next.id,next);return {ok:true};
+  } catch(e) { return lessonError_(e); }
+}
 function adminTaskDone_(req) {
   var rows = readRows_('tasks');
   for (var i = 0; i < rows.length; i++) {
@@ -1285,6 +1308,7 @@ function admin_(req) {
     case 'lessonKindSave': { var lk = lessonKindSave_(req); return lk.error ? lk : { ok: true, lessonKinds: lk.lessonKinds, admin: adminState_() }; }
     case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);
     case 'taskDel':     return kanriWrap_(req, adminTaskDel_(req), req.studentId);
+    case 'taskEdit':    return kanriWrap_(req, adminTaskEdit_(req), req.studentId);
     case 'taskDone':    return kanriWrap_(req, adminTaskDone_(req), req.studentId);
     case 'addStudent':  { var ra = adminAddStudent_(req); return kanriWrap_(req, ra, ra.id); }
     case 'setEmail':    return kanriWrap_(req, adminSetEmail_(req));
@@ -2060,7 +2084,7 @@ function kanriStudent_(studentId,section) {
     unrecordedLessons:lessons.filter(function(l){return l.status==='booked' && !l.done && /^\d{4}-\d{2}-\d{2}$/.test(l.date) && l.date<today;}),
     pendingEdits:schedulingPendingEdits_(id),wishes:wishesForAdmin_().filter(function(x){return x.studentId===id;}),
     blocked:blockedRows_().filter(function(x){return String(x.studentId)===id && x.date>=today;}),
-    teacherOff:teacherOff_(addDays_(today,-366),true),events:eventsForAdmin_(366).filter(function(x){return x.studentId===id;}),tasks:tasksFor_(id,60)
+    teacherOff:teacherOff_(addDays_(today,-366),true),events:eventsForAdmin_(366).filter(function(x){return x.studentId===id;}),tasks:adminTasksFor_(id,60)
   });
   var doneMonth = lessons.filter(function (x) { return x.status === 'booked' && x.done && x.date.slice(0, 7) === month; });
   var minutes = 0; doneMonth.forEach(function (x) { minutes += x.min; });
@@ -2087,7 +2111,7 @@ function kanriStudent_(studentId,section) {
     teacherOff: teacherOff_(today, true),
     plan: plan,
     events: eventsForAdmin_(60).filter(function (x) { return x.studentId === id; }),
-    tasks: tasksFor_(id, 60),
+    tasks: adminTasksFor_(id, 60),
     month: month, thisMonth: thisMonth
   };
 }

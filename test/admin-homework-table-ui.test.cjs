@@ -14,3 +14,12 @@ test('teacher sees submitted homework first and can return it with a comment',as
  ui.click('homework-open',{'data-id':'claim'});ui.input('homework-review-note','解き直してください');ui.click('homework-return');
  assert.equal(ui.requests.at(-1).body.reviewNote,'解き直してください');assert.equal(ui.requests.at(-1).body.done,false);
 });
+
+test('homework edit opens a modal, keeps failed input and sends only the selected task',async()=>{
+ const task={id:'edit-a',title:'旧内容',material:'旧教材',due:'2026-09-10',dueMode:'date',editToken:'version-a'};
+ const ui=await adminReady(card({tasks:[task]}));ui.click('homework-edit',{'data-id':'edit-a'});assert.equal(ui.el('admin-homework-dialog').modal,true);
+ ui.input('hw-edit-material','新教材');ui.input('hw-edit-title','p12〜15');ui.input('hw-edit-due','2026-09-12');ui.click('homework-save');
+ const req=ui.requests.at(-1);assert.equal(req.body.op,'taskEdit');assert.equal(req.body.taskId,'edit-a');assert.equal(req.body.material,'新教材');assert.equal(req.body.editToken,'version-a');
+ req.fail();await flush();if(ui.requests.at(-1)!==req){ui.requests.at(-1).reply({data:card({tasks:[task]})});await flush();}
+ assert.equal(ui.el('hw-edit-title').value,'p12〜15');ui.click('homework-save');ui.requests.at(-1).reply({data:card({tasks:[{...task,title:'p12〜15',material:'新教材'}]})});await flush();assert.equal(ui.el('admin-homework-dialog'),undefined);assert.match(ui.html(),/新教材/);
+});
