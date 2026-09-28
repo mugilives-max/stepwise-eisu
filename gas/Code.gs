@@ -2047,7 +2047,7 @@ function kanriStudent_(studentId,section) {
   ledgerRows_('生徒台帳').forEach(function (p) { if (String(p['生徒ID']) === id) profile = p; });
   profile = profile || {}; var nameParts = studentNameParts_(id); profile['姓']=nameParts.familyName; profile['名']=nameParts.givenName;
   if (profile) delete profile._row;
-  var base={section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,nlEnabled:typeof nlConfigured_==='function'&&nlConfigured_(),code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
+  var base={lessonKinds:lessonKindsPublic_(),section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,nlEnabled:typeof nlConfigured_==='function'&&nlConfigured_(),code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
   if (section==='settings') return Object.assign(base,{email:String(sys.email || ''),emailStatus:studentEmailStatus_(id),rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),parentAuth:parentStatus_(id)});
   if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
@@ -2076,7 +2076,7 @@ function kanriStudent_(studentId,section) {
   if (section==='billing') return Object.assign(base,{tuition:{today:today,history:doneMonth,slots:lessons.filter(function(l){return l.status==='booked'&&!l.done;}).map(function(l){return Object.assign({},l,{st:'mine'});}),cancellations:cancelCalendar_(id)},rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),payments:payments,billing:billingPreview_(id,month),billingMonths:billingMonths,plan:plan,thisMonth:thisMonth});
   var progressData=kanriStudentProgress_(id);
   return {
-    section:section, billing:billingPreview_(id,month), billingMonths:billingMonths,
+    lessonKinds:lessonKindsPublic_(),section:section, billing:billingPreview_(id,month), billingMonths:billingMonths,
     id: id, name: sys.name, deliveryMode: String(sys.deliveryMode || ''), email: String(sys.email || ''), rate30: Number(sys.rate30 || 0), monthly: Number(sys.monthly || 0),
     emailStatus: typeof studentEmailStatus_ === 'function' ? studentEmailStatus_(id) : null,
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_(id) : [],
