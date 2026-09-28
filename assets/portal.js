@@ -628,7 +628,7 @@
             selDate = found || today;
             var sp = selDate.split("-"); calY = +sp[0]; calM = +sp[1] - 1;
           }
-          var info = window.StepwiseCalendar.buildInfo({ cancellations: S.cancellations || [], lessons: slots.concat(hist), events: events, blocked: blocked, teacherOff: S.teacherOff || [], wishes: S.wishes || [], lessonLabel: lessonLabel });
+          var info = window.StepwiseCalendar.buildInfo({ showReviewAlerts:true, cancellations: S.cancellations || [], lessons: slots.concat(hist), events: events, blocked: blocked, teacherOff: S.teacherOff || [], wishes: S.wishes || [], lessonLabel: lessonLabel });
           var upcoming = mine.filter(function (s) { return s.date > today || (s.date === today && endTime(s.start, s.min) >= nowStr); });
           return { today: today, slots: slots, mine: mine, offers: offers, hist: hist, blocked: blocked, events: events, byDate: byDate, info: info, upcoming: upcoming, next: upcoming[0] };
         }
@@ -1377,7 +1377,7 @@
         }
         var familyCalendar = {year:calNow.getFullYear(),month:calNow.getMonth(),date:null,hidden:{}};
         function renderFamilyCalendar(children) {
-          var src={lessons:[],events:[],blocked:[],wishes:[],teacherOff:[]},offs={},today='',missing=false;
+          var src={showReviewAlerts:true,lessons:[],events:[],blocked:[],wishes:[],teacherOff:[]},offs={},today='',missing=false;
           children.forEach(function(c){
             var st=F.childState[c.studentId];if(!st||!st.me){missing=true;return;}
             today=today||st.today;
