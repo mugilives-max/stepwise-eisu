@@ -1171,8 +1171,8 @@
           if (section === 'billing') {
 
           html += renderStudentTuition(s);
-          html += renderPlanCard(s);
-          html += '<h2>料金の初期設定</h2><div class="card">';
+
+          html += '<h2>基本料金の設定</h2><div class="card">';
           if (editFee) {
             html += '<div class="line"><span class="t">料金</span><span class="w row"><label class="small muted">30分あたり</label><input type="number" id="e-rate" value="' + (s.rate30 || 1500) + '" min="0" step="100" style="width:90px">円（実施時間で計算）</span><button class="btn-primary btn-sm" data-action="savefee"' + (busy ? " disabled" : "") + '>保存</button><button class="btn-quiet btn-sm" data-action="editfee">やめる</button></div>';
           } else {
