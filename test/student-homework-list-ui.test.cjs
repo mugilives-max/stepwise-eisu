@@ -515,3 +515,9 @@ test('home shows only incomplete homework after daily lessons and removes comple
   assert.match(ui.html(), /先生の確認待ち/);
   assert.match(ui.html(), /未完了の宿題はありません/);
 });
+
+test('homework material and range appear in separate home table cells',async()=>{
+ const ui=await ready([task('material',{material:'教材<テスト>',title:'p12〜15'})],'#home');
+ assert.match(ui.html(),/<th scope="col">教材<\/th><th scope="col">内容・範囲<\/th>/);
+ assert.match(ui.html(),/<td>教材&lt;テスト&gt;<\/td><td>p12〜15/);
+});

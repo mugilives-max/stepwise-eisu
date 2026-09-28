@@ -48,3 +48,10 @@
 .po-row input { width:100%; box-sizing:border-box; min-height:44px; font-size:16px; }
 .lesson-pair-pane .lc-compose { grid-template-columns:minmax(0,1fr); }
 @media(max-width:760px) { .lc-compose { grid-template-columns:minmax(0,1fr); } .po-row { grid-template-columns:minmax(0,1fr) 76px; } .po-row .row { grid-column:1/-1; } .lc-share-actions > button { flex:1 1 100%; } }
+
+.lc-homework-table { display:block; }
+.lc-homework-table table { width:100%; border-collapse:collapse; table-layout:fixed; margin-bottom:8px; }
+.lc-homework-table th,.lc-homework-table td { border:1px solid #b8c4d3; padding:10px; text-align:left; vertical-align:top; }
+.lc-homework-table th { width:28%; background:#edf1f5; font-weight:normal; }
+.lc-homework-table input,.lc-homework-table select { width:100%; min-width:0; box-sizing:border-box; }
+.lc-homework-table small { display:block; margin-top:4px; }

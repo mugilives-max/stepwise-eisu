@@ -228,7 +228,7 @@
       .family-info-table td.is-missing{background:#fff4e3;color:#945900}
       @media(max-width:520px){.family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}}
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260922-homework"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260929-material"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
 <link rel="stylesheet" href="/assets/calendar.css?v=20260926-cancel-calendar"><script src="/assets/calendar.js?v=20260928-performed"></script>
 </head>
@@ -1801,7 +1801,7 @@
         var lessonEditors = Object.create(null), lessonPair=null;
         function lessonPairPane(e,index) {
           var prefix='pair-'+index+'-'; e.panePrefix=prefix;
-          return lessonHTML(e).replace(/<h1[^>]*>([^<]*)(<button[\s\S]*?<\/button>)?<\/h1>/,function(_,title,btn){return '<h2>'+esc(e.context && e.context.student.name || '授業')+'：'+title+(btn||'')+'</h2>';}).replace(/\s(id|for)="([^"]+)"/g,function(_,attr,id){return ' '+attr+'="'+prefix+id+'"';}).replace(/<(button|input|textarea|select)\b/g,function(_,tag){return '<'+tag+' data-lc-editor="'+esc(e.key)+'"';});
+          return lessonHTML(e).replace(/<h1[^>]*>([^<]*)(<button[\s\S]*?<\/button>)?<\/h1>/,function(_,title,btn){return '<h2>'+esc(e.context && e.context.student.name || '授業')+'：'+title+(btn||'')+'</h2>';}).replace(/\s(id|for|list)="([^"]+)"/g,function(_,attr,id){return ' '+attr+'="'+prefix+id+'"';}).replace(/<(button|input|textarea|select)\b/g,function(_,tag){return '<'+tag+' data-lc-editor="'+esc(e.key)+'"';});
         }
         function loadLessonPair(force) {
           var r=route(),hash=location.hash;
@@ -1877,7 +1877,7 @@
         function lessonId() { return "lc-" + (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)); }
         function lessonForm(record) {
           record = record || {};
-          return { report: Object.assign({},record.report || {}), content: record.content || "", progress: record.progress || "", nextFocus: record.nextFocus || "", teacherNote: record.teacherNote || "", homework: (record.homework || []).map(function (x) { return { itemId: x.itemId, title: x.title || "", due: x.dueMode === "nextLesson" ? "" : x.due || "", dueMode: x.dueMode || (x.due ? "date" : "none"), type: x.type || "宿題" }; }) };
+          return { report: Object.assign({},record.report || {}), content: record.content || "", progress: record.progress || "", nextFocus: record.nextFocus || "", teacherNote: record.teacherNote || "", homework: (record.homework || []).map(function (x) { return { itemId: x.itemId, material: x.material || "", title: x.title || "", due: x.dueMode === "nextLesson" ? "" : x.due || "", dueMode: x.dueMode || (x.due ? "date" : "none"), type: x.type || "宿題" }; }) };
         }
         function lessonAdopt(e, c, mode) {
           e.context = c;
@@ -2003,27 +2003,26 @@
         }
         function lessonSharePreview(e,disabled) {
           var f=e.form,selected=lessonOutlineSelected(e),homework=f.homework.filter(function(x){return String(x.title||'').trim();});
-          return '<section class="lc-share-preview" aria-label="共有前の確認"><h3>生徒・保護者に見える内容</h3>'+window.StepwiseReport.position(selected&&selected.publicPosition)+window.StepwiseReport.body(f,true)+'<h4>宿題・持ち物・メモ</h4>'+(homework.length?homework.map(function(x){return '<p>□ '+esc(x.title)+' <span class="note">'+(x.dueMode==='nextLesson'?'次の同じ科目の授業まで':x.dueMode==='date'?esc(x.due):'期限なし')+'</span></p>';}).join(''):'<p class="note">今回はありません。</p>')+'<p class="note">「保護者への連絡」は保護者だけに表示します。先生だけのメモは含みません。宿題も生徒の「やること」に反映します。完了済みの変更は保留し、削除した宿題の取り下げは別操作です。</p><div class="lc-share-actions">'+lessonAction('share','この内容で報告を公開・宿題を反映',disabled,'btn-primary',' id="lc-share-confirm"')+lessonAction('cancelshare','入力に戻る',disabled)+'</div></section>';
+          return '<section class="lc-share-preview" aria-label="共有前の確認"><h3>生徒・保護者に見える内容</h3>'+window.StepwiseReport.position(selected&&selected.publicPosition)+window.StepwiseReport.body(f,true)+'<h4>宿題・持ち物・メモ</h4>'+(homework.length?homework.map(function(x){return '<p>□ '+esc((x.material ? x.material+'：' : '')+x.title)+' <span class="note">'+(x.dueMode==='nextLesson'?'次の同じ科目の授業まで':x.dueMode==='date'?esc(x.due):'期限なし')+'</span></p>';}).join(''):'<p class="note">今回はありません。</p>')+'<p class="note">「保護者への連絡」は保護者だけに表示します。先生だけのメモは含みません。宿題も生徒の「やること」に反映します。完了済みの変更は保留し、削除した宿題の取り下げは別操作です。</p><div class="lc-share-actions">'+lessonAction('share','この内容で報告を公開・宿題を反映',disabled,'btn-primary',' id="lc-share-confirm"')+lessonAction('cancelshare','入力に戻る',disabled)+'</div></section>';
         }
         function lessonPublicDraft(record) {
-          return ["【授業のご報告（下書き）】", record.content || "", record.progress ? "取り組みの様子\n" + record.progress : "", (record.homework || []).length ? "宿題\n" + record.homework.map(function (x) { return "・" + x.title + (x.due ? "（期限 " + x.due + "）" : ""); }).join("\n") : "", record.nextFocus ? "次回の焦点\n" + record.nextFocus : ""].filter(Boolean).join("\n\n");
+          return ["【授業のご報告（下書き）】", record.content || "", record.progress ? "取り組みの様子\n" + record.progress : "", (record.homework || []).length ? "宿題\n" + record.homework.map(function (x) { return "・" + (x.material ? x.material+"：" : "") + x.title + (x.due ? "（期限 " + x.due + "）" : ""); }).join("\n") : "", record.nextFocus ? "次回の焦点\n" + record.nextFocus : ""].filter(Boolean).join("\n\n");
         }
         function lessonHomeworkRow(e, x, i, n, type, readonly) {
           var dis = readonly ? ' disabled' : '', attrs = ' data-item="' + esc(x.itemId) + '"';
           var label = type + ' ' + (n + 1), mode = x.dueMode || (x.due ? 'date' : 'none');
           var defMode = type === 'メモ' ? 'none' : 'nextLesson', dueOpen = (e.dueOpen || {})[x.itemId];
-          var h = '<div class="lc-homework"><input id="lc-title-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="title" value="' + esc(x.title) + '" maxlength="80" placeholder="' + (type === '宿題' ? '例: ワークp.12〜15' : type === '持ち物' ? '例: 英単語帳' : '例: 次回は小テスト') + '" aria-label="' + label + ' の内容"' + dis + '>';
-          if (readonly) h += '<button type="button" class="lc-hw-more" aria-label="' + label + ' の操作" disabled>⋯</button>';
-          else h += '<details class="lc-hw-menu" data-lc-menu><summary id="lc-hw-more-' + i + '" class="lc-hw-more" aria-label="' + label + ' の操作">⋯</summary><div class="lc-hw-actions">' + lessonAction('duetoggle', '期限を変更', false, '', attrs) + lessonAction('remove', 'この欄を削除', false, 'btn-danger', attrs) + '</div></details>';
-          if (dueOpen) {
-            h += '<div class="lc-hw-due"><label for="lc-due-mode-' + i + '">' + label + ' の期限<select id="lc-due-mode-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="dueMode"' + dis + '>' + deadlineOptions(mode) + '</select></label>';
-            if (mode === 'date') h += '<label for="lc-due-' + i + '">期限日<input type="date" id="lc-due-' + i + '" data-lc-item="' + esc(x.itemId) + '" data-lc-prop="due" value="' + esc(x.due) + '" aria-label="' + label + ' の期限日"' + dis + '></label>';
-            h += lessonAction('dueclose', '閉じる', readonly, '', attrs) + '</div>';
-          } else if (mode !== defMode) {
-            h += '<span class="lc-hw-deadline note">' + (mode === 'date' ? (x.due ? '期限：' + esc(x.due) : '期限日を選択してください') : mode === 'nextLesson' ? '期限：次の同じ科目の授業まで' : '期限なし') + '</span>';
-          }
-          return h + '</div>';
+          var choices=(e.context.materials || []).concat(e.form.homework.map(function(item){return item.material || ''; })).filter(function(v,j,a){return v && a.indexOf(v)===j;});
+          var listId='lc-material-list-'+i;
+          var h='<div class="lc-homework lc-homework-table"><table><tbody>';
+          if(type==='宿題')h+='<tr><th><label for="lc-material-'+i+'">教材（任意）</label></th><td><input id="lc-material-'+i+'" list="'+esc(listId)+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="material" value="'+esc(x.material || '')+'" maxlength="120" placeholder="教材を選択、または新しく入力" aria-label="'+label+' の教材"'+dis+'><datalist id="'+esc(listId)+'">'+choices.map(function(v){return '<option value="'+esc(v)+'"></option>';}).join('')+'</datalist><small class="note">新しい教材名も入力できます。宿題を保存すると次回から選べます。</small></td></tr>';
+          h+='<tr><th><label for="lc-title-'+i+'">内容・範囲</label></th><td><input id="lc-title-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="title" value="'+esc(x.title)+'" maxlength="80" placeholder="例：p.12〜15 練習問題" aria-label="'+label+' の内容"'+dis+'></td></tr>';
+          h+='<tr><th><label for="lc-due-mode-'+i+'">期日</label></th><td><select id="lc-due-mode-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="dueMode"'+dis+'>'+deadlineOptions(mode)+'</select>';
+          if(mode==='date')h+='<input type="date" id="lc-due-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="due" value="'+esc(x.due)+'" aria-label="'+label+' の期限日"'+dis+'>';
+          h+='</td></tr></tbody></table>'+(readonly?'':lessonAction('remove','この欄を削除',false,'btn-danger',attrs));
+          return h+'</div>';
         }
+
         function lessonHomeworkFocus(e, id) {
           var field = document.getElementById((e.panePrefix || '') + id);
           if (field) field.focus();
@@ -2099,7 +2098,7 @@
           if ((c.otherPrevious || []).length) h += '<details class="add"><summary>他科目の記録を確認</summary>' + c.otherPrevious.map(function (x) { return '<p><a href="' + esc(lessonHref(e.studentId, x.slotId, x.id)) + '">' + fmtDY(x.date) + ' ' + esc(lessonLabel(x)) + '</a></p>'; }).join("") + '</details>';
           h += '</div><div class="card">';
           var openTasks = (c.openTasks || []).filter(function (x) { return !x.done && !x.withdrawnAt && !x.withdrawn; });
-          h += openTasks.length ? openTasks.map(function (x) { return '<div class="line"><span class="w">' + esc(x.title) + '</span><span class="small ' + (x.due && x.due < today() ? "lc-overdue" : "muted") + '">' + (taskDueText(x) + (x.due && x.due < today() ? "・期限超過" : "")) + '</span></div>'; }).join("") : '<div class="empty">未完了の宿題はありません。</div>';
+          h += openTasks.length ? openTasks.map(function (x) { return '<div class="line"><span class="w">' + esc((x.material ? x.material+'：' : '')+x.title) + '</span><span class="small ' + (x.due && x.due < today() ? "lc-overdue" : "muted") + '">' + (taskDueText(x) + (x.due && x.due < today() ? "・期限超過" : "")) + '</span></div>'; }).join("") : '<div class="empty">未完了の宿題はありません。</div>';
           h += '</div></div></details>';
           if (e.latest && !future) {
             h += '<h2>最新の記録との比較</h2><div class="grid2"><div class="card"><strong>サーバーの最新</strong><div class="note">第' + esc(e.latest.record ? e.latest.record.revision : 0) + '版</div>';
@@ -2116,7 +2115,7 @@
           var labels = { new: "未反映", changed: "変更あり", applied: "反映済み", held: "完了済み・変更を保留", withdrawn: "取り下げ済み", removed: "記録から除去・やることに残存" };
           var c = e.context, blocked = e.busy || !!e.pending || !!c.pending;
           return (c.homeworkState || []).length ? c.homeworkState.map(function (x) {
-            var h = '<div class="line"><span class="w"><strong>' + esc(x.title) + '</strong><span class="small muted"> ' + taskDueText(x) + '</span><div><span class="tag ' + (x.status === "held" || x.status === "removed" ? "amber" : "gray") + '">' + esc(labels[x.status] || x.status) + '</span>' + (x.done ? ' <span class="small">完了済み</span>' : "") + '</div></span>';
+            var h = '<div class="line"><span class="w"><strong>' + esc((x.material ? x.material+'：' : '')+x.title) + '</strong><span class="small muted"> ' + taskDueText(x) + '</span><div><span class="tag ' + (x.status === "held" || x.status === "removed" ? "amber" : "gray") + '">' + esc(labels[x.status] || x.status) + '</span>' + (x.done ? ' <span class="small">完了済み</span>' : "") + '</div></span>';
             if (x.taskId && x.status !== "withdrawn" && !x.withdrawn) h += lessonAction("withdraw", "取り下げ", blocked, "btn-danger", ' data-item="' + esc(x.itemId) + '"');
             if ((x.done || x.status === "withdrawn") && c.record.status !== "void") h += lessonAction("reissue", "新しい宿題として再出題", blocked || e.form.homework.length >= 10 || c.slotChanged || (c.student || {}).active === false, "", ' data-item="' + esc(x.itemId) + '"');
             return h + '</div>';
@@ -2165,7 +2164,7 @@
             case "lc-reissue":
               var task = (c.homeworkState || []).filter(function (x) { return x.itemId === itemId; })[0];
               if (!task || e.form.homework.length >= 10) return;
-              e.form.homework.push({ itemId: lessonId(), title: task.title, due: "", dueMode: task.dueMode || "nextLesson", type: task.type || "宿題" });
+              e.form.homework.push({ itemId: lessonId(), material: task.material || "", title: task.title, due: "", dueMode: task.dueMode || "nextLesson", type: task.type || "宿題" });
               e.dirty = true; e.message = "新しい宿題欄を追加しました。期限を確認して記録を保存後、生徒へ反映してください。"; break;
             case 'lc-outline-refresh':
               if(e.form.outline){var ref=e.form.outline,line=(c.outlineChoices||[]).filter(function(x){return x.lineId===ref.lineId;})[0];if(line){ref.expectedRevision=line.revision;ref.expectedPlanRevision=line.planRevision;ref.refresh=true;e.dirty=true;e.sharePreview=false;}}break;
@@ -2277,7 +2276,7 @@
           if (field && Object.prototype.hasOwnProperty.call(e.form, field) && field !== "homework" && field !== "report") { e.form[field] = el.value; e.dirty = true; e.preview = false; }
           if (itemId) {
             var prop = el.getAttribute("data-lc-prop");
-            e.form.homework.forEach(function (x) { if (x.itemId === itemId && ["title", "due", "dueMode", "type"].indexOf(prop) >= 0) x[prop] = el.value; });
+            e.form.homework.forEach(function (x) { if (x.itemId === itemId && ["title", "material", "due", "dueMode", "type"].indexOf(prop) >= 0) x[prop] = el.value; });
             e.dirty = true; e.preview = false;
             if (prop === "dueMode") { e.dueOpen = e.dueOpen || {}; e.dueOpen[itemId] = true; e.form.homework.forEach(function (x) { if (x.itemId === itemId && x.dueMode !== "date") x.due = ""; }); var focusId=el.id; lessonRender(e); var modeField=document.getElementById(focusId); if(modeField)modeField.focus(); }
           }
@@ -2323,7 +2322,7 @@
           h+='<p>'+esc(o.subject)+'・'+esc(o.kind||'通常')+' ／ '+esc(o.period)+' ／ 案内・承認 '+esc(o.limit)+'コマ</p>';
           var total=e.items.reduce(function(n,x){return n+(Number(x.count)||0);},0);
           h+='<p id="po-total-'+esc(e.lineId)+'" role="status">'+outlineTotalText(e,total)+'</p>';
-          e.items.forEach(function(x,i){h+='<div class="po-row"><label>内容 '+(i+1)+'<input id="po-title-'+esc(x.id)+'" data-po-line="'+esc(e.lineId)+'" data-po-item="'+esc(x.id)+'" data-po-field="title" maxlength="200" value="'+esc(x.title)+'"'+(blocked?' disabled':'')+'></label><label>予定コマ数<input type="number" min="1" max="100" step="1" id="po-count-'+esc(x.id)+'" data-po-line="'+esc(e.lineId)+'" data-po-item="'+esc(x.id)+'" data-po-field="count" value="'+esc(x.count)+'"'+(blocked?' disabled':'')+'></label><div class="row">'+['up','down','remove'].map(function(a){return '<button type="button" class="btn-quiet btn-sm" data-action="po-'+a+'" data-line="'+esc(e.lineId)+'" data-item="'+esc(x.id)+'"'+(blocked||(a==='up'&&i===0)||(a==='down'&&i===e.items.length-1)?' disabled':'')+' aria-label="内容 '+(i+1)+' を'+({up:'上へ',down:'下へ',remove:'削除'}[a])+'">'+({up:'↑',down:'↓',remove:'外す'}[a])+'</button>';}).join('')+'</div></div>';});
+          e.items.forEach(function(x,i){h+='<div class="po-row"><label>内容 '+(i+1)+'<input id="po-title-'+esc(x.id)+'" data-po-line="'+esc(e.lineId)+'" data-po-item="'+esc(x.id)+'" data-po-field="title" maxlength="200" value="'+esc((x.material ? x.material+'：' : '')+x.title)+'"'+(blocked?' disabled':'')+'></label><label>予定コマ数<input type="number" min="1" max="100" step="1" id="po-count-'+esc(x.id)+'" data-po-line="'+esc(e.lineId)+'" data-po-item="'+esc(x.id)+'" data-po-field="count" value="'+esc(x.count)+'"'+(blocked?' disabled':'')+'></label><div class="row">'+['up','down','remove'].map(function(a){return '<button type="button" class="btn-quiet btn-sm" data-action="po-'+a+'" data-line="'+esc(e.lineId)+'" data-item="'+esc(x.id)+'"'+(blocked||(a==='up'&&i===0)||(a==='down'&&i===e.items.length-1)?' disabled':'')+' aria-label="内容 '+(i+1)+' を'+({up:'上へ',down:'下へ',remove:'削除'}[a])+'">'+({up:'↑',down:'↓',remove:'外す'}[a])+'</button>';}).join('')+'</div></div>';});
           h+=outlineButton(e,'add','＋ 内容を追加',blocked||e.items.length>=30);
           h+='<div class="lc-share-actions">'+outlineButton(e,'keep','先生専用の下書きとして保存',blocked||e.conflict)+outlineButton(e,'publish','この内訳を生徒・保護者に公開',blocked||e.conflict)+outlineButton(e,'refresh','最新を確認',blocked)+outlineButton(e,'close','閉じる',blocked)+'</div>';
           if(o.hasPublication)h+='<details class="lc-secondary"><summary>公開状態の確認・変更</summary>'+window.StepwiseReport.outline(o.published)+'<p class="note">公開版を非表示にしても、過去の授業報告は公開時の内容を保持します。</p>'+outlineButton(e,'hide','今後の計画内訳を非公開にする',blocked||e.conflict)+'</details>';
@@ -2670,13 +2669,13 @@
         var homeworkDialog = null;
         function adminHomeworkTable(s,tdy) {
           var tasks=(s.tasks||[]).filter(function(t){return !t.reviewedAt&&!t.withdrawn&&!t.withdrawnAt&&(!t.type||t.type==='宿題');}).sort(function(a,b){return Number(!!(b.done||b.doneAt))-Number(!!(a.done||a.doneAt)) || String(a.due||'9999').localeCompare(String(b.due||'9999'));});
-          return '<h2>宿題 <span class="cnt">'+tasks.length+'件</span></h2><div class="card">'+(tasks.length?'<table class="tb" style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr>'+['科目','内容','期日','残り期間','状態'].map(function(x,i){return '<th style="border:1px solid #b8c4d3;background:#edf1f5;width:'+([10,42,12,20,16][i])+'%">'+x+'</th>';}).join('')+'</tr></thead><tbody>'+tasks.map(function(t){var due=t.due||'',days=due?Math.round((Date.parse(due+'T00:00:00Z')-Date.parse(tdy+'T00:00:00Z'))/86400000):NaN;var vals=[t.subject||t.dueSubject||'—',t.title,due?Number(due.slice(5,7))+'/'+Number(due.slice(8,10)):t.dueMode==='nextLesson'?'予定未定':'期限なし',isNaN(days)?'—':days>0?'あと'+days+'日':days===0?'今日まで':-days+'日超過'];return '<tr>'+vals.map(function(v,i){return '<td style="border:1px solid #b8c4d3;overflow-wrap:anywhere;text-align:'+(i===1?'left':'center')+'">'+esc(v)+'</td>';}).join('')+'<td style="border:1px solid #b8c4d3;text-align:center"><button class="tag amber" aria-haspopup="dialog" data-action="homework-open" data-id="'+esc(t.id)+'" style="cursor:pointer;text-decoration:underline">'+(t.done||t.doneAt?'確認待ち':'未完了')+'</button></td></tr>';}).join('')+'</tbody></table>':'<p class="empty">未完了の宿題はありません。</p>')+'</div>';
+          return '<h2>宿題 <span class="cnt">'+tasks.length+'件</span></h2><div class="card">'+(tasks.length?'<table class="tb" style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr>'+['科目','教材','内容・範囲','期日','残り期間','状態'].map(function(x,i){return '<th style="border:1px solid #b8c4d3;background:#edf1f5;width:'+([10,20,26,12,16,16][i])+'%">'+x+'</th>';}).join('')+'</tr></thead><tbody>'+tasks.map(function(t){var due=t.due||'',days=due?Math.round((Date.parse(due+'T00:00:00Z')-Date.parse(tdy+'T00:00:00Z'))/86400000):NaN;var vals=[t.subject||t.dueSubject||'—',t.material||'—',t.title,due?Number(due.slice(5,7))+'/'+Number(due.slice(8,10)):t.dueMode==='nextLesson'?'予定未定':'期限なし',isNaN(days)?'—':days>0?'あと'+days+'日':days===0?'今日まで':-days+'日超過'];return '<tr>'+vals.map(function(v,i){return '<td style="border:1px solid #b8c4d3;overflow-wrap:anywhere;text-align:'+(i===1?'left':'center')+'">'+esc(v)+'</td>';}).join('')+'<td style="border:1px solid #b8c4d3;text-align:center"><button class="tag amber" aria-haspopup="dialog" data-action="homework-open" data-id="'+esc(t.id)+'" style="cursor:pointer;text-decoration:underline">'+(t.done||t.doneAt?'確認待ち':'未完了')+'</button></td></tr>';}).join('')+'</tbody></table>':'<p class="empty">未完了の宿題はありません。</p>')+'</div>';
         }
         function mountAdminHomework(){
           if(!homeworkDialog)return;
           if(route().page!=='student'||!cur||String(cur.id)!==homeworkDialog.studentId){homeworkDialog=null;return;}
           var t=(cur.tasks||[]).filter(function(t){return String(t.id)===homeworkDialog.id&&!t.reviewedAt;})[0];if(!t){homeworkDialog=null;return;}
-          app.insertAdjacentHTML('beforeend',window.StepwiseCalendar.dayDialog({id:'admin-homework-dialog',title:'宿題の確認',close:'homework-close',busy:busy,content:'<p>'+esc(t.title)+'</p><p>宿題の内容を確認して登録してください。</p><button class="btn-primary" data-action="homework-confirm"'+(busy?' disabled':'')+'>確認済みにする</button><label style="display:block;margin-top:16px">やり直しコメント<textarea id="homework-review-note" maxlength="500">'+esc(homeworkDialog.note == null ? t.reviewNote||'' : homeworkDialog.note)+'</textarea></label><button class="btn-quiet" data-action="homework-return"'+(busy?' disabled':'')+'>やり直しにする</button>'}));
+          app.insertAdjacentHTML('beforeend',window.StepwiseCalendar.dayDialog({id:'admin-homework-dialog',title:'宿題の確認',close:'homework-close',busy:busy,content:'<p>'+esc((t.material ? t.material+'：' : '')+t.title)+'</p><p>宿題の内容を確認して登録してください。</p><button class="btn-primary" data-action="homework-confirm"'+(busy?' disabled':'')+'>確認済みにする</button><label style="display:block;margin-top:16px">やり直しコメント<textarea id="homework-review-note" maxlength="500">'+esc(homeworkDialog.note == null ? t.reviewNote||'' : homeworkDialog.note)+'</textarea></label><button class="btn-quiet" data-action="homework-return"'+(busy?' disabled':'')+'>やり直しにする</button>'}));
           var d=document.getElementById('admin-homework-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else homeworkDialog=null;};if(d.showModal&&!d.open)d.showModal();}
         }
         function act(op, extra, okMsg, optimistic, after) {

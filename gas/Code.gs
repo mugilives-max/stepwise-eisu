@@ -876,7 +876,7 @@ function ensureTasksSheet_() {
 function taskRows_() {
   if (!ss_().getSheetByName('tasks')) return [];
   return readRows_('tasks').filter(function (x) { return !x.withdrawnAt; }).map(function (x) {
-    return Object.assign({ id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), title: String(x.title || ''),
+    return Object.assign({ id: x.id, studentId: String(x.studentId || ''), type: String(x.type || '宿題'), material: String(x.material || ''), title: String(x.title || ''),
       due: normDate_(x.due) || '', createdAt: x.createdAt ? fmtLogTime_(x.createdAt) : '', createdBy: String(x.createdBy || ''),
       reviewedAt:String(x.reviewedAt||''),reviewNote:String(x.reviewNote||''),done: !!x.doneAt, doneAt: x.doneAt ? fmtLogTime_(x.doneAt) : '' }, typeof lessonTaskDueView_ === 'function' ? lessonTaskDueView_(x) : {});
   }).filter(function (x) { return x.id && x.title; });

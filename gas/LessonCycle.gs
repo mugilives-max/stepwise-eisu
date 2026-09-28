@@ -12,7 +12,7 @@ var LESSON_HEADERS_ = {
   lessonReportDrafts: ['recordId','body','sourceRevision','revision','updatedAt'],
   lessonWrites: ['requestId','operation','payloadHash','payloadJson','status','resultJson','createdAt','updatedAt'],
   lessonPublicSnapshots: ['id','recordId','studentId','slotId','revision','lessonDate','lessonStart','lessonMin','subject','content','progress','nextFocus','homeworkJson','publishedAt','sourceRequestId'],
-  tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime','reviewedAt','reviewNote']
+  tasks: ['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime','reviewedAt','reviewNote','material']
 };
 var LESSON_SCHEMA_BOOK_ = null; // Per-execution only; never CacheService.
 LESSON_HEADERS_.lessonRecords.push('reportJson');
@@ -103,12 +103,13 @@ function lessonHomework_(items) {
   if (!Array.isArray(items) || items.length > 10) lessonFail_('validation', '宿題は10件以内で入力してください');
   var ids = Object.create(null);
   return items.map(function (x) {
-    lessonOnly_(x,['itemId','title','due','type','dueMode']);
+    lessonOnly_(x,['itemId','title','due','type','dueMode','material']);
     var id = lessonId_(x.itemId);
     if (ids[id]) lessonFail_('validation','宿題の項目IDが重複しています'); ids[id] = true;
     var type = x.type === undefined ? '宿題' : x.type;
     if (['宿題','持ち物','メモ'].indexOf(type) < 0) lessonFail_('validation','宿題の種類が正しくありません');
     var due=lessonDate_(x.due), out={itemId:id,title:lessonText_(x.title,80,true),due:due,type:type};
+    if (x.material !== undefined) out.material=lessonText_(x.material,120,false).trim();
     // Preserve the normalized shape of legacy requests: their persisted hash
     // must remain reusable after this release, including unfinished saves.
     if (x.dueMode !== undefined) { out.dueMode=lessonDueMode_(x.dueMode,due); out.due=out.dueMode === 'date' ? due : ''; }
@@ -268,7 +269,7 @@ function lessonTask_(recordId,itemId,studentId) {
 }
 function lessonTaskSame_(task,item) {
   var mode=lessonDueMode_(item.dueMode,item.due), taskMode=lessonDueMode_(task.dueMode,normDate_(task.due)||'');
-  return String(task.title) === item.title && mode === taskMode && (mode !== 'date' || (normDate_(task.due)||'') === item.due) && String(task.type) === item.type;
+  return String(task.material || '') === String(item.material || '') && String(task.title) === item.title && mode === taskMode && (mode !== 'date' || (normDate_(task.due)||'') === item.due) && String(task.type) === item.type;
 }
 
 function lessonPlan_(p,requestId,hash) {
@@ -405,7 +406,7 @@ function lessonExecute_(plan) {
       if (task && task.doneAt && !lessonTaskSame_(task,item)) { result.held.push(item.itemId); return; }
       if (task && lessonTaskSame_(task,item) && Number(task.sourceRevision) === plan.sourceRevision) { result.unchanged.push(item.itemId); return; }
       var next=task ? lessonCopy_(task) : { id:entry.taskId,studentId:plan.studentId,createdAt:plan.now,createdBy:'teacher',doneAt:'',withdrawnAt:'',sourceRecordId:plan.recordId,sourceItemId:item.itemId };
-      next.title=item.title; next.type=item.type; next.sourceRevision=plan.sourceRevision;
+      next.material=item.material || ''; next.title=item.title; next.type=item.type; next.sourceRevision=plan.sourceRevision;
       if (!task || !task.doneAt) {
         var deadline=lessonDueFields_(item,plan.studentId,String(r.subject || ''),String(r.lessonDate)+'T'+String(r.lessonStart));
         Object.keys(deadline).forEach(function (key) { next[key]=deadline[key]; });
@@ -487,7 +488,7 @@ function lessonPublishedForStudent_(studentId) {
   return lessonCommittedPublic_(String(studentId)).map(function (r) {
     return {outline:lessonOutlinePublicSnapshot_(r),report:lessonReportRead_(r),workspace:lessonWorkspace_(studentId,r),recordId:String(r.recordId),revision:Number(r.revision),date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),content:String(r.content || ''),progress:String(r.progress || ''),nextFocus:String(r.nextFocus || ''),publishedAt:String(r.publishedAt),homework:lessonHomeworkItems_(r).map(function (item) {
       var task=lessonTask_(String(r.recordId),item.itemId,String(studentId)),due=lessonHomeworkDueView_(item,r,task);
-      return {taskId:task?String(task.id):'',reviewedAt:task?String(task.reviewedAt||''):'',reviewNote:task?String(task.reviewNote||''):'',done:!!(task&&task.doneAt),withdrawn:!!(task&&task.withdrawnAt),itemId:item.itemId,title:item.title,type:item.type,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending};
+      return {taskId:task?String(task.id):'',reviewedAt:task?String(task.reviewedAt||''):'',reviewNote:task?String(task.reviewNote||''):'',done:!!(task&&task.doneAt),withdrawn:!!(task&&task.withdrawnAt),itemId:item.itemId,title:item.title,material:item.material || '',type:item.type,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending};
     })};
   }).sort(function (a,b) { return a.date+'T'+a.start < b.date+'T'+b.start ? 1 : -1; });
 }
@@ -501,13 +502,21 @@ function lessonRecordView_(r,includePrivate) {
   if (includePrivate) out.outline=lessonOutlineRecordView_(r);
   return out;
 }
+function lessonMaterialChoices_() {
+  var names=Object.create(null);
+  lessonRows_('lessonRecords').forEach(function(r){
+    if(r.status!=='active')return;
+    lessonHomeworkItems_(r).forEach(function(x){if(x.material)names[x.material]=true;});
+  });
+  return Object.keys(names).sort();
+}
 function lessonTaskView_(t) {
   var due=lessonTaskDueView_(t);
-  return {id:String(t.id),title:String(t.title || ''),due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:String(t.type || '宿題'),done:!!t.doneAt,doneAt:t.doneAt ? String(t.doneAt) : '',reviewedAt:String(t.reviewedAt||''),reviewNote:String(t.reviewNote||''),sourceRecordId:String(t.sourceRecordId || ''),sourceItemId:String(t.sourceItemId || '')};
+  return {id:String(t.id),title:String(t.title || ''),material:String(t.material || ''),due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:String(t.type || '宿題'),done:!!t.doneAt,doneAt:t.doneAt ? String(t.doneAt) : '',reviewedAt:String(t.reviewedAt||''),reviewNote:String(t.reviewNote||''),sourceRecordId:String(t.sourceRecordId || ''),sourceItemId:String(t.sourceItemId || '')};
 }
 function lessonDraftTemplate_(r) {
   if (!r) return '';
-  return ['授業内容\n'+r.content,r.progress ? '取り組みの様子\n'+r.progress : '',r.homework.length ? '宿題\n'+r.homework.map(function (x) { return x.title+(x.dueMode === 'nextLesson' ? '（次回の同じ科目の授業まで）' : x.due ? '（'+x.due+'）' : ''); }).join('\n') : '',r.nextFocus ? '次回の焦点\n'+r.nextFocus : ''].filter(Boolean).join('\n\n');
+  return ['授業内容\n'+r.content,r.progress ? '取り組みの様子\n'+r.progress : '',r.homework.length ? '宿題\n'+r.homework.map(function (x) { return (x.material ? x.material+'：' : '')+x.title+(x.dueMode === 'nextLesson' ? '（次回の同じ科目の授業まで）' : x.due ? '（'+x.due+'）' : ''); }).join('\n') : '',r.nextFocus ? '次回の焦点\n'+r.nextFocus : ''].filter(Boolean).join('\n\n');
 }
 function lessonPreparationKey_(studentId,slotId) { return JSON.stringify([String(studentId),String(slotId)]); }
 function lessonPairContext_(req) {
@@ -558,7 +567,7 @@ function lessonContextData_(studentId,slotId,recordId) {
     var ids={};
     current.homework.forEach(function (item) {
       ids[item.itemId]=true; var t=lessonTask_(current.id,item.itemId,studentId), due=lessonHomeworkDueView_(item,r,t);
-      state.push({itemId:item.itemId,taskId:t ? String(t.id) : '',title:item.title,due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:item.type,done:!!(t && t.doneAt),withdrawn:!!(t && t.withdrawnAt),status:!t ? 'new' : t.withdrawnAt ? 'withdrawn' : t.doneAt && !lessonTaskSame_(t,item) ? 'held' : lessonTaskSame_(t,item) ? 'applied' : 'changed'});
+      state.push({itemId:item.itemId,taskId:t ? String(t.id) : '',title:item.title,material:item.material || '',due:due.due,dueMode:due.dueMode,dueSubject:due.dueSubject,dueStart:due.dueStart,nextLessonPending:due.nextLessonPending,type:item.type,done:!!(t && t.doneAt),withdrawn:!!(t && t.withdrawnAt),status:!t ? 'new' : t.withdrawnAt ? 'withdrawn' : t.doneAt && !lessonTaskSame_(t,item) ? 'held' : lessonTaskSame_(t,item) ? 'applied' : 'changed'});
     });
     lessonRawTasks_(current.id).forEach(function (t) { if (!ids[String(t.sourceItemId)] && String(t.studentId) === studentId) {
       var due=lessonTaskDueView_(t);
@@ -573,7 +582,7 @@ function lessonContextData_(studentId,slotId,recordId) {
     if (!choices.some(function (c) { return c.recordId === String(x.id); })) choices.push({id:String(x.slotId),recordId:String(x.id),date:String(x.lessonDate),start:String(x.lessonStart),min:Number(x.lessonMin),subject:String(x.subject || ''),status:'history',done:false,slotChanged:lessonSlotChanged_(x),recordStatus:String(x.status)});
   });
   choices.sort(function (a,b) { return (a.date+'T'+a.start) < (b.date+'T'+b.start) ? 1 : -1; });
-  return {temporaryDraft:lessonTemporaryDraft_(studentId,slotId),outlineChoices:lessonOutlineChoices_(studentId,slot),workspace:lessonWorkspace_(studentId,r||slot),previousTasks:same?tasks.filter(function(t){return String(t.sourceRecordId)===String(same.id)&&!t.withdrawnAt;}).map(lessonTaskView_):[],today:todayStr_(),preparation:lessonPreparationView_(studentId,slotId),student:{id:studentId,name:String(student.name || ''),active:lessonActive_(student)},slot:slot ? {id:String(slot.id),date:slot.date,start:slot.start,min:Number(slot.min),subject:String(slot.subject || ''),status:slot.status,done:slot.done === true || String(slot.done) === 'true'} : {id:slotId,date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),status:'missing',done:false},record:current,previous:lessonRecordView_(same,false),otherPrevious:previous.filter(function (x) { return String(x.subject || '') !== String(reference.subject || ''); }).map(function (x) { return {id:String(x.id),slotId:String(x.slotId),date:String(x.lessonDate),subject:String(x.subject || '')}; }),openTasks:tasks.filter(function (t) { return t.id && t.title && !t.reviewedAt && !t.withdrawnAt; }).map(lessonTaskView_),homeworkState:state,draft:draft ? {body:String(draft.body || ''),revision:Number(draft.revision),sourceRevision:Number(draft.sourceRevision),updatedAt:String(draft.updatedAt || ''),stale:Number(draft.sourceRevision)!==Number(r.revision)} : null,draftTemplate:lessonDraftTemplate_(current ? lessonRecordView_(r,false) : null),pending:pending.length ? {requestId:String(pending[0].requestId),operation:String(pending[0].operation)} : null,slotChanged:r ? lessonSlotChanged_(r) : !slot || slot.status !== 'booked',lessonChoices:choices};
+  return {materials:lessonMaterialChoices_(),temporaryDraft:lessonTemporaryDraft_(studentId,slotId),outlineChoices:lessonOutlineChoices_(studentId,slot),workspace:lessonWorkspace_(studentId,r||slot),previousTasks:same?tasks.filter(function(t){return String(t.sourceRecordId)===String(same.id)&&!t.withdrawnAt;}).map(lessonTaskView_):[],today:todayStr_(),preparation:lessonPreparationView_(studentId,slotId),student:{id:studentId,name:String(student.name || ''),active:lessonActive_(student)},slot:slot ? {id:String(slot.id),date:slot.date,start:slot.start,min:Number(slot.min),subject:String(slot.subject || ''),status:slot.status,done:slot.done === true || String(slot.done) === 'true'} : {id:slotId,date:String(r.lessonDate),start:String(r.lessonStart),min:Number(r.lessonMin),subject:String(r.subject || ''),status:'missing',done:false},record:current,previous:lessonRecordView_(same,false),otherPrevious:previous.filter(function (x) { return String(x.subject || '') !== String(reference.subject || ''); }).map(function (x) { return {id:String(x.id),slotId:String(x.slotId),date:String(x.lessonDate),subject:String(x.subject || '')}; }),openTasks:tasks.filter(function (t) { return t.id && t.title && !t.reviewedAt && !t.withdrawnAt; }).map(lessonTaskView_),homeworkState:state,draft:draft ? {body:String(draft.body || ''),revision:Number(draft.revision),sourceRevision:Number(draft.sourceRevision),updatedAt:String(draft.updatedAt || ''),stale:Number(draft.sourceRevision)!==Number(r.revision)} : null,draftTemplate:lessonDraftTemplate_(current ? lessonRecordView_(r,false) : null),pending:pending.length ? {requestId:String(pending[0].requestId),operation:String(pending[0].operation)} : null,slotChanged:r ? lessonSlotChanged_(r) : !slot || slot.status !== 'booked',lessonChoices:choices};
 }
 
 // Caller must hold ScriptLock (doPost also serializes legacy task completion).
