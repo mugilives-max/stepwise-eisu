@@ -2385,7 +2385,7 @@
         function planAdditionCandidates(s,f){return planLines(s).filter(function(l){return !l.parentId&&l.status!=='declined'&&l.subject===f.subject&&(l.kind||'通常')===(f.kind||'通常')&&l.startDate<=f.endDate&&l.endDate>=f.startDate;});}
         function renderPlanEditor(s, f, cells) {
           var pr = f.parentId ? (f.parent || planLineById(s, f.parentId)) : null, lock = f.parentId ? ' disabled' : '';
-          var h = '<div class="card" style="margin:8px 0;background:var(--bg-soft,#f7f8fa)" id="plan-editor"><strong>' + (f.parentId ? (f.lineId ? '追加案内を編集' : '追加案内（トッピング）') : (f.lineId ? '案内を編集' : '新しい案内')) + '</strong>';
+          var h = '<div id="plan-editor"><strong>' + (f.parentId ? (f.lineId ? '追加案内を編集' : '追加案内（トッピング）') : (f.lineId ? '案内を編集' : '新しい案内')) + '</strong>';
           if (f.parentId) h += '<p class="note">' + (pr ? esc(planLabel(pr)) + ' ' + esc(planPeriod(pr)) + ' ' + esc(pr.count) + '回' : '元の案内') + ' への追加です。科目・種類は同じで、期間は元の案内の中に収めます。承認済みの元の案内はそのまま有効で、追加分だけ保護者に承認してもらいます。なぜ追加が必要かをコメントに書いてください。</p>';
           if (f.status === "approved") h += '<p class="note">承認済みの案内です。保存すると承認が失効し、あらためて保護者の承認が必要です。</p>';
           else if (f.status === "proposed") h += '<p class="note">送信済みの案内です。保存すると内容が変わり、再送信または再承認が必要です。</p>';
@@ -2395,20 +2395,21 @@
             h+='</div>';
           }
           if (f.error) h += '<p class="lc-notice" role="alert">' + esc(f.error) + '。入力は保持しています。</p>';
-          if(f.parentId&&!cells){
+          if(!cells){
             var field=function(id,key,type,value,extra){return '<input id="'+id+'" data-pe-field="'+key+'" type="'+type+'" value="'+esc(value)+'" '+(extra||'')+'>';};
             var limits=pr?'min="'+esc(pr.startDate)+'" max="'+esc(pr.endDate)+'"':'';
             var rows=[
-              ['科目','pe-subject','<select id="pe-subject" data-pe-field="subject" disabled><option>'+esc(f.subject)+'</option></select>'],
-              ['種類','pe-kind','<select id="pe-kind" data-pe-field="kind" disabled>'+kindOptions(f.kind||'通常')+'</select>'],
-              ['追加する回数（回）','pe-count',field('pe-count','count','number',f.count,'min="1" max="99"')],
+              ['科目','pe-subject','<select id="pe-subject" data-pe-field="subject"'+lock+'>'+[f.subject].concat(LESSON_SUBJECTS.filter(function(v){return v!==f.subject;})).map(function(v){return '<option'+(v===f.subject?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'],
+              ['種類','pe-kind','<select id="pe-kind" data-pe-field="kind"'+lock+'>'+kindOptions(f.kind||'通常')+'</select>'],
+              [f.parentId?'追加する回数（回）':'回数（回）','pe-count',field('pe-count','count','number',f.count,'min="1" max="99"')],
               ['開始日','pe-start',field('pe-start','startDate','date',f.startDate,limits)],
               ['終了日','pe-end',field('pe-end','endDate','date',f.endDate,limits)],
               ['1回の授業時間（分）','pe-min',field('pe-min','lessonMin','number',f.lessonMin,'min="30" max="240" step="30"')],
               ['1回の授業料（円）','pe-fee',field('pe-fee','lessonFee','number',f.lessonFee==null?'':f.lessonFee,'min="0" step="10"')],
-              ['生徒・保護者へのコメント','pe-comment','<textarea id="pe-comment" data-pe-field="comment" rows="3" maxlength="500" placeholder="追加が必要な理由を入力">'+esc(f.comment||'')+'</textarea>']
+              ['生徒・保護者へのコメント','pe-comment','<textarea id="pe-comment" data-pe-field="comment" rows="3" maxlength="500" placeholder="授業の目的や回数の理由を入力">'+esc(f.comment||'')+'</textarea>']
             ];
-            h+='<table class="student-info-details plan-prompt-table"><tbody>'+rows.map(function(r){return '<tr><th scope="row"><label for="'+r[1]+'">'+r[0]+'</label></th><td>'+r[2]+'</td></tr>';}).join('')+'</tbody></table><p class="note">実施した授業の時間分だけを請求します。回数は追加分の予定です。</p>';
+            h+='<table class="student-info-details plan-prompt-table"><tbody>'+rows.map(function(r){return '<tr><th scope="row"><label for="'+r[1]+'">'+r[0]+'</label></th><td>'+r[2]+'</td></tr>';}).join('')+'</tbody></table><p class="note">実施した授業の時間分だけを請求します。回数は予定です。</p>';
+          if(!f.parentId)h+='<div class="row">'+[0,1,2].map(function(n){var ym=addMonths(s.month||thisYm(),n);return '<button class="btn-quiet btn-sm" data-action="pe-month" data-ym="'+esc(ym)+'">'+(+ym.slice(5))+'月</button>';}).join('')+'</div>';
           }else{
           h += '<div class="row"><label>科目 <select id="pe-subject" data-pe-field="subject"' + lock + '>' + [""].concat(LESSON_SUBJECTS.indexOf(f.subject) < 0 && f.subject ? [f.subject] : [], LESSON_SUBJECTS).map(function (o) { return '<option value="' + esc(o) + '"' + (o === f.subject ? ' selected' : '') + '>' + (o || '科目を選択') + '</option>'; }).join("") + '</select></label>';
           h += '<label>種類 <select id="pe-kind" data-pe-field="kind"' + lock + '>' + kindOptions(f.kind || "通常") + '</select></label><label>回数 <input type="number" id="pe-count" data-pe-field="count" min="1" max="99" value="' + esc(f.count) + '" style="width:64px"> 回</label></div>';
