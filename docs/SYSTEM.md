@@ -1162,3 +1162,5 @@ Pages実行 `36237797285` 成功。管理・予約HTML、portal.js、learning-se
 2026-09-28: 保護者の計画確認dialogがページ下部へ戻る不具合を修正。showModal後のapp.innerHTML再代入をやめ、追加HTMLはinsertAdjacentHTMLで挿入してtop layerの要素を保持する。関連操作8テスト・構文チェック合格。ブラウザ表示位置の実視認は未実施。
 
 2026-09-28: カレンダー＋からの授業案内は初期90分。案内フォームを左項目・右入力の罫線表へ統一（過去実施済み追加にも適用）。
+
+2026-09-28: 管理の宿題dialogもshowModal後のinnerHTML +=で再生成されtop layerを失っていた。管理の全HTML追記をinsertAdjacentHTMLへ変更し、portalの代入fallbackも除去。UIハーネスにmodal状態・ノード保持を実装。修正前に宿題モーダル維持テストが失敗、修正後に合格。同種innerHTML +=を禁止する回帰チェック追加。関連14テスト合格。実ブラウザでの視認は未実施。

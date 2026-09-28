@@ -16,6 +16,8 @@ function createUI(kind = 'student', options = {}) {
   function element(id, a = {}) {
     let html = ''; const children = new Set();
     const e = { id, attrs: a, value: a.value || '', textContent: '', checked: Object.hasOwn(a, 'checked'), disabled: Object.hasOwn(a, 'disabled'),
+      open: Object.hasOwn(a,'open'), modal: false, showModal(){this.open=true;this.modal=true;},
+      insertAdjacentHTML(position,value){assert.equal(position,'beforeend');const saved=new Map([...children].map(id=>[id,elements.get(id)]));this.innerHTML=html+value;for(const [id,child] of saved)elements.set(id,child);},
       getAttribute: k => Object.hasOwn(a, k) ? a[k] : null, hasAttribute: k => Object.hasOwn(a, k), focus() { focused = id; }, scrollIntoView() {},
       classList: { add() {}, remove() {} }, addEventListener: (k, f) => on(id + ':' + k, f),
       clear() { for (const child of children) { elements.get(child)?.clear(); elements.delete(child); } children.clear(); } };

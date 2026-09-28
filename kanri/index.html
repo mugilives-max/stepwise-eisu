@@ -1571,9 +1571,9 @@
           if (notificationNotice && authM === "ok") app.innerHTML = '<div class="lc-notice" role="alert">' + esc(notificationNotice) + ' <button class="btn-quiet btn-sm" data-action="notification-dismiss">閉じる</button></div>' + app.innerHTML;
           if(familyModal&&!familyModalActive())closeFamilyModal();
           if(familyModalActive()){
-            app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)});
+            app.insertAdjacentHTML('beforeend',window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)}));
           }
-          mountAdminHomework(); app.innerHTML+=teacherBookingDialogHTML()+cancelDialogHTML()+reliefHTML();
+          mountAdminHomework(); app.insertAdjacentHTML('beforeend',teacherBookingDialogHTML()+cancelDialogHTML()+reliefHTML());
           if(window.StepwiseDocuments)window.StepwiseDocuments.mount(app,{teacher:true,auth:{token:token()}});
             var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
 
@@ -2625,7 +2625,7 @@
           if(!homeworkDialog)return;
           if(route().page!=='student'||!cur||String(cur.id)!==homeworkDialog.studentId){homeworkDialog=null;return;}
           var t=(cur.tasks||[]).filter(function(t){return String(t.id)===homeworkDialog.id&&!t.reviewedAt;})[0];if(!t){homeworkDialog=null;return;}
-          app.innerHTML+=window.StepwiseCalendar.dayDialog({id:'admin-homework-dialog',title:'宿題の確認',close:'homework-close',busy:busy,content:'<p>'+esc(t.title)+'</p><p>宿題の内容を確認して登録してください。</p><button class="btn-primary" data-action="homework-confirm"'+(busy?' disabled':'')+'>確認済みにする</button><label style="display:block;margin-top:16px">やり直しコメント<textarea id="homework-review-note" maxlength="500">'+esc(homeworkDialog.note == null ? t.reviewNote||'' : homeworkDialog.note)+'</textarea></label><button class="btn-quiet" data-action="homework-return"'+(busy?' disabled':'')+'>やり直しにする</button>'});
+          app.insertAdjacentHTML('beforeend',window.StepwiseCalendar.dayDialog({id:'admin-homework-dialog',title:'宿題の確認',close:'homework-close',busy:busy,content:'<p>'+esc(t.title)+'</p><p>宿題の内容を確認して登録してください。</p><button class="btn-primary" data-action="homework-confirm"'+(busy?' disabled':'')+'>確認済みにする</button><label style="display:block;margin-top:16px">やり直しコメント<textarea id="homework-review-note" maxlength="500">'+esc(homeworkDialog.note == null ? t.reviewNote||'' : homeworkDialog.note)+'</textarea></label><button class="btn-quiet" data-action="homework-return"'+(busy?' disabled':'')+'>やり直しにする</button>'}));
           var d=document.getElementById('admin-homework-dialog');if(d){d.oncancel=function(e){if(busy)e.preventDefault();else homeworkDialog=null;};if(d.showModal&&!d.open)d.showModal();}
         }
         function act(op, extra, okMsg, optimistic, after) {
