@@ -2383,6 +2383,7 @@
         function planEditAddon(s, parent) { var f = planEditOf(s, parent); f.lineId = ""; f.revision = null; f.status = ""; f.parentId = parent.id; f.parent = parent; f.count = 1; f.comment = ""; if (f.startDate < today() && today() <= f.endDate) f.startDate = today(); return f; }
         function planEditOf(s, l) { return { parentId: l.parentId || "", parent: l.parentId ? planLineById(s, l.parentId) : null, lineId: l.id, subject: l.subject, kind: l.kind || "通常", count: l.count, startDate: l.startDate, endDate: l.endDate, lessonMin: l.lessonMin || 90, lessonFee: l.lessonFee != null ? l.lessonFee : Math.round((Number(l.rate30) || 0) * (l.lessonMin || 90) / 30), comment: l.comment || "", revision: l.revision, status: l.status, error: "" }; }
         function planAdditionCandidates(s,f){return planLines(s).filter(function(l){return !l.parentId&&l.status!=='declined'&&l.subject===f.subject&&(l.kind||'通常')===(f.kind||'通常')&&l.startDate<=f.endDate&&l.endDate>=f.startDate;});}
+        function planKindAddUI(f){return f.parentId?'':(f.kindAdding?'<div class="row"><input id="pe-kind-name" aria-label="新しい種類の名前" maxlength="30" placeholder="例：夏期講習" value="'+esc(f.kindName||'')+'"><button type="button" class="btn-primary btn-sm" data-action="pe-kind-save"'+(busy?' disabled':'')+'>追加して選択</button><button type="button" class="btn-quiet btn-sm" data-action="pe-kind-cancel">やめる</button></div>':'<button type="button" class="btn-quiet btn-sm" data-action="pe-kind-add">＋ 種類を追加</button>');}
         function renderPlanEditor(s, f, cells) {
           var pr = f.parentId ? (f.parent || planLineById(s, f.parentId)) : null, lock = f.parentId ? ' disabled' : '';
           var h = '<div id="plan-editor"><strong>' + (f.parentId ? (f.lineId ? '追加案内を編集' : '追加案内（トッピング）') : (f.lineId ? '案内を編集' : '新しい案内')) + '</strong>';
@@ -2400,7 +2401,7 @@
             var limits=pr?'min="'+esc(pr.startDate)+'" max="'+esc(pr.endDate)+'"':'';
             var rows=[
               ['科目','pe-subject','<select id="pe-subject" data-pe-field="subject"'+lock+'>'+[f.subject].concat(LESSON_SUBJECTS.filter(function(v){return v!==f.subject;})).map(function(v){return '<option'+(v===f.subject?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'],
-              ['種類','pe-kind','<select id="pe-kind" data-pe-field="kind"'+lock+'>'+kindOptions(f.kind||'通常')+'</select>'],
+              ['種類','pe-kind','<select id="pe-kind" data-pe-field="kind"'+lock+'>'+kindOptions(f.kind||'通常')+'</select>'+planKindAddUI(f)],
               [f.parentId?'追加する回数（回）':'回数（回）','pe-count',field('pe-count','count','number',f.count,'min="1" max="99"')],
               ['開始日','pe-start',field('pe-start','startDate','date',f.startDate,limits)],
               ['終了日','pe-end',field('pe-end','endDate','date',f.endDate,limits)],
@@ -3101,6 +3102,9 @@
             case "plan-comment": { var commentKey=cur.id+":"+btn.getAttribute("data-line");planCommentsOpen[commentKey]=!planCommentsOpen[commentKey];render();break; }
             case "plan-detail": planDetail={studentId:cur.id,lineId:btn.getAttribute("data-line")};delete planEdits[cur.id];render();break;
             case "plan-close": if(busy)return;planDetail=null;delete planEdits[cur.id];render();break;
+            case "pe-kind-add": planEdits[cur.id].kindAdding=true;render();break;
+            case "pe-kind-cancel": planEdits[cur.id].kindAdding=false;render();break;
+            case "pe-kind-save": {var kf=planEdits[cur.id],name=val('pe-kind-name').trim();if(!kf||kf.parentId||busy)return;if(!name){toast('種類の名前を入力してください');return;}kf.kindName=name;if(lessonKinds().indexOf(name)>=0){kf.kind=name;kf.kindAdding=false;render();break;}busy=true;render();admin('lessonKinds',{}).then(function(res){var existing=(res.lessonKinds||[]).some(function(k){return k.name===name;});return existing?res:admin('lessonKindSave',{name:name,standardMin:'',standardFee:'',active:true});}).then(function(res){busy=false;if(res.admin)A=res.admin;else{A=A||{};A.lessonKinds=res.lessonKinds;}kf.kind=name;kf.kindAdding=false;cacheClear();render();toast('種類を追加しました');}).catch(function(e){busy=false;kf.error=e.message||'種類を追加できませんでした';render();});break;}
             case "pe-new": planDetail=null;planEdits[cur.id] = planEditNew(cur, ""); render(); var pe0 = document.getElementById("plan-editor"); if (pe0 && pe0.scrollIntoView) pe0.scrollIntoView({ behavior: "smooth", block: "center" }); break;
             case "pe-open": { var peL = planLineById(cur, btn.getAttribute("data-line")); if (!peL) return; planEdits[cur.id] = planEditOf(cur, peL); render(); var editor = document.getElementById("plan-editor"); if(editor && editor.scrollIntoView)editor.scrollIntoView({behavior:"smooth",block:"center"}); break; }
             case "pe-addon": { var paP = planLineById(cur, btn.getAttribute("data-line")); if (!paP) return; planEdits[cur.id] = planEditAddon(cur, paP); render(); var pe1 = document.getElementById("plan-editor"); if (pe1 && pe1.scrollIntoView) pe1.scrollIntoView({ behavior: "smooth", block: "center" }); break; }
