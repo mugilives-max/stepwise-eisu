@@ -578,14 +578,16 @@
           if(b&&!busy)b.textContent=d.extra&&d.extra.length?((d.extra.length+1)*(+(val('f-rep')||d.repeat)||1))+'件まとめて案内する':'この内容で案内する';
         }
         document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='f-rep')updateOfferCount();});
+        document.addEventListener('input',function(ev){var id=ev.target&&ev.target.id||'',m=id.match(/^f-extra-(\d+)-(start|min)$/),n=m?+m[1]+2:1;if(!m&&id!=='f-start'&&id!=='f-min')return;var prefix=m?'f-extra-'+m[1]+'-':'f-',title=document.getElementById('offer-title-'+n),start=val(prefix+'start'),min=val(prefix+'min');if(title)title.textContent=n+'件目　'+start+'〜'+offerEnd(start,min);});
+        function offerEnd(start,min){var n=window.StepwiseBoard.minutes(start)+(+min||90);return Number.isFinite(n)?('0'+Math.floor(n/60)).slice(-2)+':'+('0'+n%60).slice(-2):'';}
         function consecutiveRowsHTML(d) {
-          return (d.extra||[]).map(function(r,i){var prefix='f-extra-'+i+'-';return '<fieldset style="margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px"><legend>'+ (i+2)+'件目</legend><div class="form">'
-            +'<label for="'+prefix+'subject">科目</label><select id="'+prefix+'subject"><option value="">科目を選択</option>'+LESSON_SUBJECTS.map(function(x){return '<option'+(x===r.subject?' selected':'')+'>'+x+'</option>';}).join('')+'</select>'
-            +'<label for="'+prefix+'kind">種類</label><select id="'+prefix+'kind">'+kindOptions(r.kind)+'</select>'
-            +'<label for="'+prefix+'deliveryMode">形式</label><select id="'+prefix+'deliveryMode">'+deliveryOptions(r.deliveryMode)+'</select>'
-            +'<label for="'+prefix+'start">開始</label><input type="time" step="300" id="'+prefix+'start" value="'+esc(r.start)+'">'
-            +'<label for="'+prefix+'min">長さ</label><select id="'+prefix+'min">'+[30,45,60,90,120].map(function(m){return '<option value="'+m+'"'+(m===+r.min?' selected':'')+'>'+m+'分</option>';}).join('')+'</select></div>'
-            +'<button class="btn-quiet btn-sm" data-action="offer-remove" data-index="'+i+'"'+(busy?' disabled':'')+'>この授業を外す</button></fieldset>';}).join('');
+          return (d.extra||[]).map(function(r,i){var prefix='f-extra-'+i+'-';return '<section id="offer-extra-'+i+'"><h3 id="offer-title-'+(i+2)+'">'+ (i+2)+'件目　'+esc(r.start)+'〜'+esc(offerEnd(r.start,r.min))+'</h3><table class="student-info-details plan-prompt-table"><tbody>'
+            +'<tr><th scope="row"><label for="'+prefix+'subject">科目</label></th><td><select id="'+prefix+'subject"><option value="">科目を選択</option>'+LESSON_SUBJECTS.map(function(x){return '<option'+(x===r.subject?' selected':'')+'>'+x+'</option>';}).join('')+'</select></td></tr>'
+            +'<tr><th scope="row"><label for="'+prefix+'kind">種類</label></th><td><select id="'+prefix+'kind">'+kindOptions(r.kind)+'</select></td></tr>'
+            +'<tr><th scope="row"><label for="'+prefix+'deliveryMode">形式</label></th><td><select id="'+prefix+'deliveryMode">'+deliveryOptions(r.deliveryMode)+'</select></td></tr>'
+            +'<tr><th scope="row"><label for="'+prefix+'start">開始</label></th><td><input type="time" step="300" id="'+prefix+'start" value="'+esc(r.start)+'"></td></tr>'
+            +'<tr><th scope="row"><label for="'+prefix+'min">長さ</label></th><td><select id="'+prefix+'min">'+[30,45,60,90,120].map(function(m){return '<option value="'+m+'"'+(m===+r.min?' selected':'')+'>'+m+'分</option>';}).join('')+'</select></td></tr></tbody></table>'
+            +'<button class="btn-quiet btn-sm" data-action="offer-remove" data-index="'+i+'"'+(busy?' disabled':'')+'>この授業を外す</button></section>';}).join('');
         }
         function offerForm(today, students, fixedStudent) {
           var d = offerDraft || {};
@@ -600,7 +602,7 @@
           h += '<tr><th scope="row"><label for="f-start">開始</label></th><td><input type="time" id="f-start" value="' + (d.start || "17:00") + '" min="' + (d.outside ? "00:00" : "07:00") + '" max="' + (d.outside ? "23:59" : "22:00") + '" step="300"></td></tr>';
           h += '<tr><th scope="row"><label for="f-min">長さ</label></th><td><select id="f-min">' + [30, 45, 60, 90, 120].map(function (m) { return '<option value="' + m + '"' + (m === (+d.min || 90) ? " selected" : "") + '>' + m + '分</option>'; }).join("") + '</select></td></tr>';
           h += '<tr><th scope="row"><label for="f-rep">くり返し</label></th><td><select id="f-rep">' + [1, 2, 4, 8, 12].map(function (n) { return '<option value="' + n + '"' + (n === (+d.repeat || 1) ? ' selected' : '') + '>' + (n === 1 ? 'この日だけ' : '毎週×' + n + '回') + '</option>'; }).join('') + '</select></td></tr>';
-          h += '</tbody></table>' + consecutiveRowsHTML(d) + '<button class="btn-quiet" data-action="offer-add"'+(busy?' disabled':'')+'>＋ 続けて授業を追加</button><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" id="offer-send" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : (d.extra&&d.extra.length ? ((d.extra.length+1)*(+d.repeat||1))+"件まとめて案内する" : "この内容で案内する")) + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
+          h += '</tbody></table>' + consecutiveRowsHTML(d) + '<button class="btn-quiet" data-action="offer-add"'+(busy?' disabled':'')+'>＋ 次の授業を追加</button><div class="row" style="margin-top:12px">' + (planPrompt && planPrompt.src === 'offer' ? '' : '<button class="btn-primary" id="offer-send" data-action="offerslot"' + (busy ? " disabled" : "") + '>' + (busy ? "送信中…" : (d.extra&&d.extra.length ? ((d.extra.length+1)*(+d.repeat||1))+"件まとめて案内する" : "この内容で案内する")) + '</button>') + (d.wishId ? '<span class="small" style="color:var(--amber)">' + (d.window ? '生徒の空き時間 ' + esc(d.window) + ' のあいだで開始時刻と長さを決めてください' : '希望日時から入力中') + '(案内すると希望は消えます)</span>' : '') + '</div>';
           if(d.extra&&d.extra.length)h+='<p class="small muted">日付とくり返しは、上の授業すべてに適用されます。</p>';
           h += planPromptHtml('offer');
           var warningData=A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]};
@@ -609,6 +611,11 @@
           h+='<label class="small"><input type="checkbox" id="f-outside"'+(d.outside?' checked':'')+'> 7:00〜22:00の範囲外を指定する</label>';
           if (d.error) h += '<div role="alert" class="lc-notice">' + esc(d.error) + (d.conflicts || []).map(function (x) { return '<p>' + esc(x.date || '') + ' ' + esc(x.start || '') + '：' + esc(x.error || '') + '</p>'; }).join('') + '</div>';
           h += '<div class="note">全日程の定員と形式を確認してから案内します。案内は生徒ページに表示され、生徒が承認すると確定します（保護者の承認は待ちません）。承認済み・案内中の授業計画に収まらない案内は、計画の案内を送るかどうかをその場で選べます。確定時にカレンダー登録・通知、オンラインの場合はMeet発行を行います。</div></div>';
+          if(!d.performed){
+            var end=h.indexOf('</tbody></table>')+16,first=h.slice(0,end),rows=first.match(/<tr>[\s\S]*?<\/tr>/g)||[];
+            var common=rows.filter(function(r){return /id="f-(student|date|rep)"/.test(r);}),lesson=rows.filter(function(r){return !/id="f-(student|date|rep)"/.test(r);});
+            h='<div class="card"><h3>共通項目</h3><table class="student-info-details plan-prompt-table"><tbody>'+common.join('')+'</tbody></table><h3 id="offer-title-1">1件目　'+esc(d.start||'17:00')+'〜'+esc(offerEnd(d.start||'17:00',d.min))+'</h3><table class="student-info-details plan-prompt-table"><tbody>'+lesson.join('')+'</tbody></table>'+h.slice(end);
+          }
           if(busy)h=h.replace(/<(input|select)\b/g,'<$1 disabled');
           return h;
         }
@@ -2958,7 +2965,7 @@
               var endMinutes=window.StepwiseBoard.minutes(previous.start)+(+previous.min||90);
               if(!Number.isFinite(endMinutes)||endMinutes>=1440){toast('開始時刻を確認してください');return;}
               od.extra.push({subject:previous.subject,kind:previous.kind,deliveryMode:previous.deliveryMode,min:+previous.min||90,start:('0'+Math.floor(endMinutes/60)).slice(-2)+':'+('0'+endMinutes%60).slice(-2)});
-              planPrompt=null;render();break;
+              planPrompt=null;render();var added=document.getElementById('offer-extra-'+(od.extra.length-1));if(added&&added.scrollIntoView)added.scrollIntoView({block:'start',behavior:'smooth'});break;
             case "offer-remove":
               captureOfferDraft().extra.splice(+btn.getAttribute('data-index'),1);planPrompt=null;render();break;
             case "performed-save": {
