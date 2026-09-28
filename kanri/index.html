@@ -623,9 +623,9 @@
           if (h === "#families" || h.indexOf("#families?")===0) return { page: "families", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
           if (h === '#plans') return {page:'plans'};
           if (h.indexOf('#plans?student=') === 0) return {page:'student',id:new URLSearchParams(h.slice(7)).get('student') || '',section:'planning'};
-          if (h === "#lessons") return { page: "lessons" };
+          if (h === "#home" || h === "#lessons") return { page: "lessons" };
           if (h === "#settings") return { page: "settings" };
-          return { page: "home" };
+          return { page: "lessons" };
         }
         window.addEventListener("hashchange", function () {
           editProfile = false; editEmail = false; editFee = false; offerDraft = null; planPrompt = null; selManual = false;
@@ -637,8 +637,7 @@
           var r = route();
           if (authM !== "ok") { nav.innerHTML = ""; return; }
           nav.innerHTML =
-            '<a href="#home" class="' + (r.page === "home" ? "on" : "") + '">ホーム</a>' +
-            '<a href="#lessons" class="' + (r.page === "lessons" ? "on" : "") + '">授業</a>' +
+            '<a href="#home" class="' + (r.page === "lessons" ? "on" : "") + '">ホーム</a>' +
             '<a href="#plans" class="' + (r.page === 'plans' || r.section === 'planning' ? 'on' : '') + '">計画</a>' +
             '<a href="#students" class="' + (r.page === "students" || (r.page === "student" && r.section !== "planning") || r.page === "families" ? "on" : "") + '">生徒</a>' +
             '<a href="#settings" class="' + (r.page === "settings" ? "on" : "") + '">設定</a>' +

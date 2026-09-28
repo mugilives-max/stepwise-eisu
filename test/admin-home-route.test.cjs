@@ -1,0 +1,2 @@
+const test=require('node:test'),assert=require('node:assert/strict');const {createUI,flush}=require('./helpers/operations-ui-harness.cjs');
+for(const hash of ['','#home','#lessons'])test('home uses lesson calendar: '+hash,async()=>{const ui=createUI('admin',{hash});assert.equal(ui.requests[0].body.op,'state');ui.requests[0].reply({admin:{today:'2026-09-28',students:[],slots:[],blocked:[],teacherOff:[],wishes:[],events:[],plans:[],log:[],lessonKinds:[]}});await flush();assert.match(ui.html(),/の授業/);assert.doesNotMatch(ui.html(),/今日の授業と、次にすること/);});
