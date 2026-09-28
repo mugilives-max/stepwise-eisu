@@ -3137,7 +3137,7 @@
         document.addEventListener('cancel',function(ev){if(ev.target.id==='board-editor'){if(busy)ev.preventDefault();else boardOpen=false;}},true);
         document.addEventListener('input',function(ev){var el=ev.target;if(!el||!/^f-(date|start|min|rep|subject|kind|delivery|outside|extra-.*)$/.test(el.id))return;
           captureOfferDraft();updateOfferCount();
-          var startField=document.getElementById('f-start');if(startField){startField.min=offerDraft.outside?'00:00':'07:00';startField.max=offerDraft.outside?'23:59':'22:00';}
+          var startField=document.getElementById('f-start');if(startField&&el.id==='f-outside'){startField.min=offerDraft.outside?'00:00':'07:00';startField.max=offerDraft.outside?'23:59':'22:00';}
           var target=document.getElementById('board-warnings');if(target)target.innerHTML=window.StepwiseBoard.warnings(A||{slots:cur&&cur.lessons||[],teacherOff:cur&&cur.teacherOff||[],blocked:cur&&cur.blocked||[]},offerDraft).map(function(w){return '<p class="board-warning">'+esc(w)+'</p>';}).join('');
         });
         load();
