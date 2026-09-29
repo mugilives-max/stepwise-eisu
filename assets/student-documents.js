@@ -7,15 +7,16 @@
     root.querySelectorAll('[data-student-documents]').forEach(function(host) {
       if (host._documents) return;
       host._documents = true;
+      var resultsOnly=host.getAttribute('data-document-scope')==='results';
       var sid = host.getAttribute('data-student-documents'), rows = [], busy = false, error = '', loaded = false;
       var auth = Object.assign({}, options.auth, {studentId:sid});
       function call(action, payload) {
         return fetch(endpoint,{method:'POST',body:JSON.stringify(Object.assign({},payload,auth,{action:action}))}).then(function(r){return r.json();}).then(function(r){if(r.error)throw Error(r.error);return r;});
       }
       function draw() {
-        host.innerHTML = '<div class="card"><style>.document-form,.document-list{width:100%;border-collapse:collapse;margin:16px 0;table-layout:fixed}.document-form th,.document-form td,.document-list th,.document-list td{border:1px solid #b6c6db;padding:12px;text-align:left;overflow-wrap:anywhere}.document-form th,.document-list th{background:#edf1f6;font-weight:600}.document-form th{width:26%}.document-form th,.document-form td{padding:6px 10px;vertical-align:middle}.document-form{margin:10px 0;font-size:16px;line-height:1.4}.document-form input,.document-form select,.document-form textarea{width:100%;min-width:0;box-sizing:border-box;border:0;border-radius:0;background:transparent;font:inherit;padding:4px 6px;min-height:34px}.document-form textarea{height:64px;min-height:64px;resize:vertical}.document-list td{vertical-align:top}.document-list button{max-width:100%;white-space:normal;margin:3px 0}</style><p class="note">予定表・模試・テスト結果など、先生が登録した資料です。</p>' + (error ? '<p role="alert">'+esc(error)+'</p>' : '') +
+        host.innerHTML = '<div class="card"><style>.document-form,.document-list{width:100%;border-collapse:collapse;margin:16px 0;table-layout:fixed}.document-form th,.document-form td,.document-list th,.document-list td{border:1px solid #b6c6db;padding:12px;text-align:left;overflow-wrap:anywhere}.document-form th,.document-list th{background:#edf1f6;font-weight:600}.document-form th{width:26%}.document-form th,.document-form td{padding:6px 10px;vertical-align:middle}.document-form{margin:10px 0;font-size:16px;line-height:1.4}.document-form input,.document-form select,.document-form textarea{width:100%;min-width:0;box-sizing:border-box;border:0;border-radius:0;background:transparent;font:inherit;padding:4px 6px;min-height:34px}.document-form textarea{height:64px;min-height:64px;resize:vertical}.document-list td{vertical-align:top}.document-list button{max-width:100%;white-space:normal;margin:3px 0}</style><p class="note">'+(resultsOnly?'模試・テスト結果など、成績に関する資料です。':'予定表・模試・テスト結果など、先生が登録した資料です。')+'</p>' + (error ? '<p role="alert">'+esc(error)+'</p>' : '') +
           (options.teacher ? '<table class="document-form"><tbody>'+[
-            ['区分','<select data-doc-category aria-label="区分"><option value="schedule">学校の予定表</option><option value="mock">模試結果</option><option value="test">定期テスト結果</option><option value="other">その他の成績資料</option></select>'],
+            ['区分','<select data-doc-category aria-label="区分">'+(resultsOnly?'':'<option value="schedule">学校の予定表</option>')+'<option value="mock">模試結果</option><option value="test">定期テスト結果</option><option value="other">その他の成績資料</option></select>'],
             ['タイトル','<input data-doc-title aria-label="タイトル" maxlength="100" placeholder="省略時はファイル名">'],
             ['受験日（任意）','<input type="date" data-doc-date aria-label="受験日">'],
             ['科目（任意）','<input data-doc-subject aria-label="科目" maxlength="100" placeholder="例：英語・数学">'],
@@ -25,14 +26,15 @@
           (!loaded ? '<p role="status">読み込んでいます…</p>' : rows.length ? '<table class="document-list"><thead><tr><th>資料</th><th>区分・日付・科目</th><th>操作</th></tr></thead><tbody>'+rows.map(function(d){var m=d.details||{},kind=({schedule:'学校の予定表',mock:'模試結果',test:'定期テスト結果',other:'その他の成績資料'})[m.category]||'資料';return '<tr><td><button type="button" class="btn-quiet btn-sm" data-doc-open="'+esc(d.id)+'"'+(busy?' disabled':'')+'>'+esc(m.title||d.name)+'</button></td><td><span class="note">'+esc(kind+' ／ '+(m.examDate?'受験日 '+m.examDate:d.createdAt.slice(0,10))+(m.subject?' ／ '+m.subject:''))+'</span>'+(m.note?'<p style="white-space:pre-wrap">'+esc(m.note)+'</p>':'')+'</td><td>'+(options.teacher?((!m.category||m.category==='schedule')?' <button type="button" class="btn-quiet btn-sm" data-doc-parse="'+esc(d.id)+'"'+(busy?' disabled':'')+'>イベントを読み取る</button>':'')+' <button type="button" class="btn-quiet btn-sm" data-doc-remove="'+esc(d.id)+'"'+(busy?' disabled':'')+'>削除</button>':'')+'</td></tr>';}).join('')+'</tbody></table>' : '<p>資料はまだありません。</p>') +
           (busy?'<p role="status">処理中です…</p>':'<button type="button" class="btn-quiet btn-sm" data-doc-refresh>再読み込み</button>')+'</div>';
       }
-      function load() { return call('documentList').then(function(r){rows=r.documents;rows.sort(function(a,b){return String((b.details||{}).examDate||b.createdAt).localeCompare(String((a.details||{}).examDate||a.createdAt));});loaded=true;}); }
+      function load() { return call('documentList').then(function(r){rows=(r.documents||[]).filter(function(d){return !resultsOnly || ['mock','test','other'].indexOf((d.details||{}).category)>=0;});rows.sort(function(a,b){return String((b.details||{}).examDate||b.createdAt).localeCompare(String((a.details||{}).examDate||a.createdAt));});loaded=true;}); }
       function finish(e) { busy=false;if(e)error=e.message || '処理に失敗しました';draw(); }
       host.addEventListener('click',function(event) {
         var el=event.target.closest('button');if(!el||busy)return;
         if(el.hasAttribute('data-doc-upload')) {
           var file=host.querySelector('[data-doc-file]').files[0];
           if(!file||file.size>5*1024*1024||!file.size||!(/\.pdf$/i.test(file.name)||file.type==='application/pdf')){error='5MB以下のPDFを選んでください';draw();return;}
-          var uploadDetails={category:value('[data-doc-category]')||'schedule',title:value('[data-doc-title]'),examDate:value('[data-doc-date]'),subject:value('[data-doc-subject]'),note:value('[data-doc-note]')};
+          var uploadDetails={category:value('[data-doc-category]')||(resultsOnly?'mock':'schedule'),title:value('[data-doc-title]'),examDate:value('[data-doc-date]'),subject:value('[data-doc-subject]'),note:value('[data-doc-note]')};
+          if(resultsOnly&&['mock','test','other'].indexOf(uploadDetails.category)<0){error='成績資料の区分を選んでください';draw();return;}
           busy=true;error='';draw();
           function value(selector){return host.querySelector(selector).value||'';}
           var details=uploadDetails;
@@ -47,7 +49,7 @@
             else {var a=document.createElement('a');a.href=url;a.download=r.name;document.body.appendChild(a);a.click();a.remove();}
             setTimeout(function(){URL.revokeObjectURL(url);},300000);finish();
           },function(e){if(popup)popup.close();finish(e);});
-        } else if(el.hasAttribute('data-doc-parse')) {
+        } else if(el.hasAttribute('data-doc-parse') && !resultsOnly) {
           openCandidates(el.getAttribute('data-doc-parse'),call);
         } else if(el.hasAttribute('data-doc-remove')) {
           if(!window.confirm('この資料を一覧から削除しますか？生徒・保護者からも見えなくなります。'))return;

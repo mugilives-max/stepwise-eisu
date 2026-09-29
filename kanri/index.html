@@ -240,7 +240,7 @@
     <div class="wrap" id="app"><div class="loading"><div class="spinner"></div>読み込んでいます…</div></div>
     <div id="toast" role="status"></div>
 
-    <script src="/assets/student-documents.js?v=20260929-compact"></script>
+    <script src="/assets/student-documents.js?v=20260929-results"></script>
     <script src="../assets/learning-services.js?v=20260926-attendance"></script>
     <script>
       (function () {
@@ -1143,6 +1143,7 @@
 
           html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業記録を開く</a></p>';
           }
+          if (section === 'progress') html += '<h2>資料</h2><div data-student-documents="'+esc(s.id)+'" data-document-scope="results"></div>';
           if (section === 'settings') {
           html += '<h2>資料</h2><div data-student-documents="'+esc(s.id)+'"></div>';
           html += '<h2>授業の標準形式</h2><div class="card"><label for="student-delivery">新しい案内の初期値</label> <select id="student-delivery">' + deliveryOptions(s.deliveryMode) + '</select> <button class="btn-ghost btn-sm" data-action="studentmode"' + (busy ? ' disabled' : '') + '>標準形式を保存</button><p class="note">現在：' + deliveryLabel(s.deliveryMode) + '。登録済みの各回の形式は変わりません。</p></div>';
