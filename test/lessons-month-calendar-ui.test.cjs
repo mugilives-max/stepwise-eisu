@@ -137,3 +137,5 @@ test('AI schedule registration parses for the selected student before applying',
  assert.match(ui.html(),/チェックした内容で登録する/);
  ui.click('tnl-register');const apply=ui.requests.at(-1);assert.equal(apply.body.op,'nlApplyTeacher');assert.equal(apply.body.studentId,'test-a');assert.equal(apply.body.items[0].subject,'数学');
 });
+
+test('AI schedule starts with student and text together, preserving text across selection',async()=>{const ui=await ready();ui.click('ai-open');assert.ok(ui.el('tnl-text'));assert.ok(ui.el('ai-student'));assert.equal((ui.html().match(/id="ai-schedule"/g)||[]).length,1);ui.input('tnl-text','明日の17時から数学');const before=ui.requests.length;ui.click('tnl-parse');assert.equal(ui.requests.length,before);ui.input('ai-student','test-a');assert.equal(ui.el('tnl-text').value,'明日の17時から数学');ui.click('tnl-parse');assert.equal(ui.requests.at(-1).body.studentId,'test-a');});

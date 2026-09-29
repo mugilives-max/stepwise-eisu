@@ -230,7 +230,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260929-material"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260929-box-width"><script src="/assets/calendar.js?v=20260929-meetings"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260929-box-width"><script src="/assets/calendar.js?v=20260929-cancel-label"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -950,7 +950,7 @@
         function aiScheduleHtml() {
           if (!aiScheduleOpen) return '';
           var student=tnlStudent(), dis=busy || TNL.busy ? ' disabled' : '';
-          return window.StepwiseCalendar.dayDialog({id:'ai-schedule',title:'AIで予定登録',close:'ai-close',busy:busy||TNL.busy,content:'<label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+(route().page==='student'?[cur]:A.students.filter(function(s){return s.active;})).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+(student?renderTeacherNL(student):'<p class="note">生徒を選び、授業や予定を文章で入力してください。</p>')});
+          return window.StepwiseCalendar.dayDialog({id:'ai-schedule',title:'AIで予定登録',close:'ai-close',busy:busy||TNL.busy,content:'<label>生徒<select id="ai-student"'+dis+'><option value="">生徒を選択してください</option>'+(route().page==='student'?[cur]:A.students.filter(function(s){return s.active;})).map(function(s){return '<option value="'+esc(s.id)+'"'+(sameId(s.id,aiStudentId)?' selected':'')+'>'+esc(s.name)+'</option>';}).join('')+'</select></label>'+renderTeacherNL(student)});
         }
         var TNL = { text: "", busy: false, proposal: null, error: "" };
         var TNL_LABEL = { offer: "授業を案内", block: "授業できない日", event: "イベント" };
@@ -966,7 +966,7 @@
           var dis = TNL.busy || busy ? ' disabled' : '';
           var h = '<div>';
           h += '<textarea id="tnl-text" rows="3" maxlength="400" placeholder="予定を文章で入力。AIが予定に変換し、下書きを作ります" style="width:100%;box-sizing:border-box"' + dis + '>' + esc(TNL.text) + '</textarea>';
-          h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="tnl-parse"' + dis + '>' + (TNL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (TNL.proposal || TNL.text ? '<button class="btn-quiet btn-sm" data-action="tnl-clear"' + dis + '>クリア</button>' : '') + '</div>';
+          h += '<div class="row" style="margin-top:8px"><button class="btn-primary btn-sm" data-action="tnl-parse"' + (s ? dis : ' disabled') + '>' + (TNL.busy ? '読み取っています…' : '内容を確認') + '</button>' + (TNL.proposal || TNL.text ? '<button class="btn-quiet btn-sm" data-action="tnl-clear"' + dis + '>クリア</button>' : '') + '</div>';
           if (TNL.error) h += '<p role="alert" style="color:var(--danger);margin:8px 0 0">' + esc(TNL.error) + '</p>';
           if (TNL.proposal) h += renderTeacherProposal(s, TNL.proposal, dis);
           return h + '</div>';
@@ -2674,7 +2674,7 @@
         }
         document.addEventListener("input", function (ev) {
           var el = ev.target;
-          if (el.id === "ai-student" && !busy && !TNL.busy) { aiStudentId=el.value;TNL={text:'',busy:false,proposal:null,error:''};render();return; }
+          if (el.id === "ai-student" && !busy && !TNL.busy) { aiStudentId=el.value;TNL={text:TNL.text,busy:false,proposal:null,error:''};render();return; }
           if (el.id === "tnl-text") { TNL.text = el.value; return; }
           if (route().page !== "student" || !cur) return;
           if (el.getAttribute("data-pe-field")) planEditInput(el);
