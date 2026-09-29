@@ -86,6 +86,7 @@ function schedulingIntervalValid_(s) {
 // 数え方は「重なる件数」ではなく、候補の時間内の各瞬間の人数。終了時刻を先に処理する。
 function schedulingCapacityError_(candidate,allSlots,excludeId) {
   if(!billingSlotValid_(candidate))return schedulingError_('授業の日付・時刻・分数・科目を確認してください');
+  if(meetingRows_().some(function(m){return meetingOverlap_(candidate,m);}))return schedulingError_('ミーティングと時間が重なっています','capacity');
   var mode=schedulingMode_(candidate.deliveryMode);
   if(!mode)return schedulingError_('授業形式が未設定です。先生が対面・オンラインを設定してください','deliveryModeRequired');
   var begin=schedulingMinutes_(candidate),end=begin+Number(candidate.min),events=[],problem=null;

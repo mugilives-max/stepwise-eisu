@@ -304,10 +304,10 @@
   function dayHeading(opts) {
     function action(a, ai) {
       if (!a) return '';
-      var icon = ai ? '<path d="M9 3 11.4 9.6 18 12 11.4 14.4 9 21 6.6 14.4 1 12 6.6 9.6Z"/><path d="m19 2 1.1 3L23 6l-2.9 1L19 10l-1-3-3-1 3-1Z"/>' : '<path d="M12 4v16M4 12h16"/>';
+      var icon = ai === 'meeting' ? '<circle cx="8" cy="7" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M17 13v-2h-3V2h9v9h-3Z"/>' : ai ? '<path d="M9 3 11.4 9.6 18 12 11.4 14.4 9 21 6.6 14.4 1 12 6.6 9.6Z"/><path d="m19 2 1.1 3L23 6l-2.9 1L19 10l-1-3-3-1 3-1Z"/>' : '<path d="M12 4v16M4 12h16"/>';
       return '<button type="button" class="btn-primary schedule-day-action" data-action="'+esc(a.action)+'" data-date="'+esc(opts.date)+'" aria-label="'+esc(a.label)+'" title="'+esc(a.label)+'"'+(opts.disabled?' disabled':'')+'><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+icon+'</svg></button>';
     }
-    return '<h2 class="schedule-day-heading"><span>'+esc(opts.title)+'</span>'+action(opts.add,false)+action(opts.ai,true)+'</h2>';
+    return '<h2 class="schedule-day-heading"><span>'+esc(opts.title)+'</span>'+action(opts.add,false)+action(opts.ai,true)+action(opts.meeting,'meeting')+'</h2>';
   }
   function dayDialog(opts) {
     return '<dialog id="'+esc(opts.id)+'" class="schedule-day-dialog" aria-label="'+esc(opts.title)+'"><div class="schedule-dialog-heading"><h2>'+esc(opts.title)+(opts.help?'<button type="button" class="approval-help-button" data-action="approval-help" aria-label="'+esc(opts.title)+'の説明" aria-expanded="false" aria-controls="'+esc(opts.id)+'-help">?</button>':'')+'</h2><button type="button" class="btn-quiet" data-action="'+esc(opts.close)+'"'+(opts.busy?' disabled':'')+'>閉じる</button></div>'+(opts.help?'<div id="'+esc(opts.id)+'-help" class="note" hidden>'+opts.help.map(function(p){return '<p>'+esc(p)+'</p>';}).join('')+'</div>':'')+opts.content+'</dialog>';

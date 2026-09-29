@@ -1288,6 +1288,9 @@ function admin_(req) {
       if (ro && ro.ok && req.wishId) { delWish_(req.wishId); if (ro.admin) ro.admin.wishes = wishesForAdmin_(); }
       return kanriWrap_(req, ro, req.studentId);
     }
+    case 'meetingCreate': return kanriWrap_(req,meetingCreate_(req),req.studentId);
+    case 'meetingCancel': return kanriWrap_(req,meetingCancel_(req),req.studentId);
+    case 'meetingRetry': return kanriWrap_(req,meetingRetry_(req),req.studentId);
     case 'teacherBook': return kanriWrap_(req, teacherBook_(req), req.studentId);
     case 'deleteSlot':  return kanriWrap_(req, adminDeleteSlot_(req), req.studentId);
     case 'unbook':      return kanriWrap_(req, adminUnbook_(req), req.studentId);
@@ -1377,7 +1380,7 @@ function adminState_() {
     });
   return {
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [],
-    cancellations: cancelAttendance_(), lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
+    meetingSchedules:meetingRows_(), cancellations: cancelAttendance_(), lessonKinds: lessonKindsPublic_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
     billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
   };
@@ -2071,7 +2074,7 @@ function kanriStudent_(studentId,section) {
   ledgerRows_('生徒台帳').forEach(function (p) { if (String(p['生徒ID']) === id) profile = p; });
   profile = profile || {}; var nameParts = studentNameParts_(id); profile['姓']=nameParts.familyName; profile['名']=nameParts.givenName;
   if (profile) delete profile._row;
-  var base={lessonKinds:lessonKindsPublic_(),section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,nlEnabled:typeof nlConfigured_==='function'&&nlConfigured_(),code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
+  var base={meetingSchedules:meetingRows_(id),lessonKinds:lessonKindsPublic_(),section:section,id:id,name:sys.name,deliveryMode:String(sys.deliveryMode || ''),active:!(String(sys.active)==='false' || sys.active===false),profile:profile,today:today,month:month,nlEnabled:typeof nlConfigured_==='function'&&nlConfigured_(),code:String(sys.code || ''),lessons:[],grades:[],exams:[],payments:[],meetings:[],tasks:[]};
   if (section==='settings') return Object.assign(base,{email:String(sys.email || ''),emailStatus:studentEmailStatus_(id),rate30:Number(sys.rate30 || 0),monthly:Number(sys.monthly || 0),parentAuth:parentStatus_(id)});
   if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })

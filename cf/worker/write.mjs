@@ -197,6 +197,15 @@ export async function deliverEffects(env, effects, ids) {
       .prepare("update slots set eventId = ?, meetUrl = case when ? <> '' then ? else meetUrl end where eventId = ? or eventId = ? || '@google.com'")
       .bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.meetUrl || ''), String(w.marker), String(w.marker))));
   }
+  if (writebacks.length) await env.DB.batch(writebacks.map(w => env.DB.prepare("update meetingSchedules set eventId = ?, meetUrl = case when ? <> '' then ? else meetUrl end where status = 'scheduled' and (eventId = ? or eventId = ? || '@google.com')").bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.meetUrl || ''), String(w.marker), String(w.marker))));
+  // A cancellation can finish while Calendar creation is still in flight.
+  // Remove the late-created event as well; never revive the cancelled meeting.
+  const cleanup = [];
+  for (const w of writebacks) {
+    const cancelled = await env.DB.prepare("select id from meetingSchedules where status = 'cancelled' and (eventId = ? or eventId = ? || '@google.com')").bind(String(w.marker), String(w.marker)).first();
+    if (cancelled && w.eventId) cleanup.push({kind:'calendarDelete',eventId:String(w.eventId).split('@')[0]});
+  }
+  if (cleanup.length) await deliverEffects(env, cleanup, await recordEffects(env.DB, cleanup));
   return { sent: error ? 0 : effects.length, error, writebacks: writebacks.length };
 }
 
@@ -214,7 +223,7 @@ export async function backfillMeet(env, limit = 5) {
   if (!env.GAS_URL || !env.SYNC_KEY) return { asked: 0 };
   const since = new Date(Date.now() - MEET_RETRY_MS).toISOString();
   const rows = await env.DB.prepare(
-    `select s.eventId as eventId from slots s
+    `select s.eventId as eventId from (select eventId, deliveryMode, status, meetUrl from slots union all select eventId, deliveryMode, 'booked' as status, meetUrl from meetingSchedules where status = 'scheduled') s
       where s.deliveryMode = 'online' and s.status = 'booked'
         and s.eventId <> '' and (s.meetUrl is null or s.meetUrl = '')
         and not exists (select 1 from _effects e

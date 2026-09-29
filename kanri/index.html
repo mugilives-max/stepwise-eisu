@@ -230,7 +230,7 @@
     </style>
   <link rel="stylesheet" href="/assets/lesson-report.css?v=20260929-material"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
-<link rel="stylesheet" href="/assets/calendar.css?v=20260926-cancel-calendar"><script src="/assets/calendar.js?v=20260928-performed"></script>
+<link rel="stylesheet" href="/assets/calendar.css?v=20260926-cancel-calendar"><script src="/assets/calendar.js?v=20260929-meetings"></script>
 </head>
   <body>
     <div class="top"><div class="in">
@@ -1044,7 +1044,7 @@
           var dayN = (s.blocked || []).filter(function (b) { return b.date === selDate; });
           var dayW = (s.wishes || []).filter(function (x) { return x.date === selDate; });
           var dayO = (s.teacherOff || []).filter(function (o) { return o.date === selDate; });
-          var h = window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',add:selDate>=tdy&&canEdit?{action:'sdayadd',label:'この日に予定を追加'}:null,ai:selDate>=tdy&&canEdit&&s.nlEnabled?{action:'sdayai',label:'AIで予定登録'}:null})+'<div class="card">';
+          var h = window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',meeting:{action:'meeting-open',label:'ミーティングを設定'},add:selDate>=tdy&&canEdit?{action:'sdayadd',label:'この日に予定を追加'}:null,ai:selDate>=tdy&&canEdit&&s.nlEnabled?{action:'sdayai',label:'AIで予定登録'}:null})+'<div class="card">';
           var dayRow = function(lead,time,who,actions){return '<div class="line"><span class="t">'+time+'</span><span class="w">'+lead+' '+who+'</span>'+actions+'</div>';};
           var cancelledRows=cancellationRows(s.cancellations,selDate);h+=cancelledRows;
           if (!cancelledRows && !dayL.length && !dayE.length && !dayN.length && !dayW.length && !dayO.length) h += '<div class="empty">この日の予定はありません</div>';
@@ -1135,10 +1135,10 @@
             // 生徒マイページと同じ予定表(共通部品 assets/calendar.js)。授業は確定=青・案内=黄、授業不可・登録不可は斜線、授業可は緑
             var info = window.StepwiseCalendar.buildInfo({ cancellations:s.cancellations||[],
               lessons: (s.lessons || []).filter(function (l) { return l.status === "booked" || l.status === "offered"; }).map(function (l) { return { date: l.date, start: l.start, min: l.min, subject: l.subject, kind: l.kind, cls: lessonCalendarClass(l, tdy), st: l.status === "offered" ? "offer" : (l.done ? "done" : (l.date < tdy ? "past" : "mine")) }; }),
-              events: s.events || [], blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
+              events: (s.events || []).concat(meetingEvents(s.meetingSchedules)), blocked: s.blocked || [], teacherOff: s.teacherOff || [], wishes: s.wishes || [], lessonLabel: lessonLabel });
             if (!selDate) { selDate = tdy; var sp0 = tdy.split("-"); calY = +sp0[0]; calM = +sp0[1] - 1; }
             html += '<h2>' + esc(s.name) + 'さんの予定表</h2>' + window.StepwiseCalendar.render(info, { year: calY, month: calM, today: tdy, selDate: selDate, showToff: true, toffText:'休み', toffLegend:'先生の休み', overlapLanes:true, adminHealth: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
-            html += renderStudentDayCard(s, tdy);
+            html += renderStudentDayCard(s, tdy)+meetingRowsHTML(s.meetingSchedules,selDate);
           })();
 
           html += '<p><a class="btn-primary btn-sm" href="' + esc(lessonHref(s.id, "")) + '">授業記録を開く</a></p>';
@@ -1451,16 +1451,17 @@
           var pickSid = offerDraft && offerDraft.studentId ? String(offerDraft.studentId) : "";
           var linfo = window.StepwiseCalendar.buildInfo({ cancellations:A.cancellations||[],
             lessons: calendarSlots.map(function (s2) { return { date: s2.date, start: s2.start, min: s2.min, subject: s2.subject, kind: s2.kind, studentName: s2.studentName, req: !!s2.req, st: s2.status === "offered" ? "offer" : (s2.done ? "done" : (s2.date < today ? "past" : "mine")), cls: lessonCalendarClass(s2, today) }; }),
-            events: (A.events || []).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
+            events: (A.events || []).concat(meetingEvents(A.meetingSchedules)).map(function (e) { return { date: e.date, dateTo: e.dateTo, title: shortName(e.studentName) + ' ' + String(e.title || ''), kind: e.kind }; }),
             blocked: pickSid ? (A.blocked || []).filter(function (b2) { return sameId(b2.studentId, pickSid); }) : [],
             teacherOff: A.teacherOff || [],
             wishes: (A.wishes || []).map(function (x) { return { date: x.date, label: '希 ' + shortName(x.studentName) + ' ' + cT(x.start) + '-' + cT(x.end) }; }),
             lessonLabel: function (l) { return shortName(l.studentName) + (l.subject ? ' ' + String(l.subject).charAt(0) : '') + (l.req ? '（取消依頼）' : ''); }
           });
           html += window.StepwiseCalendar.render(linfo, { allowPastSelection:true, year: calY, month: calM, today: today, selDate: selDate, showToff: true, toffText: "休み", toffLegend: "先生の休み", adminHealth: true, overlapLanes: true, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
-          html += window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',add:{action:'calendar-add',label:selDate<today?'実施済みの授業を追加':'この日に予定を追加'},ai:selDate>=today?{action:'ai-open',label:'AIで予定登録'}:null});
+          html += window.StepwiseCalendar.dayHeading({date:selDate,title:fmtD(selDate)+'の授業',meeting:{action:'meeting-open',label:'ミーティングを設定'},add:{action:'calendar-add',label:selDate<today?'実施済みの授業を追加':'この日に予定を追加'},ai:selDate>=today?{action:'ai-open',label:'AIで予定登録'}:null});
           html+=reliefQueue(A.cancellations);var dayRows = byDate[selDate] || [], cancelledRows=cancellationRows(A.cancellations,selDate);
           html += dayRows.length || cancelledRows ? '<div class="card">' + dayRows.map(function (s) { return lessonRow(s, false); }).join("") + cancelledRows + '</div>' : '<div class="empty">この日の授業はありません。' + (selDate >= today ? '「＋」からこの日の授業を案内できます。' : '') + '</div>';
+          html += meetingRowsHTML(A.meetingSchedules,selDate);
           var dayWish = (A.wishes || []).filter(function (x) { return x.date === selDate; });
           if (dayWish.length) html += '<div class="card" style="margin-top:10px">' + dayWish.map(function (x) { return wishRow(x, true); }).join("") + '</div>';
           var dayEv = (A.events || []).filter(function (e) { return e.date <= selDate && selDate <= e.dateTo; });
@@ -1598,6 +1599,22 @@
           }).catch(function (er) { busy = false; pp.error = er.message || "通信に失敗しました"; render(); });
         }
 
+
+        var meetingDialog=null;
+        function meetingEvents(rows){return (rows||[]).map(function(m){return {date:m.date,dateTo:m.date,title:m.start+'〜'+endTime(m.start,m.min)+' ミーティング（'+m.who+'）',studentName:m.studentName,kind:'event'};});}
+        function meetingRowsHTML(rows,date){var ms=(rows||[]).filter(function(m){return m.date===date;});return ms.length?'<div class="card" style="margin-top:12px">'+ms.map(function(m){return '<div class="line"><span class="t">'+esc(m.start+'〜'+endTime(m.start,m.min))+'</span><span class="w"><strong>ミーティング</strong> '+esc(m.studentName)+'（'+esc(m.who)+'）<div class="small">'+(m.deliveryMode==='online'?'オンライン':'対面')+(m.note?'<br>'+esc(m.note):'')+'</div></span>'+(m.meetUrl?'<a class="btn-quiet btn-sm" href="'+esc(m.meetUrl)+'" target="_blank" rel="noopener">Meetに参加</a><button class="btn-quiet btn-sm" data-action="copymeet" data-url="'+esc(m.meetUrl)+'">リンクをコピー</button>':m.deliveryMode==='online'?'<span class="small">Meet準備中</span><button class="btn-quiet btn-sm" data-action="meeting-retry" data-id="'+esc(m.id)+'" data-student="'+esc(m.studentId)+'">再取得</button>':'')+'<button class="btn-quiet btn-sm" data-action="meeting-cancel" data-id="'+esc(m.id)+'" data-student="'+esc(m.studentId)+'">取り消す</button></div>';}).join('')+'</div>':'';}
+        function meetingDialogHTML(){
+          if(!meetingDialog)return '';var f=meetingDialog,dis=busy?' disabled':'',row=function(label,html){return '<tr><th scope="row">'+label+'</th><td>'+html+'</td></tr>';};
+          var input=function(k,type){return '<input id="meeting-'+k+'" data-meeting-field="'+k+'" type="'+type+'" aria-label="'+({date:'日付',start:'開始'}[k])+'" value="'+esc(f[k])+'"'+dis+'>';};
+          var select=function(k,options){return '<select id="meeting-'+k+'" data-meeting-field="'+k+'" aria-label="'+({studentId:'生徒',who:'相手',min:'長さ',deliveryMode:'形式'}[k])+'"'+dis+'>'+options.map(function(o){return '<option value="'+esc(o[0])+'"'+(String(f[k])===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>';};
+          var students=route().page==='student'&&cur?[[cur.id,cur.name]]:[['','選んでください']].concat((A&&A.students||[]).filter(function(x){return x.active;}).map(function(x){return [x.id,x.name];}));
+          var content='<table class="student-info-details"><tbody>'+row('生徒',select('studentId',students))+row('相手',select('who',[['保護者','保護者'],['生徒','生徒'],['保護者・生徒','保護者・生徒']]))+row('日付',input('date','date'))+row('開始',input('start','time'))+row('長さ',select('min',[15,30,45,60,90,120,180].map(function(n){return [n,n+'分'];})))+row('形式',select('deliveryMode',[['in_person','対面'],['online','オンライン']]))+row('メモ（任意）','<textarea id="meeting-note" data-meeting-field="note" aria-label="メモ" maxlength="500" rows="2"'+dis+'>'+esc(f.note)+'</textarea>')+'</tbody></table><p class="note">オンラインはMeetリンクを発行します。授業回数・請求には含まれません。</p>'+(f.error?'<p role="alert">'+esc(f.error)+'</p>':'')+'<button class="btn-primary" data-action="meeting-save"'+dis+'>ミーティングを登録</button>';
+          return window.StepwiseCalendar.dayDialog({id:'meeting-dialog',title:'ミーティングの設定',close:'meeting-close',busy:busy,content:content});
+        }
+        document.addEventListener('input',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
+        document.addEventListener('change',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
+        function meetingSave(){if(busy||!meetingDialog)return;var f=meetingDialog,r=route();busy=true;f.error='';render();admin('meetingCreate',f).then(function(res){busy=false;meetingDialog=null;cacheClear();if(!applyResult(res,r))load(true);else render();toast('ミーティングを登録しました');}).catch(function(e){busy=false;f.error=e.message;render();});}
+
         function render() {
           if (authM === "login") { renderLogin(); return; }
           var r = route();
@@ -1620,8 +1637,9 @@
           if(familyModalActive()){
             app.insertAdjacentHTML('beforeend',window.StepwiseCalendar.dayDialog({id:'family-group-dialog',title:'グループの変更・管理',close:'family-modal-close',busy:FT.busy,content:renderFamilies(true)}));
           }
-          mountAdminHomework(); app.insertAdjacentHTML('beforeend',teacherBookingDialogHTML()+cancelDialogHTML()+reliefHTML());
+          mountAdminHomework(); app.insertAdjacentHTML('beforeend',meetingDialogHTML()+teacherBookingDialogHTML()+cancelDialogHTML()+reliefHTML());
           if(window.StepwiseDocuments)window.StepwiseDocuments.mount(app,{teacher:true,auth:{token:token()}});
+            var md=document.getElementById('meeting-dialog');if(md){md.oncancel=function(e){e.preventDefault();if(!busy){meetingDialog=null;render();}};if(md.showModal&&!md.open)md.showModal();}
             var familyDialog=document.getElementById('family-group-dialog');if(familyDialog){familyDialog.oncancel=function(e){e.preventDefault();if(!FT.busy){closeFamilyModal();render();}};if(familyDialog.showModal&&!familyDialog.open)familyDialog.showModal();}
 
           var rd=document.getElementById('cancel-relief-dialog');if(rd){rd.oncancel=function(e){e.preventDefault();if(!busy){reliefDialog=null;render();}};if(rd.showModal&&!rd.open)rd.showModal();}
@@ -2774,6 +2792,11 @@
                 lsSet("sw_admt", res.token); authM = "ok"; load();
               }).catch(function () { busy = false; toast("通信に失敗しました"); render(); });
               break;
+            case 'meeting-open': ev.preventDefault();meetingDialog={requestId:'mt-'+Date.now()+'-'+Math.random().toString(36).slice(2),studentId:route().page==='student'&&cur?cur.id:'',date:btn.getAttribute('data-date')||selDate,start:'17:00',min:30,who:'保護者',deliveryMode:'in_person',note:''};render();break;
+            case 'meeting-close': if(!busy){meetingDialog=null;render();}break;
+            case 'meeting-save': meetingSave();break;
+            case 'meeting-cancel': if(confirm('このミーティングを取り消しますか？'))act('meetingCancel',{meetingId:btn.getAttribute('data-id'),studentId:btn.getAttribute('data-student')},'ミーティングを取り消しました');break;
+            case 'meeting-retry': act('meetingRetry',{meetingId:btn.getAttribute('data-id'),studentId:btn.getAttribute('data-student')},'Meetリンクを再取得しています。少し待って更新してください');break;
             case "resetstart": ev.preventDefault(); resetStep = "request"; render(); break;
             case "resetback": ev.preventDefault(); resetStep = ""; render(); break;
             case "resetreq":
