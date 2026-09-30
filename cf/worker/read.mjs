@@ -32,6 +32,7 @@ const ADMIN_READS = {
   state: gas => ({ ok: true, admin: gas.adminState_() }),
   kanriDashboard: gas => ({ ok: true, data: gas.kanriDashboard_() }),
   kanriStudent: (gas, req) => gas.kanriStudentOp_(req),
+  billingOverview: (gas, req) => gas.billingOverview_(String(req.ym || '')),
   billingPreview: (gas, req) => {
     const bp = gas.billingPreview_(String(req.studentId || ''), String(req.ym || ''));
     return bp.error ? bp : { ok: true, billing: bp };

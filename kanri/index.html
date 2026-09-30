@@ -27,6 +27,7 @@
       nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
       nav a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 6px 10px; border-radius: 8px; }
       nav a.on { background: var(--soft); color: var(--primary); font-weight: 700; }
+      @media (max-width: 420px) { nav { gap: 2px; } nav a { padding: 6px 7px; } } /* 項目が6つでもスマホで1行に収める */
       .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
       h1 { font-size: 21px; margin: 22px 0 4px; }
       h2 { font-size: 14.5px; font-weight: 700; margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; }
@@ -192,6 +193,30 @@
       table.extb tr.exsub td .tag { display: inline-block; margin: 2px 4px 2px 0; }
       table.extb tr:has(+ tr.exsub) td { border-bottom: none; padding-bottom: 2px; }
       table.extb td.nw { white-space: nowrap; }
+      /* 請求(月ごとの見渡し)。カードに入れず、罫線だけの一覧にする */
+      .bo-head { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; flex-wrap: wrap; }
+      .bo-month { font-size: 18px; min-width: 124px; text-align: center; }
+      .bo-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 12px 0 8px; }
+      .bo-sum > div { padding: 10px 12px; border-right: 1px solid var(--line); min-width: 0; }
+      .bo-sum > div:last-child { border-right: none; }
+      .bo-sum b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+      .bo-sum b.ok { color: var(--green); } .bo-sum b.ng { color: var(--danger); } .bo-sum b.wait { color: var(--amber); }
+      .bo-list { border-top: 1px solid var(--line); margin-top: 12px; }
+      .bo-row { display: grid; grid-template-columns: minmax(0, 1fr) 128px 104px 124px; gap: 10px; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+      .bo-row .nm { font-weight: 700; color: var(--ink); text-decoration: none; }
+      .bo-row .st { justify-self: start; }
+      .bo-row .amt { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .bo-row .act { display: flex; justify-content: flex-end; }
+      .bo-row .act a { text-decoration: none; }
+      .bo-pay { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--soft); border-radius: 10px; }
+      @media (max-width: 640px) {
+        .bo-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .bo-sum > div:nth-child(2) { border-right: none; }
+        .bo-sum > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+        .bo-row { grid-template-columns: minmax(0, 1fr) auto; }
+        .bo-row .st { justify-self: end; }
+        .bo-row .amt { text-align: left; }
+      }
       #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px; z-index: 30; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 9px 18px; font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 90vw; }
       #toast.show { opacity: 1; }
       .loading { text-align: center; color: var(--muted); padding: 60px 0; }
@@ -460,7 +485,7 @@
            そのまま Apps Script に回す。READ_API が空なら最初から回す(今までどおり)。
            書き込みは常に Apps Script。Worker は台帳に書けない。 */
         var READ_API = "https://stepwise-api.stepwise-edu.workers.dev";
-        var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1 };
+        var READ_ADMIN_OPS = { state: 1, kanriDashboard: 1, kanriStudent: 1, billingPreview: 1, billingOverview: 1 };
         // 台帳の正本が Worker に移ったら true にする。書き込みも Worker へ送る
         var WRITE_TO_WORKER = true;
         function routedToWorker(body) {
@@ -630,6 +655,7 @@
           if (h === "#families" || h.indexOf("#families?")===0) return { page: "families", studentId: new URLSearchParams(h.split("?")[1] || "").get("student") || "" };
           if (h === '#plans') return {page:'plans'};
           if (h.indexOf('#plans?student=') === 0) return {page:'student',id:new URLSearchParams(h.slice(7)).get('student') || '',section:'planning'};
+          if (h === "#billing" || h.indexOf("#billing?") === 0) return { page: "billing", ym: new URLSearchParams(h.split("?")[1] || "").get("ym") || "" };
           if (h === "#home" || h === "#lessons") return { page: "lessons" };
           if (h === "#settings") return { page: "settings" };
           return { page: "lessons" };
@@ -647,6 +673,7 @@
             '<a href="#home" class="' + (r.page === "lessons" ? "on" : "") + '">ホーム</a>' +
             '<a href="#plans" class="' + (r.page === 'plans' || r.section === 'planning' ? 'on' : '') + '">計画</a>' +
             '<a href="#students" class="' + (r.page === "students" || (r.page === "student" && r.section !== "planning") || r.page === "families" ? "on" : "") + '">生徒</a>' +
+            '<a href="#billing" class="' + (r.page === "billing" ? "on" : "") + '">請求</a>' +
             '<a href="#settings" class="' + (r.page === "settings" ? "on" : "") + '">設定</a>' +
             '<a href="#" data-action="logout">ログアウト</a>' +
             (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
@@ -660,6 +687,7 @@
           if (r.page === "families" || r.page === "students") loadFamilies();
           if (r.page === 'lessonPair') { loadLessonPair(force); return; }
           if (r.page === "lesson") { loadLesson(force); return; }
+          if (r.page === "billing") { loadBilling(); return; }
           var key = keyOf(r);
           var cached = force ? null : cacheGet(key);
           var seq = ++loadSeq;
@@ -1615,6 +1643,94 @@
         document.addEventListener('change',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
         function meetingSave(){if(busy||!meetingDialog)return;var f=meetingDialog,r=route();busy=true;f.error='';render();admin('meetingCreate',f).then(function(res){busy=false;meetingDialog=null;cacheClear();if(!applyResult(res,r))load(true);else render();toast('ミーティングを登録しました');}).catch(function(e){busy=false;f.error=e.message;render();});}
 
+        /* ---------- 請求(月ごとの見渡し) ----------
+           全生徒の請求の状態を1か月分まとめて見る。行ごとに「次にやること」を1つだけ出す。
+           金額・状態はサーバー(billingOverview)が決める。ここでは計算しない。 */
+        var BO = { ym: "", data: null, busy: false, error: "", pay: null, sending: "" };
+        var BO_STATE = { reported: ["amber", "入金の確認待ち"], ready: ["blue", "請求できます"], needDone: ["gray", "実施の確認が必要"], relief: ["amber", "減免の審査待ち"], needApproval: ["amber", "承認待ち"], review: ["red", "確認が必要"], unpaid: ["red", "未入金"], open: ["gray", "月の途中"], paid: ["green", "入金済み"] };
+        function boShift(ym, n) { var d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return d.getFullYear() + "-" + pad(d.getMonth() + 1); }
+        function boYm() { var r = route(); return /^\d{4}-(0[1-9]|1[0-2])$/.test(r.ym || "") ? r.ym : boShift(today().slice(0, 7), -1); }
+        function boYmLabel(ym) { return ym.slice(0, 4) + "年" + (+ym.slice(5, 7)) + "月"; }
+        function loadBilling(keepError) {
+          var ym = boYm(), seq = ++loadSeq;
+          if (BO.ym !== ym) { BO.data = null; BO.pay = null; }
+          BO.ym = ym; BO.busy = true; if (!keepError) BO.error = "";
+          if (BO.data) { syncMsg = "更新中…"; render(); } else renderLoading();
+          admin("billingOverview", { ym: ym }).then(function (res) {
+            if (seq !== loadSeq) return;
+            if (!res || !res.overview) throw new Error("請求の一覧を読み込めませんでした");
+            BO.data = res.overview; BO.busy = false; authM = "ok"; syncMsg = ""; render();
+          }).catch(function (e) {
+            if (seq !== loadSeq) return;
+            BO.busy = false; syncMsg = ""; if (!BO.error) BO.error = e.message;
+            if (authM !== "login") { authM = "ok"; render(); }
+          });
+        }
+        function boAction(r, disabled) {
+          var sid = encodeURIComponent(r.studentId), dis = disabled ? " disabled" : "", at = ' data-student="' + esc(r.studentId) + '"';
+          if (r.state === "ready") return '<button class="btn-primary btn-sm" data-action="bo-issue"' + at + dis + '>請求を記録</button>';
+          if (r.state === "unpaid") return '<button class="btn-primary btn-sm" data-action="bo-pay-open"' + at + dis + '>入金を記録</button>';
+          if (r.state === "reported") return '<button class="btn-primary btn-sm" data-action="bo-confirm"' + at + dis + '>入金を確認</button>';
+          if (r.state === "needApproval") return '<a class="btn-quiet btn-sm" href="#plans?student=' + sid + '">計画を確認</a>';
+          if (r.state === "needDone" || r.state === "relief") return '<a class="btn-quiet btn-sm" href="#s=' + sid + '">授業を確認</a>';
+          return '<a class="btn-quiet btn-sm" href="#s=' + sid + '&tab=billing">明細を見る</a>';
+        }
+        function renderBillingPage() {
+          renderNav();
+          var ym = BO.ym || boYm(), d = BO.data, nowYm = today().slice(0, 7);
+          var h = '<h1>請求</h1><div class="bo-head"><a class="btn-quiet btn-sm" href="#billing?ym=' + boShift(ym, -1) + '">‹ 前の月</a><strong class="bo-month">' + boYmLabel(ym) + '分</strong>' + (ym < nowYm ? '<a class="btn-quiet btn-sm" href="#billing?ym=' + boShift(ym, 1) + '">次の月 ›</a>' : '') + '</div>';
+          if (BO.error) h += '<p class="lc-notice" role="alert">' + esc(BO.error) + ' <button class="btn-quiet btn-sm" data-action="bo-reload">もう一度読み込む</button></p>';
+          if (!d) { app.innerHTML = h; return; }
+          var t = d.totals || {}, rows = d.rows || [], locked = BO.busy || !!BO.sending;
+          h += '<div class="bo-sum"><div><span class="small muted">' + (d.closed ? "請求額の合計" : "実施済みの合計") + '</span><b>' + yen((t.billed || 0) + (t.open || 0)) + '</b></div>' +
+            '<div><span class="small muted">入金済み</span><b class="' + (t.paid ? "ok" : "") + '">' + yen(t.paid) + '</b></div>' +
+            '<div><span class="small muted">未入金</span><b class="' + (t.unpaid ? "ng" : "") + '">' + yen(t.unpaid) + '</b></div>' +
+            '<div><span class="small muted">承認待ち（請求の対象外）</span><b class="' + (t.pending ? "wait" : "") + '">' + yen(t.pending) + '</b></div></div>';
+          h += '<p class="small muted">' + (d.closed ? "前の月の分は、毎月1日に自動で請求として記録されます。先生の確認が必要なものから順に並びます。" : "この月はまだ途中です。月が終わると、翌月1日に自動で請求として記録されます。") + '</p>';
+          if (!rows.length) h += '<div class="empty">この月に授業・請求のある生徒はいません。</div>';
+          else h += '<div class="bo-list">' + rows.map(function (r) {
+            var st = BO_STATE[r.state] || BO_STATE.review, sid = encodeURIComponent(r.studentId);
+            var sub = [r.summary, r.note].filter(Boolean).join(" ・ ");
+            var amt = (r.invoice || r.amount ? yen(r.amount) : "—") + (r.pendingAmount ? '<div class="small muted" style="font-weight:400">承認待ち ' + yen(r.pendingAmount) + '</div>' : "");
+            var row = '<div class="bo-row"><div><a class="nm" href="#s=' + sid + '&tab=billing">' + esc(r.name) + '</a>' + (sub ? '<div class="small muted">' + esc(sub) + '</div>' : "") + '</div>' +
+              '<span class="tag ' + st[0] + ' st">' + st[1] + '</span><div class="amt">' + amt + '</div><div class="act">' + (BO.sending && sameId(BO.sending, r.studentId) ? '<span class="small muted">保存中…</span>' : boAction(r, locked)) + '</div>';
+            if (BO.pay && sameId(BO.pay.studentId, r.studentId) && r.state === "unpaid") row += '<div class="bo-pay"><label for="bo-date">入金日</label><input type="date" id="bo-date" data-bo-field="date" value="' + esc(BO.pay.date) + '" max="' + today() + '"><label for="bo-method">方法</label><select id="bo-method" data-bo-field="method">' + ["振込","現金","PayPay","その他"].map(function (v) { return '<option' + (v === BO.pay.method ? " selected" : "") + '>' + v + '</option>'; }).join("") + '</select><button class="btn-primary btn-sm" data-action="bo-pay-save" data-student="' + esc(r.studentId) + '"' + (locked ? " disabled" : "") + '>この内容で記録</button><button class="btn-quiet btn-sm" data-action="bo-pay-cancel">やめる</button></div>';
+            return row + '</div>';
+          }).join("") + '</div>';
+          app.innerHTML = h;
+        }
+        function boRow(id) { return ((BO.data && BO.data.rows) || []).filter(function (r) { return sameId(r.studentId, id); })[0] || null; }
+        // 結果が分からなくなっても、一覧を読み直せば本当の状態(請求済み・入金済み)が出る。同じ操作を黙って再送しない
+        function boSend(op, payload, studentId, message) {
+          if (BO.sending) return;
+          BO.sending = String(studentId); BO.error = ""; render();
+          admin(op, payload).then(function (res) {
+            if (!res || !res.ok) throw new Error("保存結果を確認できませんでした。一覧で状態を確認してください。");
+            cacheClear(); BO.pay = null; toast(message);
+          }).catch(function (er) { BO.error = er.message; }).then(function () { BO.sending = ""; if (route().page === "billing") loadBilling(true); });
+        }
+        function boClick(a, btn) {
+          if (route().page !== "billing") return;
+          if (a === "bo-reload") { loadBilling(); return; }
+          if (!BO.data || BO.sending || BO.busy) return;
+          if (a === "bo-pay-cancel") { BO.pay = null; render(); return; }
+          var r = boRow(btn.getAttribute("data-student") || ""), ym = BO.data.ym;
+          if (!r) return;
+          if (a === "bo-issue" && r.state === "ready") {
+            if (!confirm(r.name + " さんの" + boYmLabel(ym) + "分 " + yen(r.amount) + " を請求として記録しますか？保護者にお知らせが届きます。")) return;
+            boSend("kanriAddPayment", { studentId: r.studentId, ym: ym, amount: r.amount, requestId: lessonId() }, r.studentId, "請求を記録しました");
+          } else if (a === "bo-pay-open" && r.state === "unpaid") { BO.pay = { studentId: r.studentId, date: today(), method: "振込" }; BO.error = ""; render(); }
+          else if (a === "bo-pay-save" && r.state === "unpaid" && r.invoice && BO.pay && sameId(BO.pay.studentId, r.studentId)) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(BO.pay.date || "") || BO.pay.date > today()) { BO.error = "入金日は今日までの日付で入力してください。"; render(); return; }
+            boSend("kanriSetPaid", { studentId: r.studentId, invoiceId: r.invoice.id, date: BO.pay.date, method: BO.pay.method, expectedPaymentRevision: r.invoice.paymentRevision || 0 }, r.studentId, "入金を記録しました");
+          } else if (a === "bo-confirm" && r.state === "reported" && r.familyId && r.signature) {
+            if (!confirm(boYmLabel(ym) + "分の入金を確認済みにしますか？同じ保護者の請求をまとめて入金済みにします。")) return;
+            boSend("familyConfirmTransfer", { familyId: r.familyId, ym: ym, signature: r.signature }, r.studentId, "入金を確認しました");
+          }
+        }
+        function boField(ev) { var k = ev.target.getAttribute && ev.target.getAttribute("data-bo-field"); if (k && BO.pay && !BO.sending) BO.pay[k] = ev.target.value; }
+        document.addEventListener("input", boField); document.addEventListener("change", boField);
+
         function render() {
           if (authM === "login") { renderLogin(); return; }
           var r = route();
@@ -1627,6 +1743,7 @@
           else if (r.page === "plans" && D) renderPlans();
           else if (r.page === "students" && D) renderStudents();
           else if (r.page === "home" && D) renderHome();
+          else if (r.page === "billing" && (BO.data || BO.error)) renderBillingPage();
           else renderLoading();
           if (authM === "ok") {
             if (slotEdit && slotEdit.auth !== token() && token()) { slotEdit.auth = token(); slotEdit.busy = false; slotEdit.error = "ログインが更新されました。保持した変更内容を確認してください。"; }
@@ -2766,6 +2883,7 @@
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }
           if (a.indexOf("lc-") === 0) { ev.preventDefault(); lessonClick(a, btn); return; }
           if (a.indexOf("po-") === 0) { ev.preventDefault(); outlineClick(a, btn); return; }
+          if (a.indexOf("bo-") === 0) { ev.preventDefault(); boClick(a, btn); return; }
           if (a.indexOf("billing-") === 0) { ev.preventDefault(); billingClick(a, btn); return; }
           var sid = btn.getAttribute("data-sid") || (route().page === "student" && cur ? cur.id : "");
           switch (a) {
