@@ -25,7 +25,7 @@ test('the student list is one row per student with the next lesson and this mont
   assert.match(html, /<a class="sl-row" href="#s=test-a"><span><span class="nm">【テスト】A<\/span><div class="small muted">中2・架空中<\/div><\/span><span><\/span><span class="small num">10\/7\(水\) 17:00<\/span><span class="small num">実施 1回・登録 3回<div class="muted">4,500円<\/div><\/span><\/a>/);
   assert.match(html, /【テスト】B &lt;i&gt;<\/span><div class="small muted">学年・学校 未登録<\/div><\/span><span><span class="tag gray">休会<\/span> <span class="tag red">未入金<\/span><\/span><span class="small num"><span class="muted">予定なし<\/span><\/span><span class="small num">実施 0回<\/span>/);
   assert.match(html, /予約ページから外した生徒 <span class="cnt">1人<\/span>/); assert.match(html, /href="#s=test-z"><span class="nm muted">【テスト】停止/);
-  assert.doesNotMatch(html.split('グループの管理')[0], /class="card/, 'no cards in the student list');
+  assert.doesNotMatch(html.split("グループの管理")[0], /class="card/, "no cards in the student list"); assert.match(html, /^<div class="flat">/);
 
   assert.equal(ui.el('n-name'), undefined);
   ui.click('newstudent-open');
@@ -56,4 +56,14 @@ test('the dashboard reports next month plan status for each student', () => {
   assert.equal(d.month, '2026-09'); assert.equal(d.nextMonth, '2026-10');
   assert.equal(a.planStatus, 'draft'); assert.deepEqual(JSON.parse(JSON.stringify(a.planNext)), { status: 'proposed', total: 3 });
   assert.deepEqual(JSON.parse(JSON.stringify(b.planNext)), { status: 'none', total: 0 });
+});
+
+test('the student page uses underlined tabs, flat sections, and puts basic information before documents', async () => {
+  const { adminReady, card } = require('./helpers/operations-ui-harness.cjs');
+  const ui = await adminReady(card(), 'settings'), html = ui.html();
+  assert.match(html, /^<div class="flat">/, 'sections are not wrapped in cards');
+  assert.match(html, /<div class="tabs" role="navigation" aria-label="生徒のページ"><a class="" href="#s=[^"]+&tab=overview">予定<\/a>/);
+  assert.match(html, /<a class="on" href="#s=[^"]+&tab=settings" aria-current="page">生徒設定<\/a>/);
+  const order = ['<h2>基本情報', '<h2>授業の標準形式</h2>', '<h2>資料</h2>'].map(t => html.indexOf(t));
+  assert.ok(order.every(i => i >= 0) && order[0] < order[1] && order[1] < order[2], JSON.stringify(order));
 });

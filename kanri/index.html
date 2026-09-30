@@ -193,6 +193,16 @@
       table.extb tr.exsub td .tag { display: inline-block; margin: 2px 4px 2px 0; }
       table.extb tr:has(+ tr.exsub) td { border-bottom: none; padding-bottom: 2px; }
       table.extb td.nw { white-space: nowrap; }
+      /* 生徒ページ: タブは下線、各節はカードに入れず見出しの罫線で区切る */
+      .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 14px 0 0; overflow-x: auto; }
+      .tabs a { padding: 8px 12px; color: var(--muted); text-decoration: none; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+      .tabs a.on { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
+      .tabs { scrollbar-width: none; } .tabs::-webkit-scrollbar { display: none; }
+      @media (max-width: 420px) { .tabs a { padding: 8px 8px; } }
+      .flat > h2 { margin-top: 30px; font-size: 15.5px; }
+      .flat > .card { border: 0; box-shadow: none; background: transparent; padding: 0; border-radius: 0; }
+      .flat > .card + .card { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+      .flat > .card.note, .flat > .card .card, .flat details.add > .card { border: 0; box-shadow: none; background: var(--soft); padding: 12px 14px; border-radius: 10px; }
       /* 生徒一覧・計画: 請求ページと同じ、カードを使わない罫線の一覧 */
       .sl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
       .sl-head h1 { margin: 0; }
@@ -924,7 +934,7 @@
             });
             html += '</div><p class="small muted">記録は残っています。生徒の設定内容をご確認ください。</p>';
           }
-          app.innerHTML = html + renderFamilies(true);
+          app.innerHTML = '<div class="flat">' + html + renderFamilies(true) + '</div>';
         }
 
         var EXAM_SUBJ = ["国語", "数学", "社会", "理科", "英語"];
@@ -1152,7 +1162,7 @@
 
           var months=[];(F.home.children||[]).forEach(function(c){var d=F.childrenData[c.studentId],st=F.childState[c.studentId],ym=d&&d.month||String(st&&st.today||'').slice(0,7);if(ym&&months.indexOf(ym)<0)months.push(ym);});
           var monthLabel=months.sort().map(function(ym){return ym.slice(0,4)+'年'+Number(ym.slice(5,7))+'月';}).join('・');
-          var h='<h2>授業料</h2><div class="card"><p class="small">今月の金額の目安です。未承認の計画も含みます。確定した請求額は下の請求記録でご確認ください。</p><p class="tuition-month">'+esc(monthLabel)+'</p><div class="tbwrap"><table class="tb"><thead><tr><th>名前</th><th>内訳</th><th>実施済み</th><th>登録分</th><th>計画分</th></tr></thead><tbody>',total=[0,0,0],complete=[true,true,true];
+          var h='<h2>授業料の目安'+helpButton('tuition')+'</h2>'+helpBox('tuition','今月の金額の目安です。未承認の計画も含みます。確定した請求額は下の請求記録でご確認ください。<br>実施済み：実施した授業 ／ 登録分：実施済み＋今後の登録済み授業（返事前の案内は含みません） ／ 計画分：今月にかかる送信済み計画の全回数分。合計は各列の授業料にキャンセル料を加えた金額です。列同士は足し合わせません。キャンセル料は当月の授業について、減額・免除を反映した現在の金額です。減額・免除の申請中は審査前の金額を表示します。<br>計画の単価と授業時間で計算します。単価が未設定・特定できない場合は「確認が必要」と表示します。')+'<div class="card"><p class="tuition-month">'+esc(monthLabel)+'</p><div class="tbwrap"><table class="tb"><thead><tr><th>名前</th><th>内訳</th><th>実施済み</th><th>登録分</th><th>計画分</th></tr></thead><tbody>',total=[0,0,0],complete=[true,true,true];
           function money(v){return v==null?'確認が必要':yen(v);}
           (F.home.children||[]).forEach(function(c){
             var d=F.childrenData[c.studentId],st=F.childState[c.studentId];
@@ -1173,7 +1183,7 @@
             h+='<tr><td rowspan="2">'+esc(familyChildName(c))+'</td><th scope="row">授業</th>'+values.map(function(v){return '<td>'+money(v)+'</td>';}).join('')+'</tr>';
             h+='<tr><th scope="row">キャンセル料</th>'+values.map(function(){return '<td>'+money(cancellationFee)+'</td>';}).join('')+'</tr>';
           });
-          h+='</tbody><tfoot><tr><th colspan="2">合計</th>'+total.map(function(v,i){return '<td>'+money(complete[i]?v:null)+'</td>';}).join('')+'</tr></tfoot></table></div><p class="small">実施済み：実施した授業 ／ 登録分：実施済み＋今後の登録済み授業（返事前の案内は含みません） ／ 計画分：今月にかかる送信済み計画の全回数分。合計は各列の授業料にキャンセル料を加えた金額です。列同士は足し合わせません。キャンセル料は当月の授業について、減額・免除を反映した現在の金額です。減額・免除の申請中は審査前の金額を表示します。</p><p class="small">計画の単価と授業時間で計算します。単価が未設定・特定できない場合は「確認が必要」と表示します。</p></div>';return h;
+          h+='</tbody><tfoot><tr><th colspan="2">合計</th>'+total.map(function(v,i){return '<td>'+money(complete[i]?v:null)+'</td>';}).join('')+'</tr></tfoot></table></div></div>';return h;
         }
         function studentPlanSummary(s){
           var lines=planLines(s).filter(function(l){return l.status==='approved'||l.status==='proposed';}),usage=s.plan&&s.plan.usage||{};
@@ -1193,7 +1203,7 @@
             '<p class="sub">' + esc([p["学年"], p["学校"]].filter(Boolean).join("・") || "学年・学校 未登録") + ' <span class="tag ' + ((p["状態"] || "在籍") === "在籍" ? "green" : "gray") + '">' + esc(p["状態"] || "在籍") + '</span>' + (s.active === false ? ' <span class="tag red">予約ページ停止中</span>' : "") + '</p></div>' +
             '<div class="row"><a class="btn-quiet btn-sm" href="/yoyaku/?preview=student:' + encodeURIComponent(s.id) + '#home" target="_blank" rel="noopener" title="生徒本人に見えている画面を表示だけします（登録・変更はできません）">生徒ページを見る</a><a class="btn-quiet btn-sm" href="/yoyaku/?preview=parent:' + encodeURIComponent(s.id) + '#family/home" target="_blank" rel="noopener" title="保護者に見えている画面を表示だけします（登録・変更はできません）">保護者ページを見る</a><button class="btn-quiet btn-sm" data-action="reload">更新</button></div></div>';
 
-          html += '<nav class="row" aria-label="生徒のページ">' + [{id:'overview',label:'予定'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'btn-primary':'btn-quiet')+' btn-sm" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</nav>';
+          html += '<div class="tabs" role="navigation" aria-label="生徒のページ">' + [{id:'overview',label:'予定'},{id:'progress',label:'成績・面談'},{id:'billing',label:'月間計画・請求'},{id:'settings',label:'生徒設定'}].map(function(t){return '<a class="'+(section===t.id?'on':'')+'" href="#s='+encodeURIComponent(s.id)+'&tab='+t.id+'"'+(section===t.id?' aria-current="page"':'')+'>'+t.label+'</a>';}).join('') + '</div>';
           if (section === 'overview') {
           html += unrecordedCard(s.unrecordedLessons || (s.lessons || []).filter(function(l){return l.status==='booked' && !l.done && l.date<(s.today || today());}),false,s);
           // この生徒の予定表
@@ -1212,8 +1222,6 @@
           }
           if (section === 'progress') html += '<h2>資料</h2><div data-student-documents="'+esc(s.id)+'" data-document-scope="results"></div>';
           if (section === 'settings') {
-          html += '<h2>資料</h2><div data-student-documents="'+esc(s.id)+'"></div>';
-          html += '<h2>授業の標準形式</h2><div class="card"><label for="student-delivery">新しい案内の初期値</label> <select id="student-delivery">' + deliveryOptions(s.deliveryMode) + '</select> <button class="btn-ghost btn-sm" data-action="studentmode"' + (busy ? ' disabled' : '') + '>標準形式を保存</button><p class="note">現在：' + deliveryLabel(s.deliveryMode) + '。登録済みの各回の形式は変わりません。</p></div>';
 
           // 基本情報
           html += '<h2>基本情報 <button class="btn-quiet btn-sm" data-action="editprofile" style="margin-left:auto">' + (editProfile ? "閉じる" : "編集") + '</button></h2>';
@@ -1241,6 +1249,8 @@
               '</tbody></table></div>';
           }
 
+          html += '<h2>授業の標準形式</h2><div class="card"><label for="student-delivery">新しい案内の初期値</label> <select id="student-delivery">' + deliveryOptions(s.deliveryMode) + '</select> <button class="btn-ghost btn-sm" data-action="studentmode"' + (busy ? ' disabled' : '') + '>標準形式を保存</button><p class="note">現在：' + deliveryLabel(s.deliveryMode) + '。登録済みの各回の形式は変わりません。</p></div>';
+          html += '<h2>資料</h2><div data-student-documents="'+esc(s.id)+'"></div>';
           }
           if (section === 'billing') {
 
@@ -1337,7 +1347,7 @@
 
           }
           if(section==='overview')html+=studentPlanSummary(s)+lessonOfferDialogHTML()+aiScheduleHtml();
-          app.innerHTML = html;
+          app.innerHTML = '<div class="flat">' + html + '</div>';
         }
 
         // 返事がないまま日付が過ぎた案内の行。実施済みにするか、未実施(取り下げ)にするかを選ぶ
@@ -1559,22 +1569,17 @@
               var ent = months[mk][s.studentId] || (months[mk][s.studentId] = { name: s.studentName, count: 0, min: 0 });
               ent.count++; ent.min += Number(s.min) || 0;
             });
+            // 月ごとに1行。生徒ごとの金額・状態・入金は「請求」ページで見る(同じ表を2か所に持たない)
             if (mkeys.length) {
-              html += '<div class="card tbwrap"><table class="tb"><tr><th>月</th><th>生徒</th><th>実施</th><th>時間</th><th>授業料</th><th></th></tr>';
-              mkeys.sort().reverse().forEach(function (mk) {
-                Object.keys(months[mk]).sort(function (a, b) { return months[mk][a].name < months[mk][b].name ? -1 : 1; }).forEach(function (sid2, i) {
-                  var ent = months[mk][sid2], st5 = null;
-                  A.students.forEach(function (x) { if (sameId(x.id, sid2)) st5 = x; });
-                  var summary = (A.billingSummaries || []).filter(function (b) { return sameId(b.studentId, sid2) && b.ym === mk; })[0];
-                  var feeText = summary && (summary.canBill || summary.invoice) ? yen(summary.invoice ? summary.invoice.amount : summary.amount) : "月の承認条件を確認";
-                  html += '<tr><td>' + (i === 0 ? (+mk.slice(5, 7)) + '月' : '') + '</td><td><a href="#s=' + esc(sid2) + '">' + esc(ent.name) + '</a></td><td>' + ent.count + '回</td><td>' + ent.min + '分</td><td>' + feeText + '</td><td><a class="btn-ghost btn-sm" href="#s=' + esc(sid2) + '">請求を確認</a></td></tr>';
-                });
-              });
-              html += '</table></div>';
+              html += '<div class="bo-list">' + mkeys.sort().reverse().slice(0, 6).map(function (mk) {
+                var ids = Object.keys(months[mk]), count = 0, min = 0;
+                ids.forEach(function (id) { count += months[mk][id].count; min += months[mk][id].min; });
+                return '<a class="sl-row" href="#billing?ym=' + mk + '"><span class="nm">' + mk.slice(0, 4) + '年' + (+mk.slice(5, 7)) + '月</span><span class="small">' + ids.length + '人</span><span class="small num">実施 ' + count + '回・' + min + '分</span><span class="small" style="color:var(--primary)">請求を見る ›</span></a>';
+              }).join("") + '</div>';
             }
-            html += '<div class="note">「実施にする」を押すと月の実績に反映されます。請求額と文面はカルテの「請求・入金管理」で確認してください。</div>';
+            html += '<p class="small muted">「実施にする」を押すと月の実績に反映されます。生徒ごとの請求額と入金は「請求」ページで確認できます。</p>';
           }
-          app.innerHTML = html;
+          app.innerHTML = '<div class="flat">' + html + '</div>';
         }
 
         function renderSettings() {
@@ -1590,7 +1595,7 @@
           html += '</table></div><div class="row" style="margin-top:10px"><input type="text" id="lk-new-name" placeholder="新しい種類(例: 演習)" maxlength="20"><input type="number" id="lk-new-min" placeholder="標準時間(分)" min="30" max="480" step="5" style="width:120px"><input type="number" id="lk-new-fee" placeholder="標準料金(円)" min="0" step="10" style="width:130px"><button class="btn-primary btn-sm" data-action="kindadd"' + (busy ? ' disabled' : '') + '>追加</button></div></div>';
           html += '<h2>ログ</h2>';
           html += (A.log || []).length ? '<div class="card loglist">' + A.log.slice(0, 30).map(function (l) { return '<div>' + esc(l.time) + ' ' + esc(l.message) + '</div>'; }).join("") + '</div>' : '<div class="empty">まだ動きはありません</div>';
-          app.innerHTML = html;
+          app.innerHTML = '<div class="flat">' + html + '</div>';
         }
 
         // 授業ページの書き込み(結果の admin をそのまま採用)
