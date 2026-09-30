@@ -2025,10 +2025,11 @@ function kanriDashboard_() {
       bookedThisMonth: mine.filter(function (x) { return x.status === 'booked' && x.date.slice(0, 7) === month; }).length,
       plannedThisMonth: (function () { var p = planFor_(id, month, planRowsAll).plan, n = 0; Object.keys(p).forEach(function (k) { n += p[k]; }); return n; })(),
       planStatus: planMonthInfo_(id, month, planRowsAll).status,
+      planNext: (function () { var i = planMonthInfo_(id, nextYm_(month)); return { status: i.status, total: i.total }; })(),
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
-  return { cancellations: cancelAttendance_(), today: today, lessonKinds: lessonKindsPublic_(), pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
+  return { cancellations: cancelAttendance_(), today: today, lessonKinds: lessonKindsPublic_(), pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, nextMonth: nextYm_(month), lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
     contactPendingCount: readRows_('contactMessages').filter(function(m){return m.status==='received'||m.status==='failed';}).length,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
