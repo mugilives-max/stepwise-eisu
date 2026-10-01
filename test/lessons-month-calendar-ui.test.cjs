@@ -13,6 +13,14 @@ async function ready(extra = {}) {
 }
 function calendar(html) { return html.slice(html.indexOf('<div class="card cal">'), html.indexOf('<h2 class="schedule-day-heading">', html.indexOf('<div class="card cal">'))); }
 function dayDetails(html) { return html.slice(html.indexOf('<h2 class="schedule-day-heading">'), html.indexOf('id="lesson-attention"')); }
+// 授業の詳細ダイアログ(詳細 → 授業内容を編集)の欄は id を持たず data-slot-edit で識別される。ハーネスの ui.input は id で
+// 要素を探すため、表示中で操作できる欄であることを確かめてから、同じ data-slot-edit を持つ入力イベントをダイアログ要素経由で送る。
+function slotDialog(ui) { const html = ui.html(), start = html.indexOf('<dialog id="slot-editor"'); assert.ok(start >= 0, 'visible dialog: slot-editor'); return html.slice(start, html.indexOf('</dialog>', start)); }
+function slotField(ui, prop, value) {
+  const field = slotDialog(ui).match(new RegExp('<(?:input|select) [^>]*data-slot-edit="' + prop + '"[^>]*>'));
+  assert.ok(field && !/ disabled/.test(field[0]), 'visible field: ' + prop);
+  const dialog = ui.el('slot-editor'); dialog.attrs['data-slot-edit'] = prop; ui.input('slot-editor', value); delete dialog.attrs['data-slot-edit'];
+}
 
 test('one unfolded home-style month calendar replaces the weekly board at the top', async () => {
   const ui = await ready(); const html = ui.html();
@@ -33,9 +41,15 @@ test('month keeps every lesson label, time order, past/done and cancellation sta
   assert.match(html, /class="calbox of admin-pending"/); assert.match(html, /class="calbox needs-attention"/); assert.match(html, /class="calbox admin-ok"/);
   assert.doesNotMatch(html, /SHOULD_NOT_APPEAR/);
   ui.click('calday', {'data-date':'2026-09-21'});
-  assert.match(dayDetails(ui.html()), /実施済/);
-  assert.match(dayDetails(ui.html()), /#lesson\?student=test-a&amp;slot=past/);
-  assert.doesNotMatch(dayDetails(ui.html()), /data-action="calendar-add"/);
+  // 通常の「実施済」バッジは省略(1ec9f94)。実施済みは授業記録の状態タグと修正ボタンの data-done で表す。
+  assert.match(dayDetails(ui.html()), /href="#lesson\?student=test-a&amp;slot=past" title="授業記録を開く">未記入<\/a>/);
+  assert.match(dayDetails(ui.html()), /data-action="slotedit" data-done="1" data-id="past" data-sid="test-a"/);
+  // 過去日の＋は授業の案内ではなく「実施済みの授業を追加」(3e8b3d7)。開いても案内は送らない。
+  assert.match(dayDetails(ui.html()), /data-action="calendar-add" data-date="2026-09-21" aria-label="実施済みの授業を追加"/);
+  assert.doesNotMatch(dayDetails(ui.html()), /この日に予定を追加/);
+  ui.click('calendar-add', {'data-date':'2026-09-21'});
+  assert.match(ui.html(), /data-action="performed-save"/); assert.doesNotMatch(ui.html(), /data-action="offerslot"/);
+  assert.equal(ui.requests.length, 1);
 });
 
 test('month navigation and empty day selection stay stable through re-rendering', async () => {
@@ -55,8 +69,10 @@ test('selected offered lesson retains direct edit with the same slot ID and no d
   const ui = await ready({slots:[lesson('offered',{status:'offered'})]});
   assert.match(dayDetails(ui.html()), /data-action="slotedit"/);
   ui.click('slotedit', {'data-id':'offered'});
-  assert.equal(ui.el('se-date').value, today); assert.equal(ui.el('se-start').value,'17:00');
-  ui.input('se-start','18:00'); ui.click('se-save');
+  // 詳細はまず表で開き、「授業内容を編集」で同じ表の中の欄を直接直す(24e19b1)。削除・取り下げの操作は押さない
+  assert.equal(ui.el('slot-editor').modal, true); ui.click('se-content');
+  assert.match(slotDialog(ui), /data-slot-edit="date" type="date" value="2026-09-23"/); assert.match(slotDialog(ui), /data-slot-edit="start" type="time" value="17:00"/);
+  slotField(ui, 'start', '18:00'); ui.click('se-detail-save');
   assert.equal(ui.requests.length,2);
   assert.equal(ui.requests[1].body.op,'editOffered');
   assert.equal(ui.requests[1].body.slotId,'offered');

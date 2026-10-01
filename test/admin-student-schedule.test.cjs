@@ -6,16 +6,18 @@ test('student schedule shares lesson rows and keeps manual and AI writes scoped 
  ui.click('calday',{'data-date':'2026-09-15'});
  assert.match(ui.html(),/9\/15.*の授業/);
  assert.match(ui.html(),/data-action="slotedit"[^>]*data-sid="test-a"/);
- assert.doesNotMatch(ui.html().split('schedule-day-heading')[1].split('data-fold="upcoming"')[0],/>予定<\/span>|予定の編集/);
- ui.click('sdayadd');assert.ok(ui.el('student-schedule'));
- ui.click('dayoffer');assert.ok(ui.el('f-date'));
- ui.click('sdayclose');ui.click('sdayadd');ui.click('sblockopen');
- ui.input('sb-start','16:00');ui.input('sb-end','18:00');ui.input('sb-note','テスト');ui.click('sblockadd');
- assert.equal(ui.requests.at(-1).body.studentId,'test-a');assert.equal(ui.requests.at(-1).body.op,'addBlock');
+ assert.doesNotMatch(ui.html().split('schedule-day-heading')[1].split('<h2>')[0],/>予定<\/span>|予定の編集/);
+ // ＋は授業一覧と共通の案内モーダル(board-editor)を、表示中の生徒・選んだ日で開く(d046b20)。生徒は選び直せない
+ ui.click('sdayadd');assert.equal(ui.el('board-editor').modal,true);assert.equal(ui.el('student-schedule'),undefined);
+ assert.match(ui.html(),/<input type="hidden" id="f-student" value="test-a">/);assert.equal(ui.el('f-date').value,'2026-09-15');
+ ui.input('f-subject','英語');ui.click('offerslot');
+ assert.equal(ui.requests.at(-1).body.op,'offer');assert.equal(ui.requests.at(-1).body.studentId,'test-a');assert.equal(ui.requests.at(-1).body.date,'2026-09-15');
 });
 test('AI opens in a modal for the current student',async()=>{
  const ui=await adminReady(card({nlEnabled:true}));ui.click('sdayai');
- assert.ok(ui.el('student-schedule'));ui.input('tnl-text','来週の英語');ui.click('tnl-parse');
+ // AIは文章入力の共通モーダル(ai-schedule)。生徒欄は表示中の生徒だけで選択済み(d046b20・e5bfbb9)
+ assert.equal(ui.el('ai-schedule').modal,true);assert.equal(ui.el('ai-student').value,'test-a');assert.doesNotMatch(ui.html(),/<option value="(?!test-a")[^"]+"/);
+ ui.input('tnl-text','来週の英語');ui.click('tnl-parse');
  assert.equal(ui.requests.at(-1).body.op,'scheduleParseTeacher');assert.equal(ui.requests.at(-1).body.studentId,'test-a');
 });
 

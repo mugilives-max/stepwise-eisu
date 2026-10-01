@@ -25,7 +25,8 @@ test('calendar composer validates the default hours before sending and preserves
  ui.input('f-start','21:00');ui.click('offerslot');assert.equal(ui.requests.length,2);assert.equal(ui.requests[1].body.start,'21:00');assert.equal(ui.requests[1].body.deliveryMode,'in_person');
  ui.requests[1].fail();await flush();assert.equal(ui.el('f-start').value,'21:00');assert.match(ui.html(),/入力を保持/);
 });
-test('month navigation does not render the weekly board or removed global restriction lists',async()=>{const ui=await ready();assert.ok(!ui.html().includes('先生の休み(先生が授業できない日)'));assert.match(ui.html(),/先生の授業不可時間を登録/);assert.doesNotMatch(ui.html(),/class="schedule-board"|id="board-date"/);ui.click('calnext');assert.match(ui.html(),/class="callabel">2026年10月/);});
+// 授業ページ下部の先生・生徒の授業不可フォーム2つは e285b26 で削除。
+test('month navigation does not render the weekly board or removed global restriction lists',async()=>{const ui=await ready();assert.ok(!ui.html().includes('先生の休み(先生が授業できない日)'));assert.doesNotMatch(ui.html(),/先生の授業不可時間を登録|生徒の授業不可時間を代理登録|id="o-date"|id="b-student"/);assert.doesNotMatch(ui.html(),/class="schedule-board"|id="board-date"/);ui.click('calnext');assert.match(ui.html(),/class="callabel">2026年10月/);});
 
 test('overlap columns remain distinct across chains, triples and adjacent lessons',()=>{
  const board=require('../assets/schedule-board.js');

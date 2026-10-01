@@ -345,10 +345,14 @@ test('a teacher-recorded approval shows a confirm-or-inquire notice on the paren
   assert.match(ui.html(), /確認を記録しました/); assert.match(ui.html(), /<span class="tag green">確認済み<\/span> 2026-09-19/); assert.doesNotMatch(ui.html(), /data-action="fa-planack"/);
   // a line approved from the parent page carries no such notice
   ui.requests.filter(r => r.body.action === 'familyStudentState').at(-1)?.reply({ ...state(), viewer: 'family', planLines: [{ ...recorded, approvedVia: '保護者ページ', teacherRecorded: false }] });
-  const { adminReady, card, line } = require('./helpers/operations-ui-harness.cjs');
-  const k = await adminReady(card({ plan: { lines: [line({ id: 'a1', status: 'approved', approvedCount: 4, approvedVia: 'LINE', consentDate: '2026-09-05', teacherRecorded: true, parentAck: 'inquiry', parentAckAt: '2026-09-19T10:00:00.000Z', parentAckMemo: 'LINEでは月3回と聞いていました' }), line({ id: 'a2', subject: '数学', status: 'approved', approvedCount: 2, count: 2, approvedVia: '電話', consentDate: '2026-09-05', teacherRecorded: true, parentAck: '' }), line({ id: 'a3', subject: '国語', status: 'approved', approvedCount: 2, count: 2, approvedVia: '保護者ページ', consentDate: '2026-09-06', teacherRecorded: false, parentAck: '' })], defaultRows: [] } }), 'billing');
+  // 先生側の承諾・確認の表示は計画ページ（#plans?student=）の「詳細」ダイアログにある（e9a2f9e で生徒ページの請求タブから外れた）
+  const { createUI: createAdminUI, card, line } = require('./helpers/operations-ui-harness.cjs');
+  const k = createAdminUI('admin', { hash: '#plans?student=test-a' }); assert.equal(k.requests[0].body.op, 'kanriStudent'); k.requests[0].reply({ data: card({ plan: { lines: [line({ id: 'a1', status: 'approved', approvedCount: 4, approvedVia: 'LINE', consentDate: '2026-09-05', teacherRecorded: true, parentAck: 'inquiry', parentAckAt: '2026-09-19T10:00:00.000Z', parentAckMemo: 'LINEでは月3回と聞いていました' }), line({ id: 'a2', subject: '数学', status: 'approved', approvedCount: 2, count: 2, approvedVia: '電話', consentDate: '2026-09-05', teacherRecorded: true, parentAck: '' }), line({ id: 'a3', subject: '国語', status: 'approved', approvedCount: 2, count: 2, approvedVia: '保護者ページ', consentDate: '2026-09-06', teacherRecorded: false, parentAck: '' })], defaultRows: [] } }) }); await flush();
+  k.click('plan-detail', { 'data-line': 'a1' });
   assert.match(k.html(), /承諾: 2026-09-05・LINE<\/div><div class="small" style="[^"]*color:var\(--amber\)[^"]*"><strong>保護者から問い合わせ<\/strong>（2026-09-19）: LINEでは月3回と聞いていました<\/div>/);
+  k.click('plan-detail', { 'data-line': 'a2' });
   assert.match(k.html(), /承諾: 2026-09-05・電話<\/div><div class="small muted"[^>]*>保護者ページでの確認待ち（先生が記録した承認）<\/div>/);
+  k.click('plan-detail', { 'data-line': 'a3' });
   assert.match(k.html(), /承諾: 2026-09-06・保護者ページ<\/div>(?!<div class=\"small)/, 'a parent-page approval has no confirmation line');
 });
 
@@ -480,14 +484,20 @@ test('declining a plan is separate from positive count adjustment and requires c
 });
 
 test('tuition shows cumulative registered and planned estimates per sibling without refresh buttons',async()=>{
+ // 月は表の上に1度だけ出し、各生徒は「授業」「キャンセル料」の2行（d3b6afd/503a541/e9ecd6a）
  const ui=await combinedHome();ui.navigate('#family/menu');const table=ui.html().split('<h2>授業料</h2>')[1].split('<h2>請求・お支払い</h2>')[0];
- assert.match(table,/太郎<\/td><td>2026-09<\/td><td>6,000円<\/td><td>9,000円<\/td><td>12,000円/);
- assert.match(table,/花子<\/td><td>2026-09<\/td><td>3,000円<\/td><td>6,000円<\/td><td>12,000円/);
+ assert.match(table,/<p class="tuition-month">2026年9月<\/p>/);
+ assert.match(table,/<td rowspan="2">太郎<\/td><th scope="row">授業<\/th><td>6,000円<\/td><td>9,000円<\/td><td>12,000円<\/td><\/tr><tr><th scope="row">キャンセル料<\/th><td>0円<\/td>/);
+ assert.match(table,/<td rowspan="2">花子<\/td><th scope="row">授業<\/th><td>3,000円<\/td><td>6,000円<\/td><td>12,000円<\/td>/);
  assert.match(table,/合計<\/th><td>9,000円<\/td><td>15,000円<\/td><td>24,000円/);assert.doesNotMatch(ui.html(),/最新の情報を確認/);
 });
 test('tuition does not turn unknown rates or missing state into zero fees',async()=>{
  const ui=loggedUI();ui.requests[0].reply(home([{studentId:'child-a',name:'【テスト】子A'}]));await flush();const d=data('【テスト】子A');d.planLines[0].rate30=null;d.planLines[0].lessonFee=null;ui.requests.at(-1).reply({ok:true,data:d});await flush();assert.match(ui.html(),/読み込み中/);
- ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),today:'2026-09-24',history:[{id:'done',date:'2026-09-20',min:90,subject:'英語',done:true}],slots:[]});await flush();const table=ui.html().split('<h2>授業料</h2>')[1].split('<h2>請求・お支払い</h2>')[0];assert.match(table,/確認が必要/);assert.doesNotMatch(table,/>0円</);
+ ui.requests.find(r=>r.body.action==='familyStudentState').reply({...state(),today:'2026-09-24',history:[{id:'done',date:'2026-09-20',min:90,subject:'英語',done:true}],slots:[],cancellations:[]});await flush();const table=ui.html().split('<h2>授業料</h2>')[1].split('<h2>請求・お支払い</h2>')[0];
+ // 単価が分からない授業料は 0円 にせず「確認が必要」。合計も同じ。0円 が出てよいのは、キャンセルが無いと分かっているキャンセル料の行だけ
+ const lessonRow=table.match(/<th scope="row">授業<\/th>(.*?)<\/tr>/)[1],totalRow=table.match(/<th colspan="2">合計<\/th>(.*?)<\/tr>/)[1];
+ assert.equal(lessonRow,'<td>確認が必要</td><td>確認が必要</td><td>確認が必要</td>');assert.equal(totalRow,'<td>確認が必要</td><td>確認が必要</td><td>確認が必要</td>');
+ assert.doesNotMatch(table.replace(/<tr><th scope="row">キャンセル料<\/th>.*?<\/tr>/,''),/>0円</);
 });
 
 test('monthly family invoice reports transfer only after confirmation and removes duplicate payment sections',async()=>{

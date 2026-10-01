@@ -2,6 +2,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createUI, slot, state, card, studentReady, adminReady, flush } = require('./helpers/operations-ui-harness.cjs');
+// 授業の詳細ダイアログ(詳細 → 授業内容を編集)の欄は id を持たず data-slot-edit で識別される。ハーネスの ui.input は id で
+// 要素を探すため、表示中で操作できる欄であることを確かめてから、同じ data-slot-edit を持つ入力イベントをダイアログ要素経由で送る。
+function slotField(ui, prop, value) {
+  const html = ui.html(), start = html.indexOf('<dialog id="slot-editor"'); assert.ok(start >= 0, 'visible dialog: slot-editor');
+  const field = html.slice(start, html.indexOf('</dialog>', start)).match(new RegExp('<(?:input|select) [^>]*data-slot-edit="' + prop + '"[^>]*>'));
+  assert.ok(field && !/ disabled/.test(field[0]), 'visible field: ' + prop);
+  const dialog = ui.el('slot-editor'); dialog.attrs['data-slot-edit'] = prop; ui.input('slot-editor', value); delete dialog.attrs['data-slot-edit'];
+}
 
 test('batch selection confirms exact dates in the DOM before one POST and one state adoption', async () => {
   const ui = await studentReady(); ui.click('batchall'); ui.check('data-accept-id', 'slot-b', false); ui.click('batchreview');
@@ -38,17 +46,19 @@ test('batch validation failure permits correction and uncertain mail never offer
 
 test('teacher offers inherit the student default, allow one-off mode, and retain all failed dates', async () => {
   const ui = await adminReady(); assert.equal(ui.el('f-delivery'), undefined, 'the offer form lives inside the day card now'); assert.doesNotMatch(ui.html(), /さんに授業を案内する/);
-  ui.click('calday', { 'data-date': '2026-09-10' }); ui.click('sdayadd'); ui.click('dayoffer', { 'data-date': '2026-09-10' });
-  assert.match(ui.html(), /手動で予定入力[^]*data-action="dayoffer" data-date="2026-09-10" aria-expanded="true">授業を案内<\/button>[^]*<h4[^>]*>【テスト】生徒Aさんに授業を案内する<\/h4>/); assert.equal(ui.el('f-delivery').value, 'online'); assert.equal(ui.el('f-date').value, '2026-09-10');
+  // 日付カードの＋は授業一覧と共通の案内モーダルを開き、表示中の生徒を選択済みにする(d046b20)
+  ui.click('calday', { 'data-date': '2026-09-10' }); ui.click('sdayadd');
+  assert.equal(ui.el('board-editor').modal, true); assert.match(ui.html(), /<th scope="row">生徒<\/th><td>【テスト】生徒A<input type="hidden" id="f-student" value="test-a"><\/td>/);
+  assert.equal(ui.el('f-student').value, 'test-a'); assert.equal(ui.el('f-delivery').value, 'online'); assert.equal(ui.el('f-date').value, '2026-09-10');
   ui.input('f-subject', '英語'); ui.input('f-delivery', 'in_person'); ui.input('f-date', '2026-09-10'); ui.input('f-start', '17:00'); ui.input('f-rep', '4'); ui.click('offerslot');
-  const r = ui.requests.at(-1); assert.equal(r.body.deliveryMode, 'in_person'); assert.equal(r.body.repeat, 4);
+  const r = ui.requests.at(-1); assert.equal(r.body.op, 'offer'); assert.equal(r.body.studentId, 'test-a'); assert.equal(r.body.deliveryMode, 'in_person'); assert.equal(r.body.repeat, 4);
   r.reply({ error: '定員超過のため案内できません', errorCode: 'capacity', conflicts: [{ date: '2026-09-17', start: '17:00', error: '対面定員' }, { date: '2026-10-01', start: '17:00', error: '全体定員' }] }); await flush();
   assert.match(ui.html(), /2026-09-17/); assert.match(ui.html(), /2026-10-01/); assert.equal(ui.el('f-delivery').value, 'in_person'); assert.equal(ui.el('f-rep').value, '4');
 });
 
 test('an offer beyond the plan shows the plan prompt in the form: cancel, or send a prefilled plan line and then the offer with planForce', async () => {
   const ui = await adminReady();
-  ui.click('calday', { 'data-date': '2026-09-10' }); ui.click('sdayadd'); ui.click('dayoffer', { 'data-date': '2026-09-10' });
+  ui.click('calday', { 'data-date': '2026-09-10' }); ui.click('sdayadd');
   ui.input('f-subject', '英語'); ui.input('f-delivery', 'in_person'); ui.input('f-date', '2026-09-10'); ui.input('f-start', '17:00'); ui.input('f-rep', '2'); ui.click('offerslot');
   const first = ui.requests.at(-1); assert.equal(first.body.op, 'offer'); assert.equal(first.body.planForce, false);
   const suggest = { studentId: 'test-a', subject: '英語', kind: '通常', count: 2, dates: ['2026-09-10', '2026-09-17'], startDate: '2026-09-01', endDate: '2026-09-30', lessonMin: 90, lessonFee: 4500, parentId: '', parentLabel: '' };
@@ -68,8 +78,10 @@ test('an offer beyond the plan shows the plan prompt in the form: cancel, or sen
   assert.match(ui.el('toast').textContent, /授業計画の案内を送りました/);
   again.reply({ ok: true, added: 2, data: card() }); await flush();
   assert.doesNotMatch(ui.html(), /授業計画の上限を超えていますが/);
-  // an addon suggestion sends the parent id and says so (the form stays open after a sent offer)
-  ui.input('f-subject', '数学'); ui.input('f-delivery', 'in_person'); ui.input('f-date', '2026-09-24'); ui.input('f-start', '17:00'); ui.click('offerslot');
+  // the shared offer modal closes after a sent offer (d046b20), so the next offer reopens it from ＋
+  assert.equal(ui.el('board-editor'), undefined); assert.equal(ui.el('f-subject'), undefined);
+  // an addon suggestion sends the parent id and says so
+  ui.click('sdayadd'); ui.input('f-subject', '数学'); ui.input('f-delivery', 'in_person'); ui.input('f-date', '2026-09-24'); ui.input('f-start', '17:00'); ui.click('offerslot');
   ui.requests.at(-1).reply({ error: 'x', errorCode: 'planShort', needPlan: true, planSuggest: { ...suggest, subject: '数学', count: 1, dates: ['2026-09-24'], parentId: 'parent-1', parentLabel: '2026年9月 数学 4回' } }); await flush();
   ui.click('pp-open'); assert.match(ui.html(), /2026年9月 数学 4回 への追加案内として送ります/); ui.click('pp-send');
   assert.equal(ui.requests.at(-1).body.parentId, 'parent-1'); assert.equal(ui.requests.at(-1).body.count, 1);
@@ -79,7 +91,9 @@ test('an offer beyond the plan shows the plan prompt in the form: cancel, or sen
 
 test('slot mode changes carry the old mode and target only that student and slot', async () => {
   const s = slot('slot-a', { status: 'booked', studentId: 'test-a', done: false }); const ui = await adminReady(card({ lessons: [s] }));
-  ui.click('calday',{'data-date':'2026-09-10'}); ui.click('slotedit', { 'data-id': 'slot-a' }); assert.equal(ui.confirms(),0); ui.input('se-mode','online'); ui.click('se-save');
+  ui.click('calday',{'data-date':'2026-09-10'}); ui.click('slotedit', { 'data-id': 'slot-a' }); assert.equal(ui.confirms(),0);
+  // 詳細はまず表で開き、「授業内容を編集」で同じ表の中の欄を直す(24e19b1)
+  assert.equal(ui.el('slot-editor').modal, true); ui.click('se-content'); slotField(ui, 'deliveryMode', 'online'); ui.click('se-detail-save'); assert.equal(ui.requests.length, 2);
   const b = ui.requests.at(-1).body; assert.equal(b.op, 'editBooked'); assert.equal(b.studentId, 'test-a'); assert.equal(b.slotId, 'slot-a'); assert.equal(b.expectedSnapshot.deliveryMode, 'in_person'); assert.equal(b.deliveryMode, 'online');
 });
 
@@ -99,7 +113,7 @@ test('changing a student default does not send slot fields and adopts a refreshe
   ui.requests.at(-1).reply({ ok: true, data: card({ deliveryMode: 'in_person', lessons: [original] }), notificationWarning: '保存は完了しましたが通知を確認してください' }); await flush();
   assert.equal(ui.el('student-delivery').value, 'in_person'); assert.match(ui.html(), /role="alert".*通知を確認/);
   ui.navigate('#s=test-a'); ui.requests.at(-1).reply({data:card({section:'overview',deliveryMode:'in_person',lessons:[original]})}); await flush();
-  ui.click('calday',{'data-date':'2026-09-10'}); ui.click('slotedit', { 'data-id': 'slot-a' }); ui.input('se-mode','online'); ui.click('se-save'); assert.equal(ui.requests.at(-1).body.expectedSnapshot.deliveryMode,'in_person');
+  ui.click('calday',{'data-date':'2026-09-10'}); ui.click('slotedit', { 'data-id': 'slot-a' }); ui.click('se-content'); slotField(ui, 'deliveryMode', 'online'); ui.click('se-detail-save'); assert.equal(ui.requests.at(-1).body.op,'editBooked'); assert.equal(ui.requests.at(-1).body.expectedSnapshot.deliveryMode,'in_person');
 });
 
 test('unfinished batch payload survives reload and lock-timeout responses without changing request ID', async () => {
@@ -127,16 +141,21 @@ test('the lessons calendar is the shared component: one box per lesson with time
   ui.requests[0].reply({ admin: { today: '2026-09-08', slots, lessonsToday: [], lessonsWeek: [], pending: [], unpaid: [], students: [], meetings: [], teacherOff: [{ id: 'o1', date: '2026-09-20', start: '', end: '', note: '' }], wishes: [{ id: 'w1', studentId: 'test-b', studentName: '【テスト】B', date: '2026-09-18', start: '16:00', end: '18:00', kind: 'range' }], events: [{ id: 'e1', studentId: 'test-a', studentName: '【テスト】山田 太郎', date: '2026-09-25', dateTo: '2026-09-25', title: '中間テスト', kind: 'test' }] } }); await flush();
   const html = ui.html();
   assert.doesNotMatch(html, /class="cgrp"|class="cbox|class="caldot|calday boxed/, 'the old home renderer is gone');
-  assert.match(html, /<button class="calday[^"]*" data-action="calday" data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:30<\/span><span class="s">山田 英<\/span><\/span><span class="calbox"><span class="t">17:30-<wbr>19:00<\/span><span class="s">B 数<\/span><\/span><span class="calbox rq"><span class="t">18:30-<wbr>20:00<\/span><span class="s">山田 英（取消依頼）<\/span><\/span>/);
-  assert.match(html, /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="calbox of"><span class="t">16:00-<wbr>17:00<\/span><span class="s">山田 英<\/span>/);
+  // 重なる授業は横に並ぶレーン(a992576)に入り、色は必要な対応で分ける(ed39666: 取消依頼は needs-attention)。1授業1箱・時刻順は変わらない
+  const day15 = html.match(/<button class="calday[^"]*" data-action="calday" data-date="2026-09-15">15<span class="calmarks"><\/span>[^]*?<\/button>/)[0];
+  assert.deepEqual([...day15.matchAll(/<span class="calbox ([^"]*)"><span class="t">([^<]*)<wbr>([^<]*)<\/span><span class="s">([^<]*)<\/span><\/span>/g)].map(m => [m[1], m[2] + m[3], m[4]]),
+    [['admin-ok', '17:00-18:30', '山田 英'], ['admin-ok', '17:30-19:00', 'B 数'], ['needs-attention', '18:30-20:00', '山田 英（取消依頼）'], ['admin-ok', '19:00-20:30', 'B 数']]);
+  assert.match(html, /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="calbox of admin-pending"><span class="t">16:00-<wbr>17:00<\/span><span class="s">山田 英<\/span>/);
   assert.match(html, /data-date="2026-09-18">18<span class="calmarks"><\/span><span class="calbox wi">希 B 16-18<\/span>/);
   assert.match(html, /class="calday[^"]*toff[^"]*" data-action="calday" data-date="2026-09-20">20<span class="calmarks"><\/span><span class="callbl to"[^>]*>休み<\/span>/);
   assert.match(html, /data-date="2026-09-25">25<span class="calmarks"><\/span><span class="calbox ev">山田 中間テスト<\/span>/);
-  assert.match(html, /<div class="callegend">[^]*<span class="callbl to toffswatch"[^>]*>休み<\/span> 先生の休み<\/span><span><span class="callbl rq"[^>]*>取消依頼<\/span> 生徒から取消の依頼あり<\/span><\/div>/);
+  assert.match(html, /<div class="callegend">[^]*<span class="callbl rq"[^>]*>要対応<\/span> 実施未登録・記録なし・取消依頼<\/span>[^]*<span class="callbl to toffswatch"[^>]*>休み<\/span> 先生の休み<\/span><\/div>/);
   assert.doesNotMatch(html, /登録不可/);
 });
 test('selected calendar day exposes add button and carries date into student offer',async()=>{
- const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="sdayadd" data-date="2026-09-15" aria-label="この日に予定を追加"/);ui.click('sdayadd');assert.equal(ui.el('f-date'),undefined);ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date').value,'2026-09-15');ui.click('dayoffer',{'data-date':'2026-09-15'});assert.equal(ui.el('f-date'),undefined);assert.equal(ui.requests.length,1);
+ const ui=await adminReady();ui.click('calday',{'data-date':'2026-09-15'});assert.match(ui.html(),/data-action="sdayadd" data-date="2026-09-15" aria-label="この日に予定を追加"/);assert.equal(ui.el('f-date'),undefined);
+ // ＋は共通の案内モーダルを直接開き、選んだ日と表示中の生徒を入れておく(d046b20)。閉じても何も送らない
+ ui.click('sdayadd',{'data-date':'2026-09-15'});assert.equal(ui.el('board-editor').modal,true);assert.equal(ui.el('f-date').value,'2026-09-15');assert.equal(ui.el('f-student').value,'test-a');ui.click('board-close');assert.equal(ui.el('f-date'),undefined);assert.equal(ui.requests.length,1);
 });
 
 
@@ -146,24 +165,29 @@ test('past months stay reachable for a year and past days keep their lessons and
   for (let i = 0; i < 5; i++) { assert.doesNotMatch(ui.html(), /data-action="calprev" disabled/); ui.click('calprev'); }
   const html = ui.html();
   assert.match(html, /<span class="callabel">2026年4月<\/span>/);
-  assert.match(html, /<button class="calday" data-action="calday" data-date="2026-04-10">10<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:00<\/span><span class="s">英語<\/span><\/span><\/button>/, 'a past lesson is a box on a clickable day');
-  assert.match(html, /<button class="calday sat ngday" data-action="calday" data-date="2026-04-11">11<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span><\/button>/, 'past 授業不可 stays visible');
-  assert.match(html, /<button class="calday sun" data-action="calday" data-date="2026-04-12">12<span class="calmarks"><\/span><span class="calbox unavailable toff"><span class="t">12:00-<wbr>13:00<\/span><span class="s">登録不可<\/span><\/span><\/button>/, 'past teacher off stays visible');
-  assert.match(html, /<span class="calday off" data-date="2026-04-13">13<span class="calmarks"><\/span><\/span>|<span class="calday off">13<span class="calmarks"><\/span><\/span>/, 'an expired 授業可 request is not shown and the empty past day is faded');
-  ui.click('calday', { 'data-date': '2026-04-10' }); assert.match(ui.html(), /4月10日（金）の予定/); assert.match(ui.html(), /<span class="tag gray">実施済<\/span>/);
+  // 管理の生徒カレンダーは授業一覧と同じ部品(e5df615: cal-lanes・先生の休みは「休み」)。記録のない実施済み授業は要対応の色(ed39666)
+  assert.match(html, /<button class="calday[^"]*" data-action="calday" data-date="2026-04-10">10<span class="calmarks"><\/span><span class="calbox needs-attention"><span class="t">17:00-<wbr>18:00<\/span><span class="s">英語（通常）<\/span><\/span><\/button>/, 'a past lesson is a box on a clickable day');
+  assert.match(html, /<button class="calday[^"]* sat ngday" data-action="calday" data-date="2026-04-11">11<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span><\/button>/, 'past 授業不可 stays visible');
+  assert.match(html, /<button class="calday[^"]* sun" data-action="calday" data-date="2026-04-12">12<span class="calmarks"><\/span><span class="calbox unavailable toff"><span class="t">12:00-<wbr>13:00<\/span><span class="s">休み<\/span><\/span><\/button>/, 'past teacher off stays visible');
+  assert.match(html, /<span class="calday[^"]* off">13<span class="calmarks"><\/span><\/span>/, 'an expired 授業可 request is not shown and the empty past day is faded');
+  assert.doesNotMatch(html, /data-date="2026-04-13"[^>]*>13/);
+  // 日付カードの見出しは「M/D(曜)の授業」(e5df615)、通常の「実施済」バッジは省略し記録状態のタグと data-done で表す(1ec9f94)
+  ui.click('calday', { 'data-date': '2026-04-10' }); assert.match(ui.html(), /<span>4\/10\(金\)の授業<\/span>/);
+  assert.match(ui.html(), /href="#lesson\?student=test-a&amp;slot=old" title="授業記録を開く">未記入<\/a>/); assert.match(ui.html(), /data-action="slotedit" data-done="1" data-id="old"/);
 });
 
 test('the admin student page draws the same calendar as the student mypage (boxes, hatched days, legend)', async () => {
   const c = card({ lessons: [{ id: 'l1', date: '2026-09-15', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語', kind: '演習' }, { id: 'l2', date: '2026-09-16', start: '18:00', min: 60, status: 'offered', done: false, subject: '数学', kind: '' }], blocked: [{ id: 'b1', date: '2026-09-17', start: '', end: '', note: '' }], teacherOff: [{ id: 't1', date: '2026-09-18', note: '' }], wishes: [{ id: 'w1', date: '2026-09-19', start: '16:00', end: '18:00' }], events: [{ id: 'e1', date: '2026-09-20', dateTo: '2026-09-21', title: '中間テスト', kind: 'test' }] });
   const ui = await adminReady(c, 'overview');
+  // 共通部品 calendar.js のまま、管理の授業ページと同じ表示に揃えた(e5df615: 重なりレーン・先生の休みは「休み」、ed39666: 対応別の色)
   assert.match(ui.html(), /<h2>【テスト】生徒A<\/h2>|さんの予定表<\/h2>/);
-  assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox"><span class="t">17:00-<wbr>18:30<\/span><span class="s">英語（演習）<\/span><\/span>/);
-  assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="calbox of"><span class="t">18:00-<wbr>19:00<\/span><span class="s">数学<\/span>/);
-  assert.match(ui.html(), /class="calday ngday" data-action="calday" data-date="2026-09-17">17<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span>/);
-  assert.match(ui.html(), /class="calday toff" data-action="calday" data-date="2026-09-18">18<span class="calmarks"><\/span><span class="callbl to"[^>]*>登録不可<\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-15">15<span class="calmarks"><\/span><span class="calbox admin-ok"><span class="t">17:00-<wbr>18:30<\/span><span class="s">英語（演習）<\/span><\/span>/);
+  assert.match(ui.html(), /data-date="2026-09-16">16<span class="calmarks"><\/span><span class="calbox of admin-pending"><span class="t">18:00-<wbr>19:00<\/span><span class="s">数学（通常）<\/span>/);
+  assert.match(ui.html(), /class="calday[^"]* ngday" data-action="calday" data-date="2026-09-17">17<span class="calmarks"><\/span><span class="callbl to"[^>]*>授業不可<\/span>/);
+  assert.match(ui.html(), /class="calday[^"]* toff" data-action="calday" data-date="2026-09-18">18<span class="calmarks"><\/span><span class="callbl to"[^>]*>休み<\/span>/);
   assert.match(ui.html(), /data-date="2026-09-19">19<span class="calmarks"><\/span><span class="callbl wi">授業可<\/span>/);
   assert.match(ui.html(), /data-date="2026-09-20">20<span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/); assert.match(ui.html(), /data-date="2026-09-21">21<span class="calholiday">敬老の日<\/span><span class="calmarks"><\/span><span class="calbox ev">中間テスト<\/span>/);
-  assert.match(ui.html(), /<div class="callegend"><span><span class="callbl" style="display:inline">授業<\/span><\/span>[^]*登録不可<\/span> 先生の休み/);
+  assert.match(ui.html(), /<div class="callegend"><span><span class="callbl" style="display:inline">授業<\/span><\/span>[^]*<span class="callbl to ngswatch"[^>]*>授業不可<\/span> 授業できない日<\/span><span><span class="callbl to toffswatch"[^>]*>休み<\/span> 先生の休み/);
   assert.doesNotMatch(ui.html(), /class="caldot|class="cbox/);
 });
 
@@ -173,29 +197,37 @@ test('the admin day card mirrors the student 予定の編集 card with teacher a
   assert.match(ui.html(), /class="schedule-day-heading"/);
   assert.match(ui.html(), /09:00〜12:00/);
   assert.match(ui.html(), /data-action="delevent" data-id="e1"/);
-  assert.match(ui.html(), /実施済/);
-  assert.match(ui.html(), /href="#lesson\?student=test-a&amp;slot=l3"/);
+  // 通常の「実施済」バッジは省略(1ec9f94)。実施済みの授業は記録状態のタグ(記録ページへのリンク)と修正ボタンの data-done で示す
+  assert.match(ui.html(), /href="#lesson\?student=test-a&amp;slot=l3" title="授業記録を開く">未記入<\/a>/);
+  assert.match(ui.html(), /data-action="slotedit" data-done="1" data-id="l3"/);
   for (const id of ['l1','l2','l3']) assert.match(ui.html(), new RegExp('data-action="slotedit"[^>]*data-id="'+id+'"'));
   assert.match(ui.html(), /承認待ち/);
   assert.match(ui.html(), /data-action="sdelblock" data-id="b1"/);
   assert.match(ui.html(), /data-action="usewish"/);
   assert.match(ui.html(), /data-action="delwish" data-id="w1"/);
   assert.doesNotMatch(ui.html(), /手動で予定入力/);
-  ui.click('sdayadd'); assert.match(ui.html(), /<h3[^>]*>手動で予定入力<\/h3><div class="row"[^>]*><button class="btn-quiet btn-sm" data-action="dayoffer" data-date="2026-09-15" aria-expanded="false">授業を案内<\/button><button class="btn-quiet btn-sm" data-action="sblockopen"[^>]*>授業不可を登録<\/button>/);
-  ui.click('sblockopen'); ui.input('sb-start', '16:00'); ui.input('sb-end', '18:00'); ui.input('sb-note', '塾の面談'); ui.click('sblockadd');
-  const r = ui.requests.at(-1).body; assert.equal(r.op, 'addBlock'); assert.equal(r.studentId, 'test-a'); assert.equal(r.date, '2026-09-15'); assert.equal(r.dateTo, '2026-09-15'); assert.equal(r.start, '16:00'); assert.equal(r.end, '18:00'); assert.equal(r.note, '塾の面談');
-  ui.requests.at(-1).reply({ ok: true, admin: { today: '2026-09-08', students: [], slots: [], blocked: [], teacherOff: [], wishes: [], events: [], plans: [], log: [] } }); await flush();
-  const reload = ui.requests.at(-1); if (reload.body.op === 'kanriStudent') { reload.reply({ ok: true, data: c }); await flush(); }
-  ui.click('sdelblock', { 'data-id': 'b1' }); assert.equal(ui.requests.at(-1).body.op, 'delBlock'); assert.equal(ui.requests.at(-1).body.blockId, 'b1');
+  // ＋は授業一覧と共通の案内モーダルを、この生徒・この日で開く(d046b20)
+  ui.click('sdayadd'); assert.equal(ui.el('board-editor').modal, true); assert.equal(ui.el('f-student').value, 'test-a'); assert.equal(ui.el('f-date').value, '2026-09-15');
+  ui.click('board-close'); assert.equal(ui.requests.length, 1);
+  ui.click('sdelblock', { 'data-id': 'b1' }); assert.equal(ui.requests.at(-1).body.op, 'delBlock'); assert.equal(ui.requests.at(-1).body.blockId, 'b1'); assert.equal(ui.requests.at(-1).body.studentId, 'test-a');
 });
 
-test('the admin day card defaults to 文章で予定を登録 with a switch to manual entry: parse through scheduleParseTeacher, edit the proposal, register through nlApplyTeacher', async () => {
+// 先生が日付カードからこの生徒の授業不可を登録する操作。d046b20 で＋が共通の案内モーダル(授業の案内のみ)に替わってから、
+// sblockopen / sblockadd は「この希望で案内」(usewish)経由でしか表示されない。授業ページの代理登録フォームは
+// e285b26 で「重複」として削除済みのため、手動で登録する入口がなくなっている。意図した削除と確認できるまで失敗のまま残す。
+test('the teacher registers 授業不可 for the shown student from the day card', async () => {
+  const c = card({ blocked: [{ id: 'b1', date: '2026-09-15', start: '', end: '', note: '部活' }] });
+  const ui = await adminReady(c, 'overview'); ui.click('calday', { 'data-date': '2026-09-15' });
+  ui.click('sdayadd'); ui.click('sblockopen'); ui.input('sb-start', '16:00'); ui.input('sb-end', '18:00'); ui.input('sb-note', '塾の面談'); ui.click('sblockadd');
+  const r = ui.requests.at(-1).body; assert.equal(r.op, 'addBlock'); assert.equal(r.studentId, 'test-a'); assert.equal(r.date, '2026-09-15'); assert.equal(r.dateTo, '2026-09-15'); assert.equal(r.start, '16:00'); assert.equal(r.end, '18:00'); assert.equal(r.note, '塾の面談');
+});
+
+// AIボタンは文章入力の共通モーダルを、この生徒だけを選択肢にして開く(d046b20・e5bfbb9)。旧カード内の文章/手動の切替と説明欄は廃止
+test('the admin day card AI button opens the shared text modal for this student: parse through scheduleParseTeacher, edit the proposal, register through nlApplyTeacher', async () => {
   const ui = await adminReady(card({ nlEnabled: true, deliveryMode: 'online' }), 'overview');
   ui.click('calday', { 'data-date': '2026-09-15' }); ui.click('sdayai');
-  assert.match(ui.html(), /<div class="seg" role="tablist"[^>]*><button type="button" role="tab" class="on" aria-selected="true" data-action="dayinput" data-mode="text">文章で予定を登録<\/button><button type="button" role="tab" class="" aria-selected="false" data-action="dayinput" data-mode="manual">手動で入力<\/button><\/div>/);
-  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"/); assert.doesNotMatch(ui.html(), /文章を書くだけで/); assert.equal(ui.el('tnl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります'); ui.click('help-toggle', { 'data-help': 'tnl' }); assert.match(ui.html(), /<div class="card note"[^>]*>文章を書いて「内容を確認」を押すと、AIが「授業の案内」「授業不可」「イベント」に分けて登録の下書きを作ります。/); ui.click('help-toggle', { 'data-help': 'tnl' });
-  ui.click('dayinput', { 'data-mode': 'manual' }); assert.equal(ui.el('tnl-text'), undefined); assert.match(ui.html(), /data-action="dayoffer" data-date="2026-09-15"/); assert.match(ui.html(), /data-action="sblockopen"/);
-  ui.click('dayinput', { 'data-mode': 'text' }); assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /data-action="dayoffer"/);
+  assert.equal(ui.el('ai-schedule').modal, true); assert.equal(ui.el('ai-student').value, 'test-a'); assert.deepEqual([...ui.html().matchAll(/<option value="([^"]+)"[^>]*>【テスト】/g)].map(m => m[1]), ['test-a']);
+  assert.ok(ui.el('tnl-text')); assert.doesNotMatch(ui.html(), /文章で自動入力|手動で予定入力|data-action="dayoffer"|data-action="sblockopen"|data-action="dayinput"/); assert.equal(ui.el('tnl-text').getAttribute('placeholder'), '予定を文章で入力。AIが予定に変換し、下書きを作ります');
   ui.input('tnl-text', '来週水曜17時から90分英語の演習。20日は部活で休み。25日は中間テスト'); ui.click('tnl-parse');
   let r = ui.requests.at(-1).body; assert.equal(r.op, 'scheduleParseTeacher'); assert.equal(r.studentId, 'test-a'); assert.match(r.text, /英語の演習/); assert.deepEqual(r.subjects.slice(0, 2), ['英語', '数学']);
   ui.requests.at(-1).reply({ ok: true, items: [
@@ -221,8 +253,10 @@ test('the admin day card defaults to 文章で予定を登録 with a switch to m
   assert.doesNotMatch(ui.html(), /data-action="tnl-register"|登録済み/); assert.equal(ui.el('tnl-text').value, '');
 });
 
-test('admin student overview omits upcoming and retains history fold', async () => {
+// 予定タブの授業履歴の折りたたみは c08bd09 で未完了宿題の表に置き換え(過去の授業は予定表の日付から開く)
+test('admin student overview omits upcoming and history folds and shows the homework table instead', async () => {
   const ui = await adminReady(card({ lessons: [{ id: 'p1', date: '2026-09-01', start: '17:00', min: 90, status: 'booked', done: true, subject: '英語' }, { id: 'u1', date: '2026-09-20', start: '17:00', min: 90, status: 'booked', done: false, subject: '英語' }] }), 'overview');
   assert.doesNotMatch(ui.html(), /data-fold="upcoming"|今後の予定/);
-  assert.match(ui.html(), /<details class="fold " data-fold="history"><summary><h2><span class="mk" aria-hidden="true"><\/span>授業履歴 <span class="cnt">直近1件<\/span><\/h2><\/summary><div class="card">[^]*?<\/div><\/details>/);
+  assert.doesNotMatch(ui.html(), /data-fold="history"|授業履歴/); assert.match(ui.html(), /<h2>宿題 <span class="cnt">0件<\/span><\/h2>/);
+  ui.click('calday', { 'data-date': '2026-09-01' }); assert.match(ui.html(), /href="#lesson\?student=test-a&amp;slot=p1" title="授業記録を開く"/);
 });

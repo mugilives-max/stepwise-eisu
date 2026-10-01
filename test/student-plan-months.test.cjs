@@ -26,13 +26,15 @@ test('student state lists proposed and approved lines whose period reaches this 
 const {studentReady,state,line}=require('./helpers/operations-ui-harness.cjs');
 test('student UI never renders plan prices even from an old response',async()=>{
  const ui=await studentReady({...state([]),planLines:[line({lessonFee:987654,rate30:329218,comment:'学習内容'})]});
- assert.ok(ui.html().includes('学習内容'));
- assert.ok(ui.html().includes('90分'));
+ // 生徒ホームは「授業計画・実施状況」の表だけ（6f28c56）。時間と説明は状態ボタンから開く読み取り専用の詳細に出る
  assert.match(ui.html(),/portal-plan-table/);
- assert.ok(ui.html().includes('<th>種類</th><th>回数</th><th>時間</th>'));
- assert.ok(ui.html().includes('9/1〜9/30'));
- assert.match(ui.html(),/colspan="6"/);
- assert.match(ui.html(),/portal-plan-comment/);
+ assert.ok(ui.html().includes('<th>期間</th><th>科目</th><th>種類</th><th>計画回数</th><th>登録回数</th><th>実施回数</th><th>状態</th>'));
+ assert.ok(ui.html().includes('<td>9/1〜9/30</td><td>英語</td><td>通常</td>'));
+ assert.doesNotMatch(ui.html(),/987,?654|329,?218|1回 |料金|授業料/);
+ ui.click('student-planopen',{'data-line':'line-1'});
+ assert.match(ui.html(),/<dialog id="student-plan-dialog"/);
+ assert.ok(ui.html().includes('学習内容'));
+ assert.ok(ui.html().includes('4回・90分'));
  assert.doesNotMatch(ui.html(),/987,?654|329,?218|1回 |料金|授業料/);
 });
 test('student API exposes learning fields only including the teacher student preview',()=>{
@@ -42,25 +44,26 @@ test('student API exposes learning fields only including the teacher student pre
  assert.equal(c.parentDataForStudent_(c.findStudent_('test-a')).data.planLines[0].lessonFee,4500);
 });
 
-test('approved plan progress is a sibling section showing completed versus planned lessons',async()=>{
+// 計画と実施状況は常時表示の1つの節にまとめた（6f28c56）。登録回数は実施済み＋確定した予定（5dd85b6）
+test('approved plan progress shows planned, registered and completed lessons in the combined section',async()=>{
  const ui=await studentReady({...state([]),history:[{date:'2026-09-01',subject:'英語',kind:'',done:true},{date:'2026-09-02',subject:'英語',kind:'',done:true}],planLines:[line({status:'approved',approvedCount:4})]});
- const html=ui.html(),boundary=html.indexOf('data-fold="progress"');
+ const html=ui.html(),boundary=html.indexOf('<h2>授業計画・実施状況');
  assert.ok(boundary>0);
- assert.ok(html.slice(0,boundary).includes('</details>'));
- assert.ok(html.slice(boundary).includes('実施状況'));
- assert.ok(html.slice(boundary).includes('<th>計画回数</th><th>予定回数</th><th>実施回数</th>'));
- assert.ok(html.slice(boundary).includes('<td>4回</td><td>0回</td><td>2回</td>'));
+ assert.ok(!html.includes('data-fold="plan"'));
+ assert.ok(html.slice(boundary).includes('<th>計画回数</th><th>登録回数</th><th>実施回数</th>'));
+ assert.ok(html.slice(boundary).includes('<td>4回</td><td>2回</td><td>2回</td>'));
+ assert.ok(html.slice(boundary).includes('あと 2 回、日程調整が必要です'));
  assert.ok(!html.slice(boundary).includes('<th>時間</th>'));
  assert.ok(!html.includes('実施計画'));
 });
 
 test('progress separates lessons covered by a proposed plan from genuinely outside lessons',async()=>{
  const ui=await studentReady({...state([]),history:[{date:'2026-09-02',subject:'英語',kind:'',done:true},{date:'2026-09-20',subject:'英語',kind:'',done:true},{date:'2026-09-02',subject:'英語',kind:'演習',done:true}],planLines:[line({endDate:'2026-09-10'})]});
- const progress=ui.html().split('data-fold="progress"')[1];
- assert.ok(progress.includes('<td>未承認</td>'));
+ const progress=ui.html().split('<h2>授業計画・実施状況')[1];
+ assert.ok(progress.includes('data-line="line-1">承認待ち</button>'));
  assert.equal((progress.match(/<td>計画外<\/td>/g)||[]).length,2);
  assert.ok(progress.includes('<td>通常</td><td><span class="plan-count-value"><span>4回</span><button'));
- assert.ok(progress.includes('<td>0回</td><td>1回</td><td>未承認</td>'));
+ assert.ok(progress.includes('<td>1回</td><td>1回</td><td><button type="button" class="tag amber" aria-haspopup="dialog" data-action="student-planopen" data-line="line-1">承認待ち</button></td>'));
  assert.equal((progress.match(/class="plan-count-warning"/g)||[]).length,1);
  assert.ok(progress.includes('この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し、確認していただくようにお願いします。'));
  const id=/aria-controls="(progress-approval-[^"]+)"/.exec(progress)[1];

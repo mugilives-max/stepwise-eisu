@@ -11,8 +11,14 @@ test('shared calendar keeps holidays, lessons and blocked dates together, includ
  assert.match(cell,/秋分の日/);assert.match(cell,/数学/);assert.match(cell,/授業不可/);assert.match(cell,/sel/);
  assert.match(cal.render({}, {year:2028,month:0}),/祝日情報はまだ掲載していません/);
 });
+// 管理ホームは授業一覧の共有月カレンダー(a234b42)。保護者・生徒と同じ StepwiseCalendar の日付ボタンに祝日名が入り、
+// ボタンの読み上げ名(文字列)にも祝日名が含まれる。
 test('teacher home displays the same holiday names and accessible date label',async()=>{
- const ui=createUI('admin',{hash:'#home',now:'2026-09-23T12:00:00+09:00'});
- ui.requests[0].reply({data:{today:'2026-09-23',slots:[],lessonsToday:[],lessonsWeek:[],pending:[],unpaid:[],students:[],meetings:[]}});await flush();
- assert.match(ui.html(),/id="home-day-2026-09-23"[^]*?aria-label="[^"]*秋分の日[^]*?<span class="calholiday">秋分の日/);
+ const ui=createUI('admin',{hash:'#home',now:'2026-09-23T12:00:00+09:00'});assert.equal(ui.requests[0].body.op,'state');
+ ui.requests[0].reply({admin:{today:'2026-09-23',students:[],slots:[],blocked:[],teacherOff:[],wishes:[],events:[],plans:[],log:[],lessonKinds:[]}});await flush();
+ const cell=ui.html().match(/<button class="calday[^"]*"[^>]*data-date="2026-09-23">[^]*?<\/button>/)[0];
+ assert.match(cell,/class="calday[^"]* holiday[ "]/);assert.match(cell,/<span class="calholiday">秋分の日<\/span>/);
+ const shared=cal.render(cal.buildInfo({}),{year:2026,month:8,today:'2026-09-23'}).match(/data-date="2026-09-23">[^]*?<\/button>/)[0];
+ assert.equal(cell.slice(cell.indexOf('data-date=')),shared);
+ assert.match(cell.replace(/<[^>]+>/g,''),/^23秋分の日/);
 });

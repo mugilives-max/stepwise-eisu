@@ -5,7 +5,9 @@ test('membership view filters single groups and never reads billing or notificat
  const h=createFamilyHarness();const g=h.admin('familyCreate',{label:'【テスト】兄弟',studentIds:['test-a','test-b']});assert.equal(g.ok,true);
  const c=h.context(),counts={},read=c.readRows_;c.readRows_=function(name){counts[name]=(counts[name]||0)+1;assert.notEqual(name,'familyOutbox');return read(name);};
  c.familyView_=c.familyBilling_=c.ledgerRows_=()=>{throw Error('Unexpected detailed read');};
- const r=c.familyGroups_('');assert.equal(r.families.length,1);assert.equal(r.families[0].children.length,2);assert.equal('email' in r.families[0],false);assert.equal('billing' in r.families[0],false);assert.equal('notifications' in r,false);assert.deepEqual(counts,{familyLinks:1,students:1,familyAccounts:1});
+ const r=c.familyGroups_('');assert.equal(r.families.length,1);assert.equal(r.families[0].children.length,2);assert.equal('email' in r.families[0],false);assert.equal('billing' in r.families[0],false);assert.equal('notifications' in r,false);
+ // familyAccounts の 2 回目は入金確認待ち(familyPaymentReports_、aed47c6)。有効な保護者がいないので請求は計算しない
+ assert.equal(r.paymentReports.length,0);assert.deepEqual(counts,{familyLinks:1,students:1,familyAccounts:2});
 });
 test('single groups are omitted from list but available for their student settings',()=>{
  const h=createFamilyHarness();h.admin('familyCreate',{label:'【テスト】単独',studentIds:['test-a']});

@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {createUI,adminReady,card,line,flush}=require('./helpers/operations-ui-harness.cjs');
+const {createUI,card,line,flush}=require('./helpers/operations-ui-harness.cjs');
 const copy=x=>JSON.parse(JSON.stringify(x));
 const position={title:'方程式の計算',plannedCount:2,ordinal:1,course:'数学（夏期講習）',total:10};
 const choice={lineId:'line-1',label:'数学・夏期講習',revision:2,planRevision:7,items:[{id:'calc',title:'方程式の計算',position,publicPosition:position},{id:'private',title:'PRIVATE_OUTLINE',position:{...position,title:'PRIVATE_OUTLINE'},publicPosition:null}]};
@@ -51,7 +51,9 @@ test('historical position persists until explicit refresh or clearing correspond
   ui.click('lc-publish');assert.equal(ui.requests.at(-1).body.record.outline.refresh,true);
 });
 const outline=(extra={})=>({lineId:'line-1',planRevision:7,subject:'英語',kind:'',period:'2026年9月',status:'proposed',limit:4,revision:0,items:[],published:null,hasPublication:false,pending:null,...extra});
-async function planReady(o=outline()){const ui=await adminReady(card({plan:{lines:[line()],defaultRows:[]}}),'billing');ui.click('po-open',{'data-line':'line-1'});assert.equal(ui.requests.at(-1).body.op,'planOutlineGet');ui.requests.at(-1).reply({ok:true,outline:o});await flush();return ui;}
+// Plan lines are managed on the planning page (#plans?student=); the optional outline sits under 授業内容の内訳 in the line's edit dialog (詳細 → 計画を編集).
+function openOutline(ui,lineId){ui.click('plan-detail',{'data-line':lineId});ui.click('pe-open',{'data-line':lineId});ui.click('po-open',{'data-line':lineId});}
+async function planReady(o=outline()){const ui=createUI('admin',{hash:'#plans?student=test-a'});ui.requests[0].reply({data:card({section:'billing',plan:{lines:[line()],defaultRows:[]}})});await flush();openOutline(ui,'line-1');assert.equal(ui.requests.at(-1).body.op,'planOutlineGet');ui.requests.at(-1).reply({ok:true,outline:o});await flush();return ui;}
 test('advanced outline draft is separate from plan approval, validates over-allocation, and retries same request',async()=>{
   const ui=await planReady(outline({items:[{id:'calc',title:'計算',count:2}]}));ui.input('po-title-calc','PRIVATE_DRAFT');ui.input('po-count-calc','5');
   ui.click('po-publish',{'data-line':'line-1'});assert.equal(ui.requests.length,2);assert.match(ui.html(),/案内・承認回数以内/);
@@ -73,10 +75,10 @@ test('public renderers escape titles, distinguish unknown / overrun, and do not 
 });
 test('late outline response cannot switch the current student screen or target another student',async()=>{
   const ui=await planReady(outline({items:[{id:'calc',title:'計算',count:2}]}));ui.input('po-title-calc','Aの下書き');ui.click('po-keep',{'data-line':'line-1'});const pending=ui.requests.at(-1);
-  ui.navigate('#s=test-b&tab=billing');ui.requests.at(-1).reply({data:card({id:'test-b',name:'【テスト】生徒B',plan:{lines:[line({id:'line-b'})],defaultRows:[]}})});await flush();
+  ui.navigate('#plans?student=test-b');ui.requests.at(-1).reply({data:card({id:'test-b',name:'【テスト】生徒B',section:'billing',plan:{lines:[line({id:'line-b'})],defaultRows:[]}})});await flush();
   pending.reply({ok:true,outline:outline({revision:1,items:[{id:'calc',title:'Aの下書き',count:2}]})});await flush();
   assert.match(ui.html(),/生徒B/);assert.doesNotMatch(ui.html(),/Aの下書き/);
-  ui.click('po-open',{'data-line':'line-b'});assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.lineId,'line-b');
+  openOutline(ui,'line-b');assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.lineId,'line-b');
 });
 
 test('attendance is recorded inside the editor without losing unsaved input',async()=>{

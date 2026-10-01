@@ -21,8 +21,8 @@ function card(overrides = {}) {
   };
 }
 function invoice(overrides = {}) { return { id: 'test-invoice', ym: '2026-09', amount: 3000, status: '未入金', paymentRevision: 0, ...overrides }; }
-async function ready(data = card()) {
-  const ui = createUI('#s=' + data.id + '&tab=billing');
+async function ready(data = card(), hash = '#s=' + data.id + '&tab=billing') {
+  const ui = createUI(hash);
   assert.equal(ui.requests[0].body.op, 'kanriStudent');
   ui.requests[0].reply({ ok: true, data }); await flush();
   return ui;
@@ -32,16 +32,20 @@ function setPayment(ui) {
   ui.input('bill-method-test-invoice', '現金');
   ui.click('billing-paid', { 'data-invoice': 'test-invoice' });
 }
+// 授業計画の編集は生徒ページの「月間計画・請求」タブから外れ、計画ページ（#plans?student=）に移った。
+// 一覧の「詳細」から開くダイアログで編集する。
+function readyPlans(data = card()) { return ready(data, '#plans?student=' + data.id); }
 function setPlan(ui, count = 4) {
   ui.el('pl-subject').value = '英語'; ui.el('pl-count').value = String(count); ui.click('plansave');
 }
 function line(overrides = {}) { return { id: 'line-1', subject: '英語', kind: '', count: 4, approvedCount: null, startDate: '2026-09-01', endDate: '2026-09-30', period: '2026年9月', month: '2026-09', lessonMin: 90, rate30: 1500, lessonFee: 4500, comment: '', status: 'proposed', revision: 3, ...overrides }; }
 function planCard(lines, overrides = {}) { return card({ plan: { ...card().plan, lines }, ...overrides }); }
-function sendLine(ui, count) { ui.click('pe-open', { 'data-line': 'line-1' }); if (count != null) ui.input('pe-count', String(count)); ui.click('pe-send'); return ui.requests.at(-1).body; }
+function sendLine(ui, count) { ui.click('plan-detail', { 'data-line': 'line-1' }); ui.click('pe-open', { 'data-line': 'line-1' }); if (count != null) ui.input('pe-count', String(count)); ui.click('pe-send'); return ui.requests.at(-1).body; }
 
 test('default count saves send subject, kind and count without a month or revision', async () => {
-  const ui = await ready(planCard([line()]));
-  assert.match(ui.html(), /<div class="plan-gr" data-line="line-1"><div class="plan-gc">英語<\/div><div class="plan-gc">通常<\/div><div class="plan-gc">4回<\/div><div class="plan-gc">9月<\/div><div class="plan-gc">90分<\/div><div class="plan-gc">4,500円<\/div><\/div>/);
+  const ui = await readyPlans(planCard([line()]));
+  assert.equal(ui.requests[0].body.studentId, 'test-a');
+  assert.match(ui.html(), /<tr><td>9\/1〜9\/30<\/td><td>英語<\/td><td>通常<\/td><td>4回<\/td><td>90分<\/td><td>4,500円<\/td>/);
   setPlan(ui, 6);
   const body = ui.requests.at(-1).body;
   assert.equal(body.op, 'planSet'); assert.equal(body.studentId, 'test-a'); assert.equal(body.ym, undefined); assert.equal(Object.hasOwn(body, 'expectedRevision'), false);
@@ -49,27 +53,30 @@ test('default count saves send subject, kind and count without a month or revisi
 });
 
 test('a line edit sends the line revision and keeps the editor after a network failure so it can be resent', async () => {
-  const ui = await ready(planCard([line({ revision: 3 })]));
+  const ui = await readyPlans(planCard([line({ revision: 3 })]));
   const body = sendLine(ui, 5);
   assert.equal(body.op, 'planLineSave'); assert.equal(body.lineId, 'line-1'); assert.equal(body.expectedRevision, 3); assert.equal(body.count, 5); assert.equal(body.propose, true); assert.equal(body.lessonFee, 4500); assert.equal(body.startDate, '2026-09-01'); assert.equal(body.endDate, '2026-09-30');
   ui.requests.at(-1).fail(); await flush();
-  assert.equal(ui.el('pe-count').value, '5'); assert.match(ui.html(), /入力は保持しています/);
+  assert.equal(ui.el('pe-count').value, '5'); assert.match(ui.el('toast').textContent, /入力は保持しています/);
   ui.click('pe-send'); assert.equal(ui.requests.at(-1).body.expectedRevision, 3); assert.equal(ui.requests.at(-1).body.count, 5);
   ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 4, count: 5 })]) }); await flush();
-  assert.equal(ui.el('pe-count'), undefined, 'the editor closes after a successful save'); assert.match(ui.html(), /<div class="plan-gc">5回<\/div><div class="plan-gc">9月<\/div>/);
+  assert.equal(ui.el('pe-count'), undefined, 'the editor closes after a successful save'); assert.match(ui.html(), /<td>英語<\/td><td>通常<\/td><td>5回<\/td>/);
 });
 
 test('a late background read cannot supply the revision for the next line save', async () => {
-  const ui = await ready(planCard([line({ revision: 1 })]));
-  ui.navigate('#students'); ui.navigate('#s=test-a&tab=billing'); const background = ui.requests.at(-1);
+  const ui = await readyPlans(planCard([line({ revision: 1 })]));
+  ui.navigate('#plans'); ui.navigate('#plans?student=test-a'); const background = ui.requests.at(-1);
+  assert.equal(background.body.op, 'kanriStudent');
   sendLine(ui); ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 2 })]) }); await flush();
   background.reply({ ok: true, data: planCard([line({ revision: 1 })]) }); await flush();
   assert.equal(sendLine(ui).expectedRevision, 2);
 });
 
 test('late responses for another student cannot supply a line save student or revision', async () => {
-  const ui = await ready(planCard([line({ revision: 1 })])); ui.click('reload'); const oldRead = ui.requests.at(-1);
-  ui.navigate('#s=test-b&tab=billing');
+  // 計画ページには「再読み込み」ボタンがないので、一覧へ戻って開き直すことで test-a の読み取りを飛ばしておく
+  const ui = await readyPlans(planCard([line({ revision: 1 })])); ui.navigate('#plans'); ui.navigate('#plans?student=test-a'); const oldRead = ui.requests.at(-1);
+  assert.equal(oldRead.body.studentId, 'test-a');
+  ui.navigate('#plans?student=test-b');
   ui.requests.at(-1).reply({ ok: true, data: planCard([line({ revision: 8 })], { id: 'test-b' }) }); await flush();
   oldRead.reply({ ok: true, data: planCard([line({ revision: 99 })]) }); await flush();
   const body = sendLine(ui);
@@ -77,7 +84,7 @@ test('late responses for another student cannot supply a line save student or re
 });
 
 test('a failed student switch cannot save the previous student card still on screen', async () => {
-  const ui = await ready(); ui.navigate('#s=test-b&tab=billing');
+  const ui = await readyPlans(); ui.navigate('#plans?student=test-b');
   // 読み取りは Worker へ行く。落ちると Apps Script に回るので、そちらも落とす
   const sent = ui.requests.length;
   ui.requests.at(-1).fail(); await flush();
@@ -113,12 +120,14 @@ test('a payment response for another student does not cancel the current student
 });
 
 test('a new line is prefilled from the current base fee and an explicitly edited fee survives a refresh', async () => {
-  const ui = await ready(); ui.click('pe-new');
+  const ui = await readyPlans(); ui.click('pe-new');
   assert.equal(ui.el('pe-fee').value, '4500'); assert.equal(ui.el('pe-min').value, '90'); assert.equal(ui.el('pe-start').value, '2026-09-01'); assert.equal(ui.el('pe-end').value, '2026-09-30');
-  ui.click('pe-cancel'); ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2000 }) }); await flush();
+  // 一覧へ戻って開き直すと、前回の内容を先に出して裏で最新を読み直す
+  const refresh = async data => { ui.navigate('#plans'); ui.navigate('#plans?student=test-a'); ui.requests.at(-1).reply({ ok: true, data }); await flush(); };
+  ui.click('pe-cancel'); await refresh(card({ rate30: 2000 }));
   ui.click('pe-new'); assert.equal(ui.el('pe-fee').value, '6000');
   ui.input('pe-fee', '5250'); ui.click('pe-month', { 'data-ym': '2026-11' });
-  ui.click('reload'); ui.requests.at(-1).reply({ ok: true, data: card({ rate30: 2500 }) }); await flush();
+  await refresh(card({ rate30: 2500 }));
   assert.equal(ui.el('pe-fee').value, '5250'); assert.equal(ui.el('pe-start').value, '2026-11-01'); assert.equal(ui.el('pe-end').value, '2026-11-30');
   ui.click('pe-draft'); const body = ui.requests.at(-1).body;
   assert.equal(body.op, 'planLineSave'); assert.equal(body.propose, false); assert.equal(body.lineId, undefined); assert.equal(body.lessonFee, 5250); assert.equal(body.startDate, '2026-11-01');

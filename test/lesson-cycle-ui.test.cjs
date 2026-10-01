@@ -24,6 +24,9 @@ function createUI(hash=href()) {
   function element(id,attrs={}) {
     let html=''; const childIds=new Set();
     const e={id,value:'',textContent:'',disabled:Object.hasOwn(attrs,'disabled'),attrs,
+      open:Object.hasOwn(attrs,'open'),showModal(){this.open=true;},
+      // render() は本文を描いた後、ダイアログを末尾に差し込む（既存の要素は残す）
+      insertAdjacentHTML(position,value){assert.equal(position,'beforeend');const saved=new Map([...childIds].map(cid=>[cid,elements.get(cid)]));this.innerHTML=html+value;for (const [cid,child] of saved) elements.set(cid,child);},
       getAttribute:k=>Object.hasOwn(attrs,k)?attrs[k]:null,hasAttribute:k=>Object.hasOwn(attrs,k),focus(){focused=id;},scrollIntoView(){},classList:{add(){},remove(){}},
       addEventListener:(name,fn)=>on(id+':'+name,fn),
       clear(){for (const child of childIds) {elements.get(child)?.clear();elements.delete(child);}childIds.clear();}};
@@ -65,22 +68,25 @@ function createUI(hash=href()) {
 
 test('public report fields retain typed values in the record save and retry',async()=>{
   const ui=await createUI().ready();ui.input('lc-content','短い報告');ui.input('lc-report-actualUnit','消化');ui.input('lc-report-homeworkAccuracy','0');ui.input('lc-report-parentMessage','次回も復習します');
-  ui.click('lc-save');const first=ui.requests.at(-1),body=clone(first.body);assert.equal(body.record.report.actualUnit,'消化');assert.equal(body.record.report.homeworkAccuracy,'0');
+  ui.click('lc-publish');const first=ui.requests.at(-1),body=clone(first.body);assert.equal(body.record.report.actualUnit,'消化');assert.equal(body.record.report.homeworkAccuracy,'0');
   first.fail();await flush();assert.equal(ui.el('lc-report-parentMessage').value,'次回も復習します');ui.click('lc-retry');assert.deepEqual(clone(ui.requests.at(-1).body),body);
 });
 
 test('lesson save keeps input after network failure and retries the identical mutation once',async()=>{
   const ui=await createUI().ready(); ui.input('lc-content','手元の授業内容'); ui.input('lc-teacherNote',privateSentinel);
-  assert.equal(ui.beforeUnload(),true); ui.click('lc-save'); const first=ui.requests.at(-1), body=clone(first.body);
-  ui.click('lc-save');assert.equal(ui.requests.length,2,'busy blocks a second save');first.fail();await flush();
+  assert.equal(ui.beforeUnload(),true); ui.click('lc-publish'); const first=ui.requests.at(-1), body=clone(first.body);
+  ui.click('lc-publish');assert.equal(ui.requests.length,2,'busy blocks a second save');first.fail();await flush();
   assert.equal(ui.el('lc-content').value,'手元の授業内容');assert.equal(ui.el('lc-teacherNote').value,privateSentinel);assert.match(ui.html(),/同じ処理を再試行/);
   ui.click('lc-retry');assert.deepEqual(ui.requests.at(-1).body,body);
-  ui.requests.at(-1).reply({ok:true,context:lessonContext('test-a','slot-a',savedRecord(body.record))});await flush();
+  const saved=savedRecord(body.record);ui.requests.at(-1).reply({ok:true,context:lessonContext('test-a','slot-a',saved)});await flush();
+  // 「保存して公開」は保存の成功後、保存した版の宿題反映を続けて送る
+  const apply=ui.requests.at(-1).body;assert.equal(apply.op,'lessonHomeworkApply');assert.equal(apply.recordId,saved.id);assert.equal(apply.expectedRevision,saved.revision);assert.notEqual(apply.requestId,body.requestId);
+  ui.requests.at(-1).reply({ok:true,context:lessonContext('test-a','slot-a',saved)});await flush();
   assert.equal(ui.beforeUnload(),false);assert.equal(ui.html().includes('同じ処理を再試行'),false);ui.noPrivateStorage();
 });
 
 test('teacher re-login preserves unsaved private input and request ID while replacing only token',async()=>{
-  const ui=await createUI().ready();ui.input('lc-content','認証切れでも残す本文');ui.input('lc-teacherNote',privateSentinel);ui.click('lc-save');const pending=clone(ui.requests.at(-1).body);
+  const ui=await createUI().ready();ui.input('lc-content','認証切れでも残す本文');ui.input('lc-teacherNote',privateSentinel);ui.click('lc-publish');const pending=clone(ui.requests.at(-1).body);
   ui.requests.at(-1).reply({error:'ログイン期限切れ',badAuth:true});await flush();
   if(ui.requests.at(-1).body.action==='authmode'){ui.requests.at(-1).reply({mode:'account'});await flush();}
   assert.equal(ui.local.has('sw_admt'),false);assert.ok(ui.el('a-email'));ui.el('a-email').value='teacher@example.invalid';ui.el('a-pass').value='test-only-password';ui.click('login');
@@ -90,11 +96,11 @@ test('teacher re-login preserves unsaved private input and request ID while repl
 });
 
 test('revision conflict retains local input, compares latest, and requires explicit rebase before saving',async()=>{
-  const ui=await createUI().ready(lessonContext('test-a','slot-a',savedRecord({},1)));ui.input('lc-content','手元で編集');ui.input('lc-teacherNote',privateSentinel);ui.click('lc-save');const first=ui.requests.at(-1).body;
+  const ui=await createUI().ready(lessonContext('test-a','slot-a',savedRecord({},1)));ui.input('lc-content','手元で編集');ui.input('lc-teacherNote',privateSentinel);ui.click('lc-publish');const first=ui.requests.at(-1).body;
   ui.requests.at(-1).reply({error:'別端末で更新されました',errorCode:'conflict'});await flush();assert.equal(ui.el('lc-content').value,'手元で編集');
   ui.click('lc-refresh');const latest=savedRecord({content:'別端末の本文',teacherNote:'別端末のメモ'},3);ui.requests.at(-1).reply({ok:true,context:lessonContext('test-a','slot-a',latest)});await flush();
   assert.equal(ui.el('lc-content').value,'手元で編集');assert.match(ui.html(),/別端末の本文/);const before=ui.requests.length;
-  ui.click('lc-rebase');assert.equal(ui.requests.length,before,'comparison choice alone never saves');ui.click('lc-save');
+  ui.click('lc-rebase');assert.equal(ui.requests.length,before,'comparison choice alone never saves');ui.click('lc-publish');
   assert.equal(ui.requests.at(-1).body.expectedRevision,3);assert.equal(ui.requests.at(-1).body.record.content,'手元で編集');assert.notEqual(ui.requests.at(-1).body.requestId,first.requestId);ui.noPrivateStorage();
 });
 
@@ -103,7 +109,7 @@ test('late lesson load or save responses cannot redraw another student route',as
   ui.requests.at(-1).reply({ok:true,context:lessonContext('test-b','slot-b',savedRecord({content:'Bの本文'},1,'test-b','slot-b'))});await flush();
   oldLoad.reply({ok:true,context:lessonContext('test-a','slot-a',savedRecord({content:'Aの古い応答'}))});await flush();
   assert.match(ui.html(),/Bの本文/);assert.equal(ui.html().includes('Aの古い応答'),false);
-  ui.navigate(href());await flush();ui.input('lc-content','Aで保存中');ui.click('lc-save');const oldSave=ui.requests.at(-1);
+  ui.navigate(href());await flush();ui.input('lc-content','Aで保存中');ui.click('lc-publish');const oldSave=ui.requests.at(-1);
   ui.navigate(href('test-b','slot-b'));await flush();oldSave.reply({ok:true,context:lessonContext('test-a','slot-a',savedRecord({content:'Aの遅れた保存'},2))});await flush();
   assert.match(ui.html(),/Bの本文/);assert.equal(ui.html().includes('Aの遅れた保存'),false);ui.noPrivateStorage();
 });
@@ -120,7 +126,7 @@ test('resuming another tab pending save populates the recovered record and revis
   const ui=await createUI().ready(lessonContext('test-a','slot-a',null,{pending:{requestId:'another-tab-save',operation:'lessonRecordSave'}}));
   ui.click('lc-resume');assert.equal(ui.requests.at(-1).body.op,'lessonWriteResume');
   ui.requests.at(-1).reply({ok:true,operation:'lessonRecordSave',context:lessonContext('test-a','slot-a',savedRecord({content:'復旧した本文'},4))});await flush();
-  assert.equal(ui.el('lc-content').value,'復旧した本文');ui.input('lc-progress','追加');ui.click('lc-save');assert.equal(ui.requests.at(-1).body.expectedRevision,4);ui.noPrivateStorage();
+  assert.equal(ui.el('lc-content').value,'復旧した本文');ui.input('lc-progress','追加');ui.click('lc-publish');assert.equal(ui.requests.at(-1).body.expectedRevision,4);ui.noPrivateStorage();
 });
 
 test('partial homework recovery displays the final context and stops retrying a terminal journal',async()=>{

@@ -7,39 +7,6 @@ const emptyEmail = () => ({ email:'', verified:false, verifiedAt:'', pendingEmai
 const emailState = overrides => ({ ...state(), emailStatus:{ ...emptyEmail(), ...overrides } });
 const proof = 'se1.' + 'a'.repeat(32) + '.' + 'b'.repeat(64);
 
-test('self-added homework selects a next-subject deadline without sending a client anchor and retains a failed draft', async () => {
-  const ui = await studentReady(state([slot('booked', { st:'mine', subject:'数学' })]));
-  ui.navigate('#tasks');
-  assert.equal(ui.el('f-tdue-mode').value, 'nextLesson'); assert.equal(ui.el('f-tdue-subject').value, '数学');
-  ui.input('f-ttitle', '方程式 <復習>'); ui.input('f-tdue-subject', '化学'); ui.click('taskadd');
-  const first = ui.requests.at(-1);
-  assert.deepEqual(first.body, { action:'taskAdd', k:'test-link-a', type:'宿題', title:'方程式 <復習>', due:'', dueMode:'nextLesson', dueSubject:'化学' });
-  first.reply({ error:'確認してからもう一度追加してください' }); await flush();
-  assert.equal(ui.el('f-ttitle').value, '方程式 <復習>'); assert.equal(ui.el('f-tdue-subject').value, '化学');
-  ui.click('taskadd'); ui.requests.at(-1).reply({ ok:true, state:state() }); await flush();
-  assert.equal(ui.el('f-ttitle').value, '');
-});
-
-test('deadline mode changes preserve input and date, no-deadline, and missing-subject requests stay distinct', async () => {
-  const ui = await studentReady(state([])); ui.navigate('#tasks'); ui.input('f-ttitle', '単語を復習'); ui.click('taskadd');
-  assert.equal(ui.requests.length, 1, 'next-subject mode needs a subject');
-  ui.change('f-tdue-mode', 'date'); assert.equal(ui.el('f-ttitle').value, '単語を復習');
-  ui.click('taskadd'); assert.equal(ui.requests.length, 1, 'date mode needs an actual date');
-  ui.input('f-tdue', '2026-09-14'); ui.change('f-tdue-mode', 'none'); ui.change('f-tdue-mode', 'date');
-  assert.equal(ui.el('f-tdue').value, '2026-09-14'); ui.click('taskadd');
-  assert.equal(ui.requests.at(-1).body.due, '2026-09-14'); assert.equal(ui.requests.at(-1).body.dueSubject, '');
-  ui.requests.at(-1).reply({ error:'一時的な確認待ち' }); await flush(); ui.change('f-tdue-mode', 'none'); ui.click('taskadd');
-  assert.equal(ui.requests.at(-1).body.dueMode, 'none'); assert.equal(ui.requests.at(-1).body.due, ''); assert.equal(ui.requests.at(-1).body.dueSubject, '');
-});
-
-test('homework drafts are scoped to the dedicated student link and late saves cannot clear another draft', async () => {
-  const ui = await studentReady(); ui.navigate('#tasks'); ui.input('f-ttitle', 'Aの宿題'); ui.input('f-tdue-subject', '数学'); ui.click('taskadd'); const old = ui.requests.at(-1);
-  ui.switchStudent('test-link-b'); ui.requests.at(-1).reply(state([], '【テスト】B')); await flush();
-  assert.equal(ui.el('f-ttitle').value, ''); ui.input('f-ttitle', 'Bのメモ');
-  old.reply({ ok:true, state:state([], '古いA') }); await flush();
-  assert.equal(ui.el('f-ttitle').value, 'Bのメモ'); assert.equal(ui.html().includes('古いA'), false);
-});
-
 test('task lists show pending same-subject deadlines and the frozen deadline of completed homework', async () => {
   const tasks = [
     { id:'pending-task', type:'宿題', title:'次の英語まで', dueMode:'nextLesson', dueSubject:'英語', due:'', nextLessonPending:true },
@@ -49,7 +16,7 @@ test('task lists show pending same-subject deadlines and the frozen deadline of 
   const ui = await studentReady({ ...state(), tasks });
   ui.navigate('#tasks?filter=all');
   assert.match(ui.html(), /次回の英語授業（予定未定）/);
-  assert.match(ui.html(), /次回の数学授業（2026\/9\/10 17:00）まで・2026\/9\/8 に完了/);
+  assert.match(ui.html(), /次回の数学授業（2026\/9\/10 17:00）まで・2026\/9\/8 に申告/);
   assert.match(ui.html(), /&lt;script&gt;x&lt;\/script&gt;/); assert.equal(ui.html().includes('<img src=x>'), false);
 });
 
@@ -236,21 +203,25 @@ test('the offers section is a collapsed details block with one select-all / clea
   ui.click('batchall'); ui.click('batchclear'); assert.match(ui.html(), /data-action="batchall"[^>]*>一括選択</); assert.equal((ui.html().match(/data-accept-id="[^"]+" checked/g) || []).length, 0);
 });
 
-test('the 授業計画 fold separates proposed notices from the approved plan with counts', async () => {
+// 生徒ホームの「授業計画」の折り畳みは「授業計画・実施状況」に統合された（6f28c56）。承認待ちの計画も同じ表に並ぶ
+test('the 授業計画・実施状況 section lists approved and proposed plans with counts and never shows prices', async () => {
   const { line } = require('./helpers/operations-ui-harness.cjs');
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }, { id:'h2', date:'2026-09-25', start:'17:00', min:60, subject:'数学', done:true }], plan:{ '英語':4 }, planStatus:'approved',
     planLines:[line({ id:'l1', status:'approved', approvedCount:4, comment:'入試に向けて長文を仕上げます' }), line({ id:'l2', subject:'英語', count:3, startDate:'2026-10-01', endDate:'2026-10-31', period:'2026年10月', month:'2026-10', comment:'10月は模試対策で\n回数を増やします' }), line({ id:'l3', subject:'数学', count:6, startDate:'2026-09-22', endDate:'2026-10-05', period:'2026/9/22〜10/5', month:'', lessonMin:60, lessonFee:3000, comment:'' })] };
   const ui = await studentReady(s);
-  assert.ok(ui.html().includes('<td>数学</td><td>通常</td><td>6回</td><td>60分</td>'));assert.doesNotMatch(ui.html(),/3,000円/);assert.match(ui.html(),/入試に向けて長文を仕上げます/);
-  assert.match(ui.html(), /<details class="fold plan" data-fold="plan"><summary><h2>[^]*?授業計画 <span class="cnt">2件の案内<\/span>/);
-  assert.ok(ui.html().includes('<td>10/1〜10/31</td><td>英語</td><td>通常</td><td>3回</td>'));
-  assert.match(ui.html(), /保護者の方に伝えて、保護者ページから承認・調整をお願いしましょう/);
+  assert.doesNotMatch(ui.html(), /data-fold="plan"/);
+  assert.match(ui.html(), /<h2>授業計画・実施状況 <span class="cnt">3件の計画<\/span><\/h2>/);
+  assert.ok(ui.html().includes('<td>9/22〜10/5</td><td>数学</td><td>通常</td>'));assert.doesNotMatch(ui.html(),/3,000円/);assert.match(ui.html(),/入試に向けて長文を仕上げます/);
+  // 1回の時間は状態ボタンから開く読み取り専用の詳細に出る。料金は出さない
+  ui.click('student-planopen', { 'data-line':'l3' }); assert.match(ui.html(), /6回・60分/); assert.doesNotMatch(ui.html(), /3,000円|円</);
+  assert.ok(ui.html().includes('<td>10/1〜10/31</td><td>英語</td><td>通常</td><td><span class="plan-count-value"><span>3回</span>'));
+  assert.match(ui.html(), /<tr id="progress-approval-l2" hidden><td class="portal-plan-info" colspan="7">この授業計画の授業回数は、保護者の承認を得ていません。保護者の方に連絡し/);
   assert.ok(ui.html().includes('<td>4回</td><td>1回</td><td>1回</td>'));
-  assert.ok(ui.html().includes('<td>未承認</td>'));
+  assert.match(ui.html(), /data-action="student-planopen" data-line="l2">承認待ち</);
   assert.match(ui.html(), /あと 3 回、日程調整が必要です/);
   const none = await studentReady({ ...state([]), planLines:[] }); assert.doesNotMatch(none.html(), /授業計画/);
   const onlyProposed = await studentReady({ ...state([]), planLines:[line()] });
-  assert.match(onlyProposed.html(), /授業計画 <span class="cnt">1件の案内<\/span>/); assert.match(onlyProposed.html(), /progress-approval-line-1/);
+  assert.match(onlyProposed.html(), /授業計画・実施状況 <span class="cnt">1件の計画<\/span>/); assert.match(onlyProposed.html(), /progress-approval-line-1/);
 
 });
 
@@ -289,10 +260,12 @@ test('approved addon lines are folded into their parent plan and proposed addons
   const s = { ...state([]), history:[{ id:'h1', date:'2026-09-02', start:'17:00', min:90, subject:'英語', done:true }],
     planLines:[line({ id:'p', status:'approved', approvedCount:4, comment:'通常の予習' }), line({ id:'x', parentId:'p', addon:true, count:2, approvedCount:2, status:'approved', startDate:'2026-09-20', endDate:'2026-09-30', period:'2026/9/20〜9/30', month:'', comment:'テスト前に演習を増やすため' }), line({ id:'y', parentId:'p', addon:true, count:1, status:'proposed', startDate:'2026-09-25', endDate:'2026-09-30', period:'2026/9/25〜9/30', month:'', comment:'さらに1回' })] };
   const ui = await studentReady(s);
-  assert.ok(ui.html().includes('<td>通常（追加）</td><td>1回</td>'));
+  // 追加の計画は親の行の状態ボタンに並ぶ（496baf3/ab08921）。承認待ちの追加は「追加申請あり」
+  assert.match(ui.html(), /data-line="x">追加：承認済み<\/button> <button type="button" class="tag amber" aria-haspopup="dialog" data-action="student-planopen" data-line="y">追加申請あり</);
   assert.ok(ui.html().includes('<td>6回</td><td>1回</td><td>1回</td>'));assert.match(ui.html(),/あと 5 回/);
   assert.match(ui.html(),/テスト前に演習を増やすため/);
-  assert.equal((ui.html().match(/<span class="tag green">承認済み<\/span>/g) || []).length, 1, 'the approved addon is not listed as a separate row');
+  assert.doesNotMatch(ui.html(), /<td>9\/20〜9\/30<\/td>/, 'the approved addon is not listed as a separate row');
+  assert.equal((ui.html().match(/<tr><td>9\/1〜9\/30<\/td>/g) || []).length, 1);
 });
 
 test('teacher preview of the student mypage: reads through action=preview with the teacher token, shows the banner, and blocks every write without a request', async () => {
@@ -387,9 +360,10 @@ test('sent plans appear in progress even without lessons, excluding drafts', asy
   data.planLines = [line({ id: 'sent-zero', status: 'proposed', subject: '数学', count: 6 }), line({ id: 'draft-zero', status: 'draft', subject: '理科', count: 8 })];
   data.history = [];
   const ui = await studentReady(data);
-  const progress = ui.html().split('data-fold="progress"')[1];
+  // 実施状況は折り畳みでなく常時表示の「授業計画・実施状況」になった（6f28c56）
+  const progress = ui.html().split('<h2>授業計画・実施状況')[1];
   assert.ok(progress.includes('progress-approval-sent-zero'));
-  assert.ok(progress.includes('<td>0回</td><td>0回</td><td>未承認</td>'));
+  assert.ok(progress.includes('<td>0回</td><td>0回</td><td><button type="button" class="tag amber" aria-haspopup="dialog" data-action="student-planopen" data-line="sent-zero">承認待ち</button></td>'));
   assert.ok(!progress.includes('理科'));
   assert.ok(!progress.includes('承認済みの計画なし'));
 });

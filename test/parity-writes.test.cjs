@@ -70,7 +70,6 @@ test('生徒の書き込みは Worker でも台帳が同じ結果になる', asy
     ['授業可能な日時を出す', { action: 'wishMany', k: K, kind: 'ok', dates: ['2026-09-24'], start: '16:00', end: '18:00', note: '', deliveryMode: 'in_person' }, null],
     ['授業不可を登録', { action: 'blockSet', k: K, add: ['2026-09-26'], removeIds: [], note: '', start: '', end: '' }, null],
     ['予定を共有', { action: 'eventAddMany', k: K, ranges: [{ date: '2026-09-27', dateTo: '2026-09-27' }], title: '見本の行事', alsoBlock: true, kind: 'event' }, null],
-    ['宿題を追加', { action: 'taskAdd', k: K, type: '持ち物', title: '見本の持ち物' }, null],
     ['案内を辞退', { action: 'decline', k: K, slotId: 'SLOT' }, null],
     ['取消を依頼', { action: 'cancelReq', k: K, slotId: 'SLOT', reason: '見本の理由' }, 'booked'],
   ];
@@ -86,6 +85,15 @@ test('生徒の書き込みは Worker でも台帳が同じ結果になる', asy
     }
   }
   assert.deepEqual(diffs, [], '台帳の結果が違う:\n' + diffs.join('\n'));
+});
+
+test('生徒からの宿題追加は GAS でも Worker でも同じく断り、台帳に何も書かない', async () => {
+  // 宿題・持ち物は先生だけが追加する（1ad6564）。今の生徒画面からは送られないが、古い画面から来ても書かない
+  const r = await bothSides({ action: 'taskAdd', k: K, type: '持ち物', title: '見本の持ち物' }, null);
+  assert.equal(r.gasResult.error, '宿題の追加は先生が行います');
+  assert.equal(r.done.result.error, '宿題の追加は先生が行います');
+  assert.equal(r.gasLedger, r.workerLedger);
+  assert.equal(r.gasLedger.includes('見本の持ち物'), false);
 });
 
 test('メールとカレンダーは控えに溜まり、台帳には仮の予定IDが入る', async () => {

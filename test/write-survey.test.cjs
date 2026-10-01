@@ -26,7 +26,8 @@ function cases(slot) {
     ['授業可能な日時を出す（生徒）', { action: 'wishMany', k: K, kind: 'ok', dates: ['2026-09-24'], start: '16:00', end: '18:00', note: '', deliveryMode: 'in_person' }],
     ['授業不可を登録（生徒）', { action: 'blockSet', k: K, add: ['2026-09-26'], removeIds: [], note: '', start: '', end: '' }],
     ['予定を共有（生徒）', { action: 'eventAddMany', k: K, ranges: [{ date: '2026-09-27', dateTo: '2026-09-27' }], title: '見本の行事', alsoBlock: false, kind: 'event' }],
-    ['宿題を追加（生徒）', { action: 'taskAdd', k: K, type: '持ち物', title: '見本の持ち物' }],
+    // 宿題の追加は先生だけになった（1ad6564）。生徒が書くのは完了のチェック
+    ['宿題を完了にする（生徒）', { action: 'taskDone', k: K, taskId: 'TASK', done: true }],
     ['案内を辞退（生徒）', { action: 'decline', k: K, slotId: slot.id }],
     ['取消を依頼（生徒）', { action: 'cancelReq', k: K, slotId: slot.id, reason: '見本の理由' }],
   ];
@@ -75,7 +76,11 @@ test('生徒の書き込みを D1 の上で流し、結果と Google 依存を�
     // 取消の依頼は確定済みの授業に対して行う
     const booked = body.action === 'cancelReq';
     const slot = h.seedSlot({ date: '2026-09-25', start: '17:00', status: booked ? 'booked' : 'offered' });
-    const req = JSON.parse(JSON.stringify(body).split(shape.id).join(slot.id));
+    // 完了のチェックは、先生が出した宿題に対して行う
+    const task = body.action === 'taskDone' ? h.admin('taskAdd', { studentId: 'test-a', title: '見本の宿題', dueMode: 'date', due: '2026-09-30' }) : null;
+    if (task) assert.ok(task.ok, '見本の宿題を出せない: ' + (task.error || ''));
+    const taskId = task ? String(h.rows('tasks').at(-1).id) : '';
+    const req = JSON.parse(JSON.stringify(body).split(shape.id).join(slot.id).split('TASK').join(taskId));
     // 【テスト】で始まる名前だと通知もカレンダーも意図的に抑止される。
     // Google への依存を測るために、合成の台帳の中だけ名前を変える（実在の生徒ではない）
     h.setRow('students', 'id', 'test-a', { name: '見本の生徒' });

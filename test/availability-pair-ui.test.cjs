@@ -11,24 +11,27 @@ async function pairUI(){const ui=createUI('admin',{hash:'#lesson-pair?slot=slot-
 test('paired records keep identities and field IDs separate and do not redraw the other editor during a save',async()=>{
  const ui=await pairUI();assert.match(ui.el('pair-pane-0').innerHTML,/【テスト】test-a/);assert.match(ui.el('pair-pane-1').innerHTML,/【テスト】test-b/);
  ui.input('pair-0-lc-content','Aの記録');ui.input('pair-1-lc-content','Bの記録');const fieldB=ui.el('pair-1-lc-content');
- ui.click('lc-save',{'data-lc-editor':key('test-a')});const req=ui.requests.at(-1);assert.equal(req.body.studentId,'test-a');assert.equal(req.body.record.content,'Aの記録');assert.equal(ui.el('pair-1-lc-content'),fieldB);
+ ui.click('lc-publish',{'data-lc-editor':key('test-a')});const req=ui.requests.at(-1);assert.equal(req.body.studentId,'test-a');assert.equal(req.body.record.content,'Aの記録');assert.equal(ui.el('pair-1-lc-content'),fieldB);
  ui.input('pair-1-lc-content','Bは入力を継続');req.reply({ok:true,operation:'lessonRecordSave',context:ctx('test-a',{record:{id:'ra',revision:1,content:'Aの記録',publishedRevision:1,status:'active',homework:[]}})});await flush();
  assert.equal(ui.el('pair-1-lc-content'),fieldB);assert.equal(fieldB.value,'Bは入力を継続');assert.equal(ui.beforeUnload(),true);
- ui.click('lc-save',{'data-lc-editor':key('test-b')});assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.record.content,'Bは入力を継続');
+ // 公開後に続けて送る宿題の反映も、Aの記録だけを対象にする
+ const applyA=ui.requests.at(-1).body;assert.equal(applyA.op,'lessonHomeworkApply');assert.equal(applyA.studentId,'test-a');assert.equal(applyA.recordId,'ra');
+ ui.click('lc-publish',{'data-lc-editor':key('test-b')});assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.record.content,'Bは入力を継続');
 });
 test('a failed paired save retries its own request while the other student saves independently',async()=>{
- const ui=await pairUI();ui.input('pair-0-lc-content','Aの記録');ui.click('lc-save',{'data-lc-editor':key('test-a')});const a=ui.requests.at(-1),payload=structuredClone(a.body);a.fail();await flush();
- ui.input('pair-1-lc-content','Bの記録');ui.click('lc-save',{'data-lc-editor':key('test-b')});const b=ui.requests.at(-1);assert.equal(b.body.studentId,'test-b');
+ const ui=await pairUI();ui.input('pair-0-lc-content','Aの記録');ui.click('lc-publish',{'data-lc-editor':key('test-a')});const a=ui.requests.at(-1),payload=structuredClone(a.body);a.fail();await flush();
+ ui.input('pair-1-lc-content','Bの記録');ui.click('lc-publish',{'data-lc-editor':key('test-b')});const b=ui.requests.at(-1);assert.equal(b.body.studentId,'test-b');
  ui.click('lc-retry',{'data-lc-editor':key('test-a')});assert.deepEqual(ui.requests.at(-1).body,payload);assert.notEqual(payload.requestId,b.body.requestId);
  ui.navigate('#home');ui.navigate('#lesson-pair?slot=slot-test-a');assert.equal(ui.el('pair-0-lc-content').value,'Aの記録');assert.equal(ui.el('pair-1-lc-content').value,'Bの記録');
  assert.equal(JSON.stringify([...ui.local,...ui.session]).includes('Aの記録'),false);
 });
-test('paired preparation and homework stay in the selected student editor',async()=>{
- const ui=await pairUI();ui.input('pair-1-lc-preparation','Bの非公開準備');ui.click('lc-prep-save',{'data-lc-editor':key('test-b')});assert.equal(ui.requests.at(-1).body.studentId,'test-b');assert.equal(ui.requests.at(-1).body.body,'Bの非公開準備');
- ui.click('lc-add',{'data-lc-editor':key('test-a')});ui.input('pair-0-lc-content','A授業');ui.input('pair-0-lc-title-0','A宿題');ui.click('lc-duetoggle',{'data-lc-editor':key('test-a')});
- assert.equal(ui.focused(),'pair-0-lc-due-mode-0');
+// 授業準備の欄は 2026-09-23 に廃止（1fe7ded）。Bの非公開入力は先生だけのメモで確かめる
+test('paired private notes and homework stay in the selected student editor',async()=>{
+ const ui=await pairUI();ui.input('pair-1-lc-teacherNote','Bの非公開メモ');
+ ui.click('lc-add',{'data-lc-editor':key('test-a')});ui.input('pair-0-lc-content','A授業');ui.input('pair-0-lc-title-0','A宿題');
  ui.input('pair-0-lc-due-mode-0','date');assert.equal(ui.focused(),'pair-0-lc-due-mode-0');ui.input('pair-0-lc-due-0','2026-09-12');
- ui.click('lc-dueclose',{'data-lc-editor':key('test-a')});assert.equal(ui.focused(),'pair-0-lc-hw-more-0');assert.equal(ui.el('pair-0-lc-due-0'),undefined);
- ui.click('lc-save',{'data-lc-editor':key('test-a')});
- assert.equal(ui.requests.at(-1).body.record.homework[0].title,'A宿題');assert.equal(JSON.stringify(ui.requests.at(-1).body).includes('Bの非公開準備'),false);
+ assert.equal(ui.el('pair-1-lc-title-0').value,'');assert.equal(ui.el('pair-1-lc-due-0'),undefined);
+ ui.click('lc-publish',{'data-lc-editor':key('test-a')});const body=ui.requests.at(-1).body;assert.equal(body.studentId,'test-a');
+ assert.equal(body.record.homework[0].title,'A宿題');assert.equal(body.record.homework[0].dueMode,'date');assert.equal(body.record.homework[0].due,'2026-09-12');
+ assert.equal(JSON.stringify(body).includes('Bの非公開メモ'),false);assert.equal(ui.el('pair-1-lc-teacherNote').value,'Bの非公開メモ');
 });

@@ -33,11 +33,13 @@ function failWrite(h,name,predicate,after=false) {
   return ()=>{sh.getRange=original;};
 }
 
-test('schema appends eight task columns, preserves old rows, is idempotent and preflights mismatches',()=>{
+test('schema appends the lesson task columns, preserves old rows, is idempotent and preflights mismatches',()=>{
   const h=createHarness({iterations:10}), c=h.context(); c.ensureTasksSheet_();
   const sh=h.spreadsheet.getSheetByName('tasks'); sh.appendRow(['legacy-task','test-a','宿題','既存課題','',new Date(),'teacher','done-value']);
   const before=clone(sh.values[1]); c.ensureLessonSchema_(); c.ensureLessonSchema_();
-  assert.deepEqual(clone(sh.values[1]),before); assert.equal(sh.values[0].length,16);
+  assert.deepEqual(clone(sh.values[1]),before);
+  // 確認(reviewedAt/reviewNote)・教材(material)・一覧での手直し(manualEditedAt)の列も後ろに足す
+  assert.deepEqual(clone(sh.values[0]),['id','studentId','type','title','due','createdAt','createdBy','doneAt','sourceRecordId','sourceItemId','sourceRevision','withdrawnAt','dueMode','dueSubject','dueAfter','dueTime','reviewedAt','reviewNote','material','manualEditedAt']);
   assert.equal(h.spreadsheet.getSheetByName('lessonRecords').values.length,1);
   const broken=createHarness(), bc=broken.context(); bc.ensureTasksSheet_(); broken.spreadsheet.getSheetByName('tasks').values[0][2]='unexpected';
   assert.throws(()=>bc.ensureLessonSchema_(),/シート構成/);
