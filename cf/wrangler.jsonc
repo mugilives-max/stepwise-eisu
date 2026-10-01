@@ -30,6 +30,13 @@
       // 本番 D1。`wrangler d1 create stepwise` の出力で置き換える（docs/D1_MIGRATION.md 段階 A）。
       "database_id": "889ff9cf-4bb0-4ef9-ba0e-b4ce2105f039",
       "migrations_dir": "migrations"
+    },
+    {
+      // 作り直し（v2）の台帳。家族が根っこの新しい表（cf/migrations-v2）。切り替えまでは今の DB と並べて置く
+      "binding": "DB2",
+      "database_name": "stepwise-v2",
+      "database_id": "91ea045c-94a4-413f-91c1-1e29ebe6eb24",
+      "migrations_dir": "migrations-v2"
     }
   ],
   "env": {
@@ -41,6 +48,12 @@
           "database_name": "stepwise-local",
           "database_id": "00000000-0000-4000-8000-000000000001",
           "migrations_dir": "migrations"
+        },
+        {
+          "binding": "DB2",
+          "database_name": "stepwise-v2-local",
+          "database_id": "00000000-0000-4000-8000-000000000002",
+          "migrations_dir": "migrations-v2"
         }
       ]
     }

@@ -8,10 +8,12 @@ const { DatabaseSync } = require('node:sqlite');
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'cf', 'migrations');
 
-function migrationFiles() {
-  if (!fs.existsSync(MIGRATIONS)) return [];
-  return fs.readdirSync(MIGRATIONS).filter(n => n.endsWith('.sql')).sort()
-    .map(n => ({ name: n, sql: fs.readFileSync(path.join(MIGRATIONS, n), 'utf8') }));
+// dir を渡すと別のマイグレーション（作り直しの v2 は 'migrations-v2'）を当てる
+function migrationFiles(dir) {
+  const base = dir ? path.join(ROOT, 'cf', dir) : MIGRATIONS;
+  if (!fs.existsSync(base)) return [];
+  return fs.readdirSync(base).filter(n => n.endsWith('.sql')).sort()
+    .map(n => ({ name: n, sql: fs.readFileSync(path.join(base, n), 'utf8') }));
 }
 
 function meta(started, changes) {
@@ -63,7 +65,7 @@ function createD1(opts) {
   db.exec('pragma foreign_keys = on');
   const applied = [];
   if (!opts || opts.migrate !== false) {
-    for (const m of migrationFiles()) { db.exec(m.sql); applied.push(m.name); }
+    for (const m of migrationFiles(opts && opts.dir)) { db.exec(m.sql); applied.push(m.name); }
   }
   const binding = {
     prepare: sql => statement(db, sql, []),

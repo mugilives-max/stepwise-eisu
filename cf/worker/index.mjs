@@ -8,6 +8,7 @@ import { health } from "./health.mjs";
 import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
 import { runWrite, runNaturalSchedule, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
+import { handleV2 } from "../v2/index.mjs";
 import { handlePush, deliverNotice, pushEnabled, PUSH_ACTIONS } from "./push.mjs";
 import { EFFECT_ADMIN_OPS, handleEffectsAdmin } from "./effects-admin.mjs";
 
@@ -54,6 +55,8 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: head });
 
     const url = new URL(request.url);
+    // 作り直し（v2）の API。今の仕組みとは別のデータベース（DB2）を使う。docs/REBUILD_DESIGN.md
+    if (url.pathname.startsWith("/v2/")) return handleV2(request, env, ctx, head);
     // 生徒マイページは GET で読む（GAS の doGet と同じ）
     if (request.method === "GET" && url.searchParams.get("action") === "state") {
       try {
