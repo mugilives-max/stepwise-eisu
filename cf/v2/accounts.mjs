@@ -5,6 +5,7 @@
 import { fail, newToken, sha256Hex, hashPassword, verifyPassword, passwordProblem, newSalt, normEmail, iso, audit } from './util.mjs';
 
 export const SITE = 'https://www.stepwise-education.jp';
+export async function isLive(c) { const r = await c.db.prepare("select value from settings where key = 'live'").first(); return !!r && r.value === '1'; }
 const SESSION_MS = 30 * 86400e3;
 const SESSIONS_PER_SUBJECT = 20;
 const LOCK_AFTER = 5, LOCK_MS = 15 * 60e3;
@@ -91,7 +92,9 @@ export async function issueChallenge(c, kind, purpose, who, mail) {
   await c.db.prepare('insert into authChallenges (id, purpose, subjectId, email, tokenHash, expiresAt, createdAt) values (?, ?, ?, ?, ?, ?, ?)')
     .bind(sha256Hex(token).slice(0, 24), purpose, who.id, who.email, sha256Hex(token), iso(c.now + ms), iso(c.now)).run();
   const url = SITE + k.page + '#' + (purpose === k.invite ? 'invite' : 'reset') + '=' + encodeURIComponent(token);
-  if (mail) c.effects.push({ kind: 'mail', to: who.email, name: 'ステップワイズ英数教室', subject: mail.subject, body: mail.body(url), testOnly: !!who.testOnly });
+  // 切り替え（settings の live = '1'）より前は、保護者あてのメールは実際には送らない（写した本番のデータで試している間に、本物の保護者へ届かないように）
+  const held = kind === 'family' && !(await isLive(c));
+  if (mail) c.effects.push({ kind: 'mail', to: who.email, name: 'ステップワイズ英数教室', subject: mail.subject, body: mail.body(url), testOnly: !!who.testOnly, audience: kind, held });
   return url;
 }
 

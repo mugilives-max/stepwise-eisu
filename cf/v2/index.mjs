@@ -5,9 +5,11 @@
 import { ApiError } from './util.mjs';
 import { staffRoutes } from './staff.mjs';
 import { familyRoutes } from './family.mjs';
+import { peopleRoutes } from './people.mjs';
+import { migrateRoutes } from './migrate-identity.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes };
 const MAX_BODY = 200000;
 
 export async function handleV2(request, env, ctx, head = {}) {
