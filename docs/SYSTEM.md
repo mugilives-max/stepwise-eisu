@@ -1289,3 +1289,16 @@ Pages実行 `36237797285` 成功。管理・予約HTML、portal.js、learning-se
 - 入力欄の id（`lc-material-N` / `lc-title-N` / `lc-due-mode-N` / `lc-due-N`）、`data-lc-item` / `data-lc-prop`、削除の action（`lc-remove`）、Enter で次の欄へ移る動きは変えていない。クラス名 `lc-homework-table` は互換のため残し、中身を表からグリッドにした（`assets/lesson-report.css`。生徒・保護者ページと共用のファイルだが、このクラスは先生の入力欄だけ）。
 - 画面全体を `.flat` で包み、他の管理画面と同じくカードの枠を外した。「授業計画での位置づけ」の側欄と、折り畳みの中のフォームは薄い色の面のまま。
 - 既存の回帰テストは変更前後で失敗一覧に差なし（新たな失敗なし）。
+
+### 講師アカウント（2026-10-01、Worker `2026-10-01-instructors`、D1 `0018_instructors`）
+
+雇用する講師が使う画面。方針は「業務の遂行に必要な情報だけを見せる」（[FUTURE_WORK.md](FUTURE_WORK.md) の「講師アカウント」）。
+
+- **データ**: 表 `instructors`（`gas/Instructors.gs` の `INSTRUCTOR_COLS_`。パスワードは保護者と同じ PBKDF2・端末ごとのセッション・5回失敗で15分ロック）。`slots` の14列目 `instructorId`（空 = 先生本人）。授業記録の `createdBy` / `updatedBy` は講師の操作なら `instructor:<id>`、担当講師（`report.teacher`）が空なら講師名を入れる。
+- **先生の操作**（設定ページの「講師」）: `instructorAdd {name,email}` は招待リンク（7日・1回限り、`/kanri/#instructor-invite=ii1.…`）を返す。メールは送らない。先生が LINE などで本人に送る。`instructorInvite {instructorId}` は再発行（パスワードの再設定にも使う）。`instructorSetActive {instructorId, active}` の停止はセッションと招待をすぐ失効させる。`instructorList {ym}` は一覧と勤務実績（その月に実施済みにした担当授業の回数・時間・明細）。
+- **担当の指定**: 案内のフォームの「担当」（`offer` の `instructorId`。くり返し・連続の全回に付く）と、授業の詳細の「担当」（`setSlotInstructor {slotId, studentId, instructorId}`。選ぶとすぐ保存）。停止中の講師は選べない。
+- **講師のログイン**: 管理画面のログイン欄で、先生以外の登録済みメールなら講師としてログインする（`login` → `instructorLogin_`。先生のロック・失敗回数とは別）。トークンは `in1.<id>.<secret>`。
+- **講師ができること**（`instructorAdmin_` の許可リスト。これ以外は `errorCode:'forbidden'`）: `instructorHome`（担当授業の前後60日と担当生徒）、`instructorStudent`（担当生徒の成績・模試・未完了の宿題。成績票のリンク・行番号は返さない）、担当授業の授業記録（`lessonContext` ほか記録・宿題・一時保存・再開の8操作。授業の担当と生徒が一致するかを毎回確かめる）、担当授業を実施済みにする（`toggleDone` の done=true のみ）、ログアウト。
+- **講師に返さないもの**: 料金・単価・請求・入金、保護者の名前・連絡先・メール、生徒の専用リンク、担当外の授業・生徒、ログ、設定。記録の無効化・内訳の設定・複数授業の同時記録の導線も出さない。先生の読み取り（Worker の `ADMIN_READS`）は講師のトークンでは `badAuth` になる。
+- **画面**: 講師としてログインすると、ナビは「担当の授業／ログアウト」だけ。担当の授業は「記録が必要な授業／これからの授業／記録済みの授業（直近60日）／担当の生徒」。生徒を押すと成績・宿題（読み取りのみ）。取消・変更の連絡は先生へ回すよう画面に案内する。
+- **テスト**: `test/instructors.test.cjs`（権限・担当外の拒否・記録の担当者・停止・勤務実績）、`test/instructors-ui.test.cjs`（講師の画面・ログイン・招待・先生の講師管理）。

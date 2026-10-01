@@ -313,7 +313,7 @@ function lessonPlan_(p,requestId,hash) {
   }
   var pending = lessonPending_(p.studentId,p.slotId,r ? String(r.id) : '');
   if (pending.length) lessonFail_('pending','前の保存を再開してください',{requestId:String(pending[0].requestId),retryRequired:true});
-  var plan = { operation:p.operation, studentId:p.studentId, slotId:p.slotId, recordId:r ? String(r.id) : 'lr-' + uid_(), requestId:requestId, hash:hash, now:now, actor:'teacher:primary', input:p };
+  var plan = { operation:p.operation, studentId:p.studentId, slotId:p.slotId, recordId:r ? String(r.id) : 'lr-' + uid_(), requestId:requestId, hash:hash, now:now, actor:INSTRUCTOR_ACTOR_ || 'teacher:primary', input:p };
   if ((p.operation === 'lessonPreparationSave' || p.operation === 'lessonRecordDraftSave')) {
     plan.recordId='';
     plan.preparation={id:(p.operation==='lessonRecordDraftSave'?'record-draft:':'')+lessonPreparationKey_(p.studentId,p.slotId),slotId:p.slotId,studentId:p.studentId,body:p.body,revision:p.expectedRevision+1,updatedAt:now,lessonDate:slot.date,lessonStart:slot.start,lessonMin:Number(slot.min),subject:String(slot.subject || '')};
@@ -589,6 +589,12 @@ function lessonContextData_(studentId,slotId,recordId) {
 function lessonAdmin_(req) {
   try {
     if (!req || req.mcpKey !== undefined || !req.token || authMode_() !== 'account' || !authOk_(req)) return {error:'先生としてログインし直してください',badAuth:true};
+    return lessonAdminBody_(req);
+  } catch (e) { return lessonError_(e); }
+}
+// 認証の済んだ授業記録の操作（先生: lessonAdmin_、講師: 担当の確認後に instructorLesson_ から）
+function lessonAdminBody_(req) {
+  try {
     if (getConfig_('lessonCycleEnabled') === 'off') return {error:'授業記録は準備中です',errorCode:'disabled'};
     memoClear_(); ensureLessonSchema_();
     if (req.op === 'planOutlineGet') {

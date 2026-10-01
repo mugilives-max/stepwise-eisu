@@ -285,6 +285,8 @@ function schedulingAdminOffer_(req) {
     var kind=kindNorm_(item.kind);if(!kindValid_(kind))return kindError_();
     normalized.push({start:item.start,min:Number(item.min),subject:String(item.subject).trim(),deliveryMode:mode,kind:kind});
   }
+  // 担当講師（空 = 先生）。案内した授業すべてに付ける
+  var instructorPick=instructorAssignable_(req.instructorId);if(instructorPick.error)return instructorPick;
   var existing=readRows_('slots'),candidates=[],conflicts=[],blocks=blockedRows_(),offs=teacherOff_(req.date,true),warnings=[];
   // Stable IDs let a retry recognize a committed batch even if its response was lost.
   var batchKey=req.requestId?schedulingHash_(JSON.stringify([student.id,String(req.requestId),req.date,repeat,normalized])):'';
@@ -313,9 +315,9 @@ function schedulingAdminOffer_(req) {
       return {error:'授業計画の上限を超えています（'+short.length+'件）。授業計画の案内を送ってから案内するか、取り消してください',errorCode:'planShort',needPlan:true,planSuggest:planSuggest_(student,first,group)};
     }
   }
-  var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode,s.kind||''];});
+  var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode,s.kind||'',instructorPick.id];});
   // 連続授業と週ごとの繰り返しを1回の Sheets 書き込み。途中までの追加・行ごとの再読み込みを避ける。
-  sh.getRange(sh.getLastRow()+1,1,values.length,13).setValues(values);
+  sh.getRange(sh.getLastRow()+1,1,values.length,14).setValues(values);
   addLog_('先生が'+student.name+'さんに'+candidates.length+'件案内('+fmtDateJa_(req.date)+' '+req.start+'・'+(mode==='online'?'オンライン':'対面')+')');
   var result={ok:true,added:candidates.length};
   try {
