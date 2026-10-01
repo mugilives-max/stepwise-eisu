@@ -16,13 +16,21 @@ function fixture(verified=true){
 }
 
 test('teacher cancellation and declined-request routes send only verified public snapshots, once',()=>{
-  for(const [op,status,extra,kind] of [['deleteSlot','offered',{},'cancelled'],['unbook','booked',{},'cancelled'],['resolveCancel','booked',{approve:true},'cancelled'],['resolveCancel','booked',{approve:false},'cancelDeclined']]){
+  for(const [op,status,extra,kind] of [['unbook','booked',{},'cancelled'],['resolveCancel','booked',{approve:true},'cancelled'],['resolveCancel','booked',{approve:false},'cancelDeclined']]){
     const h=fixture();h.slot(status);ok(h.cancel(op,extra));assert.equal(h.mailbox.length,1,op);
     const mail=h.mailbox[0];assert.match(mail.body,/2026-09-15 15:00/);assert.equal(mail.to,'student-cancel@example.invalid');assert.equal(mail.body.includes('PRIVATE_CANCEL_REASON'),false);assert.equal(mail.body.includes('synthetic-link-a'),false);
     assert.equal(h.rows('studentEmailOutbox').at(-1).kind,kind);assert.equal(h.rows('slotChangeNotices')[0].status,'done');
     ok(h.cancel(op,extra));assert.equal(h.mailbox.length,1,'replay does not send twice');
     if(kind==='cancelDeclined'){assert.equal(h.rows('slots')[0].status,'booked');assert.equal(h.rows('slots')[0].req,'');}
   }
+});
+
+// 返事前の案内の取り下げは「授業の取消」ではないので、生徒にメールを送らない（2026-10-01）
+test('withdrawing an unanswered offer sends no mail and records no student notice',()=>{
+  const h=fixture();h.slot('offered');ok(h.cancel('deleteSlot'));
+  assert.equal(h.rows('slots').length,0);assert.equal(h.mailbox.length,0);assert.equal(h.rows('studentEmailOutbox').filter(o=>o.kind==='cancelled').length,0);
+  assert.equal(h.rows('slotChangeNotices')[0].status,'done');
+  ok(h.cancel('deleteSlot'));assert.equal(h.mailbox.length,0,'a replay sends nothing either');
 });
 
 test('legacy stored addresses cannot receive cancellation or deprecated mail entrypoints',()=>{
@@ -53,16 +61,16 @@ test('deleted offered rows recover notification setup from their durable origina
     const h=fixture();h.slot('offered');const sh=h.spreadsheet.getSheetByName('slots'),del=sh.deleteRow;
     sh.deleteRow=function(index){sh.deleteRow=del;if(after)del.call(this,index);throw new Error('synthetic lost deletion');};
     assert.equal(h.cancel('deleteSlot').errorCode,'pending');assert.equal(h.mailbox.length,0);
-    if(after){ok(h.admin('kanriStudent',{studentId:'test-a'}));assert.equal(h.mailbox.length,1,'teacher read completes only an already durable cancellation notice');}
-    else{ok(h.admin('kanriStudent',{studentId:'test-a'}));assert.equal(h.mailbox.length,0,'teacher read must not perform the uncommitted deletion');}
-    ok(h.cancel('deleteSlot'));assert.equal(h.rows('slots').length,0);assert.equal(h.mailbox.length,1);
+    ok(h.admin('kanriStudent',{studentId:'test-a'}));assert.equal(h.rows('slots').length,after?0:1,'teacher read completes only an already durable deletion');
+    ok(h.cancel('deleteSlot'));assert.equal(h.rows('slots').length,0);assert.equal(h.mailbox.length,0,'a withdrawn offer never mails the student');
+    assert.equal(h.rows('slotChangeNotices')[0].status,'done');
   }
 });
 
 test('outbox preparation failure keeps a recoverable cancellation; saved outbox failure is retryable separately',()=>{
   for(const after of [false,true]){
-    const h=fixture();h.slot('offered');failWriteOnce(h.spreadsheet.getSheetByName('studentEmailOutbox'),v=>v[0][3]==='cancelled',after);
-    const res=ok(h.cancel('deleteSlot'));assert.match(res.notificationWarning,/通知/);assert.equal(h.rows('slots').length,0);assert.equal(h.mailbox.length,0);
+    const h=fixture();h.slot('booked');failWriteOnce(h.spreadsheet.getSheetByName('studentEmailOutbox'),v=>v[0][3]==='cancelled',after);
+    const res=ok(h.cancel('unbook'));assert.match(res.notificationWarning,/通知/);assert.notEqual(h.rows('slots')[0]&&h.rows('slots')[0].status,'booked');assert.equal(h.mailbox.length,0);
     if(!after){assert.equal(h.rows('slotChangeNotices')[0].status,'pending');ok(h.admin('state'));assert.equal(h.mailbox.length,1);}
     else{assert.equal(h.rows('slotChangeNotices')[0].status,'done');const out=h.rows('studentEmailOutbox').at(-1);ok(h.admin('studentEmailRetryNotification',{studentId:'test-a',notificationId:out.id}));assert.equal(h.mailbox.length,1);}
   }

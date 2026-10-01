@@ -313,7 +313,7 @@ function familyDeliverOutbox_(out,a,subject,body,authMail) {
   return out;
 }
 function familyBusinessMail_(out) {
-  var text={planProposed:'授業計画(回数・料金)の確認依頼があります。',invoiceCreated:'月謝の請求内容を記録しました。',invoiceVoided:'月謝の請求を取り消しました。'}[String(out.kind)];
+  var text={planProposed:'授業計画(回数・料金)の確認依頼があります。',invoiceCreated:'授業料の請求内容を記録しました。',invoiceVoided:'授業料の請求を取り消しました。'}[String(out.kind)];
   if(!text)throw new Error('通知種類が不明です');
   return {subject:'【ステップワイズ】'+(out.ym?out.ym+' ':'')+'保護者ページのお知らせ',body:text+'\n保護者ページにログインし、お子さまを選んで内容をご確認ください。\n\n'+FAMILY_PORTAL_URL_};
 }

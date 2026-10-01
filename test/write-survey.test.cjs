@@ -141,7 +141,8 @@ test('生徒の書き込みを D1 の上で流し、結果と Google 依存を�
   // 本物の GAS 側で失敗した操作は、比べたことにならない（両方同じエラーを返しただけ）
   assert.deepEqual(report.filter(r => r.gasError).map(r => r.label + ': ' + r.gasError), [], '見本の入力が通っていない');
 
-  // Google を使わない書き込みが実際にあること（先に移せる候補）
+  // Google を使わない書き込みが実際にあること（先に移せる候補）。
+  // 2026-10-01 から取消依頼は先生へのメール（MailApp）を使うので、Google 不要は授業不可の登録と宿題の完了の2つ
   const free = report.filter(r => !r.google.length).map(r => r.label);
-  assert.ok(free.length >= 3, 'Google 不要の書き込みが見つからない: ' + JSON.stringify(report.map(r => [r.label, r.google])));
+  assert.ok(free.length >= 2, 'Google 不要の書き込みが見つからない: ' + JSON.stringify(report.map(r => [r.label, r.google])));
 });

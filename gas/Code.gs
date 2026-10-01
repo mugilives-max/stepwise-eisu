@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-10-01-gas-catchup' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-10-01-mail-review' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -453,6 +453,8 @@ function slotCancellationNotice_(w){
   if(typeof serviceCancelDecided_==='function')serviceCancelDecided_(w);
   var before=JSON.parse(w.beforeJson),student=systemStudent_(w.studentId),notice;
   if(!student||!before.studentId)notice={status:'skipped',recorded:true};
+  // 返事前の案内の取り下げは「授業の取消」ではないので知らせない（生徒のページから案内が消えるだけ。2026-10-01）
+  else if(w.operation==='deleteSlot')notice={status:'skipped',recorded:true};
   else notice=w.operation==='cancelDeclined'?studentEmailNotifyCancelDeclined_(student,'slot-change:'+w.id,before):studentEmailNotifyCancelled_(student,'slot-change:'+w.id,before);
   var result={ok:true,notificationStatus:notice.status};
   if(notice.warning)result.notificationWarning=notice.warning;

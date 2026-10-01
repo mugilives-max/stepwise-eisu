@@ -142,7 +142,8 @@ function serviceCancelRequest_(req,auth){
   var original=JSON.parse(row.slotJson);if(original.date!==r.slot.date||original.start!==r.slot.start||Number(original.min)!==Number(r.slot.min))return {error:'授業日時が変更されました。最新の予定から再申請してください',errorCode:'conflict'};
   var obj={kind:'cancel',id:id,reason:row.reason,at:row.receivedAt,receivedAt:row.receivedAt,deadlineAt:row.deadlineAt,requestType:row.requestType};
   sheet_('slots').getRange(r.rowIndex,11).setNumberFormat('@').setValue(JSON.stringify(obj));memoClear_();
-  // Teacher dashboard is the reliable notification surface; no extra email side effect on retries.
+  // 初めて受け付けたときだけ先生にメール（同じ申請の再送では送らない）。管理画面のホームにも出る（2026-10-01）
+  if(!old&&!isTestStudent_(auth.student))notify_('【取消依頼】'+auth.student.name+'さん',(auth.role==='parent'?auth.student.name+'さんの保護者':auth.student.name+'さん')+'から授業の取消依頼が届きました。\n'+fmtDateJa_(r.slot.date)+' '+r.slot.start+'〜'+endTime_(r.slot.start,r.slot.min)+(r.slot.subject?'（'+r.slot.subject+'）':'')+'\n'+(row.requestType==='exception'?'無料で取り消せる期限（前日23時）を過ぎてからの依頼です。\n':'')+(row.reason?'理由: '+row.reason+'\n':'')+'\n管理画面で承認するか、予定どおり行うかを選んでください。\nhttps://www.stepwise-education.jp/kanri/');
   return {ok:true,cancellation:{id:id,receivedAt:row.receivedAt,requestType:row.requestType,status:'received'}};
 }
 function serviceCancelDecided_(notice){
