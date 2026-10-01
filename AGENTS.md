@@ -19,6 +19,7 @@ Claude / Codex 共通。塾のホームページと予約・管理システム�
 | 未完了事項、次の作業、運用上の判断 | [FUTURE_WORK.md](docs/FUTURE_WORK.md) |
 | UI・UXの目的、合意した方針、課題・改善候補・未決事項 | [UI_UX_REVIEW.md](docs/UI_UX_REVIEW.md) |
 | 保護者認証の変更・検証・復旧 | [PARENT_AUTH.md](docs/PARENT_AUTH.md) |
+| メール通知（誰に・いつ・何を送るか、止め方）の追加・変更 | [EMAIL_NOTIFICATIONS.md](docs/EMAIL_NOTIFICATIONS.md) |
 | MCPの接続・停止・更新 / 将来の書き込み設計 | [MCP_OPERATIONS.md](docs/MCP_OPERATIONS.md) / [MCP_DESIGN.md](docs/MCP_DESIGN.md) |
 | 授業サイクルの導入順 / 初回実装 | [REDESIGN_MASTER_PLAN.md](docs/REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](docs/LESSON_CYCLE_PHASE1_SPEC.md) |
 | 過去の調査根拠 / 契約条項の検討 | [REDESIGN_CURRENT_STATE.md](docs/REDESIGN_CURRENT_STATE.md) / [CONTRACT_CLAUSES_DRAFT.md](docs/CONTRACT_CLAUSES_DRAFT.md) |
