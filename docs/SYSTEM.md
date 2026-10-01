@@ -410,7 +410,9 @@ Google公式 [clasp](https://github.com/google/clasp) 3.4.1をdevDependencyに�
 
 - [MCP_DESIGN.md](MCP_DESIGN.md): ChatGPT / Codex から操作するための MCP サーバー設計と段階計画(2026-09-06〜)
 - [MCP_OPERATIONS.md](MCP_OPERATIONS.md): **MCP の運用手順**(置き場所、緊急停止、キー・パスフレーズの変更、再配置、トラブル対応)
-- [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 契約書に追加する条項の下書き(保護者承認・保護者パスワード)
+- [TERMS_DRAFT_2026-10.md](TERMS_DRAFT_2026-10.md): 受講規約の改定案（単月契約・日程の締め切り確定・日時の変更・当日の時間変更。2026-10、未採用）
+- [SCHEDULING_FLOW_DESIGN.md](SCHEDULING_FLOW_DESIGN.md): 日程の決め方の作り直しの設計（締め切りと自動確定・確定後の変更。2026-10、未実装）
+- [CONTRACT_CLAUSES_DRAFT.md](CONTRACT_CLAUSES_DRAFT.md): 旧条項案（情報の取り扱い・保護者パスワードの引き継ぎ元）
 - [PARENT_AUTH.md](PARENT_AUTH.md): 保護者専用認証の実装と反映順序
 - [REDESIGN_CURRENT_STATE.md](REDESIGN_CURRENT_STATE.md) / [REDESIGN_MASTER_PLAN.md](REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](LESSON_CYCLE_PHASE1_SPEC.md): 移行前の調査記録・将来計画・授業記録の実装仕様。採否はMASTER_PLAN、具体的な受け入れ条件はPHASE1_SPEC
 - MCPサーバー本体は別のprivateリポジトリ `mugilives-max/stepwise-mcp`。接続先・環境・配置手順は [MCP_OPERATIONS.md](MCP_OPERATIONS.md) に集約する。

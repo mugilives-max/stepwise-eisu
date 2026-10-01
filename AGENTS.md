@@ -22,7 +22,8 @@ Claude / Codex 共通。塾のホームページと予約・管理システム�
 | メール通知（誰に・いつ・何を送るか、止め方）の追加・変更 | [EMAIL_NOTIFICATIONS.md](docs/EMAIL_NOTIFICATIONS.md) |
 | MCPの接続・停止・更新 / 将来の書き込み設計 | [MCP_OPERATIONS.md](docs/MCP_OPERATIONS.md) / [MCP_DESIGN.md](docs/MCP_DESIGN.md) |
 | 授業サイクルの導入順 / 初回実装 | [REDESIGN_MASTER_PLAN.md](docs/REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](docs/LESSON_CYCLE_PHASE1_SPEC.md) |
-| 過去の調査根拠 / 契約条項の検討 | [REDESIGN_CURRENT_STATE.md](docs/REDESIGN_CURRENT_STATE.md) / [CONTRACT_CLAUSES_DRAFT.md](docs/CONTRACT_CLAUSES_DRAFT.md) |
+| 日程の決め方（締め切りと自動確定・確定後の変更）の設計 / 受講規約の改定案 | [SCHEDULING_FLOW_DESIGN.md](docs/SCHEDULING_FLOW_DESIGN.md) / [TERMS_DRAFT_2026-10.md](docs/TERMS_DRAFT_2026-10.md) |
+| 過去の調査根拠 / 旧契約条項案 | [REDESIGN_CURRENT_STATE.md](docs/REDESIGN_CURRENT_STATE.md) / [CONTRACT_CLAUSES_DRAFT.md](docs/CONTRACT_CLAUSES_DRAFT.md) |
 
 仕様や運用が変わったら該当する正本を更新し、後続作業に影響する未解決事項だけをFUTURE_WORKへ残す。別の引き継ぎ資料やDriveの本文コピーを増やさない。
 
