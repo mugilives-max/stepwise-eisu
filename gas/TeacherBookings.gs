@@ -20,7 +20,9 @@ function teacherBook_(req){
  }
  var result=schedulingAcceptMany_({k:student.code,slotIds:[String(row.slot.id)],requestId:'teacher-'+id,expectedSnapshots:[JSON.parse(receipt.snapshotJson)]},true);
  if(!result.ok)return {error:result.error||'確定処理を確認しています。同じ内容で再試行してください',errorCode:result.errorCode||'pending',pending:!!result.pending};
- return {ok:true,admin:adminState_(),notificationWarning:result.warning||''};
+ // 生徒には「授業を登録しました（返事は不要です）」を送る。同じ登録の再送では送らない（通知 ID で重複を防ぐ）
+ var notice=typeof studentEmailNotifyBooked_==='function'?studentEmailNotifyBooked_(student,'teacher-booked:'+row.slot.id+':'+id,[row.slot]):{};
+ return {ok:true,admin:adminState_(),notificationWarning:[result.warning||'',notice.warning||''].filter(Boolean).join(' ')};
 }
 function teacherBookingRespond_(req){
  var student=findStudentByCode_(req.k),row=findSlotRow_(String(req.slotId||''));

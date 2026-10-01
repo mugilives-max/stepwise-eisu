@@ -310,7 +310,7 @@
           h += '</div>';
           h += pushSection();
           dis=SE.busy||previewK?' disabled':'';
-          var prefs = s.prefs || {}, kinds = [['offered', '授業の案内（新しい授業の日時）'], ['changed', '授業の変更（日時・科目・形式）'], ['cancelled', '授業の取消'], ['cancelDeclined', '取消依頼への回答（予定どおり実施）']];
+          var prefs = s.prefs || {}, kinds = [['offered', '授業の案内・登録（新しい授業の日時）'], ['changed', '授業の変更（日時・科目・形式）'], ['cancelled', '授業の取消'], ['cancelDeclined', '取消依頼への回答（予定どおり実施）']];
           h += '<div class="card" style="margin-top:14px"><h2 style="margin:0 0 6px;font-size:16px">メールで受け取る項目</h2>';
           kinds.forEach(function (kv) { h += '<label style="display:block;padding:6px 0"><input type="checkbox" data-action="se-pref" data-kind="' + kv[0] + '"' + (prefs[kv[0]] === false ? '' : ' checked') + dis + '> ' + kv[1] + '</label>'; });
           h += '<p class="note">オフにした項目はメールを送りません（生徒ページでは今までどおり確認できます）。変更はすぐに保存されます。受信確認が済むまでは、どの項目もメールは届きません。</p></div>';

@@ -501,7 +501,8 @@ function schedulingAcceptMany_(req,teacherRecorded) {
       completed.push({slotId:snapshot.id});write.completedJson=JSON.stringify(completed);schedulingWrite_(write);
     }
     if(write.notificationState==='pending'){
-      if(isTestStudent_(student)||getConfig_('emailNotify')!=='on')write.notificationState='skipped';
+      // 先生が生徒の連絡を受けて登録したとき（teacherRecorded）は、自分の操作なので先生へは知らせない（2026-10-01）
+      if(isTestStudent_(student)||teacherRecorded||!teacherMailOn_('confirmed'))write.notificationState='skipped';
       else {
         // Mail has no idempotency key. Claim once before sending; uncertain sends are
         // surfaced for human review instead of silently sending the same message twice.

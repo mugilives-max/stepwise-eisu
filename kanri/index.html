@@ -1610,6 +1610,7 @@
           renderNav();
           var html = '<h1>設定</h1><p class="sub">先生アカウント・講師・ログ</p>';
           html += renderEffectsAdmin();
+          html += renderTeacherMailPrefs();
           html += renderInstructorAdmin();
           html += '<h2>アカウント</h2><div class="card"><div class="row between" style="margin-bottom:10px"><span>ログイン中: <strong>' + esc(A.account || "") + '</strong></span><button class="btn-quiet btn-sm" data-action="logout">ログアウト</button></div>';
           html += '<div class="form"><label for="f-curpass">現在のパスワード</label><input type="password" id="f-curpass" autocomplete="current-password"><label for="f-newpass">新しいパスワード</label><input type="password" id="f-newpass" autocomplete="new-password" placeholder="8文字以上"></div>';
@@ -1712,6 +1713,25 @@
         document.addEventListener('input',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
         document.addEventListener('change',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
         function meetingSave(){if(busy||!meetingDialog)return;var f=meetingDialog,r=route();busy=true;f.error='';render();admin('meetingCreate',f).then(function(res){busy=false;meetingDialog=null;cacheClear();if(!applyResult(res,r))load(true);else render();toast('ミーティングを登録しました');}).catch(function(e){busy=false;f.error=e.message;render();});}
+
+        /* ---------- 先生に届くメール（種類ごとのオン・オフ）---------- */
+        var TM = { busy: false, error: "" };
+        function renderTeacherMailPrefs() {
+          var p = A && A.teacherMailPrefs, dis = busy || TM.busy ? ' disabled' : '';
+          if (!p) return '';
+          var h = '<h2>先生に届くメール</h2><p class="small muted">生徒・保護者の操作を知らせるメールです（送り先は先生の Google アカウント）。届けたくない種類はチェックを外して保存してください。生徒・保護者に届くメールはここでは変わりません。</p>';
+          if (TM.error) h += '<p class="lc-notice" role="alert">' + esc(TM.error) + '</p>';
+          h += '<label style="display:block;font-weight:700;margin:6px 0"><input type="checkbox" data-tm-all' + (p.all ? ' checked' : '') + dis + '> 先生あての通知メールを受け取る（外すとすべて止まります）</label>';
+          h += '<div style="padding-left:18px">' + (p.kinds || []).map(function (k) { return '<label style="display:block;margin:4px 0"><input type="checkbox" data-tm-key="' + esc(k.key) + '"' + (k.on ? ' checked' : '') + dis + '> ' + esc(k.label) + '</label>'; }).join("") + '</div>';
+          return h + '<p><button class="btn-primary btn-sm" data-action="tm-save"' + dis + '>' + (TM.busy ? '保存中…' : 'この内容で保存') + '</button></p>';
+        }
+        function teacherMailSave() {
+          if (TM.busy || busy || !A || !A.teacherMailPrefs) return;
+          var all = document.querySelector('[data-tm-all]'), kinds = {};
+          document.querySelectorAll('[data-tm-key]').forEach(function (el) { kinds[el.getAttribute('data-tm-key')] = !!el.checked; });
+          TM.busy = true; TM.error = ""; render();
+          admin("teacherMailPrefsSave", { prefs: { all: !!(all && all.checked), kinds: kinds } }).then(function (res) { A.teacherMailPrefs = res.teacherMailPrefs; cacheClear(); toast("先生に届くメールの設定を保存しました"); }).catch(function (e) { TM.error = e.message; }).then(function () { TM.busy = false; render(); });
+        }
 
         /* ---------- 送信の記録（メール・カレンダー）----------
            システムが Apps Script に頼んだ処理の記録を新しい順に見る（2026-09-22 以降。Worker の _effects）。
@@ -3176,6 +3196,7 @@
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }
           if (a.indexOf("lc-") === 0) { ev.preventDefault(); lessonClick(a, btn); return; }
           if (a.indexOf("po-") === 0) { ev.preventDefault(); outlineClick(a, btn); return; }
+          if (a === "tm-save") { ev.preventDefault(); teacherMailSave(); return; }
           if (a.indexOf("sl-") === 0) { ev.preventDefault(); sendLogClick(a, btn); return; }
           if (a.indexOf("ef-") === 0) { if (a !== "ef-goto") ev.preventDefault(); effectsClick(a, btn); return; }
           if (a.indexOf("in-") === 0) { ev.preventDefault(); instructorAdminClick(a, btn); return; }

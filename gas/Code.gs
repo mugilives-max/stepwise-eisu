@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-10-01-mail-review-2' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-10-01-mail-review-3' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -1322,6 +1322,7 @@ function admin_(req) {
     case 'planLineApproveTeacher': return kanriWrap_(req, planLineApproveTeacher_(req), req.studentId);
     case 'planLinesFromDefault': return kanriWrap_(req, planLinesFromDefault_(req), req.studentId);
     case 'lessonKinds': return { ok: true, lessonKinds: lessonKindsPublic_() };
+    case 'teacherMailPrefsSave': return teacherMailPrefsSave_(req);
     case 'lessonKindSave': { var lk = lessonKindSave_(req); return lk.error ? lk : { ok: true, lessonKinds: lk.lessonKinds, admin: adminState_() }; }
     case 'taskAdd':     return kanriWrap_(req, adminTaskAdd_(req), req.studentId);
     case 'taskDel':     return kanriWrap_(req, adminTaskDel_(req), req.studentId);
@@ -1394,7 +1395,7 @@ function adminState_() {
     });
   return {
     pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [],
-    meetingSchedules:meetingRows_(), cancellations: cancelAttendance_(), lessonKinds: lessonKindsPublic_(), instructors: instructorOptions_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
+    meetingSchedules:meetingRows_(), cancellations: cancelAttendance_(), lessonKinds: lessonKindsPublic_(), instructors: instructorOptions_(), teacherMailPrefs: teacherMailPrefs_(), slots: slots, students: students, log: log, blocked: blocked, teacherOff: teacherOff_(addDays_(todayStr_(), -366), true), wishes: wishesForAdmin_(), events: eventsForAdmin_(366), plans: planRows_(), today: todayStr_(),
     billingSummaries: students.reduce(function(all,st){return all.concat(billingMonths_(st.id).map(function(b){return Object.assign({studentId:String(st.id)},b);}));},[]),
     account: getConfig_('teacherEmail')
   };
@@ -1756,8 +1757,40 @@ function deleteCalEvent_(slot) {
   }
 }
 
+// 先生あての通知メールの種類。件名の頭で見分ける（長いものを先に並べる）。
+// 設定ページで種類ごとに止められる（config の teacherMail.<key> が 'off' なら送らない。2026-10-01）。
+// emailNotify が 'on' でなければ、どの種類も送らない（全体の停止）。
+var TEACHER_MAIL_KINDS_ = [
+  { key: 'confirmed', prefix: '【確定】', label: '授業の確定（生徒が案内を承認したとき）' },
+  { key: 'declined', prefix: '【日時が合わない】', label: '案内への「日時が合わない」の返事' },
+  { key: 'cancelRequest', prefix: '【取消依頼】', label: '授業の取消依頼' },
+  { key: 'cancelWithdrawn', prefix: '【取消依頼の取り下げ】', label: '取消依頼の取り下げ' },
+  { key: 'sharedEvent', prefix: '【共有予定】', label: '生徒が共有した予定（テスト・行事など）' },
+  { key: 'wish', prefix: '【授業希望', label: '授業希望（授業できる時間帯）' },
+  { key: 'planAnswer', prefix: '【授業計画の回答】', label: '授業計画への保護者の回答' },
+  { key: 'planInquiry', prefix: '【授業計画の問い合わせ】', label: '授業計画についての保護者の問い合わせ' }
+];
+function teacherMailKind_(subject) {
+  var s = String(subject || ''), hit = null;
+  TEACHER_MAIL_KINDS_.forEach(function (k) { if (s.indexOf(k.prefix) === 0 && (!hit || k.prefix.length > hit.prefix.length)) hit = k; });
+  return hit ? hit.key : (s.indexOf('【取消】') === 0 ? 'cancelRequest' : '');
+}
+function teacherMailOn_(key) { return getConfig_('emailNotify') === 'on' && (!key || getConfig_('teacherMail.' + key) !== 'off'); }
+function teacherMailPrefs_() {
+  return { all: getConfig_('emailNotify') === 'on', kinds: TEACHER_MAIL_KINDS_.map(function (k) { return { key: k.key, label: k.label, on: getConfig_('teacherMail.' + k.key) !== 'off' }; }) };
+}
+function teacherMailPrefsSave_(req) {
+  var input = req.prefs, keys = TEACHER_MAIL_KINDS_.map(function (k) { return k.key; });
+  if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.all !== 'boolean' || !input.kinds || typeof input.kinds !== 'object') return { error: '通知の設定を確認してください' };
+  var bad = Object.keys(input.kinds).filter(function (k) { return keys.indexOf(k) < 0 || typeof input.kinds[k] !== 'boolean'; });
+  if (bad.length) return { error: '通知の設定を確認してください' };
+  setConfig_('emailNotify', input.all ? 'on' : 'off');
+  Object.keys(input.kinds).forEach(function (k) { setConfig_('teacherMail.' + k, input.kinds[k] ? 'on' : 'off'); });
+  addLog_('先生あての通知メールの設定を変更しました');
+  return { ok: true, teacherMailPrefs: teacherMailPrefs_() };
+}
 function notify_(subject, body) {
-  if (getConfig_('emailNotify') !== 'on') return;
+  if (!teacherMailOn_(teacherMailKind_(subject))) return;
   try {
     MailApp.sendEmail(Session.getEffectiveUser().getEmail(),
       '[ステップワイズ予約] ' + subject, body);

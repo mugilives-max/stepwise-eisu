@@ -13,7 +13,7 @@ function fixture() {
   h.setRow('students', 'id', 'test-a', { name: '架空生徒A' });
   h.spreadsheet.getSheetByName('slots').appendRow(['notice-slot', '2026-09-15', '15:00', 60, 'booked', 'test-a', false, '', '', '数学', '', 'in_person', '']);
   const original = h.context;
-  h.context = () => { const c = original(); c.MailApp.sendEmail = (...args) => { sent.push(args); }; return c; };
+  h.context = () => { const c = original(); c.MailApp.sendEmail = (...args) => { sent.push(args); }; c.MailApp.getRemainingDailyQuota = () => 100; return c; };
   h.send = req => JSON.parse(h.context().doPost({ postData: { contents: JSON.stringify(req) } }).getContent());
   return { h, sent };
 }
@@ -61,4 +61,40 @@ test('a subject-only change does not mail the student; a change of date, time, l
   run('editBooked', { start: '16:00' }); run('editOffered', { date: '2026-09-16' }); run('setSlotDeliveryMode', { deliveryMode: 'online' }); run('editBooked', { min: 90, subject: '英語' });
   assert.equal(calls.length, 4, 'real schedule changes still mail the student');
   assert.equal(calls[3][3].subject, '英語', 'a mail for a time change shows the corrected subject too');
+});
+
+// 見直し候補 6: 先生あての通知は種類ごとに止められる
+test('teacher mail kinds can be switched off one by one, and the master switch stops them all', () => {
+  const { h, sent } = fixture(), T = require('./gas-harness.cjs').TEACHER_TOKEN;
+  const prefs = ok(h.send({ action: 'admin', op: 'state', token: T })).admin.teacherMailPrefs;
+  assert.equal(prefs.all, true); assert.ok(prefs.kinds.length >= 8); assert.ok(prefs.kinds.every(k => k.on));
+  assert.ok(h.send({ action: 'admin', op: 'teacherMailPrefsSave', token: T, prefs: { all: true, kinds: { unknown: false } } }).error);
+  ok(h.send({ action: 'admin', op: 'teacherMailPrefsSave', token: T, prefs: { all: true, kinds: { cancelRequest: false } } }));
+  ok(h.send({ action: 'cancelReq', k: 'synthetic-link-a', slotId: 'notice-slot', requestId: 'notice-cancel-off', reason: '発熱' }));
+  assert.equal(sent.filter(a => String(a[1] || '').includes('【取消依頼】')).length, 0, 'a switched-off kind is not mailed');
+  const c = h.context();
+  c.notify_('【共有予定】架空生徒Aさん', '本文'); assert.equal(sent.filter(a => String(a[1] || '').includes('【共有予定】')).length, 1, 'other kinds still arrive');
+  assert.equal(c.teacherMailKind_('【取消依頼の取り下げ】架空生徒Aさん'), 'cancelWithdrawn', 'the longer prefix wins');
+  ok(h.send({ action: 'admin', op: 'teacherMailPrefsSave', token: T, prefs: { all: false, kinds: {} } }));
+  h.context().notify_('【共有予定】架空生徒Aさん', '本文'); assert.equal(sent.filter(a => String(a[1] || '').includes('【共有予定】')).length, 1, 'the master switch stops everything');
+  assert.equal(ok(h.send({ action: 'admin', op: 'state', token: T })).admin.teacherMailPrefs.kinds.find(k => k.key === 'cancelRequest').on, false);
+});
+
+// 見直し候補 2: 先生が承認を待たずに登録したとき
+test('a teacher booking mails the student "授業を登録しました" once and does not mail the teacher', () => {
+  const { h, sent } = fixture(), T = require('./gas-harness.cjs').TEACHER_TOKEN;
+  // 生徒のメールを受信確認済みにする（確認メールのリンクを使う）
+  ok(h.send({ action: 'studentEmailRequest', k: 'synthetic-link-a', email: 'student@example.invalid' }));
+  const verify = sent.map(a => a[0]).filter(m => m && typeof m === 'object' && /verify=/.test(m.body)).at(-1);
+  ok(h.send({ action: 'studentEmailVerify', challenge: decodeURIComponent(verify.body.match(/\?verify=([^\s]+)/)[1]) }));
+  h.spreadsheet.getSheetByName('slots').appendRow(['offer-slot', '2026-09-16', '17:00', 60, 'offered', 'test-a', '', '', '', '英語', '', 'in_person', '']);
+  const snap = h.context().schedulingSnapshot_(h.rows('slots').find(s => s.id === 'offer-slot'));
+  const req = { action: 'admin', op: 'teacherBook', token: T, studentId: 'test-a', slotId: 'offer-slot', requestId: 'teacher-book-mail-1', expectedSnapshot: snap };
+  ok(h.send(req)); ok(h.send(req));
+  const student = sent.map(a => a[0]).filter(m => m && typeof m === 'object' && /授業を登録しました/.test(m.subject));
+  assert.equal(student.length, 1, 'one mail even when the same booking is sent twice');
+  assert.equal(student[0].to, 'student@example.invalid'); assert.equal(student[0].subject, '【ステップワイズ】授業を登録しました');
+  assert.match(student[0].body, /^先生が授業を登録しました。返事は不要です。\n\n・2026-09-16 17:00〜18:00 英語（対面）/);
+  assert.equal(sent.filter(a => String(a[1] || '').includes('【確定】')).length, 0, 'the teacher is not told about their own booking');
+  assert.equal(h.rows('studentEmailOutbox').filter(o => o.kind === 'booked').length, 1);
 });

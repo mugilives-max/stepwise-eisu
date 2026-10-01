@@ -143,18 +143,18 @@ function studentEmailDeliverOutbox_(out,student,subject,body,verification){
   }catch(e){out.status='uncertain';out.sentAt='';out.error='送信結果が不明です。二重送信を避けるため再送しません';}return out;
 }
 function studentEmailBusinessBody_(out){
-  var slots=JSON.parse(String(out.snapshotJson)),kind=String(out.kind),titles={offered:'授業の案内が届いています',changed:'授業の予定を変更しました',cancelled:'授業を取り消しました',cancelDeclined:'授業は予定どおり行います'};
+  var slots=JSON.parse(String(out.snapshotJson)),kind=String(out.kind),titles={offered:'授業の案内が届いています',booked:'授業を登録しました',changed:'授業の予定を変更しました',cancelled:'授業を取り消しました',cancelDeclined:'授業は予定どおり行います'};
   if(!titles[kind]||!studentEmailSnapshotsValid_(kind,slots))throw new Error('通知の授業情報を確認してください');
   var lines=slots.map(function(s,i){return (kind==='changed'?(i===0?'変更前：':'変更後：'):'・')+s.date+' '+s.start+'〜'+endTime_(s.start,s.min)+' '+(s.subject||'科目未登録')+'（'+(s.deliveryMode==='online'?'オンライン':s.deliveryMode==='in_person'?'対面':'形式未登録')+'）';});
-  return {subject:'【ステップワイズ】'+titles[kind],body:titles[kind]+'。\n\n'+lines.join('\n')+'\n\n先生から案内済みの生徒専用ページを開いてご確認ください。このメールには専用リンクを記載していません。'};
+  return {subject:'【ステップワイズ】'+titles[kind],body:(kind==='booked'?'先生が授業を登録しました。返事は不要です':titles[kind])+'。\n\n'+lines.join('\n')+'\n\n先生から案内済みの生徒専用ページを開いてご確認ください。このメールには専用リンクを記載していません。'};
 }
 function studentEmailNotify_(student,eventKey,kind,slots){
   var snapshots=null,out=null,current=null;
   try{
     current=student&&findStudent_(student.id);if(!current)return {ok:true,status:'skipped',recorded:true};
-    snapshots=(slots||[]).map(studentEmailSnapshot_);if(['offered','changed','cancelled','cancelDeclined'].indexOf(kind)<0||!studentEmailSnapshotsValid_(kind,snapshots))throw new Error('通知対象を確認してください');
+    snapshots=(slots||[]).map(studentEmailSnapshot_);if(['offered','booked','changed','cancelled','cancelDeclined'].indexOf(kind)<0||!studentEmailSnapshotsValid_(kind,snapshots))throw new Error('通知対象を確認してください');
     var r=studentEmailRecord_(current.id),email=studentEmailVerifiedAddress_(current);out=studentEmailOutboxAdd_(current,eventKey,kind,{email:email,contactRevision:r?Number(r.revision)||0:0,slots:snapshots});
-    if(out.status==='pending'&&!studentEmailPrefs_(current.id)[kind]){out.status='skipped';out.error='本人の通知設定でオフのため送信しません';studentEmailWrite_('studentEmailOutbox',STUDENT_EMAIL_OUTBOX_COLS_,out);return {ok:true,status:'skipped',recorded:true};}
+    if(out.status==='pending'&&!studentEmailPrefs_(current.id)[kind==='booked'?'offered':kind]){out.status='skipped';out.error='本人の通知設定でオフのため送信しません';studentEmailWrite_('studentEmailOutbox',STUDENT_EMAIL_OUTBOX_COLS_,out);return {ok:true,status:'skipped',recorded:true};}
     if(!email&&out.status==='pending'){out.status='skipped';out.error='受信確認済みのメールがないため送信しません';studentEmailWrite_('studentEmailOutbox',STUDENT_EMAIL_OUTBOX_COLS_,out);return {ok:true,status:'skipped',recorded:true};}
     var content=studentEmailBusinessBody_(out),sent=studentEmailDeliverOutbox_(out,current,content.subject,content.body,false),result={ok:true,status:sent.status,recorded:true};
     if(['pending','failed','uncertain'].indexOf(String(sent.status))>=0)result.warning='保存は完了しましたが、生徒へのメール通知を確認してください';return result;
@@ -165,6 +165,8 @@ function studentEmailNotify_(student,eventKey,kind,slots){
   }
 }
 function studentEmailNotifyOffered_(student,eventKey,slots){return studentEmailNotify_(student,eventKey,'offered',slots);}
+// 先生が生徒の承認を待たずに登録したとき。設定は「授業の案内」と共通（2026-10-01）
+function studentEmailNotifyBooked_(student,eventKey,slots){return studentEmailNotify_(student,eventKey,'booked',slots);}
 function studentEmailNotifyOfferChanged_(student,eventKey,before,after){return studentEmailNotify_(student,eventKey,'changed',[before,after]);}
 function studentEmailNotifyCancelled_(student,eventKey,slot){return studentEmailNotify_(student,eventKey,'cancelled',[slot]);}
 function studentEmailNotifyCancelDeclined_(student,eventKey,slot){return studentEmailNotify_(student,eventKey,'cancelDeclined',[slot]);}
