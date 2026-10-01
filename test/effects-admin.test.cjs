@@ -80,3 +80,20 @@ test('the Meet backfill query avoids LIKE patterns that D1 rejects for long even
   const index = fs.readFileSync(path.join(__dirname, '..', 'cf', 'worker', 'index.mjs'), 'utf8');
   assert.match(index, /EFFECT_ADMIN_OPS\.indexOf\(String\(body\.op \|\| ""\)\) >= 0/);
 });
+
+test('the send log lists mail newest first with status, filters by kind and status, and pages by 50', async () => {
+  const { call, p } = await fixture();
+  let log = await call('effectsLog');
+  assert.equal(log.ok, true); assert.equal(log.kind, 'mail');
+  assert.deepEqual(log.items.map(x => [x.title, x.status]), [['送信中', 'pending'], ['送信済み', 'sent'], ['【ステップワイズ】授業のご案内', 'failed']]);
+  log = await call('effectsLog', { status: 'sent' });
+  assert.deepEqual(log.items.map(x => x.title), ['送信済み']);
+  log = await call('effectsLog', { kind: 'calendar', status: 'problem' });
+  assert.deepEqual(log.items.map(x => x.kind), ['calendarCreate'], 'automatic Meet retries are not part of the log');
+  for (let i = 0; i < 55; i++) await p.d1.prepare("insert into _effects (createdAt, kind, payload, status, sentAt) values (?, 'mail', ?, 'sent', ?)").bind('2026-09-30T00:00:00Z', JSON.stringify({ kind: 'mail', to: 't@example.invalid', subject: '件名' + i, body: '' }), '2026-09-30T00:00:05Z').run();
+  const first = await call('effectsLog', { status: 'sent' });
+  assert.equal(first.items.length, 50); assert.equal(first.more, true); assert.equal(first.items[0].title, '件名54');
+  const second = await call('effectsLog', { status: 'sent', before: first.next });
+  assert.equal(second.items.length, 6); assert.equal(second.more, false); assert.equal(second.items.at(-1).title, '送信済み');
+  assert.equal((await call('effectsLog', {}, 'wrong-token')).badAuth, true);
+});

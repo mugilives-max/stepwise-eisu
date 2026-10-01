@@ -106,3 +106,22 @@ test('settings lists failed mail and calendar work; each item is retried or dism
   retry.reply({ ok: true, id: 109, status: 'sent' }); await flush();
   assert.equal(ui.requests.at(-1).body.op, 'effectsList', 'the list is read again after each action');
 });
+
+test('the send log page shows sent mail with its body and loads more on request', async () => {
+  const ui = createUI('admin', { hash: '#sendlog', now: '2026-10-01T12:00:00+09:00' });
+  const first = ui.requests.find(r => r.body.op === 'effectsLog');
+  assert.deepEqual([first.body.kind, first.body.status, first.body.before], ['mail', 'all', undefined]);
+  first.reply({ ok: true, items: [{ id: 300, at: '10/1 13:00', sentAt: '10/1 13:01', kind: 'mail', status: 'sent', label: 'メール', title: '授業のご案内', to: 'student@example.invalid', preview: '10/3 の授業です' }, { id: 200, at: '9/29 12:00', kind: 'mail', status: 'failed', label: 'メール', title: '取消のお知らせ', to: 'parent@example.invalid', preview: '', error: 'Error: 停止' }], more: true, next: 200 });
+  await flush();
+  const html = ui.html();
+  assert.match(html, /<h1>送信の記録<\/h1>/); assert.match(ui.el('nav').innerHTML, /href="#settings" class="on">設定/);
+  assert.match(html, /授業のご案内/); assert.match(html, /送信 10\/1 13:01/); assert.match(html, /<span class="tag green">送信済み<\/span>/); assert.match(html, /<span class="tag red">失敗<\/span>/);
+  assert.match(html, /10\/3 の授業です/);
+  ui.click('sl-more');
+  assert.equal(ui.requests.at(-1).body.before, 200);
+  ui.requests.at(-1).reply({ ok: true, items: [{ id: 100, at: '9/25 10:00', kind: 'mail', status: 'sent', label: 'メール', title: '古いお知らせ', to: 'x@example.invalid', preview: '' }], more: false, next: 100 }); await flush();
+  assert.match(ui.html(), /古いお知らせ/); assert.match(ui.html(), /授業のご案内/, 'earlier rows stay');
+  assert.doesNotMatch(ui.html(), /data-action="sl-more"/);
+  ui.click('sl-status', { 'data-v': 'problem' });
+  assert.deepEqual([ui.requests.at(-1).body.status, ui.requests.at(-1).body.before], ['problem', undefined]);
+});

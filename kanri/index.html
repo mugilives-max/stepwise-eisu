@@ -702,6 +702,7 @@
           if (h === "#billing" || h.indexOf("#billing?") === 0) return { page: "billing", ym: new URLSearchParams(h.split("?")[1] || "").get("ym") || "" };
           if (h === "#home" || h === "#lessons") return { page: "lessons" };
           if (h === "#settings") return { page: "settings" };
+          if (h === "#sendlog") return { page: "sendlog" };
           return { page: "lessons" };
         }
         window.addEventListener("hashchange", function () {
@@ -719,7 +720,7 @@
             '<a href="#plans" class="' + (r.page === 'plans' || r.section === 'planning' ? 'on' : '') + '">計画</a>' +
             '<a href="#students" class="' + (r.page === "students" || (r.page === "student" && r.section !== "planning") || r.page === "families" ? "on" : "") + '">生徒</a>' +
             '<a href="#billing" class="' + (r.page === "billing" ? "on" : "") + '">請求</a>' +
-            '<a href="#settings" class="' + (r.page === "settings" ? "on" : "") + '">設定</a>' +
+            '<a href="#settings" class="' + (r.page === "settings" || r.page === "sendlog" ? "on" : "") + '">設定</a>' +
             '<a href="#" data-action="logout">ログアウト</a>' +
             (syncMsg ? '<span class="small muted" style="padding:6px 4px 6px 10px">' + syncMsg + '</span>' : "");
         }
@@ -731,6 +732,7 @@
           if (!token()) { authM = "login"; render(); return; }
           var r = route();
           if (isInstructor() && r.page !== "lesson") { loadInstructor(); return; }
+          if (r.page === "sendlog") { loadSendLog(true); return; }
           if (r.page === "settings") { loadInstructors(); loadEffects(); }
           if (r.page === "lessons" || r.page === "home") checkEffectsSoon();
           if (r.page === "families" || r.page === "students") loadFamilies();
@@ -1711,6 +1713,45 @@
         document.addEventListener('change',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
         function meetingSave(){if(busy||!meetingDialog)return;var f=meetingDialog,r=route();busy=true;f.error='';render();admin('meetingCreate',f).then(function(res){busy=false;meetingDialog=null;cacheClear();if(!applyResult(res,r))load(true);else render();toast('ミーティングを登録しました');}).catch(function(e){busy=false;f.error=e.message;render();});}
 
+        /* ---------- 送信の記録（メール・カレンダー）----------
+           システムが Apps Script に頼んだ処理の記録を新しい順に見る（2026-09-22 以降。Worker の _effects）。
+           「送信済み」は Google に送信を頼めたという意味で、相手に届いたかまでは分からない。 */
+        var SL = { kind: "mail", status: "all", items: [], more: false, next: 0, busy: false, error: "", loaded: false };
+        var SL_STATUS = { sent: ["green", "送信済み"], failed: ["red", "失敗"], pending: ["amber", "未送信"], dismissed: ["gray", "送らない"] };
+        function loadSendLog(reset) {
+          if (SL.busy) return;
+          if (reset) { SL.items = []; SL.next = 0; SL.more = false; SL.loaded = false; }
+          var seq = ++loadSeq; SL.busy = true; SL.error = ""; if (!SL.loaded) renderLoading(); else render();
+          admin("effectsLog", { kind: SL.kind, status: SL.status, before: reset ? undefined : SL.next || undefined }).then(function (res) {
+            if (seq !== loadSeq && !SL.loaded) return;
+            SL.items = SL.items.concat(res.items || []); SL.more = !!res.more; SL.next = res.next || 0; SL.loaded = true;
+          }).catch(function (e) { SL.error = e.message; SL.loaded = true; }).then(function () { SL.busy = false; authM = "ok"; if (route().page === "sendlog") render(); });
+        }
+        function renderSendLog() {
+          renderNav();
+          var dis = SL.busy ? ' disabled' : '';
+          var seg = function (action, value, current, label) { return '<button class="' + (value === current ? 'btn-primary' : 'btn-quiet') + ' btn-sm" data-action="' + action + '" data-v="' + value + '"' + dis + '>' + label + '</button>'; };
+          var h = '<div class="head"><div><a href="#settings" class="small">← 設定</a><h1>送信の記録</h1><p class="sub">システムから送ったメールと、Google カレンダーへの予定の作成・変更の記録です（2026年9月22日以降）。「送信済み」は Google に送信を頼めたという意味で、相手に届いたかどうかまでは分かりません。</p></div></div>';
+          h += '<div class="bo-head">' + seg("sl-kind", "mail", SL.kind, "メール") + seg("sl-kind", "calendar", SL.kind, "カレンダー") + seg("sl-kind", "all", SL.kind, "すべて") + '<span style="width:12px"></span>' + seg("sl-status", "all", SL.status, "すべての状態") + seg("sl-status", "sent", SL.status, "送信済み") + seg("sl-status", "problem", SL.status, "送れなかったもの") + '</div>';
+          if (SL.error) h += '<p class="lc-notice" role="alert">' + esc(SL.error) + '</p>';
+          if (!SL.items.length) h += SL.busy ? '<p class="small muted">読み込んでいます…</p>' : '<div class="empty">記録はありません。</div>';
+          else h += '<div class="bo-list">' + SL.items.map(function (x) {
+            var st = SL_STATUS[x.status] || ["gray", x.status];
+            var what = x.kind === "mail"
+              ? '<strong>' + esc(x.title) + '</strong><div class="small muted">宛先 ' + esc(x.to) + '</div><details class="small"><summary>本文を見る</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px">' + esc(x.preview) + '</div></details>'
+              : '<strong>' + esc(x.title || x.label) + '</strong><div class="small muted">' + esc(x.label) + (x.when ? ' ・ ' + esc(x.when) : '') + (x.meet ? ' ・ Meet あり' : '') + '</div>';
+            return '<div class="sl-row ef-row"><span class="small"><span class="num">' + esc(x.at) + '</span>' + (x.sentAt && x.status === "sent" && x.sentAt !== x.at ? '<div class="muted">送信 ' + esc(x.sentAt) + '</div>' : '') + '</span><span>' + what + '</span><span class="small muted" style="overflow-wrap:anywhere">' + (x.status !== "sent" ? esc(x.error || '') : '') + '</span><span style="justify-self:end"><span class="tag ' + st[0] + '">' + st[1] + '</span></span></div>';
+          }).join("") + '</div>';
+          if (SL.more) h += '<p><button class="btn-quiet" data-action="sl-more"' + dis + '>' + (SL.busy ? '読み込み中…' : 'もっと見る') + '</button></p>';
+          app.innerHTML = '<div class="flat">' + h + '</div>';
+        }
+        function sendLogClick(a, btn) {
+          if (SL.busy) return;
+          if (a === "sl-kind") { SL.kind = btn.getAttribute("data-v"); loadSendLog(true); }
+          else if (a === "sl-status") { SL.status = btn.getAttribute("data-v"); loadSendLog(true); }
+          else if (a === "sl-more") loadSendLog(false);
+        }
+
         /* ---------- 送れなかった処理（メール・カレンダー）----------
            Apps Script に頼んだ付随処理が失敗・未送信のまま残っているもの。自動では送り直さない。
            先生が中身を見て、1件ずつ「再送」か「送らない」を選ぶ（2026-10-01）。 */
@@ -1733,7 +1774,7 @@
         }
         function renderEffectsAdmin() {
           var d = EF.data, dis = busy || EF.busy || EF.sending ? ' disabled' : '';
-          var h = '<h2 id="failed-effects">送れなかった処理' + (EF.count ? ' <span class="cnt">' + EF.count + '件</span>' : '') + '</h2><p class="small muted">メールの送信やカレンダーの予定作成（Meet の発行を含む）が失敗したものです。自動では送り直しません。中身を見て、送るものは「再送」、送らないものは「送らない」を押してください。カレンダーの予定作成を再送すると、Meet のリンクもあとから入ります。</p>';
+          var h = '<h2 id="failed-effects">送れなかった処理' + (EF.count ? ' <span class="cnt">' + EF.count + '件</span>' : '') + '</h2><p class="small muted">メールの送信やカレンダーの予定作成（Meet の発行を含む）が失敗したものです。自動では送り直しません。中身を見て、送るものは「再送」、送らないものは「送らない」を押してください。カレンダーの予定作成を再送すると、Meet のリンクもあとから入ります。 <a href="#sendlog">送信の記録を見る ›</a></p>';
           if (EF.error) h += '<p class="lc-notice" role="alert">' + esc(EF.error) + '</p>';
           if (!d) return h + (EF.busy ? '<p class="small muted">読み込んでいます…</p>' : '');
           var items = d.items || [];
@@ -1995,6 +2036,7 @@
           else if (r.page === "students" && D) renderStudents();
           else if (r.page === "home" && D) renderHome();
           else if (r.page === "billing" && (BO.data || BO.error)) renderBillingPage();
+          else if (r.page === "sendlog" && SL.loaded) renderSendLog();
           else renderLoading();
           if (authM === "ok") {
             if (slotEdit && slotEdit.auth !== token() && token()) { slotEdit.auth = token(); slotEdit.busy = false; slotEdit.error = "ログインが更新されました。保持した変更内容を確認してください。"; }
@@ -3134,6 +3176,7 @@
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }
           if (a.indexOf("lc-") === 0) { ev.preventDefault(); lessonClick(a, btn); return; }
           if (a.indexOf("po-") === 0) { ev.preventDefault(); outlineClick(a, btn); return; }
+          if (a.indexOf("sl-") === 0) { ev.preventDefault(); sendLogClick(a, btn); return; }
           if (a.indexOf("ef-") === 0) { if (a !== "ef-goto") ev.preventDefault(); effectsClick(a, btn); return; }
           if (a.indexOf("in-") === 0) { ev.preventDefault(); instructorAdminClick(a, btn); return; }
           if (a === "inv-setup") { ev.preventDefault(); instructorInviteSubmit(); return; }

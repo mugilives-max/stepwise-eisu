@@ -1321,3 +1321,11 @@ Pages実行 `36237797285` 成功。管理・予約HTML、portal.js、learning-se
 - **Meet の取り直しの不具合**: `backfillMeet` が控えの検索に `like '%' || eventId || '%'` を使っており、予定 ID（77文字）が D1 の LIKE パターン長の上限を超えて「LIKE or GLOB pattern too complex」で失敗することがあった（直近2分に取り直しの記録があるとき）。`instr()` に変えた。
 - **再発防止の約束**: `gas/*.gs` を変えたら、Worker だけでなく Apps Script も公開する（`gas/Code.gs` の `release` を変えて `npm run gas:plan -- <前回公開したコミット>` → `npm run gas:apply -- <ID>`）。付随処理の失敗はホームの警告で気づける。
 - テスト: `test/effects-admin.test.cjs`、`test/instructors-ui.test.cjs`（設定ページの一覧と操作）。
+
+### 送信の記録（2026-10-01、Worker `2026-10-01-send-log`）
+
+- 管理画面の `#sendlog`（設定ページの「送れなかった処理」の説明文からリンク）。システムが Apps Script に頼んだメールと Google カレンダーの処理（作成・変更・削除）を新しい順に50件ずつ見る。「もっと見る」で続きを読む。
+- 絞り込み: 種類（メール／カレンダー／すべて）、状態（すべて／送信済み／送れなかったもの = 失敗・未送信・送らない）。メールは宛先・件名・本文（2,000文字まで）、カレンダーは題名・日時・Meet の有無を出す。
+- 「送信済み」は Apps Script が Google に送信を頼めたという意味で、相手に届いたかどうか（迷惑メール扱い・宛先不明など）までは分からない。
+- 記録の元は Worker の `_effects`（2026-09-22 以降）。それより前の GAS 単独の時期のメールは、台帳の `familyOutbox` / `studentEmailOutbox` に残っているが、この画面には出さない。Meet の取り直し（`calendarMeet`）は出さない。
+- admin op `effectsLog {kind, status, before}`（先生のみ、`cf/worker/effects-admin.mjs`）。テスト: `test/effects-admin.test.cjs`、`test/instructors-ui.test.cjs`。
