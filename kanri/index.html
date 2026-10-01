@@ -281,7 +281,7 @@
       .family-info-table td.is-missing{background:#fff4e3;color:#945900}
       @media(max-width:520px){.family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}}
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css?v=20260929-material"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css?v=20261001-hwrows"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
 <link rel="stylesheet" href="/assets/calendar.css?v=20260929-box-width"><script src="/assets/calendar.js?v=20260929-cancel-label"></script>
 </head>
@@ -2191,15 +2191,15 @@
         function lessonHomeworkRow(e, x, i, n, type, readonly) {
           var dis = readonly ? ' disabled' : '', attrs = ' data-item="' + esc(x.itemId) + '"';
           var label = type + ' ' + (n + 1), mode = x.dueMode || (x.due ? 'date' : 'none');
-          var defMode = type === 'メモ' ? 'none' : 'nextLesson', dueOpen = (e.dueOpen || {})[x.itemId];
           var choices=(e.context.materials || []).concat(e.form.homework.map(function(item){return item.material || ''; })).filter(function(v,j,a){return v && a.indexOf(v)===j;});
           var listId='lc-material-list-'+i;
-          var h='<div class="lc-homework lc-homework-table"><table><tbody>';
-          if(type==='宿題')h+='<tr><th><label for="lc-material-'+i+'">教材（任意）</label></th><td><input id="lc-material-'+i+'" list="'+esc(listId)+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="material" value="'+esc(x.material || '')+'" maxlength="120" placeholder="教材を選択、または新しく入力" aria-label="'+label+' の教材"'+dis+'><datalist id="'+esc(listId)+'">'+choices.map(function(v){return '<option value="'+esc(v)+'"></option>';}).join('')+'</datalist><small class="note">新しい教材名も入力できます。宿題を保存すると次回から選べます。</small></td></tr>';
-          h+='<tr><th><label for="lc-title-'+i+'">内容・範囲</label></th><td><input id="lc-title-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="title" value="'+esc(x.title)+'" maxlength="80" placeholder="例：p.12〜15 練習問題" aria-label="'+label+' の内容"'+dis+'></td></tr>';
-          h+='<tr><th><label for="lc-due-mode-'+i+'">期日</label></th><td><select id="lc-due-mode-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="dueMode"'+dis+'>'+deadlineOptions(mode)+'</select>';
-          if(mode==='date')h+='<input type="date" id="lc-due-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="due" value="'+esc(x.due)+'" aria-label="'+label+' の期限日"'+dis+'>';
-          h+='</td></tr></tbody></table>'+(readonly?'':lessonAction('remove','この欄を削除',false,'btn-danger',attrs));
+          // 1件1行: [教材][内容・範囲][期日][削除]。「日付を指定」のときだけ日付欄が下に出る。見出し(教材・内容・範囲・期日)は欄の上に1回だけ出す
+          var h='<div class="lc-homework lc-homework-table'+(type==='宿題'?'':' lc-homework-plain')+'">';
+          if(type==='宿題')h+='<input id="lc-material-'+i+'" list="'+esc(listId)+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="material" value="'+esc(x.material || '')+'" maxlength="120" placeholder="教材" aria-label="'+label+' の教材"'+dis+'><datalist id="'+esc(listId)+'">'+choices.map(function(v){return '<option value="'+esc(v)+'"></option>';}).join('')+'</datalist>';
+          h+='<input id="lc-title-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="title" value="'+esc(x.title)+'" maxlength="80" placeholder="'+(type==='宿題'?'内容・範囲（例：p.12〜15）':type+'の内容')+'" aria-label="'+label+' の内容"'+dis+'>';
+          h+='<select id="lc-due-mode-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="dueMode" aria-label="'+label+' の期日"'+dis+'>'+deadlineOptions(mode)+'</select>';
+          h+=readonly?'<span></span>':lessonAction('remove','×',false,'btn-quiet lc-hw-remove',attrs+' aria-label="'+label+' を削除" title="この欄を削除"');
+          if(mode==='date')h+='<div class="lc-hw-date"><label for="lc-due-'+i+'" class="small muted">期限日</label><input type="date" id="lc-due-'+i+'" data-lc-item="'+esc(x.itemId)+'" data-lc-prop="due" value="'+esc(x.due)+'" aria-label="'+label+' の期限日"'+dis+'></div>';
           return h+'</div>';
         }
 
@@ -2207,7 +2207,7 @@
           var field = document.getElementById((e.panePrefix || '') + id);
           if (field) field.focus();
         }
-        function renderLesson() { renderNav(); var e=lessonEditor(); if(e.context && e.context.slot && e.context.slot.date>(e.context.today||today())){location.hash="#lessons";return;} e.panePrefix=""; app.innerHTML=lessonHTML(e); }
+        function renderLesson() { renderNav(); var e=lessonEditor(); if(e.context && e.context.slot && e.context.slot.date>(e.context.today||today())){location.hash="#lessons";return;} e.panePrefix=""; app.innerHTML='<div class="flat">'+lessonHTML(e)+'</div>'; }
         function lessonHTML(e) {
           var c = e.context, r = c && c.record;
           var future = c && c.slot && c.slot.date > (c.today || today());
@@ -2240,7 +2240,7 @@
               var groupHtml='';
               if(type==='持ち物')groupHtml+='<details class="lc-secondary" data-lc-extras data-lc-editor="'+esc(e.key)+'"'+(e.extrasOpen?' open':'')+'><summary>持ち物・メモを追加（任意）</summary>';
               var rows = []; e.form.homework.forEach(function (x, i) { if ((x.type || "宿題") === type) rows.push({ x: x, i: i }); });
-              groupHtml += '<div class="lc-hwgroup"><div class="lc-hwhead"><h3>' + type + ' <span class="note">（任意）</span></h3><span class="note">基本の期限：' + (type === 'メモ' ? 'なし' : '次の同じ科目の授業まで') + '</span></div>';
+              groupHtml += '<div class="lc-hwgroup"><div class="lc-hwhead"><h3>' + type + ' <span class="note">（任意）</span></h3><span class="note">基本の期限：' + (type === 'メモ' ? 'なし' : '次の同じ科目の授業まで') + (type === '宿題' ? '。新しい教材名も入力でき、保存すると次回から選べます' : '') + '</span></div>' + (rows.length ? '<div class="lc-hwcols' + (type === '宿題' ? '' : ' lc-homework-plain') + '">' + (type === '宿題' ? '<span>教材</span>' : '') + '<span>内容・範囲</span><span>期日</span><span></span></div>' : '');
               rows.forEach(function (r, n) {
                 groupHtml += lessonHomeworkRow(e, r.x, r.i, n, type, readonly);
               });

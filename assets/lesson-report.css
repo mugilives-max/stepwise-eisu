@@ -49,9 +49,18 @@
 .lesson-pair-pane .lc-compose { grid-template-columns:minmax(0,1fr); }
 @media(max-width:760px) { .lc-compose { grid-template-columns:minmax(0,1fr); } .po-row { grid-template-columns:minmax(0,1fr) 76px; } .po-row .row { grid-column:1/-1; } .lc-share-actions > button { flex:1 1 100%; } }
 
-.lc-homework-table { display:block; }
-.lc-homework-table table { width:100%; border-collapse:collapse; table-layout:fixed; margin-bottom:8px; }
-.lc-homework-table th,.lc-homework-table td { border:1px solid #b8c4d3; padding:10px; text-align:left; vertical-align:top; }
-.lc-homework-table th { width:28%; background:#edf1f5; font-weight:normal; }
-.lc-homework-table input,.lc-homework-table select { width:100%; min-width:0; box-sizing:border-box; }
-.lc-homework-table small { display:block; margin-top:4px; }
+.lc-homework-table, .lc-hwcols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) 168px 44px; gap:6px 8px; align-items:center; margin-top:6px; }
+.lc-homework-table.lc-homework-plain, .lc-hwcols.lc-homework-plain { grid-template-columns:minmax(0,1fr) 168px 44px; }
+.lc-hwcols { font-size:12.5px; color:var(--muted,#64717f); margin-top:10px; padding:0 2px; }
+.lc-homework-table input, .lc-homework-table select { width:100%; min-width:0; box-sizing:border-box; margin:0; }
+.lc-hw-remove { min-height:44px; padding:0; font-size:18px; line-height:1; }
+.lc-hw-date { grid-column:1/-1; display:flex; align-items:center; gap:8px; padding:0 2px 4px; }
+.lc-hw-date input { width:auto; }
+@media (max-width:640px) {
+  .lc-hwcols { display:none; }
+  .lc-homework-table { grid-template-columns:minmax(0,1fr) 44px; padding-bottom:8px; border-bottom:1px solid var(--line,#dde5e9); }
+  .lc-homework-table.lc-homework-plain { grid-template-columns:minmax(0,1fr) 44px; }
+  .lc-homework-table select { grid-column:1/2; }
+  .lc-homework-table .lc-hw-remove { grid-row:1; grid-column:2; }
+  .lc-homework-table.lc-homework-plain .lc-hw-remove { grid-row:1; }
+}
