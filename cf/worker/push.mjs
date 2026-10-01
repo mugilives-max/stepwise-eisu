@@ -132,11 +132,20 @@ export function noticeFor(body, result) {
   if (action !== 'admin' || !result.ok) return null;
 
   // 先生が授業の案内を出した → その生徒へ（既にあるメール通知と同じ場面）
-  if (op === 'offer' && Number(result.added) > 0) {
+  // 予定表にまとめてあとで送る仮予定（held）は、送るまで知らせない
+  if (op === 'offer' && Number(result.added) > 0 && !result.held) {
     return { ownerKind: 'student', owner: String(body.studentId || ''), message: {
       title: '授業の案内が届きました',
       body: Number(result.added) + '件の候補が届いています。予定を確認してください',
       url: '/yoyaku/#home', tag: 'offer',
+    } };
+  }
+  // 先生が予定表を送った → その生徒へ（2026-10-01）
+  if (op === 'scheduleSend' && Number(result.sent) > 0) {
+    return { ownerKind: 'student', owner: String(body.studentId || ''), message: {
+      title: '授業予定表が届きました',
+      body: Number(result.sent) + '件の仮予定が届いています。都合の悪い日がないか確認してください',
+      url: '/yoyaku/#home', tag: 'schedule',
     } };
   }
   // 先生が学習計画の案内を送った → その生徒の保護者へ（宛先は呼び出し側で解決する）

@@ -28,7 +28,7 @@ test('home opens on the lesson calendar with today first and booked/offered kept
   assert.ok(h.indexOf('schedule-day-heading')<h.indexOf('id="lesson-attention"'));
   assert.equal((section.match(/data-action="slotedit"[^>]*data-id="a"/g)||[]).length,1);
   assert.ok(section.indexOf('data-id="b"')<section.indexOf('data-id="a"'));
-  assert.match(row(section,'b'),/data-action="teacher-book-open" data-id="b">承認待ち/);
+  assert.match(row(section,'b'),/data-action="teacher-book-open" data-id="b"[^>]*>承認待ち/);
   assert.doesNotMatch(row(section,'a'),/承認待ち/);
   assert.match(row(section,'a'),/data-status="booked"/);assert.match(row(section,'b'),/data-status="offered"/);
   assert.doesNotMatch(section,/data-id="future"/);
@@ -69,7 +69,7 @@ test('unconfirmed offer edits keep ID, kind, snapshot and input; no delete is se
 
 test('cancel requests keep reasons and explicit decision actions',async()=>{
   const ui=await ready({slots:[slot('cancel',{date:'2026-09-24',req:{requestType:'exception',reason:'【テスト】体調不良',at:'2026-09-22T03:00:00Z'}})]});
-  assert.match(attention(ui.html()),/取消依頼 <span class="cnt">1件[^]*取消依頼中[^]*【テスト】体調不良[^]*data-action="cancelok"[^]*data-action="cancelkeep"/);
+  assert.match(attention(ui.html()),/お休み・キャンセルの連絡 <span class="cnt">1件[^]*キャンセルの連絡[^]*【テスト】体調不良[^]*data-action="cancelok"[^>]*>キャンセルにする[^]*data-action="cancelkeep"/);
   ui.click('cancelkeep',{'data-id':'cancel'});
   assert.equal(ui.requests.at(-1).body.op,'resolveCancel');assert.equal(ui.requests.at(-1).body.approve,false);
   assert.equal(ui.requests.at(-1).body.studentId,'test-a');assert.equal(ui.requests.at(-1).body.slotId,'cancel');
@@ -160,4 +160,15 @@ test('editing an offered lesson from a selected date refreshes that date without
   assert.match(daySection(ui.html()),/9\/25\(金\)の授業[^]*18:00/);
   assert.ok(sel(ui.html(),'2026-09-25'));
   assert.equal(ui.requests.some(r=>r.body.op==='deleteSlot'),false);
+});
+
+// 2026-10-01: 生徒・保護者からの「日時の変更のお願い」はホームの先頭に出て、日時を直さずに済みにもできる
+test('date-change requests come first on home and can be cleared without editing',async()=>{
+  const ui=await ready({slots:[slot('move',{date:'2026-09-25',status:'offered',flow:{confirmBy:'2026-09-23',held:false,change:{kind:'move',by:'parent',note:'【テスト】26日だと助かります',at:'2026-09-22T03:00:00Z'}}}),slot('rec',{date:'2026-09-20',done:true})]});
+  const a=attention(ui.html());
+  assert.ok(a.indexOf('日時の変更のお願い')<a.indexOf('授業記録の未記入'));
+  assert.match(a,/日時の変更のお願い<\/strong>（保護者）【テスト】26日だと助かります/);
+  assert.match(a,/仮予定 9\/23まで/);
+  ui.click('change-clear',{'data-id':'move','data-sid':'test-a'});
+  assert.deepEqual([ui.requests.at(-1).body.op,ui.requests.at(-1).body.slotId,ui.requests.at(-1).body.studentId],['scheduleChangeClear','move','test-a']);
 });

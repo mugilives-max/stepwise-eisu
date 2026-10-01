@@ -270,6 +270,7 @@ function schedulingEditLesson_(req,op) {
     if(notice.recorded===false)return {ok:false,error:'変更は保存しました。通知の準備を確認できませんでした。同じ内容で再送してください',errorCode:'pending',pending:true,saved:true,requestId:requestId,slotId:String(req.slotId),notificationStatus:notice.status,notificationWarning:notice.warning};
     if(op==='editBooked')teacherBookingEdited_(write,before,after);
     write.status='done';schedulingEditWrite_(write);
+    slotChangeClear_(req.slotId); // 日時を直したら「日時の変更のお願い」は済み（2026-10-01）
     return schedulingEditResult_(write,student,before,after,false,notice);
   } catch(e){return {error:'変更の処理中です。同じ内容で再送してください',errorCode:'pending',pending:true,requestId:requestId,slotId:String(req.slotId)};}
 }
@@ -290,6 +291,8 @@ function schedulingAdminOffer_(req) {
   }
   // 担当講師（空 = 先生）。案内した授業すべてに付ける
   var instructorPick=instructorAssignable_(req.instructorId);if(instructorPick.error)return instructorPick;
+  // 2026-10-01: hold=true は「予定表にまとめてあとで送る」（生徒に見せず、メールも送らない）。それ以外は締め切り付きで今すぐ送る
+  var hold=req.hold===true||String(req.hold)==='true';
   var existing=readRows_('slots'),candidates=[],conflicts=[],blocks=blockedRows_(),offs=teacherOff_(req.date,true),warnings=[];
   // Stable IDs let a retry recognize a committed batch even if its response was lost.
   var batchKey=req.requestId?schedulingHash_(JSON.stringify([student.id,String(req.requestId),req.date,repeat,normalized])):'';
@@ -318,11 +321,15 @@ function schedulingAdminOffer_(req) {
       return {error:'授業計画の上限を超えています（'+short.length+'件）。授業計画の案内を送ってから案内するか、取り消してください',errorCode:'planShort',needPlan:true,planSuggest:planSuggest_(student,first,group)};
     }
   }
-  var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode,s.kind||'',instructorPick.id];});
+  var deadline=hold?null:scheduleConfirmBy_(candidates,todayStr_(),req.confirmBy?String(req.confirmBy):'');
+  if(deadline&&deadline.error)return schedulingError_(deadline.error);
+  candidates.forEach(function(s){s.confirmBy=hold?'hold':deadline.byId[s.id];});
+  var sh=sheet_('slots'),values=candidates.map(function(s){return [s.id,s.date,s.start,s.min,s.status,s.studentId,s.done,s.eventId,s.meetUrl,s.subject,s.req,s.deliveryMode,s.kind||'',instructorPick.id,s.confirmBy];});
   // 連続授業と週ごとの繰り返しを1回の Sheets 書き込み。途中までの追加・行ごとの再読み込みを避ける。
-  sh.getRange(sh.getLastRow()+1,1,values.length,14).setValues(values);
+  sh.getRange(sh.getLastRow()+1,1,values.length,15).setValues(values);
   addLog_('先生が'+student.name+'さんに'+candidates.length+'件案内('+fmtDateJa_(req.date)+' '+req.start+'・'+(mode==='online'?'オンライン':'対面')+')');
   var result={ok:true,added:candidates.length};
+  if(hold){result.held=true;result.admin=adminState_();return result;}
   try {
     var notice=typeof studentEmailNotifyOffered_==='function'?studentEmailNotifyOffered_(student,'offered:'+schedulingHash_(candidates.map(function(s){return s.id;}).sort().join('|')),candidates):{status:'skipped'};
     result.notificationStatus=notice.status;if(notice.warning)result.notificationWarning=notice.warning;
@@ -463,7 +470,7 @@ function schedulingAcceptMany_(req,teacherRecorded) {
     var selected=[],invalid=null;
     ids.forEach(function(id){
       var r=findSlotRow_(id);
-      if(!r||String(r.slot.studentId)!==String(student.id)||r.slot.status!=='offered')invalid={slotId:id,error:'承認できない案内が含まれています。画面を更新してください',errorCode:'conflict',refresh:true};
+      if(!r||String(r.slot.studentId)!==String(student.id)||r.slot.status!=='offered'||(!teacherRecorded&&slotHeld_(r.slot)))invalid={slotId:id,error:'承認できない案内が含まれています。画面を更新してください',errorCode:'conflict',refresh:true};
       else {
         var busy=schedulingPendingSlotMutation_(id),snapshot=expected.find(function(s){return s.id===id;});
         if(busy)invalid={slotId:id,error:busy.error,errorCode:busy.errorCode};

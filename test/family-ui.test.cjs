@@ -281,7 +281,7 @@ test('the family 成績 tab is the child grades page with the exam-report panel 
 });
 
 test('parent settings have a separate tab and mail notification toggles save at once', async () => {
-  const ui = loggedUI(); ui.requests[0].reply({ ...home(), emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: true } }); await flush();
+  const ui = loggedUI(); ui.requests[0].reply({ ...home(), emailPrefs: { planProposed: true, schedule: true, invoiceCreated: true, invoiceVoided: true } }); await flush();
   ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子A') }); await flush(); ui.requests.at(-1).reply({ ok: true, data: data('【テスト】子B') }); await flush();
   ui.navigate('#family/menu');
   assert.deepEqual([...ui.el('tabs').innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['ホーム', '宿題', '学習記録', '保護者メニュー', '設定']);
@@ -291,11 +291,11 @@ test('parent settings have a separate tab and mail notification toggles save at 
   const html = ui.html();
   assert.match(html, /保護者の設定/); assert.match(html, /メールアドレスを変更/);
   assert.doesNotMatch(html, /請求・お支払い|授業計画の案内|family-contact-|先生への連絡/);
-  assert.equal((html.match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 3);
+  assert.equal((html.match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 4, '授業予定表・予定日の決定も既定でオン');
   ui.check('data-kind', 'invoiceVoided', false);
-  assert.deepEqual(ui.requests.at(-1).body, { action: 'familyEmailPrefs', ftoken: 'test-family-token', prefs: { planProposed: true, invoiceCreated: true, invoiceVoided: false } });
-  ui.requests.at(-1).reply({ ok: true, emailPrefs: { planProposed: true, invoiceCreated: true, invoiceVoided: false } }); await flush();
-  assert.match(ui.html(), /メール通知の設定を保存しました/); assert.equal((ui.html().match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 2);
+  assert.deepEqual(ui.requests.at(-1).body, { action: 'familyEmailPrefs', ftoken: 'test-family-token', prefs: { planProposed: true, schedule: true, invoiceCreated: true, invoiceVoided: false } });
+  ui.requests.at(-1).reply({ ok: true, emailPrefs: { planProposed: true, schedule: true, invoiceCreated: true, invoiceVoided: false } }); await flush();
+  assert.match(ui.html(), /メール通知の設定を保存しました/); assert.equal((ui.html().match(/data-action="fa-mailpref"[^>]*checked/g) || []).length, 3);
   ui.navigate('#family/billing'); assert.match(ui.el('tabs').innerHTML, /href="#family\/menu" class="on"/);
 });
 

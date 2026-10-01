@@ -35,7 +35,7 @@ test('students / slots が無い台帳でも列見出しが揃う', () => {
   assert.deepEqual(headers(h, 'students'),
     ['id', 'name', 'active', 'email', 'code', 'rate30', 'monthly', 'parentToken', 'parentExp', 'deliveryMode']);
   assert.deepEqual(headers(h, 'slots'),
-    ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl', 'subject', 'req', 'deliveryMode', 'kind', 'instructorId']);
+    ['id', 'date', 'start', 'min', 'status', 'studentId', 'done', 'eventId', 'meetUrl', 'subject', 'req', 'deliveryMode', 'kind', 'instructorId', 'confirmBy', 'changeReqAt', 'changeReqBy', 'changeReqKind', 'changeReqNote']);
 });
 
 // ensureSchema_ に足したヘルパーが「作成より前」に紛れ込むのを防ぐ。

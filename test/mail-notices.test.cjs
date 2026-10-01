@@ -21,26 +21,26 @@ function fixture() {
 test('a new cancellation request mails the teacher once, with the lesson and reason; a retry of the same request does not repeat it', () => {
   const { h, sent } = fixture();
   ok(h.send({ action: 'cancelReq', k: 'synthetic-link-a', slotId: 'notice-slot', requestId: 'notice-cancel-01', reason: '学校行事' }));
-  const teacher = sent.filter(a => String(a[1] || '').includes('【取消依頼】'));
+  const teacher = sent.filter(a => String(a[1] || '').includes('【お休みの連絡】'));
   assert.equal(teacher.length, 1);
   assert.equal(teacher[0][0], 'teacher@example.invalid');
-  assert.equal(teacher[0][1], '[ステップワイズ予約] 【取消依頼】架空生徒Aさん');
-  assert.match(teacher[0][2], /架空生徒Aさんから授業の取消依頼が届きました。\n9\/15\(火\) 15:00〜16:00（数学）\n理由: 学校行事\n/);
+  assert.equal(teacher[0][1], '[ステップワイズ予約] 【お休みの連絡】架空生徒Aさん');
+  assert.match(teacher[0][2], /架空生徒Aさんから授業のお休みの連絡が届きました。\n9\/15\(火\) 15:00〜16:00（数学）\n理由: 学校行事\n/);
   assert.doesNotMatch(teacher[0][2], /前日23時/, 'a request in time is not marked late');
   assert.match(teacher[0][2], /https:\/\/www\.stepwise-education\.jp\/kanri\//);
   ok(h.send({ action: 'cancelReq', k: 'synthetic-link-a', slotId: 'notice-slot', requestId: 'notice-cancel-01', reason: '学校行事' }));
-  assert.equal(sent.filter(a => String(a[1] || '').includes('【取消依頼】')).length, 1, 'the same request does not mail twice');
+  assert.equal(sent.filter(a => String(a[1] || '').includes('【お休みの連絡】')).length, 1, 'the same request does not mail twice');
 });
 
 test('a late request says so, and test students never mail the teacher', () => {
   const { h, sent } = fixture();
   h.advance(Date.parse('2026-09-14T23:30:00+09:00') - h.now());
   ok(h.send({ action: 'cancelReq', k: 'synthetic-link-a', slotId: 'notice-slot', requestId: 'notice-cancel-02', reason: '発熱' }));
-  assert.match(sent.find(a => String(a[1]).includes('【取消依頼】'))[2], /無料で取り消せる期限（前日23時）を過ぎてからの依頼です。/);
+  assert.match(sent.find(a => String(a[1]).includes('【キャンセル】'))[2], /無料で変更・お休みにできる期限（前日23時）を過ぎてからの連絡です（キャンセル料の対象）。/);
   const t = fixture();
   t.h.setRow('students', 'id', 'test-a', { name: '【テスト】生徒A' });
   ok(t.h.send({ action: 'cancelReq', k: 'synthetic-link-a', slotId: 'notice-slot', requestId: 'notice-cancel-03', reason: '発熱' }));
-  assert.equal(t.sent.filter(a => String(a[1] || '').includes('【取消依頼】')).length, 0);
+  assert.equal(t.sent.filter(a => String(a[1] || '').includes('【お休みの連絡】')).length, 0);
 });
 
 test('parent invoice mails say 授業料, not the retired 月謝', () => {
@@ -71,7 +71,7 @@ test('teacher mail kinds can be switched off one by one, and the master switch s
   assert.ok(h.send({ action: 'admin', op: 'teacherMailPrefsSave', token: T, prefs: { all: true, kinds: { unknown: false } } }).error);
   ok(h.send({ action: 'admin', op: 'teacherMailPrefsSave', token: T, prefs: { all: true, kinds: { cancelRequest: false } } }));
   ok(h.send({ action: 'cancelReq', k: 'synthetic-link-a', slotId: 'notice-slot', requestId: 'notice-cancel-off', reason: '発熱' }));
-  assert.equal(sent.filter(a => String(a[1] || '').includes('【取消依頼】')).length, 0, 'a switched-off kind is not mailed');
+  assert.equal(sent.filter(a => String(a[1] || '').includes('【お休みの連絡】')).length, 0, 'a switched-off kind is not mailed');
   const c = h.context();
   c.notify_('【共有予定】架空生徒Aさん', '本文'); assert.equal(sent.filter(a => String(a[1] || '').includes('【共有予定】')).length, 1, 'other kinds still arrive');
   assert.equal(c.teacherMailKind_('【取消依頼の取り下げ】架空生徒Aさん'), 'cancelWithdrawn', 'the longer prefix wins');

@@ -1337,3 +1337,13 @@ Pages実行 `36237797285` 成功。管理・予約HTML、portal.js、learning-se
 - 毎日0時10分の `familyCloseMonths_` は、前月分を **翌月3日以降** にだけ確定する（定数 `BILLING_CLOSE_DAY_ = 3`、`billingCloseOn_(ym)`）。1日・2日は先生が生徒ごとに請求の内容を確かめる期間。前々月以前の保留分は今までどおり毎日やり直す。1日・2日でも先生が手で請求を記録でき、その月は自動では二重に記録しない。
 - `billingOverview` は `closeOn`（確定日）・`closeWaiting`（前月で確定日前）・`closeDay` を返す。請求ページは確定待ちの間「◯月3日の0時10分に、請求できる状態の生徒の分が自動で請求として記録されます」を出す。保護者の請求の説明（`assets/lesson-report.js`）も「翌月3日に前月分を確定」に直した。
 - 日程の決め方の作り直し（[SCHEDULING_FLOW_DESIGN.md](SCHEDULING_FLOW_DESIGN.md)）の先行分。テスト: `test/billing-close-day.test.cjs`、`test/billing-overview-ui.test.cjs`。
+
+### 日程の決め方 段階1: 仮予定の締め切りと自動決定（2026-10-01、GAS・Worker `2026-10-01-schedule-flow-1`）
+
+- 先生が送った授業は「仮予定」。締め切り（送った日の3日後。翌月分だけなら今月25日。授業の2日前まで）までに連絡がなければ、Worker の毎日0時10分の処理（`scheduleAutoConfirm_`、`SCHEDULE_AUTO_CONFIRM=1`）が決定する。決定は先生の直接決定と同じ処理で、カレンダー・Meet を作り、生徒（`confirmed`）と保護者（`scheduleConfirmed`）に1日1通知らせる。
+- 案内フォームの「送り方」で「予定表にまとめて、あとで送る」を選ぶと、生徒に見せずに置いておける（`confirmBy='hold'`）。生徒ページの「予定表を送る」（admin op `scheduleSend`）で締め切りを付けてまとめて送る（生徒 `schedule`、保護者 `scheduleSent`、アプリ通知）。
+- 生徒・保護者の授業ごとのボタンは「変更・お休みの連絡」の1つ。前日23時までは「日時の変更をお願いする」「お休みにする」（無料）、その後は「開始を遅らせたい」「キャンセルする（1,000円）」。日時の変更のお願い・開始を遅らせたいは新しい op `lessonChange`（保護者も代理で使える、権限は `reschedule`）。お休み・キャンセルは今の `cancelReq` / `decline`。
+- `slots` に `confirmBy`・`changeReqAt`・`changeReqBy`・`changeReqKind`・`changeReqNote`（15〜19列目、D1 `0019`、`schemaOk26`）。`familyEmailPrefs.schedule` を追加。
+- 先生あての件名を【お休みの連絡】【キャンセル】【日時の変更のお願い】【開始を遅らせたい】【お願いの取り下げ】に。設定の「先生に届くメール」も同じ分け方。
+- 管理画面: 授業のタグ（仮予定 M/Dまで・未送信（予定表）・日時の変更のお願い・お休みの連絡・キャンセルの連絡）、生徒ページの「未送信の仮予定 N件」と「予定表を送る」、ホームの「日時の変更のお願い」（「済みにする」= admin op `scheduleChangeClear`）。
+- 設計と実装の細部は [SCHEDULING_FLOW_DESIGN.md](SCHEDULING_FLOW_DESIGN.md) の 12 章。

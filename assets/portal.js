@@ -285,7 +285,7 @@
 
         var SE = { challenge:'', busy:false, message:'', error:'', email:'', removeConfirm:false, seq:0 };
         var NL = { text: '', busy: false, proposal: null, error: '' }; // 文章で予定を伝える
-        var folds = { tasks: true, offers: false, plan: false, progress: false }; // ホームの折り畳み(やることリスト・授業登録・授業計画の案内)。開閉は再描画をまたいで保持
+        var folds = { tasks: true, offers: false, offersOld: false, plan: false, progress: false }; // ホームの折り畳み(やることリスト・授業登録・授業計画の案内)。開閉は再描画をまたいで保持
         function foldHead(key, title, cnt) { return '<details class="fold ' + key + '" data-fold="' + key + '"' + (folds[key] ? ' open' : '') + '><summary><h2><span class="mk" aria-hidden="true"></span>' + title + (cnt ? ' <span class="cnt">' + cnt + '</span>' : '') + '</h2></summary>'; }
         function studentEmailReadChallenge() {
           if (location.hash.indexOf('#student-email?') !== 0) return;
@@ -310,7 +310,7 @@
           h += '</div>';
           h += pushSection();
           dis=SE.busy||previewK?' disabled':'';
-          var prefs = s.prefs || {}, kinds = [['offered', '授業の案内・登録（新しい授業の日時）'], ['changed', '授業の変更（日時・科目・形式）'], ['cancelled', '授業の取消'], ['cancelDeclined', '取消依頼への回答（予定どおり実施）']];
+          var prefs = s.prefs || {}, kinds = [['offered', '授業予定表・予定日の決定（新しい授業の日時）'], ['changed', '授業の変更（日時・科目・形式）'], ['cancelled', '授業の取消'], ['cancelDeclined', '取消依頼への回答（予定どおり実施）']];
           h += '<div class="card" style="margin-top:14px"><h2 style="margin:0 0 6px;font-size:16px">メールで受け取る項目</h2>';
           kinds.forEach(function (kv) { h += '<label style="display:block;padding:6px 0"><input type="checkbox" data-action="se-pref" data-kind="' + kv[0] + '"' + (prefs[kv[0]] === false ? '' : ' checked') + dis + '> ' + kv[1] + '</label>'; });
           h += '<p class="note">オフにした項目はメールを送りません（生徒ページでは今までどおり確認できます）。変更はすぐに保存されます。受信確認が済むまでは、どの項目もメールは届きません。</p></div>';
@@ -566,7 +566,7 @@
         /* ---------- 予定表 ---------- */
         // 予定表の本体は共通部品 assets/calendar.js(管理画面の生徒カルテと同じ)
         function renderCal(info, today, showToff) {
-          return window.StepwiseCalendar.render(info, { cancelLegend:true,compactAvailabilityLegend:true,toffLegend:"教室都合", offerLegend: "授業（未登録）", eventLegend: "イベント", year: calY, month: calM, today: today, selDate: selDate, selMode: selMode, selDays: selDays, showToff: !!showToff, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
+          return window.StepwiseCalendar.render(info, { cancelLegend:true,compactAvailabilityLegend:true,toffLegend:"教室都合", offerLegend: "仮予定", eventLegend: "イベント", year: calY, month: calM, today: today, selDate: selDate, selMode: selMode, selDays: selDays, showToff: !!showToff, minIdx: calNow.getFullYear() * 12 + calNow.getMonth() - 12, maxIdx: calNow.getFullYear() * 12 + calNow.getMonth() + 3 });
         }
 
         /* ---------- 画面: 専用リンクなし ---------- */
@@ -708,7 +708,7 @@
               if (s.st === "event") { html += dayRow('<span class="tag coral">重要な予定</span>', '', esc(s.title), s.id ? '<button class="btn-quiet btn-sm" data-action="delevent" data-id="' + esc(s.id) + '">削除</button>' : ''); return; }
               var time = s.start + "〜" + endTime(s.start, s.min), who = (s.subject ? esc(lessonLabel(s, true)) : "") + (s.deliveryMode === 'in_person' ? '' : deliveryTag(s));
               if (s.st === "cancelled") html += dayRow('', time, esc(s.subject||'')+' <button class="tag gray" data-action="cancel-review" data-id="'+esc(s.id)+'">キャンセル済み</button>'+(!s.confirmed?bookingReviewButton({id:s.id,teacherBooking:{status:'pending'}}).replace('booking-review','cancel-review').replace(/先生の登録内容を確認/g,'キャンセル内容を確認'):''), '');
-              else if (s.st === "mine") html += dayRow('', time, who + bookingReviewButton(s) + (s.req ? ' <span class="tag amber">キャンセル申請中</span>' : ''), meetControl(s, false) + cancelControl(s, true));
+              else if (s.st === "mine") html += dayRow('', time, who + bookingReviewButton(s) + changeTag(s), meetControl(s, false) + cancelControl(s, true));
               else if (s.st === "done") {
                 var records = (S.lessonRecords || []).filter(function (r) { return r.date === s.date && r.start === s.start && r.subject === (s.subject || '') && Number(r.min) === Number(s.min); });
                 var record = records.length === 1 ? records[0] : null;
@@ -720,6 +720,7 @@
                 html += emitDayRow(recordHtml+'</div></details>',s.start);
               }
               else if (s.st === "past") html += dayRow('<span class="tag gray">授業</span>', time, who+bookingReviewButton(s), '');
+              else if (s.st === "offer" && s.confirmBy) html += dayRow('<span class="tag amber">仮予定</span>', time, who + ' <span class="small muted">' + mdOf(s.confirmBy) + 'までに連絡がなければ決定</span>' + changeTag(s), cancelControl(s, true));
               else if (s.st === "offer") html += dayRow('<label><input type="checkbox" data-accept-id="' + esc(s.id) + '"' + (acceptBatch().selected[s.id] ? ' checked' : '') + dis + ' aria-label="' + esc(fmtDateW(s.date) + ' ' + s.start + 'を選択') + '"></label><span class="tag amber">案内</span>', time, who, '<button class="btn-primary btn-sm" data-action="askaccept" data-id="' + esc(s.id) + '"' + dis + '>予定する</button><button class="btn-quiet btn-sm" data-action="askdecline" data-id="' + esc(s.id) + '">再調整</button>');
             });
             dayNg.forEach(function (b) { html += dayRow('<span class="tag gray">授業不可</span>', b.start ? esc(b.start) + '〜' + esc(b.end) : '終日', b.note ? esc(b.note) : '', b.id && selDate >= today ? '<button class="btn-quiet btn-sm" data-action="delblock" data-ids="' + esc(b.id) + '">解除</button>' : ''); });
@@ -743,13 +744,13 @@
           if (next) {
             var untilTxt = next.date === today ? "今日" : next.date === addDaysStr(today, 1) ? "明日" : Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) + "日後";
             html += '<div class="card next"><div class="in">' + untilTxt + '</div><div class="when">' + fmtDateW(next.date) + " " + next.start + "〜" + endTime(next.start, next.min) + '</div>';
-            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + deliveryTag(next) + '<span class="small muted">' + next.min + "分</span>" + (next.req ? '<span class="tag red">キャンセル申請中</span>' : "") + '</div>';
+            html += '<div class="row" style="margin-top:4px">' + (next.subject ? '<span class="tag blue">' + esc(next.subject) + '</span>' : "") + deliveryTag(next) + '<span class="small muted">' + next.min + "分</span>" + changeTag(next) + '</div>';
             html += '<div class="row" style="margin-top:10px">';
             html += meetControl(next, true);
             html += '<a class="btn-ghost btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="' + gcalUrl(next) + '">カレンダーに追加</a>';
             html += cancelControl(next) + '</div></div>';
           } else {
-            html += '<div class="empty">次の授業はまだ決まっていません。' + (D.offers.length ? '下の「授業登録」から「予定する」を押してください。' : '先生から案内が届くとここに表示されます。') + '</div>';
+            html += '<div class="empty">次の授業はまだ決まっていません。' + (D.offers.length ? (D.offers.some(function (s) { return !s.confirmBy; }) ? '下の「授業登録」から「予定する」を押してください。' : '仮予定は、締め切りまでに連絡がなければ決定します。') : '先生から案内が届くとここに表示されます。') + '</div>';
           }
           return html;
         }
@@ -852,10 +853,19 @@
         }
 
         function renderOffers(D, sharedName) {
-          var offers = D.offers, b = acceptBatch(), html = renderBatch(b,sharedName);
+          var b = acceptBatch(), html = renderBatch(b,sharedName), karis = D.offers.filter(function (s) { return s.confirmBy; }), offers = D.offers.filter(function (s) { return !s.confirmBy; });
+          if (karis.length) {
+            var dl = []; karis.forEach(function (s) { if (dl.indexOf(s.confirmBy) < 0) dl.push(s.confirmBy); });
+            html += (sharedName ? '' : foldHead('offers', '仮予定', karis.length + '件・都合の悪い日だけ連絡'));
+            html += '<div class="card"><p class="note" style="margin-top:0">' + (dl.length === 1 ? mdOf(dl[0]) + 'までに' : '各授業の日付までに') + '連絡がなければ、この日時で決定します。都合の悪い授業だけ「変更・お休みの連絡」を押してください。</p>';
+            karis.forEach(function (s) {
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + ' ' + s.start + '〜' + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s, true)) : '') + deliveryTag(s) + (dl.length > 1 ? ' <span class="small muted">' + mdOf(s.confirmBy) + 'まで</span>' : '') + changeTag(s) + '</span>' + cancelControl(s) + '</div>';
+            });
+            html += '</div>' + (sharedName ? '' : '</details>');
+          }
           var selectable = offers.slice(0, 31), allSelected = selectable.every(function (s) { return b.selected[s.id]; });
           if (!offers.length) return html;
-          html += (sharedName ? '' : foldHead('offers', '授業登録', offers.length + '件・返事をお願いします'));
+          html += (sharedName ? '' : foldHead(karis.length ? 'offersOld' : 'offers', '授業登録', offers.length + '件・返事をお願いします'));
           html += '<div class="card" style="border-color:#d99a2b">';
           html += '<div class="row"><button class="btn-quiet btn-sm" data-action="' + (allSelected ? 'batchclear' : 'batchall') + '"' + (b.pending || b.busy || b.refreshRequired ? ' disabled' : '') + '>' + (allSelected ? '選択解除' : '一括選択') + '</button>' + (offers.length > 31 ? '<span class="small muted">一括選択は31件まで</span>' : '') + '</div>';
           offers.forEach(function (s) {
@@ -872,7 +882,7 @@
           if (upcoming.length > 1 || (upcoming.length === 1 && !(hasNextCard && next))) {
             html += '<div class="card">';
             upcoming.forEach(function (s) {
-              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s, true)) : "") + (s.req ? ' <span class="tag red">キャンセル申請中</span>' : "") + "</span>";
+              html += '<div class="slotline"><span class="time">' + fmtDateW(s.date) + " " + s.start + "〜" + endTime(s.start, s.min) + '</span><span class="who">' + (s.subject ? esc(lessonLabel(s, true)) : "") + changeTag(s) + "</span>";
               html += deliveryTag(s);
               html += meetControl(s, false);
               html += cancelControl(s) + "</div>";
@@ -883,7 +893,7 @@
           } else {
             html += '<div class="empty">確定している授業はありません</div>';
           }
-          html += '<div class="note">キャンセルは各授業から申請できます。申請後は「キャンセル申請中」と表示されます。</div>';
+          html += '<div class="note">日時の変更・お休みは、前日23時までなら各授業の「変更・お休みの連絡」から無料でできます。</div>';
           return html;
         }
 
@@ -900,6 +910,22 @@
           if (pending.kind === "accept") {
             return '<dialog id="schedule-accept-dialog" class="schedule-day-dialog" aria-labelledby="schedule-accept-title" aria-describedby="schedule-accept-message"><div class="schedule-dialog-heading"><h2 id="schedule-accept-title">授業を予定する</h2></div><p id="schedule-accept-message">' + esc(when) + ' の授業を予定しますか？</p><div class="row"><button type="button" class="btn-primary" data-action="doaccept">OK</button><button type="button" class="btn-quiet" data-action="closebar" autofocus>やめる</button></div></dialog>';
           }
+          if (pending.kind === "change") {
+            var choices = changeChoices(s), pick = choices.indexOf(pending.choice) >= 0 ? pending.choice : '';
+            var d = '<dialog id="schedule-accept-dialog" class="schedule-day-dialog" aria-label="変更・お休みの連絡"><div class="inner">';
+            d += '<div class="msg"><strong>' + esc(when) + '</strong>' + (s.subject ? ' ' + esc(lessonLabel(s, true)) : '') + (s.st === 'offer' ? '（仮予定）' : '') + '</div>';
+            if (!choices.length) d += '<p>授業が始まっているため、ここからは連絡できません。先生に直接お知らせください。</p>';
+            else {
+              d += '<p>どうしますか？</p><div class="row" role="group" aria-label="連絡の種類">' + choices.map(function (c) { var t = CHANGE_TEXT[c]; return '<button type="button" class="' + (pick === c ? 'btn-primary' : 'btn-quiet') + '" aria-pressed="' + (pick === c) + '" data-action="changepick" data-c="' + c + '">' + t[0] + '（' + t[1] + '）</button>'; }).join('') + '</div>';
+              if (pick) {
+                var t = CHANGE_TEXT[pick], offerRest = pick === 'rest' && s.st === 'offer';
+                d += '<p class="note">' + (offerRest ? 'この仮予定を取り下げます。料金はかかりません。' : t[2]) + '</p>';
+                if (!offerRest) d += '<input type="text" id="f-cnote" maxlength="' + (pick === 'move' || pick === 'late' ? 500 : 1000) + '" value="' + esc(pending.note || '') + '" placeholder="' + t[3] + '" style="width:100%;margin:6px 0 8px">';
+              }
+            }
+            d += '<div class="row">' + (pick ? '<button class="' + (pick === 'cancel' ? 'btn-danger' : 'btn-primary') + '" data-action="dochange"' + (busy ? ' disabled' : '') + '>' + (busy ? '送っています…' : '連絡する') + '</button>' : '') + '<button class="btn-quiet" data-action="closebar">やめる</button></div>';
+            return d + '</div></dialog>';
+          }
           var html = '<div class="confirmbar"><div class="inner">';
           if (pending.kind === "decline") {
             html += '<div class="msg">' + esc(when) + " の日時の再調整を先生にお願いしますか?<br><span class='small muted'>この案内は取り下げられ、先生が別の日時を登録します。</span></div>";
@@ -914,7 +940,7 @@
             html += '<input type="text" id="f-creason" maxlength="1000" required value="' + esc(pending.reason || '') + '" placeholder="理由（必須）" style="width:100%;margin:6px 0 8px">';
             html += '<div class="row"><button class="btn-danger" data-action="docancel"' + (busy ? " disabled" : "") + '>' + (busy ? '申請しています…' : 'キャンセルを申請する') + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           } else if (pending.kind === "withdraw") {
-            html += '<div class="msg">' + esc(when) + " の取消依頼を取り下げて、予定どおり授業を受けますか?</div>";
+            html += '<div class="msg">' + esc(when) + " の連絡を取り下げて、予定どおり授業を受けますか?</div>";
             html += '<div class="row"><button class="btn-primary" data-action="dowithdraw"' + (busy ? " disabled" : "") + ">" + (busy ? "送信しています…" : "依頼を取り下げる") + '</button><button class="btn-quiet" data-action="closebar">やめる</button></div>';
           }
           return html + (pending.kind==='cancel'?' </div></dialog>':'</div></div>');
@@ -1073,11 +1099,31 @@
           return html;
         }
 
+        // 授業ごとの「変更・お休みの連絡」（2026-10-01）。連絡中なら取り下げのボタンだけ出す
         function cancelControl(s, compact) {
-          if (s.req) return '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">依頼を取り下げる</button>';
-          if (typeof s.hours === "number" && s.hours < (S.cancelDeadlineH || 24)) return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : 'キャンセル') + '</button>';
-          return '<button class="btn-quiet btn-sm" data-action="askcancel" data-id="' + esc(s.id) + '">' + (compact ? 'キャンセル' : '取消を依頼') + '</button>';
+          if (s.change || s.req) return '<button class="btn-quiet btn-sm" data-action="askwithdraw" data-id="' + esc(s.id) + '">連絡を取り下げる</button>';
+          if (s.st === 'mine' && typeof s.hours === 'number' && s.hours <= 0) return '';
+          return '<button class="btn-quiet btn-sm" data-action="askchange" data-id="' + esc(s.id) + '">変更・お休みの連絡</button>';
         }
+        // 連絡の状態のタグ。お休み（前日23時まで・無料）とキャンセル（それ以降）を分けて出す
+        function changeTag(s) {
+          if (s.change) return ' <span class="tag amber">' + (s.change.kind === 'late' ? '開始を遅らせたい（相談中）' : '日時の変更をお願い中') + '</span>';
+          if (s.req) return s.req.requestType === 'exception' ? ' <span class="tag red">キャンセルの連絡済み</span>' : ' <span class="tag amber">お休みの連絡済み</span>';
+          return '';
+        }
+        function mdOf(d) { return Number(String(d).slice(5, 7)) + '/' + Number(String(d).slice(8, 10)); }
+        // いま選べる連絡（仮予定 / 決定〜前日23時 / 前日23時〜開始前）
+        function changeChoices(s) {
+          var now = Date.now(), deadline = Date.parse(s.date + 'T23:00:00+09:00') - 86400000, start = Date.parse(s.date + 'T' + s.start + ':00+09:00');
+          if (s.st === 'offer' || now <= deadline) return ['move', 'rest'];
+          return now < start ? ['late', 'cancel'] : [];
+        }
+        var CHANGE_TEXT = {
+          move: ['日時の変更をお願いする', '無料', '先生が別の日時を相談します。決まるまでは今の日時のままです。', '希望の日時など（必須）'],
+          rest: ['お休みにする', '無料', '前日23時までの連絡なので、料金はかかりません。', '理由（必須）'],
+          late: ['開始を遅らせたい', '先生に相談', '先生の都合がつくときだけ応じます。応じた場合も料金は予定どおりで、追加はありません。', '何分ほど遅らせたいか（必須）'],
+          cancel: ['キャンセルする', '1,000円', '前日23時を過ぎているため、キャンセル料（1回1,000円）がかかります。授業の開始後は授業料相当額です。急病などの事情があれば理由に書いてください。先生が確認し、減額・免除することがあります。', '理由（必須）']
+        };
 
         /* ---------- 画面: 成績 / 授業の記録 ---------- */
         function renderGradesPage() {
@@ -1320,7 +1366,7 @@
         // fixedTab: 'grades'=成績、'history'=授業の記録(既読機能付き)。空ならホーム。いずれも上のナビから
         // メール通知の種類別オン・オフ(保護者)。変更はすぐ保存
         function renderFamilyMailPrefs(dis) {
-          var prefs = (F.home && F.home.emailPrefs) || {}, kinds = [['planProposed', '月の回数・料金の確認依頼'], ['invoiceCreated', '請求の記録'], ['invoiceVoided', '請求の取消']];
+          var prefs = (F.home && F.home.emailPrefs) || {}, kinds = [['planProposed', '月の回数・料金の確認依頼'], ['schedule', '授業予定表・予定日の決定'], ['invoiceCreated', '請求の記録'], ['invoiceVoided', '請求の取消']];
           var h = '<div class="card" style="margin-top:12px"><h3 style="margin:0 0 6px;font-size:16px">メール通知</h3>';
           kinds.forEach(function (kv) { h += '<label style="display:block;padding:6px 0"><input type="checkbox" data-action="fa-mailpref" data-kind="' + kv[0] + '"' + (prefs[kv[0]] === false ? '' : ' checked') + dis + '> ' + kv[1] + '</label>'; });
           return h + '<p class="note">オフにした項目はメールを送りません（保護者ページのお知らせでは引き続き確認できます）。変更はすぐに保存されます。メールアドレスの確認や再設定のメールは対象外です。</p></div>';
@@ -1395,7 +1441,7 @@
           if(!familyCalendar.date){familyCalendar.date=today;familyCalendar.year=+today.slice(0,4);familyCalendar.month=+today.slice(5,7)-1;}
           src.lessonLabel=function(x){return x.studentLabel+' '+lessonLabel(x);};
           var filters=children.length>1?'<div class="family-calendar-filter" role="group" aria-label="カレンダーに表示する生徒"><span class="small muted">表示する生徒</span>'+children.map(function(c){var visible=!familyCalendar.hidden[c.studentId];return '<button type="button" class="btn-quiet btn-sm" data-action="family-calfilter" data-child="'+esc(c.studentId)+'" aria-pressed="'+visible+'">'+esc(familyChildName(c))+'<span class="small"> '+(visible?'表示中':'非表示')+'</span></button>';}).join('')+'</div>':'';
-          var h='<h2>予定表</h2>'+filters+window.StepwiseCalendar.render(window.StepwiseCalendar.buildInfo(src),{year:familyCalendar.year,month:familyCalendar.month,today:today,selDate:familyCalendar.date,showToff:true,overlapLanes:true,cancelLegend:true,compactAvailabilityLegend:true,toffLegend:"教室都合",offerLegend:'授業（未登録）',eventLegend:'イベント'});
+          var h='<h2>予定表</h2>'+filters+window.StepwiseCalendar.render(window.StepwiseCalendar.buildInfo(src),{year:familyCalendar.year,month:familyCalendar.month,today:today,selDate:familyCalendar.date,showToff:true,overlapLanes:true,cancelLegend:true,compactAvailabilityLegend:true,toffLegend:"教室都合",offerLegend:'仮予定',eventLegend:'イベント'});
           h=h.replace(/data-action="cal/g,'data-action="family-cal');
           return h+(missing?'<p role="status">ほかのお子さんの予定を読み込んでいます…</p>':'');
         }
@@ -1770,7 +1816,7 @@
         function studentNoticeItems(){
           if(!S||!S.me)return [];
           var items=[];
-          (S.slots||[]).filter(function(x){return x.st==='offer';}).forEach(function(x){items.push({title:'授業の案内：'+fmtDateW(x.date)+' '+x.start+' '+(x.subject||''),url:'#home',required:true});});
+          (S.slots||[]).filter(function(x){return x.st==='offer';}).forEach(function(x){items.push(x.confirmBy?{title:'仮予定：'+fmtDateW(x.date)+' '+x.start+' '+(x.subject||'')+'（'+mdOf(x.confirmBy)+'までに連絡がなければ決定）',url:'#home'}:{title:'授業の案内：'+fmtDateW(x.date)+' '+x.start+' '+(x.subject||''),url:'#home',required:true});});
           (S.lessonRecords||[]).slice(0,5).forEach(function(x){items.push({title:'授業の記録：'+fmtDateW(x.date)+' '+(x.subject||''),url:'#history'});});
           return items;
         }
@@ -1786,7 +1832,7 @@
           var p=S.permissions;
           app.innerHTML=app.innerHTML.replace(/<(button|input)\b[^>]*>/g,function(tag){var a=(tag.match(/data-action="([^"]+)"/)||[])[1],key='';
             if(/data-accept-id=/.test(tag)||['askaccept','doaccept','batchall','batchreview','batchsend'].indexOf(a)>=0)key='booking';
-            if(['askdecline','askcancel','askwithdraw','dodecline','docancel','dowithdraw'].indexOf(a)>=0)key='reschedule';
+            if(['askdecline','askcancel','askwithdraw','dodecline','docancel','dowithdraw','askchange','changepick','dochange'].indexOf(a)>=0)key='reschedule';
             if(a==='dayavailability'||a==='delblock')key='availability';
             if(a==='delevent')key='events';
             if(a==='dayact'){var mode=(tag.match(/data-m="([^"]+)"/)||[])[1];key=mode==='want'?'request':mode==='event'?'events':'availability';}
@@ -2014,7 +2060,23 @@
               pending.reason=reason;
               studentAction({ action: "cancelReq", slotId: pending.slotId, requestId:pending.requestId, k: myKey(), reason: reason }, "キャンセル申請を受け付けました"); break;
             case "askwithdraw": pending = { kind: "withdraw", slotId: id }; render(); break;
-            case "dowithdraw": studentAction({ action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "依頼を取り下げました"); break;
+            case "dowithdraw": {
+              var ws = (S.slots || []).filter(function (x) { return sameId(x.id, pending.slotId); })[0];
+              studentAction(ws && ws.change ? { action: "lessonChange", withdraw: true, slotId: pending.slotId, k: myKey() } : { action: "cancelReq", withdraw: true, slotId: pending.slotId, k: myKey() }, "連絡を取り下げました"); break;
+            }
+            case "askchange": pending = { kind: "change", slotId: id, requestId: crypto.randomUUID(), choice: '', note: '' }; render(); break;
+            case "changepick": if (pending && pending.kind === 'change') { var cn = document.getElementById('f-cnote'); if (cn) pending.note = cn.value; pending.choice = btn.getAttribute('data-c'); render(); } break;
+            case "dochange": {
+              if (!pending || pending.kind !== 'change' || !pending.choice) return;
+              var cs = (S.slots || []).filter(function (x) { return sameId(x.id, pending.slotId); })[0];
+              if (!cs) { toast('最新の予定を確認してください'); return; }
+              var ch = pending.choice, note = (document.getElementById('f-cnote') || { value: '' }).value.trim(); pending.note = note;
+              if (ch === 'rest' && cs.st === 'offer') { studentAction({ action: "decline", slotId: pending.slotId, k: myKey() }, "お休みにしました"); break; }
+              if (!note) { toast(CHANGE_TEXT[ch][3].replace('（必須）', '') + 'を入力してください'); return; }
+              if (ch === 'rest' || ch === 'cancel') studentAction({ action: "cancelReq", slotId: pending.slotId, requestId: pending.requestId, k: myKey(), reason: note }, ch === 'rest' ? "お休みの連絡を受け付けました" : "キャンセルの連絡を受け付けました");
+              else studentAction({ action: "lessonChange", slotId: pending.slotId, kind: ch, note: note, k: myKey() }, ch === 'move' ? "日時の変更をお願いしました" : "先生に連絡しました");
+              break;
+            }
             case "delwish": { var dw = (S.wishes || []).filter(function (w) { return String(w.id) === String(id); })[0]; pending = { kind: "remove", verb: "取り消す", text: "授業できる時間帯" + (dw ? " " + fmtDateW(dw.date) + " " + esc(dw.start) + "〜" + esc(dw.end) : "") + " の登録を取り消しますか?", body: { action: "unwish", k: myKey(), wishId: id }, ok: "授業可能日時を取り消しました" }; render(); break; }
             case "delevent": { var de = (S.events || []).filter(function (e) { return String(e.id) === String(id); })[0]; pending = { kind: "remove", verb: "削除する", text: "重要な予定" + (de ? "「" + esc(de.title) + "」（" + fmtDateW(de.date) + (de.dateTo && de.dateTo !== de.date ? "〜" + fmtDateW(de.dateTo) : "") + "）" : "") + " を削除しますか?", body: { action: "eventDel", k: myKey(), eventId: id }, ok: "予定を取り消しました" }; render(); break; }
             case "doremove": if (pending && pending.kind === "remove") studentAction(pending.body, pending.ok); break;

@@ -426,9 +426,9 @@ test('a family session reads a linked child state and acts for the child through
 
 test('family mail preferences default on, save per family, and skip only the kinds turned off', () => {
   const h = createFamilyHarness(); const v = verified(h); h.mailbox.length = 0;
-  assert.deepEqual(ok(h.family('familyHome', { ftoken: v.ftoken })).emailPrefs, { planProposed: true, invoiceCreated: true, invoiceVoided: true });
+  assert.deepEqual(ok(h.family('familyHome', { ftoken: v.ftoken })).emailPrefs, { planProposed: true, invoiceCreated: true, invoiceVoided: true, schedule: true });
   rejected(h.family('familyEmailPrefs', { prefs: { invoiceCreated: false } })); rejected(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { other: false } })); rejected(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { invoiceCreated: 'no' } }));
-  assert.deepEqual(ok(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { invoiceCreated: false } })).emailPrefs, { planProposed: true, invoiceCreated: false, invoiceVoided: true });
+  assert.deepEqual(ok(h.family('familyEmailPrefs', { ftoken: v.ftoken, prefs: { invoiceCreated: false } })).emailPrefs, { planProposed: true, invoiceCreated: false, invoiceVoided: true, schedule: true });
   assert.equal(h.rows('familyEmailPrefs').length, 1);
   const notify = (kind, key) => JSON.parse(JSON.stringify(h.context().familyNotifySafe_(kind, 'test-a', key, { ym: '2026-09', revision: 1 })));
   assert.deepEqual(ok(notify('invoiceCreated', 'pref-one')).statuses, ['skipped']); assert.equal(h.mailbox.length, 0);

@@ -46,7 +46,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'state') return json_(studentState_(p.k || ''));
     if (p.action === 'authmode') return json_({ mode: authMode_() });
-    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-10-01-billing-close-3' });
+    return json_({ ok: true, service: 'stepwise-yoyaku', release: '2026-10-01-schedule-flow-1' });
   } catch (err) {
     return json_({ error: String(err) });
   }
@@ -70,7 +70,7 @@ function doPost(e) {
     var res;
     // 保護者ページから子どもの操作を代行: ログイン済みの保護者(ftoken)と、その家族に紐付く子ども(studentId)を確認できたときだけ、
     // その子の専用コードを k として扱う(コードは応答に含めない)。対象は生徒本人が使う操作に限る(メール設定・保護者認証は対象外)。
-    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'teacherBookingRespond', 'cancelAcknowledge', 'cancelReliefRequest', 'decline', 'cancelReq', 'grades', 'scheduleParse'];
+    var FAMILY_PROXY_ = ['wish', 'unwish', 'wishMany', 'eventAddMany', 'eventAdd', 'eventDel', 'block', 'unblock', 'blockSet', 'taskAdd', 'taskDone', 'taskDel', 'accept', 'acceptMany', 'teacherBookingRespond', 'cancelAcknowledge', 'cancelReliefRequest', 'decline', 'cancelReq', 'lessonChange', 'grades', 'scheduleParse'];
     var proxyErr = null, authenticatedFamilyProxy=false;delete req.familyProxy;
     if (!req.k && req.ftoken && req.studentId && FAMILY_PROXY_.indexOf(String(req.action || '')) >= 0 && typeof familyChildRequire_ === 'function') {
       var fp = familyChildRequire_(req);
@@ -92,6 +92,7 @@ function doPost(e) {
       case 'cancelAcknowledge': res = cancelAcknowledge_(req); break;
       case 'teacherBookingRespond': res = teacherBookingRespond_(req); break;
       case 'acceptMany': res = schedulingAcceptMany_(req); break;
+      case 'lessonChange': res = lessonChange_(req); break; // 変更・お休みの連絡のうち、日時の変更のお願い・開始を遅らせたい(ScheduleFlow.gs)
       case 'decline': res = decline_(req.slotId, req.k); break;
       case 'cancel':  res = { error: '取消は先生への依頼制になりました。ページを開き直してください', refresh: true }; break;
       case 'cancelReq': res = cancelReq_(req); break;
@@ -145,10 +146,11 @@ function studentState_(code) {
   // 本人の予定・案内のみ返す(他の生徒の予定は一切送らない)
   var all = readRows_('slots').filter(function (s) { return String(s.studentId) === String(me.id); });
   var slots = all
-    .filter(function (s) { return s.date >= today; })
+    .filter(function (s) { return s.date >= today && !(s.status === 'offered' && slotHeld_(s)); })
     .map(function (s) {
-      var st = s.status === 'offered' ? 'offer' : 'mine';
+      var st = s.status === 'offered' ? 'offer' : 'mine', flow = slotFlow_(s);
       return {
+        confirmBy: flow.confirmBy, change: flow.change,
         teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), st: st,
         subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
         meet: st === 'mine' ? String(s.meetUrl || '') : '',
@@ -352,9 +354,10 @@ function decline_(slotId, code) {
   }
   var when = fmtDateJa_(r.slot.date) + ' ' + r.slot.start + '〜' + endTime_(r.slot.start, r.slot.min);
   sheet_('slots').deleteRow(r.rowIndex);
-  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の案内を「この日時は難しい」');
-  if (!isTestStudent_(student)) notify_('【日時が合わない】' + student.name + 'さん',
-    student.name + 'さんが案内「' + when + '」を「この日時は難しい」と回答しました。\n別の時間を案内してください。');
+  addLog_(student.name + 'さんが ' + fmtDateJa_(r.slot.date) + ' ' + r.slot.start + ' の仮予定をお休みに');
+  // 2026-10-01: 「変更・お休みの連絡」の「お休みにする」（仮予定）。仮予定は取り下げられる
+  if (!isTestStudent_(student)) notify_('【お休みの連絡】' + student.name + 'さん',
+    student.name + 'さんが仮予定「' + when + (r.slot.subject ? '（' + r.slot.subject + '）' : '') + '」をお休みにしました。\n仮予定は取り下げました。必要なら別の日時を送ってください。');
   return { ok: true, state: studentState_(code) };
 }
 
@@ -416,7 +419,7 @@ function cancelReq_(req) {
     if(prior&&prior.id){var receipt=serviceRows_('cancellationRequests').filter(function(x){return x.id===prior.id;})[0];if(receipt){receipt.status='withdrawn';receipt.decidedAt=new Date().toISOString();serviceWrite_('cancellationRequests',receipt);}}
     sheet_('slots').getRange(r.rowIndex, 11).setValue('');
     addLog_(name + 'さんが ' + when + ' の取消依頼を取り下げ');
-    if (!isTestStudent_(student)) notify_('【取消依頼の取り下げ】' + name + 'さん', name + 'さんが ' + when + ' の取消依頼を取り下げました。予定どおり行います。');
+    if (!isTestStudent_(student)) notify_('【お願いの取り下げ】' + name + 'さん', name + 'さんが ' + when + ' のお休み・キャンセルの連絡を取り下げました。予定どおり行います。');
     return { ok: true, state: studentState_(req.k) };
   }
   var result=serviceCancelRequest_(Object.assign({},req,{_receivedAt:req._receivedAt,requestId:req.requestId||'legacy-'+schedulingHash_(String(req.slotId)+'|'+String(req.reason))}),{student:student,role:'student',senderId:String(student.id)});
@@ -842,7 +845,7 @@ function parentDataForStudent_(student) {
     months[m].count++; months[m].minutes += Number(l.min) || 0;
   });
   var planLines = parentPlanLines_(String(student.id), todayStr_());
-  var upcoming = readRows_('slots').filter(function(s){return String(s.studentId)===String(student.id)&&s.date>=todayStr_()&&(s.status==='offered'||s.status==='booked');})
+  var upcoming = readRows_('slots').filter(function(s){return String(s.studentId)===String(student.id)&&s.date>=todayStr_()&&(s.status==='offered'&&!slotHeld_(s)||s.status==='booked');})
     .sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);})
     .map(function(s){return {id:String(s.id),date:s.date,start:s.start,min:Number(s.min),status:s.status,subject:String(s.subject||''),deliveryMode:String(s.deliveryMode||''),meetUrl:String(s.meetUrl||'')};});
   return { ok: true, data: { name: d.name, lessonRecords: typeof lessonPublishedForStudent_ === 'function' ? lessonPublishedForStudent_(student.id) : [], deliveryMode:String(student.deliveryMode||''), upcoming:upcoming, month: d.month, thisMonth: d.thisMonth, rate30: d.rate30, monthly: d.monthly,
@@ -1256,10 +1259,12 @@ var LITE_ = false; // true のとき adminState_ を省略(管理画面からの
 function kanriWrap_(req, res, studentId) {
   if (!res || res.error || req.from !== 'kanri') return res;
   if (req.view === 'lessons') return res; // 授業ページは admin 全データをそのまま使う
-  if (req.view === 'home') return Object.assign({ ok: true, id: String(studentId || ''), dash: kanriDashboard_() },res.notificationWarning?{notificationWarning:res.notificationWarning}:{});
+  // 画面の案内に使う結果（通知の警告・予定表にまとめたか・送った件数）は引き継ぐ
+  var keep = {}; ['notificationWarning', 'held', 'sent'].forEach(function (k) { if (res[k] !== undefined && res[k] !== '') keep[k] = res[k]; });
+  if (req.view === 'home') return Object.assign({ ok: true, id: String(studentId || ''), dash: kanriDashboard_() }, keep);
   var d = kanriStudent_(String(studentId || req.studentId || ''),req.section);
   if (d.error) return d;
-  return Object.assign({ ok: true, id: String(studentId || req.studentId || ''), data: d },res.notificationWarning?{notificationWarning:res.notificationWarning}:{});
+  return Object.assign({ ok: true, id: String(studentId || req.studentId || ''), data: d }, keep);
 }
 
 function admin_(req) {
@@ -1306,6 +1311,8 @@ function admin_(req) {
     case 'meetingCancel': return kanriWrap_(req,meetingCancel_(req),req.studentId);
     case 'meetingRetry': return kanriWrap_(req,meetingRetry_(req),req.studentId);
     case 'teacherBook': return kanriWrap_(req, teacherBook_(req), req.studentId);
+    case 'scheduleSend': return kanriWrap_(req, scheduleSend_(req), req.studentId);
+    case 'scheduleChangeClear': return kanriWrap_(req, scheduleChangeClear_(req), req.studentId);
     case 'deleteSlot':  return kanriWrap_(req, adminDeleteSlot_(req), req.studentId);
     case 'unbook':      return kanriWrap_(req, adminUnbook_(req), req.studentId);
     case 'toggleDone':  return kanriWrap_(req, adminToggleDone_(req), req.studentId);
@@ -1367,7 +1374,7 @@ function adminState_() {
       studentName: s.studentId ? studentName_(s.studentId) : '',
       done: String(s.done) === 'true' || s.done === true,
       subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
-      meetUrl: String(s.meetUrl || ''), instructorId: String(s.instructorId || ''),
+      meetUrl: String(s.meetUrl || ''), instructorId: String(s.instructorId || ''), flow: slotFlow_(s),
       lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus,
       lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus,
       req: parseReq_(s.req)
@@ -1760,11 +1767,12 @@ function deleteCalEvent_(slot) {
 // 先生あての通知メールの種類。件名の頭で見分ける（長いものを先に並べる）。
 // 設定ページで種類ごとに止められる（config の teacherMail.<key> が 'off' なら送らない。2026-10-01）。
 // emailNotify が 'on' でなければ、どの種類も送らない（全体の停止）。
+// prefix は配列でもよい（同じ種類の件名がいくつかあるとき）。2026-10-01 に「お休み・キャンセル」「日時の変更のお願い」の言葉へ
 var TEACHER_MAIL_KINDS_ = [
-  { key: 'confirmed', prefix: '【確定】', label: '授業の確定（生徒が案内を承認したとき）' },
-  { key: 'declined', prefix: '【日時が合わない】', label: '案内への「日時が合わない」の返事' },
-  { key: 'cancelRequest', prefix: '【取消依頼】', label: '授業の取消依頼' },
-  { key: 'cancelWithdrawn', prefix: '【取消依頼の取り下げ】', label: '取消依頼の取り下げ' },
+  { key: 'confirmed', prefix: '【確定】', label: '授業の決定（生徒が仮予定を自分で決定したとき）' },
+  { key: 'cancelRequest', prefix: ['【お休みの連絡】', '【キャンセル】', '【取消依頼】', '【取消】', '【日時が合わない】'], label: 'お休みの連絡・キャンセル' },
+  { key: 'changeRequest', prefix: ['【日時の変更のお願い】', '【開始を遅らせたい】'], label: '日時の変更のお願い・開始を遅らせたい連絡' },
+  { key: 'cancelWithdrawn', prefix: ['【お願いの取り下げ】', '【取消依頼の取り下げ】'], label: 'お休み・キャンセル・お願いの取り下げ' },
   { key: 'sharedEvent', prefix: '【共有予定】', label: '生徒が共有した予定（テスト・行事など）' },
   { key: 'wish', prefix: '【授業希望', label: '授業希望（授業できる時間帯）' },
   { key: 'planAnswer', prefix: '【授業計画の回答】', label: '授業計画への保護者の回答' },
@@ -1772,8 +1780,8 @@ var TEACHER_MAIL_KINDS_ = [
 ];
 function teacherMailKind_(subject) {
   var s = String(subject || ''), hit = null;
-  TEACHER_MAIL_KINDS_.forEach(function (k) { if (s.indexOf(k.prefix) === 0 && (!hit || k.prefix.length > hit.prefix.length)) hit = k; });
-  return hit ? hit.key : (s.indexOf('【取消】') === 0 ? 'cancelRequest' : '');
+  TEACHER_MAIL_KINDS_.forEach(function (k) { [].concat(k.prefix).forEach(function (p) { if (s.indexOf(p) === 0 && (!hit || p.length > hit.len)) hit = { key: k.key, len: p.length }; }); });
+  return hit ? hit.key : '';
 }
 function teacherMailOn_(key) { return getConfig_('emailNotify') === 'on' && (!key || getConfig_('teacherMail.' + key) !== 'off'); }
 function teacherMailPrefs_() {
@@ -1827,7 +1835,7 @@ function sheetValues_(name) {
 // スキーマ確認(列見出しの追加など)は6時間キャッシュ
 function ensureSchema_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('schemaOk25')) return;
+  if (cache.get('schemaOk26')) return;
   // 1. シートを作る。列を足すだけのヘルパー(2.)は対象シートが無いと黙って何もしないので、
   //    作成より先に呼ぶと列が欠けたまま6時間キャッシュされる。新しいヘルパーもこの順で足す。
   ensureParentAuthSheet_();
@@ -1859,7 +1867,8 @@ function ensureSchema_() {
   ensureSubjectHeader_();      // slots
   if (typeof ensureKindColumns_ === 'function') ensureKindColumns_(); // slots/plans
   if (typeof ensureInstructorSchema_ === 'function') ensureInstructorSchema_(); // instructors と slots の担当講師(kind の後)
-  cache.put('schemaOk25', '1', 21600);
+  if (typeof ensureScheduleFlowSchema_ === 'function') ensureScheduleFlowSchema_(); // slots の締め切り・変更のお願い(担当講師の後。ScheduleFlow.gs)
+  cache.put('schemaOk26', '1', 21600);
 }
 
 function readRows_(name) {
@@ -2032,7 +2041,7 @@ function kanriDashboard_() {
     return { teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
       done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''),
       studentId: String(s.studentId || ''), studentName: nameOf[String(s.studentId)] || studentName_(s.studentId), instructorId: String(s.instructorId || ''),
-      meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus };
+      meetUrl: String(s.meetUrl || ''), req: parseReq_(s.req), flow: slotFlow_(s), lessonRecordStatus:lessonMetadata_(s.studentId,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(s.studentId,s.id).lessonDraftStatus };
   };
   var cancelReqs = slots.filter(function (s) { return s.status === 'booked' && parseReq_(s.req); }).map(slim).sort(slotSort_);
   var lessonsToday = slots.filter(function (s) { return s.date === today && s.status === 'booked'; }).map(slim).sort(slotSort_);
@@ -2076,7 +2085,7 @@ function kanriDashboard_() {
       next: next ? { date: next.date, start: next.start } : null,
       unpaid: unpaid.filter(function (u) { return u.studentId === id; }).length };
   });
-  return { cancellations: cancelAttendance_(), today: today, lessonKinds: lessonKindsPublic_(), instructors: instructorOptions_(), pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, nextMonth: nextYm_(month), lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
+  return { changeRequests: slots.filter(function (s) { return String(s.changeReqAt || '') && (s.status === 'offered' || s.status === 'booked') && s.date >= today; }).map(slim).sort(slotSort_), cancellations: cancelAttendance_(), today: today, lessonKinds: lessonKindsPublic_(), instructors: instructorOptions_(), pendingEdits: typeof schedulingPendingEdits_ === 'function' ? schedulingPendingEdits_() : [], month: month, nextMonth: nextYm_(month), lessonsToday: lessonsToday, lessonsWeek: lessonsWeek, pending: pending, expired: expired, unrecordedLessons: slots.filter(function(s){return s.status==='booked' && !(s.done===true || String(s.done)==='true') && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date<today;}).map(slim).sort(slotSort_),
     contactPendingCount: readRows_('contactMessages').filter(function(m){return m.status==='received'||m.status==='failed';}).length,
     unpaid: unpaid, meetings: meetings, students: stuCards, inactive: inactive, cancelReqs: cancelReqs, wishes: wishesForAdmin_(),
     events: eventsForAdmin_(0).filter(function (x) { return x.date < addDays_(today, 21); }),
@@ -2128,7 +2137,7 @@ function kanriStudent_(studentId,section) {
   if (section==='progress') return Object.assign(base,kanriStudentProgress_(id));
   var lessons = readRows_('slots').filter(function (s) { return String(s.studentId) === id; })
     .map(function (s) { return { teacherBooking: teacherBookingInfo_(s), id: s.id, date: s.date, start: s.start, min: Number(s.min), status: s.status,
-      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), instructorId: String(s.instructorId || ''), req: parseReq_(s.req), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
+      done: String(s.done) === 'true' || s.done === true, subject: String(s.subject || ''), kind: kindNorm_(s.kind), deliveryMode: String(s.deliveryMode || ''), meetUrl: String(s.meetUrl || ''), instructorId: String(s.instructorId || ''), req: parseReq_(s.req), flow: slotFlow_(s), lessonRecordStatus:lessonMetadata_(id,s.id).lessonRecordStatus, lessonDraftStatus:lessonMetadata_(id,s.id).lessonDraftStatus }; })
     .sort(function (a, b) { return -slotSort_(a, b); });
   if (section==='overview') return Object.assign(base,{
     // 過去分は1年(カレンダーで見返せるように。2026-09-19: 直近20件→366日)

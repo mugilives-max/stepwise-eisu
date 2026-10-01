@@ -30,11 +30,24 @@ function cors(env, request) {
 const reply = (data, status, extra) => new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...extra } });
 
 export default {
-  // Daily at 00:10 JST; close completed months and retry held months.
+  // 毎日 0:10 JST。月の請求の確定（翌月3日から）と、締め切りを過ぎた仮予定の決定（2026-10-01）。
+  // 片方が失敗してももう片方は行い、最後にまとめて失敗を知らせる。
   async scheduled(event, env) {
-    if(env.WRITE_MODE !== "worker" || env.BILLING_AUTO_CLOSE !== "1") return;
-    const done = await runWrite({},env,{monthlyBilling:true});
-    if(done.result.error) throw new Error("Monthly billing failed");
+    if (env.WRITE_MODE !== "worker") return;
+    const failed = [];
+    if (env.BILLING_AUTO_CLOSE === "1") {
+      try { const done = await runWrite({}, env, { monthlyBilling: true }); if (done.result.error) failed.push("Monthly billing failed"); }
+      catch (e) { failed.push("Monthly billing failed"); }
+    }
+    if (env.SCHEDULE_AUTO_CONFIRM === "1") {
+      try {
+        const done = await runWrite({}, env, { autoConfirm: true });
+        // 決定した授業のカレンダー・Meet とお知らせのメールを Apps Script に頼む
+        if (done.effects.length) { const ids = await recordEffects(env.DB, done.effects); await deliverEffects(env, done.effects, ids); }
+        if (done.result.error) failed.push("Schedule auto-confirm failed");
+      } catch (e) { failed.push("Schedule auto-confirm failed"); }
+    }
+    if (failed.length) throw new Error(failed.join("; "));
   },
   async fetch(request, env, ctx) {
     const head = cors(env, request);

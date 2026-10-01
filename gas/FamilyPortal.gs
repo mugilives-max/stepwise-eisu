@@ -6,14 +6,20 @@ var FAMILY_CHALLENGE_COLS_ = ['id','familyId','kind','email','secretHash','expir
 var FAMILY_OUTBOX_COLS_ = ['id','eventKey','familyId','studentId','kind','ym','revision','email','status','createdAt','sentAt','attempts','error'];
 var FAMILY_NOTICE_READ_COLS_ = ['id','familyId','noticeId','readAt'];
 // 保護者へのメール通知の種類別オン・オフ。行がなければ全部オン。認証メール(確認・再設定)は対象外
-var FAMILY_EMAIL_PREF_COLS_ = ['familyId','planProposed','invoiceCreated','invoiceVoided','updatedAt'];
-var FAMILY_MAIL_KINDS_ = ['planProposed','invoiceCreated','invoiceVoided'];
+// schedule（授業予定表・予定日の決定）は 2026-10-01 に末尾へ追加
+var FAMILY_EMAIL_PREF_COLS_ = ['familyId','planProposed','invoiceCreated','invoiceVoided','updatedAt','schedule'];
+var FAMILY_MAIL_KINDS_ = ['planProposed','invoiceCreated','invoiceVoided','schedule'];
+// 送る通知の種類 → 保護者の設定のキー。予定表と予定日の決定は1つの設定「schedule」で止める
+var FAMILY_NOTICE_KINDS_ = {planProposed:'planProposed',invoiceCreated:'invoiceCreated',invoiceVoided:'invoiceVoided',scheduleSent:'schedule',scheduleConfirmed:'schedule'};
 var FAMILY_PORTAL_URL_ = 'https://www.stepwise-education.jp/yoyaku/#family';
 var FAMILY_CHALLENGE_MS_ = 30 * 60 * 1000;
 // 先生が送る登録メールは、保護者が自分で申し込んだものではないので開くまでに時間がかかる。24時間有効にする
 var FAMILY_TEACHER_CHALLENGE_MS_ = 24 * 60 * 60 * 1000;
 
 function ensureFamilySchema_() {
+  // 2026-10-01: familyEmailPrefs の末尾に schedule を足す（旧5列のままなら見出しだけ足す）
+  var prefs=ss_().getSheetByName('familyEmailPrefs');
+  if(prefs&&prefs.getLastRow()&&prefs.getLastColumn()===5&&prefs.getRange(1,1,1,5).getValues()[0].join('|')===FAMILY_EMAIL_PREF_COLS_.slice(0,5).join('|')){prefs.getRange(1,6).setValue('schedule');memoClear_();}
   var definitions={studentPermissions:STUDENT_PERMISSION_COLS_,familyProfiles:FAMILY_PROFILE_COLS_,familyAccounts:FAMILY_ACCOUNT_COLS_,familyLinks:FAMILY_LINK_COLS_,familyChallenges:FAMILY_CHALLENGE_COLS_,familyOutbox:FAMILY_OUTBOX_COLS_,familyNoticeReads:FAMILY_NOTICE_READ_COLS_,familyEmailPrefs:FAMILY_EMAIL_PREF_COLS_};
   Object.keys(definitions).forEach(function(name){
     var sh=ss_().getSheetByName(name),cols=definitions[name];
@@ -313,17 +319,19 @@ function familyDeliverOutbox_(out,a,subject,body,authMail) {
   return out;
 }
 function familyBusinessMail_(out) {
-  var text={planProposed:'授業計画(回数・料金)の確認依頼があります。',invoiceCreated:'授業料の請求内容を記録しました。',invoiceVoided:'授業料の請求を取り消しました。'}[String(out.kind)];
+  var month=/^\d{4}-\d{2}$/.test(String(out.ym||''))?Number(String(out.ym).slice(5,7))+'月':'';
+  var text={planProposed:'授業計画(回数・料金)の確認依頼があります。',invoiceCreated:'授業料の請求内容を記録しました。',invoiceVoided:'授業料の請求を取り消しました。',
+    scheduleSent:month+'の授業予定表が届いています。締め切りまでに連絡がなければ、この日時で決定します。',scheduleConfirmed:month+'の授業予定日が決定しました。変更する場合は前日の23時までにお申し付けください。'}[String(out.kind)];
   if(!text)throw new Error('通知種類が不明です');
   return {subject:'【ステップワイズ】'+(out.ym?out.ym+' ':'')+'保護者ページのお知らせ',body:text+'\n保護者ページにログインし、お子さまを選んで内容をご確認ください。\n\n'+FAMILY_PORTAL_URL_};
 }
 function familyNotifySafe_(kind,studentId,eventKey,detail) {
   try {
-    if(['planProposed','invoiceCreated','invoiceVoided'].indexOf(kind)<0)return {ok:false};
+    if(!FAMILY_NOTICE_KINDS_[kind])return {ok:false};
     var matches=familyRows_('familyAccounts').filter(function(a){return a.status==='active'&&a.verifiedAt&&familyChildren_(a,false).some(function(s){return s.studentId===String(studentId);});});
     var states=[];matches.forEach(function(a){
       var out=familyOutboxAdd_(eventKey,a,String(studentId),kind,detail);
-      if(out.status==='pending'&&!familyEmailPrefs_(a.id)[kind]){out.status='skipped';out.error='保護者の通知設定でオフのため送信しません';familyWrite_('familyOutbox',FAMILY_OUTBOX_COLS_,out);states.push('skipped');return;}
+      if(out.status==='pending'&&!familyEmailPrefs_(a.id)[FAMILY_NOTICE_KINDS_[kind]]){out.status='skipped';out.error='保護者の通知設定でオフのため送信しません';familyWrite_('familyOutbox',FAMILY_OUTBOX_COLS_,out);states.push('skipped');return;}
       var mail=familyBusinessMail_(out);states.push(familyDeliverOutbox_(out,a,mail.subject,mail.body,false).status);
     });
     return {ok:true,statuses:states};
@@ -425,7 +433,7 @@ function familyAdmin_(req) {
     var outboxes=familyRows_('familyOutbox');
     for(var i=0;i<req.ids.length;i++){
       var out=outboxes.filter(function(r){return String(r.id)===req.ids[i];})[0];
-      if(!out||['pending','failed'].indexOf(String(out.status))<0||['planProposed','invoiceCreated','invoiceVoided'].indexOf(String(out.kind))<0)return familyError_('未送信と確認できた業務通知だけ再送できます。認証メールは保護者から再発行してください');
+      if(!out||['pending','failed'].indexOf(String(out.status))<0||!FAMILY_NOTICE_KINDS_[String(out.kind)])return familyError_('未送信と確認できた業務通知だけ再送できます。認証メールは保護者から再発行してください');
     }
     req.ids.forEach(function(id){var out=outboxes.filter(function(r){return String(r.id)===id;})[0],a=familyAccount_(out.familyId);if(a){var mail=familyBusinessMail_(out);familyDeliverOutbox_(out,a,mail.subject,mail.body,false);}});return familyList_();
   }

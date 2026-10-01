@@ -20,7 +20,8 @@
     "GAS_URL": "https://script.google.com/macros/s/AKfycbz53sl4GgKNY1UY1gaBndjDplQk5MrA9EfShYfy05Jl4JNEFEl7-B1uKSmd0v5Mhn4Irw/exec",
     // 書き込みの正本。"worker" にすると Worker が台帳を書く。空なら今までどおり Apps Script
     "WRITE_MODE": "worker",
-    "BILLING_AUTO_CLOSE": "1"
+    "BILLING_AUTO_CLOSE": "1",
+    "SCHEDULE_AUTO_CONFIRM": "1"
   },
   "d1_databases": [
     {

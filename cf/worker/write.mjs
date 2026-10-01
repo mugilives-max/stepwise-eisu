@@ -127,7 +127,7 @@ export async function runWrite(body, env, options = {}) {
     services.Utilities.getUuid = () => uuids[uuidIndex++] ||= randomUuid();
     const gas = createGas(services);
     gas.StepwiseParentCrypto = crypto.crypto;
-    const result = options.monthlyBilling === true ? gas.familyCloseMonths_() : JSON.parse(gas.doPost({ postData: { contents: JSON.stringify(body) } }).getContent());
+    const result = options.monthlyBilling === true ? gas.familyCloseMonths_() : options.autoConfirm === true ? gas.scheduleAutoConfirm_() : JSON.parse(gas.doPost({ postData: { contents: JSON.stringify(body) } }).getContent());
 
     if (crypto.pending) {
       // Nothing from this run (including failures, new IDs or queued mail) is

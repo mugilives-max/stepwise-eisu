@@ -30,3 +30,18 @@ for(const block of [false,true])test('event does not block lessons unless explic
  if(block)ui.click('tnl-event-block',{'data-i':'0'});
  ui.click('tnl-register');assert.equal(ui.requests.at(-1).body.items[0].alsoBlock,block);
 });
+
+// 日程の決め方（2026-10-01）: 「予定表にまとめて、あとで送る」と、未送信の仮予定をまとめて送るボタン
+test('the offer form can hold lessons for the schedule, and held lessons are sent together from the student page',async()=>{
+ const held={id:'held-a',date:'2026-09-21',start:'17:00',min:60,status:'offered',subject:'英語',deliveryMode:'in_person',flow:{confirmBy:'',held:true,change:null}};
+ const ui=await adminReady(card({lessons:[held,Object.assign({},held,{id:'held-b',date:'2026-09-28'})]}));
+ assert.match(ui.html(),/未送信の仮予定 2件<\/strong>（9\/21\(月\)〜9\/28\(月\)）/);
+ ui.click('calday',{'data-date':'2026-09-21'});
+ assert.match(ui.html(),/data-action="teacher-book-open" data-id="held-a"[^>]*>未送信（予定表）/);
+ ui.click('sched-send',{'data-sid':'test-a'});assert.equal(ui.confirms(),1,'送る前に確認する');
+ assert.equal(ui.requests.at(-1).body.op,'scheduleSend');assert.equal(ui.requests.at(-1).body.studentId,'test-a');assert.match(ui.requests.at(-1).body.requestId,/^lc-/);
+ ui.requests.at(-1).reply({ok:true,sent:2,id:'test-a',data:card({lessons:[]})});await flush();
+ ui.click('sdayadd');assert.match(ui.html(),/<option value="hold">予定表にまとめて、あとで送る<\/option>/);
+ ui.input('f-subject','英語');ui.input('f-send','hold');ui.click('offerslot');
+ assert.equal(ui.requests.at(-1).body.op,'offer');assert.equal(ui.requests.at(-1).body.hold,true);
+});
