@@ -9,6 +9,7 @@ import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
 import { runWrite, runNaturalSchedule, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
 import { handlePush, deliverNotice, pushEnabled, PUSH_ACTIONS } from "./push.mjs";
+import { EFFECT_ADMIN_OPS, handleEffectsAdmin } from "./effects-admin.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -118,6 +119,12 @@ export default {
     if (DOCUMENT_ACTIONS.includes(action)) {
       try { return reply(await handleDocuments(body, env), 200, head); }
       catch { return reply({error:'資料の処理に失敗しました。もう一度お試しください'}, 500, head); }
+    }
+
+    // 送れなかった付随処理の一覧・再送・送らない（先生だけ）。台帳ではなく Worker の控え(_effects)を扱う
+    if (action === "admin" && EFFECT_ADMIN_OPS.indexOf(String(body.op || "")) >= 0) {
+      try { return reply(await handleEffectsAdmin(body, env), 200, head); }
+      catch (e) { return reply({ error: "処理に失敗しました。もう一度お試しください", errorCode: "workerError" }, 500, head); }
     }
 
     // 通知の登録・解除。台帳は変えないので、書き込みの経路には入れない

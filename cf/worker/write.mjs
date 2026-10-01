@@ -222,13 +222,15 @@ const MEET_RETRY_MS = 120000; // 同じ予定を立て続けに頼まない
 export async function backfillMeet(env, limit = 5) {
   if (!env.GAS_URL || !env.SYNC_KEY) return { asked: 0 };
   const since = new Date(Date.now() - MEET_RETRY_MS).toISOString();
+  // 控えの中身に予定 ID が含まれるかは instr で見る。LIKE '%…%' だと予定 ID（77文字）が
+  // D1 のパターン長の上限を超え、「LIKE or GLOB pattern too complex」で問い合わせごと失敗する
   const rows = await env.DB.prepare(
     `select s.eventId as eventId from (select eventId, deliveryMode, status, meetUrl from slots union all select eventId, deliveryMode, 'booked' as status, meetUrl from meetingSchedules where status = 'scheduled') s
       where s.deliveryMode = 'online' and s.status = 'booked'
         and s.eventId <> '' and (s.meetUrl is null or s.meetUrl = '')
         and not exists (select 1 from _effects e
                          where e.kind = 'calendarMeet' and e.createdAt > ?
-                           and e.payload like '%' || s.eventId || '%')
+                           and instr(e.payload, s.eventId) > 0)
       limit ?`).bind(since, limit).all();
   const wanted = (rows.results || []).map(r => ({ kind: 'calendarMeet', eventId: String(r.eventId) }));
   if (!wanted.length) return { asked: 0 };

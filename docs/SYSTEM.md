@@ -1312,3 +1312,12 @@ Pages実行 `36237797285` 成功。管理・予約HTML、portal.js、learning-se
 - **ホームの宿題**: 表（科目・教材・内容・期日・残り・状態の6列）をやめ、1件1行の一覧（`.hw-lines`）にした。行の見出しは「教材：内容・範囲」、下に「科目 ・ 期日 ・ 残り日数」（期限超過は赤、今日までは橙）、右に「未完了」ボタン（押すと従来どおり完了の確認が開く）。
 - **授業計画（案内・実施状況）**: 表の HTML（`.portal-plan-table`）はそのままにして、CSS で1件1行に見せる。列の見出しは隠し、値の前に短いラベル（計画・登録・実施、回数・授業・1回の料金）を付ける。1行目に「科目・種類・期間」と状態のボタン、2行目に回数。コメント・内訳などの補足行は薄い色の面で直後に続く。家族のまとめ表は名前を行の先頭に出す。列は後ろから数えて特定するため、案内の表で「1回の料金」の列がある（保護者）場合は表に `with-fee` を付ける。古い `.family-plan-table{min-width:660px}` は打ち消した。
 - 本文の幅が狭いため、7〜8列の表は PC でも窮屈だった。スマホ・PC とも同じ一覧の見た目になる。
+
+### 付随処理（メール・カレンダー）が止まっていた件と、送れなかった処理の確認画面（2026-10-01、GAS v109 `2026-10-01-gas-catchup`、Worker `2026-10-01-effects-retry`）
+
+- **起きたこと**: 2026-09-29 03:08 JST から 10-01 まで、Apps Script に頼む付随処理（カレンダーの予定作成・変更、Meet、メール）がすべて失敗していた。9/29 の宿題の教材列（`tasks.material` / `manualEditedAt`）の追加が Worker と D1 にだけ反映され、Apps Script は 9/26 の版（v108）のままだった。台帳の写し（Sheets）の `tasks` に列が増えたため、古い Apps Script の `ensureLessonSchema_` が「授業記録のシート構成が一致しません。移行を停止しました」で止まり、`effects` の要求ごと失敗していた。失敗はカレンダー作成23件・変更1件・メール24件。Meet のないオンライン授業が出た。
+- **対応**: 最新の `gas/*.gs` を Apps Script v109 に公開（9/26 以降の CancellationFees / DocumentEvents / Instructors / Meetings も初めて入った）。失敗分は自動では送り直さない（先生の判断）。
+- **送れなかった処理の確認**: 管理画面の設定ページの先頭「送れなかった処理」。Worker の `_effects` のうち `failed` / `pending`（作成から10分以上）で、メール・カレンダー作成・変更・削除を古い順に出す（Meet の取り直し `calendarMeet` は自動で頼み直すので出さない）。1件ずつ「再送」（同じ中身を Apps Script に再送。カレンダー作成なら Meet の URL も書き戻る）か「送らない」（`status='dismissed'`）を選ぶ。どちらも確認ダイアログを出す。先生のログインだけ（講師は不可）。admin op `effectsList {countOnly?}` / `effectRetry {id}` / `effectDismiss {id}`（`cf/worker/effects-admin.mjs`）。ホームの先頭に件数の警告を出す（読み込みの1.2秒後に件数だけ確認）。
+- **Meet の取り直しの不具合**: `backfillMeet` が控えの検索に `like '%' || eventId || '%'` を使っており、予定 ID（77文字）が D1 の LIKE パターン長の上限を超えて「LIKE or GLOB pattern too complex」で失敗することがあった（直近2分に取り直しの記録があるとき）。`instr()` に変えた。
+- **再発防止の約束**: `gas/*.gs` を変えたら、Worker だけでなく Apps Script も公開する（`gas/Code.gs` の `release` を変えて `npm run gas:plan -- <前回公開したコミット>` → `npm run gas:apply -- <ID>`）。付随処理の失敗はホームの警告で気づける。
+- テスト: `test/effects-admin.test.cjs`、`test/instructors-ui.test.cjs`（設定ページの一覧と操作）。

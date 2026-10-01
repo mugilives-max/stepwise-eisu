@@ -214,6 +214,8 @@
       .sl-row .num { font-variant-numeric: tabular-nums; }
       .sl-m { display: none; }
       .sl-row.in-row { grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1.2fr) auto; }
+      .sl-row.ef-row { grid-template-columns: 150px minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: start; }
+      @media (max-width: 640px) { .sl-row.ef-row { grid-template-columns: minmax(0, 1fr); } .sl-row.ef-row > :nth-child(4) { justify-self: start; } }
       @media (max-width: 640px) {
         .sl-row.in-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "d a" "s s" "k k"; gap: 4px 10px; }
         .sl-row.in-row > :nth-child(1) { grid-area: d; } .sl-row.in-row > :nth-child(2) { grid-area: s; justify-self: start; }
@@ -729,7 +731,8 @@
           if (!token()) { authM = "login"; render(); return; }
           var r = route();
           if (isInstructor() && r.page !== "lesson") { loadInstructor(); return; }
-          if (r.page === "settings") loadInstructors();
+          if (r.page === "settings") { loadInstructors(); loadEffects(); }
+          if (r.page === "lessons" || r.page === "home") checkEffectsSoon();
           if (r.page === "families" || r.page === "students") loadFamilies();
           if (r.page === 'lessonPair') { loadLessonPair(force); return; }
           if (r.page === "lesson") { loadLesson(force); return; }
@@ -1598,12 +1601,13 @@
             }
             html += '<p class="small muted">「実施にする」を押すと月の実績に反映されます。生徒ごとの請求額と入金は「請求」ページで確認できます。</p>';
           }
-          app.innerHTML = '<div class="flat">' + html + '</div>';
+          app.innerHTML = '<div class="flat">' + effectsBanner() + html + '</div>';
         }
 
         function renderSettings() {
           renderNav();
           var html = '<h1>設定</h1><p class="sub">先生アカウント・講師・ログ</p>';
+          html += renderEffectsAdmin();
           html += renderInstructorAdmin();
           html += '<h2>アカウント</h2><div class="card"><div class="row between" style="margin-bottom:10px"><span>ログイン中: <strong>' + esc(A.account || "") + '</strong></span><button class="btn-quiet btn-sm" data-action="logout">ログアウト</button></div>';
           html += '<div class="form"><label for="f-curpass">現在のパスワード</label><input type="password" id="f-curpass" autocomplete="current-password"><label for="f-newpass">新しいパスワード</label><input type="password" id="f-newpass" autocomplete="new-password" placeholder="8文字以上"></div>';
@@ -1706,6 +1710,53 @@
         document.addEventListener('input',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
         document.addEventListener('change',function(e){var k=e.target.getAttribute('data-meeting-field');if(k&&meetingDialog&&!busy)meetingDialog[k]=e.target.value;});
         function meetingSave(){if(busy||!meetingDialog)return;var f=meetingDialog,r=route();busy=true;f.error='';render();admin('meetingCreate',f).then(function(res){busy=false;meetingDialog=null;cacheClear();if(!applyResult(res,r))load(true);else render();toast('ミーティングを登録しました');}).catch(function(e){busy=false;f.error=e.message;render();});}
+
+        /* ---------- 送れなかった処理（メール・カレンダー）----------
+           Apps Script に頼んだ付随処理が失敗・未送信のまま残っているもの。自動では送り直さない。
+           先生が中身を見て、1件ずつ「再送」か「送らない」を選ぶ（2026-10-01）。 */
+        var EF = { data: null, count: 0, busy: false, error: "", sending: 0, checkedAt: 0 };
+        function loadEffects() {
+          if (EF.busy) return;
+          EF.busy = true;
+          admin("effectsList", {}).then(function (res) { EF.data = res; EF.count = res.count || 0; EF.error = ""; }).catch(function (e) { EF.error = e.message; }).then(function () { EF.busy = false; if (route().page === "settings" && A) render(); });
+        }
+        // ホームの警告用に件数だけ確かめる（画面の読み込みを待たせないよう、少し遅らせて1回だけ）
+        function checkEffectsSoon() {
+          if (isInstructor() || Date.now() - EF.checkedAt < 60000) return;
+          EF.checkedAt = Date.now();
+          setTimeout(function () {
+            admin("effectsList", { countOnly: true }).then(function (res) { var before = EF.count; EF.count = res.count || 0; if (before !== EF.count && route().page === "lessons" && A) render(); }).catch(function () {});
+          }, 1200);
+        }
+        function effectsBanner() {
+          return EF.count ? '<p class="lc-notice" role="alert">送れなかったメール・カレンダーの処理が <strong>' + EF.count + '件</strong> あります。<a href="#settings" data-action="ef-goto">設定 → 送れなかった処理</a> で1件ずつ確認してください。</p>' : '';
+        }
+        function renderEffectsAdmin() {
+          var d = EF.data, dis = busy || EF.busy || EF.sending ? ' disabled' : '';
+          var h = '<h2 id="failed-effects">送れなかった処理' + (EF.count ? ' <span class="cnt">' + EF.count + '件</span>' : '') + '</h2><p class="small muted">メールの送信やカレンダーの予定作成（Meet の発行を含む）が失敗したものです。自動では送り直しません。中身を見て、送るものは「再送」、送らないものは「送らない」を押してください。カレンダーの予定作成を再送すると、Meet のリンクもあとから入ります。</p>';
+          if (EF.error) h += '<p class="lc-notice" role="alert">' + esc(EF.error) + '</p>';
+          if (!d) return h + (EF.busy ? '<p class="small muted">読み込んでいます…</p>' : '');
+          var items = d.items || [];
+          if (!items.length) return h + '<div class="empty">送れなかった処理はありません。</div>';
+          return h + '<div class="bo-list">' + items.map(function (x) {
+            var what = x.kind === "mail"
+              ? '<strong>' + esc(x.title) + '</strong><div class="small muted">宛先 ' + esc(x.to) + '</div><details class="small"><summary>本文を見る</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px">' + esc(x.preview) + '</div></details>'
+              : '<strong>' + esc(x.title || x.label) + '</strong>' + (x.when ? '<div class="small muted">' + esc(x.when) + (x.meet ? ' ・ Meet あり' : '') + '</div>' : '');
+            var row = '<div class="sl-row ef-row"><span class="small"><span class="tag ' + (x.kind === "mail" ? 'blue' : 'amber') + '">' + esc(x.label) + '</span><div class="muted">' + esc(x.at) + ' に失敗' + (x.status === "pending" ? '（未送信）' : '') + '</div></span><span>' + what + '</span><span class="small muted" style="overflow-wrap:anywhere">' + esc(x.error || '') + '</span><span style="justify-self:end;display:flex;gap:6px;flex-wrap:wrap">';
+            row += EF.sending === x.id ? '<span class="small muted">送信中…</span>' : '<button class="btn-primary btn-sm" data-action="ef-retry" data-id="' + x.id + '"' + dis + '>再送</button><button class="btn-quiet btn-sm" data-action="ef-dismiss" data-id="' + x.id + '"' + dis + '>送らない</button>';
+            return row + '</span></div>';
+          }).join("") + '</div>';
+        }
+        function effectsClick(a, btn) {
+          if (a === "ef-goto") return;
+          if (EF.sending || EF.busy || busy || !EF.data) return;
+          var id = Number(btn.getAttribute("data-id")), x = (EF.data.items || []).filter(function (i) { return i.id === id; })[0];
+          if (!x) return;
+          if (a === "ef-retry" && !confirm(x.kind === "mail" ? "このメールを再送しますか？\n宛先: " + x.to + "\n件名: " + x.title : "この予定を Google カレンダーに" + (x.kind === "calendarDelete" ? "消す処理" : x.kind === "calendarPatch" ? "反映" : "作成") + "しますか？\n" + (x.title || "") + " " + (x.when || ""))) return;
+          if (a === "ef-dismiss" && !confirm("この処理は送らないことにしますか？（一覧から消えます。あとから送ることはできません）")) return;
+          EF.sending = id; EF.error = ""; render();
+          admin(a === "ef-retry" ? "effectRetry" : "effectDismiss", { id: id }).then(function () { toast(a === "ef-retry" ? "再送しました" : "送らないことにしました"); cacheClear(); }).catch(function (e) { EF.error = e.message; }).then(function () { EF.sending = 0; loadEffects(); });
+        }
 
         /* ---------- 講師（雇用する講師）----------
            講師には業務に必要な情報だけを見せる: 担当授業の予定と授業記録、担当生徒の成績・宿題。
@@ -3083,6 +3134,7 @@
           if (a.indexOf("family-") === 0) { ev.preventDefault(); familyAdminClick(a, btn); return; }
           if (a.indexOf("lc-") === 0) { ev.preventDefault(); lessonClick(a, btn); return; }
           if (a.indexOf("po-") === 0) { ev.preventDefault(); outlineClick(a, btn); return; }
+          if (a.indexOf("ef-") === 0) { if (a !== "ef-goto") ev.preventDefault(); effectsClick(a, btn); return; }
           if (a.indexOf("in-") === 0) { ev.preventDefault(); instructorAdminClick(a, btn); return; }
           if (a === "inv-setup") { ev.preventDefault(); instructorInviteSubmit(); return; }
           if (a.indexOf("bo-") === 0) { ev.preventDefault(); boClick(a, btn); return; }
