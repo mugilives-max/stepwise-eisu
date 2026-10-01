@@ -462,7 +462,7 @@ test('calendar filters hide only selected siblings, retain the day list and rest
 
  test('parent menu retains combined proposals without child headings or refresh controls',async()=>{
  const ui=await combinedHome();
- const table=html=>html.match(/<table class="portal-plan-table portal-proposal-table family-plan-table">[^]*?<\/table>/)[0].replace(/ data-home-child="[^"]*"/g,'');
+ const table=html=>html.match(/<table class="portal-plan-table portal-proposal-table family-plan-table with-fee">[^]*?<\/table>/)[0].replace(/ data-home-child="[^"]*"/g,'');
  ui.navigate('#family/plans');
  assert.match(table(ui.html()),/<td>太郎<\/td>/);assert.match(table(ui.html()),/<td>花子<\/td>/);
  assert.equal((ui.html().match(/portal-proposal-table/g)||[]).length,1);

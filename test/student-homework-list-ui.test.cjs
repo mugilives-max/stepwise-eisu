@@ -516,8 +516,10 @@ test('home shows only incomplete homework after daily lessons and removes comple
   assert.match(ui.html(), /未完了の宿題はありません/);
 });
 
-test('homework material and range appear in separate home table cells',async()=>{
+// ホームの宿題は1件1行（2026-10-01）。教材と内容・範囲は「教材：内容」の1つの見出しにまとめる
+test('homework on home shows one line per item with material, range, due date and a done button',async()=>{
  const ui=await ready([task('material',{material:'教材<テスト>',title:'p12〜15'})],'#home');
- assert.match(ui.html(),/<th scope="col">教材<\/th><th scope="col">内容・範囲<\/th>/);
- assert.match(ui.html(),/<td>教材&lt;テスト&gt;<\/td><td>p12〜15/);
+ assert.match(ui.html(),/<ul class="hw-lines"><li class="hw-line"><div class="hw-main"><strong class="hw-title">教材&lt;テスト&gt;：p12〜15<\/strong>/);
+ assert.match(ui.html(),/<button type="button" class="tag amber" aria-haspopup="dialog" data-action="tasktoggle" data-id="material" data-done="true"/);
+ assert.doesNotMatch(ui.html(),/home-homework-table/);
 });

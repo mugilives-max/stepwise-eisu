@@ -207,17 +207,19 @@
             return '<li class="homework-row' + (t.done ? ' is-done' : '') + '"><div class="homework-content"><div class="homework-meta"><span class="tag ' + (t.type === '持ち物' ? 'coral' : t.type === 'メモ' ? 'gray' : 'blue') + '">' + esc(t.type || '宿題') + '</span>' + status + (t.createdBy === 'teacher' ? '<span class="small muted">先生から</span>' : '') + '</div><strong class="homework-title">' + esc((t.material ? t.material+'：' : '')+t.title) + '</strong>' + (t.reviewNote ? '<p>先生から：' + esc(t.reviewNote) + '</p>' : '') + '<div class="homework-due">' + esc(taskDueText(t)) + (t.done && taskDoneDate(t.doneAt) ? '・' + esc(taskDoneDate(t.doneAt)) + ' に申告' : '') + '</div></div><div class="homework-actions"><button class="' + (t.done ? 'btn-quiet' : 'btn-ghost') + '" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="' + (!t.done) + '" aria-label="' + esc(t.title + '：' + verb) + '"' + dis + (t.reviewedAt ? ' disabled' : '') + '>' + verb + '</button>' + (t.createdBy === 'student' && !t.done ? '<button class="btn-quiet btn-sm" data-action="taskdel" data-id="' + esc(t.id) + '" aria-label="' + esc(t.title + 'を削除') + '"' + dis + '>削除</button>' : '') + '</div></li>';
           }).join('') + '</ul>';
         }
+        // ホームの宿題: 1件1行。左に「教材：内容」、下に科目・期日・残り日数、右に状態のボタン（押すと完了にする）
         function renderHomeHomeworkTable(tasks) {
           var dis = busy || previewK ? ' disabled' : '', today = S.today || '';
-          return '<table class="portal-plan-table home-homework-table"><colgroup><col style="width:10%"><col style="width:20%"><col style="width:22%"><col style="width:12%"><col style="width:20%"><col style="width:16%"></colgroup><thead><tr><th scope="col">科目</th><th scope="col">教材</th><th scope="col">内容・範囲</th><th scope="col">期日</th><th scope="col">残り期間</th><th scope="col">状態</th></tr></thead><tbody>' + tasks.map(function(t) {
+          return '<ul class="hw-lines">' + tasks.map(function(t) {
             var due = /^\d{4}-\d{2}-\d{2}$/.test(t.due || '') ? t.due : '';
             var days = due && today ? Math.round((Date.parse(due + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000) : NaN;
-            var status = isNaN(days) ? '' : days > 0 ? 'あと' + days + '日' : days === 0 ? '今日まで' : -days + '日超過';
-            var dueLabel = due ? Number(due.slice(5, 7)) + '/' + Number(due.slice(8, 10)) : t.dueMode === 'nextLesson' ? '予定未定' : '期限なし';
+            var left = isNaN(days) ? '' : days > 0 ? 'あと' + days + '日' : days === 0 ? '今日まで' : -days + '日超過';
+            var dueLabel = due ? Number(due.slice(5, 7)) + '/' + Number(due.slice(8, 10)) + 'まで' : t.dueMode === 'nextLesson' ? '次の授業まで（予定未定）' : '期限なし';
             var source = (S.lessonRecords || []).filter(function(r) { return t.sourceRecordId && String(r.recordId) === String(t.sourceRecordId); })[0];
-            var subject = t.subject || (source && source.subject) || t.dueSubject || '—';
-            return '<tr><td>' + esc(subject) + '</td><td>' + esc(t.material || '—') + '</td><td>' + esc(t.title) + (t.reviewNote ? '<br><span class="small">先生から：' + esc(t.reviewNote) + '</span>' : '') + '</td><td>' + esc(dueLabel) + '</td><td>' + esc(status || '—') + '</td><td class="home-homework-status"><button type="button" class="tag amber" aria-haspopup="dialog" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>未完了</button></td></tr>';
-          }).join('') + '</tbody></table>';
+            var subject = t.subject || (source && source.subject) || t.dueSubject || '';
+            var meta = [subject, dueLabel].filter(Boolean).map(esc).join(' ・ ') + (left ? ' ・ <span class="' + (days < 0 ? 'hw-late' : days === 0 ? 'hw-today' : '') + '">' + esc(left) + '</span>' : '');
+            return '<li class="hw-line"><div class="hw-main"><strong class="hw-title">' + esc((t.material ? t.material + '：' : '') + t.title) + '</strong><div class="small muted">' + meta + '</div>' + (t.reviewNote ? '<div class="small">先生から：' + esc(t.reviewNote) + '</div>' : '') + '</div><button type="button" class="tag amber" aria-haspopup="dialog" data-action="tasktoggle" data-id="' + esc(t.id) + '" data-done="true" aria-label="' + esc(t.title + '：完了にする') + '"' + dis + '>未完了</button></li>';
+          }).join('') + '</ul>';
         }
         function renderTasksPage() {
           var filter = taskFilter(), tasks = visibleTasks(), open = tasks.filter(function (t) { return !t.done; }), done = tasks.filter(function (t) { return t.done; });
@@ -769,7 +771,7 @@
           }
           var ymNow = today.slice(0, 7), extra = {};
           var planCols = (famChild ? 7 : 6)+(sharedName?1:0);
-          function planTableHead(){return '<div class="portal-plan-wrap"><table class="portal-plan-table portal-proposal-table'+(sharedName?' family-plan-table':'')+'"><thead><tr>'+nameHead+'<th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th>'+(famChild?'<th>1回の料金</th>':'')+'<th>状態</th></tr></thead><tbody>';}
+          function planTableHead(){return '<div class="portal-plan-wrap"><table class="portal-plan-table portal-proposal-table'+(sharedName?' family-plan-table':'')+(famChild?' with-fee':'')+'"><thead><tr>'+nameHead+'<th>期間</th><th>科目</th><th>種類</th><th>回数</th><th>時間</th>'+(famChild?'<th>1回の料金</th>':'')+'<th>状態</th></tr></thead><tbody>';}
           function planTableEnd(){return '</tbody></table></div>';}
           function planPeriod(l){function date(d){return d ? (d.slice(0,4)===today.slice(0,4)?'':d.slice(0,4)+'/')+Number(d.slice(5,7))+'/'+Number(d.slice(8,10)) : '未設定';}return date(l.startDate)+'〜'+date(l.endDate);}
           function planRow(l){

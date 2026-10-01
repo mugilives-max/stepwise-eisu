@@ -279,3 +279,52 @@
 .day-record > summary::-webkit-details-marker{display:none;}
 .day-record-toggle{flex-shrink:0;}
 .day-record > summary:focus-visible{outline:2px solid var(--primary);outline-offset:4px;}
+
+/* 授業計画の表（案内・実施状況）は、表の HTML のまま1件1行の一覧に見せる（2026-10-01）。
+   本文の幅が狭いので、7〜8列の表はPCでも窮屈だった。列の見出しは隠し、値の前に短いラベルを付ける。
+   列は後ろから数えて特定する（先頭の「名前」列は家族のまとめ表だけにあるため）。 */
+.portal-plan-wrap { overflow: visible; margin: 4px 0 12px; }
+.portal-plan-table, .portal-plan-table > tbody { display: block; width: 100%; min-width: 0; border-top: 1px solid var(--line); }
+.portal-plan-table.family-plan-table { min-width: 0; }
+.portal-plan-table > tbody { border-top: 0; }
+.portal-plan-table > thead { display: none; }
+.portal-plan-table tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.portal-plan-table tr[hidden] { display: none; }
+.portal-plan-table tr:has(+ tr > td.portal-plan-info) { border-bottom: 0; }
+.portal-plan-table tr:has(> td.portal-plan-info) { padding-top: 0; }
+.portal-plan-table td, .portal-plan-table th { border: 0; padding: 0; background: transparent; text-align: left; vertical-align: baseline; }
+.portal-plan-table tr::after { content: ""; order: 5; flex-basis: 100%; height: 0; }
+.portal-plan-table td.portal-plan-info { flex: 1 1 100%; min-width: 0; box-sizing: border-box; order: 9; background: var(--soft); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.portal-plan-table tr:has(> td.portal-plan-info)::after { display: none; }
+/* 実施状況: [名前] 期間 科目 種類 計画 登録 実施 状態 */
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(6) { order: 1; font-weight: 700; font-size: 15px; }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(5) { order: 2; color: var(--muted); font-size: 13px; }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(7) { order: 3; color: var(--muted); font-size: 13px; }
+.portal-plan-table:not(.portal-proposal-table) td:last-child:not(.portal-plan-info) { order: 4; margin-left: auto; }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(4) { order: 6; font-size: 13px; }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(3) { order: 7; font-size: 13px; }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(2) { order: 8; font-size: 13px; }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(4)::before { content: "計画 "; color: var(--muted); }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(3)::before { content: "・ 登録 "; color: var(--muted); }
+.portal-plan-table:not(.portal-proposal-table) td:nth-last-child(2)::before { content: "・ 実施 "; color: var(--muted); }
+/* 案内: [名前] 期間 科目 種類 回数 時間 [1回の料金] 状態 */
+.portal-proposal-table:not(.with-fee) td:nth-last-child(5), .portal-proposal-table.with-fee td:nth-last-child(6) { order: 1; font-weight: 700; font-size: 15px; }
+.portal-proposal-table:not(.with-fee) td:nth-last-child(4), .portal-proposal-table.with-fee td:nth-last-child(5) { order: 2; color: var(--muted); font-size: 13px; }
+.portal-proposal-table:not(.with-fee) td:nth-last-child(6), .portal-proposal-table.with-fee td:nth-last-child(7) { order: 3; color: var(--muted); font-size: 13px; }
+.portal-proposal-table td:last-child:not(.portal-plan-info) { order: 4; margin-left: auto; }
+.portal-proposal-table:not(.with-fee) td:nth-last-child(3), .portal-proposal-table.with-fee td:nth-last-child(4) { order: 6; font-size: 13px; }
+.portal-proposal-table:not(.with-fee) td:nth-last-child(2), .portal-proposal-table.with-fee td:nth-last-child(3) { order: 7; font-size: 13px; }
+.portal-proposal-table.with-fee td:nth-last-child(2) { order: 8; font-size: 13px; }
+.portal-proposal-table:not(.with-fee) td:nth-last-child(3)::before, .portal-proposal-table.with-fee td:nth-last-child(4)::before { content: "回数 "; color: var(--muted); }
+.portal-proposal-table:not(.with-fee) td:nth-last-child(2)::before, .portal-proposal-table.with-fee td:nth-last-child(3)::before { content: "・ 授業 "; color: var(--muted); }
+.portal-proposal-table.with-fee td:nth-last-child(2)::before { content: "・ 1回の料金 "; color: var(--muted); }
+/* 家族のまとめ表の名前は行の先頭に1行で */
+.family-plan-table td:first-child:not(.portal-plan-info) { order: 0; flex-basis: 100%; font-weight: 700; font-size: 13px; color: var(--primary); }
+/* ホームの宿題（1件1行） */
+.hw-lines { list-style: none; margin: 4px 0 12px; padding: 0; border-top: 1px solid var(--line); }
+.hw-line { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.hw-main { flex: 1; min-width: 0; }
+.hw-title { display: block; overflow-wrap: anywhere; }
+.hw-late { color: var(--danger); font-weight: 700; }
+.hw-today { color: var(--amber); font-weight: 700; }
+.hw-line > .tag { flex: none; cursor: pointer; }
