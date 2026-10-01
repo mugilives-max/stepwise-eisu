@@ -15,7 +15,7 @@ test('family reports preserve invoice balances, reject stale signatures and tran
 test('closing waits for month end, blocks unapproved siblings and is idempotent after approval',()=>{
  const {h,a}=fixture();function plan(id,approved){const l=h.admin('planLineSave',{studentId:id,subject:'数学',kind:'通常',count:1,startDate:'2026-09-01',endDate:'2026-09-30',lessonMin:60,lessonFee:3000,propose:true}).line;assert.ok(l);if(approved)assert.ok(h.admin('planLineApproveTeacher',{studentId:id,lineId:l.id,expectedRevision:l.revision,via:'電話',consentDate:'2026-09-07',memo:'架空の承認'}).ok);return l;}
  plan('test-a',true);const pending=plan('test-b',false);for(const id of ['test-a','test-b'])h.seedSlot({studentId:id,date:'2026-09-05',status:'booked',done:true,min:60,subject:'数学',kind:'通常'});
- assert.equal(h.context().familyCloseMonths_().issued,0);h.advance(Date.parse('2026-10-01T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,0);assert.equal(h.context().familyBilling_(a,false)[0].status,'review');assert.equal(h.payments().length,0);
+ assert.equal(h.context().familyCloseMonths_().issued,0);h.advance(Date.parse('2026-10-03T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,0);assert.equal(h.context().familyBilling_(a,false)[0].status,'review');assert.equal(h.payments().length,0);
  assert.ok(h.admin('planLineApproveTeacher',{studentId:'test-b',lineId:pending.id,expectedRevision:pending.revision,via:'電話',consentDate:'2026-09-30',memo:'架空の承認'}).ok);
  assert.equal(h.context().familyCloseMonths_().issued,2);assert.equal(h.context().familyCloseMonths_().issued,0);assert.equal(h.payments().length,2);assert.equal(h.context().familyBilling_(a,false)[0].amount,6000);
 });

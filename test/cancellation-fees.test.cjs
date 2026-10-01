@@ -60,7 +60,7 @@ test('Worker D1 persists the same cancellation charge and invoice snapshot',asyn
 test('family monthly close issues a fee-only statement once and shows a separate fee',()=>{
  const h=fixture();h.advance(10*3600000+1);request(h);ok(decide(h,quote(h)));
  const c=h.context();c.ensureFamilySchema_();const a={id:'fee-family',email:'fee@example.invalid',label:'【テスト】家族',status:'active',revision:1,createdAt:'2026-09-01',passHash:'fixture'};c.familySave_(a);c.familySetChildren_(a,['test-a']);
- h.advance(Date.parse('2026-10-01T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,1);assert.equal(h.context().familyCloseMonths_().issued,0);
+ h.advance(Date.parse('2026-10-03T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,1);assert.equal(h.context().familyCloseMonths_().issued,0);
  const m=h.context().familyBilling_(a,false)[0];assert.equal(m.amount,1000);assert.equal(m.children[0].invoice.fees[0].amount,1000);assert.equal(m.children[0].invoice.lessons.length,0);
 });
 
@@ -97,7 +97,7 @@ test('family relief is scoped to linked child and monthly close waits for review
  const c=h.context();c.ensureFamilySchema_();const a={id:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',email:'relief@example.invalid',label:'test family',status:'active',verifiedAt:'2026-09-01',passHash:'fixture'};c.familySave_(a);c.familySetChildren_(a,['test-a']);const ftoken=c.familyIssueSession_(a).ftoken;
  const req={action:'cancelReliefRequest',ftoken,studentId:'test-a',cancellationId:id,requestId:'family-relief-01',reason:'illness'};
  assert.ok(h.request({...req,studentId:'test-b'}).error);assert.ok(h.request({...req,ftoken:'invalid'}).error);ok(h.request(req));assert.equal(h.get({action:'state',k:'synthetic-link-a'}).cancellations[0].relief.requestedBy,'parent');
- h.advance(Date.parse('2026-10-01T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,0);
+ h.advance(Date.parse('2026-10-03T00:10:00+09:00')-h.now());assert.equal(h.context().familyCloseMonths_().issued,0);
  ok(h.admin('serviceCancelReliefReview',{studentId:'test-a',cancellationId:id,requestId:'family-relief-01',amount:500,note:'reduced'}));assert.equal(h.context().familyCloseMonths_().issued,1);assert.equal(h.context().familyBilling_(a,false)[0].amount,500);
 });
 test('Worker D1 persists relief request, billing hold and teacher decision',async()=>{

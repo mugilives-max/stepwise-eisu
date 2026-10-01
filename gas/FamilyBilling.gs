@@ -22,13 +22,18 @@ function familyBillingClosedMonths_(a,months,children) {
   });children.forEach(function(c){cancelFeeItems_(c.studentId).forEach(function(f){var ym=f.date.slice(0,7);if(!f.amount||ym>=current)return;var m=map[ym];if(!m)m=map[ym]={ym:ym,amount:null,unpaid:null,children:[],status:'review',signature:''};if(!m.children.some(function(x){return String(x.studentId)===String(c.studentId);}))m.status='review';});});return Object.keys(map).sort().reverse().map(function(ym){return map[ym];});
 }
 // Internal Worker trigger only; never exposed through HTTP dispatch.
+// 月の請求の自動確定日（毎日0時10分の処理が、この日以降に前月分を確定する）。
+// 1日・2日は先生が生徒ごとに請求の内容を確かめる期間（2026-10-01 から。それまでは1日に確定していた）。
+var BILLING_CLOSE_DAY_ = 3;
+function billingCloseOn_(ym){return nextYm_(ym)+'-'+('0'+BILLING_CLOSE_DAY_).slice(-2);}
 function familyCloseMonths_() {
-  ensureSchema_();var current=todayStr_().slice(0,7),result={issued:0,pending:0};
+  ensureSchema_();var today=todayStr_(),current=today.slice(0,7),result={issued:0,pending:0};
   familyRows_('familyAccounts').filter(function(a){return a.status==='active';}).forEach(function(a){
     var children=familyChildren_(a,false),months={},slots=readRows_('slots');
     slots.forEach(function(s){var ym=String(s.date||'').slice(0,7);if(ym>='2026-09'&&ym<current&&s.status==='booked'&&children.some(function(c){return String(c.studentId)===String(s.studentId);}))months[ym]=true;});
     children.forEach(function(c){cancelFeeItems_(c.studentId).forEach(function(f){var ym=f.date.slice(0,7);if(f.amount>0&&ym<current){if(billingActiveInvoices_(c.studentId,ym).length)ym=Utilities.formatDate(new Date(Date.parse(current+'-01T00:00:00+09:00')-86400000),TZ,'yyyy-MM');months[ym]=true;}});});
     Object.keys(months).sort().forEach(function(ym){
+      if(today<billingCloseOn_(ym))return; // 前月分は確定日まで待つ（前々月以前の保留分は毎日やり直す）
       var candidates=[],blocked=false;
       children.forEach(function(c){var p=billingPreview_(c.studentId,ym);if(billingActiveInvoices_(c.studentId,ym).length>1){blocked=true;return;}if(p.invoice)return;if(cancelReliefPending_(c.studentId,ym).length){blocked=true;return;}
         if(!(p.fees||[]).length&&!slots.some(function(s){return String(s.studentId)===String(c.studentId)&&String(s.date).slice(0,7)===ym&&s.status==='booked';}))return;
@@ -94,5 +99,6 @@ function billingOverview_(ym) {
       signature:state==='reported'?reported[fam.id]:''});
   });
   rows.sort(function(a,b){var d=BILLING_OVERVIEW_ORDER_.indexOf(a.state)-BILLING_OVERVIEW_ORDER_.indexOf(b.state);return d||(a.name<b.name?-1:a.name>b.name?1:0);});
-  return {ok:true,overview:{ym:ym,current:current,closed:ym<current,totals:totals,rows:rows}};
+  var closeOn=billingCloseOn_(ym);
+  return {ok:true,overview:{ym:ym,current:current,closed:ym<current,closeOn:closeOn,closeWaiting:ym<current&&today<closeOn,closeDay:BILLING_CLOSE_DAY_,totals:totals,rows:rows}};
 }

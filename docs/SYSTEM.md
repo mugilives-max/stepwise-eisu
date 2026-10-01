@@ -1331,3 +1331,9 @@ Pages実行 `36237797285` 成功。管理・予約HTML、portal.js、learning-se
 - 「送信済み」は Apps Script が Google に送信を頼めたという意味で、相手に届いたかどうか（迷惑メール扱い・宛先不明など）までは分からない。
 - 記録の元は Worker の `_effects`（2026-09-22 以降）。それより前の GAS 単独の時期のメールは、台帳の `familyOutbox` / `studentEmailOutbox` に残っているが、この画面には出さない。Meet の取り直し（`calendarMeet`）は出さない。
 - admin op `effectsLog {kind, status, before}`（先生のみ、`cf/worker/effects-admin.mjs`）。テスト: `test/effects-admin.test.cjs`、`test/instructors-ui.test.cjs`。
+
+### 請求の自動確定を翌月3日に（2026-10-01、GAS・Worker `2026-10-01-billing-close-3`）
+
+- 毎日0時10分の `familyCloseMonths_` は、前月分を **翌月3日以降** にだけ確定する（定数 `BILLING_CLOSE_DAY_ = 3`、`billingCloseOn_(ym)`）。1日・2日は先生が生徒ごとに請求の内容を確かめる期間。前々月以前の保留分は今までどおり毎日やり直す。1日・2日でも先生が手で請求を記録でき、その月は自動では二重に記録しない。
+- `billingOverview` は `closeOn`（確定日）・`closeWaiting`（前月で確定日前）・`closeDay` を返す。請求ページは確定待ちの間「◯月3日の0時10分に、請求できる状態の生徒の分が自動で請求として記録されます」を出す。保護者の請求の説明（`assets/lesson-report.js`）も「翌月3日に前月分を確定」に直した。
+- 日程の決め方の作り直し（[SCHEDULING_FLOW_DESIGN.md](SCHEDULING_FLOW_DESIGN.md)）の先行分。テスト: `test/billing-close-day.test.cjs`、`test/billing-overview-ui.test.cjs`。

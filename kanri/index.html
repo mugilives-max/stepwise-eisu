@@ -289,7 +289,7 @@
       .family-info-table td.is-missing{background:#fff4e3;color:#945900}
       @media(max-width:520px){.family-info-table th,.family-info-table td,.student-info-details th,.student-info-details td{padding:7px 6px;font-size:12px}.family-info-table th:first-child{width:34%}}
     </style>
-  <link rel="stylesheet" href="/assets/lesson-report.css?v=20261001-hwrows"><script src="/assets/lesson-report.js?v=20260926-attendance"></script>
+  <link rel="stylesheet" href="/assets/lesson-report.css?v=20261001-hwrows"><script src="/assets/lesson-report.js?v=20261001-close3"></script>
 <link rel="stylesheet" href="/assets/schedule-board.css?v=20260909-lanes"><script src="/assets/schedule-board.js?v=20260909-lanes"></script>
 <link rel="stylesheet" href="/assets/calendar.css?v=20260929-box-width"><script src="/assets/calendar.js?v=20260929-cancel-label"></script>
 </head>
@@ -1983,7 +1983,9 @@
             '<div><span class="small muted">入金済み</span><b class="' + (t.paid ? "ok" : "") + '">' + yen(t.paid) + '</b></div>' +
             '<div><span class="small muted">未入金</span><b class="' + (t.unpaid ? "ng" : "") + '">' + yen(t.unpaid) + '</b></div>' +
             '<div><span class="small muted">承認待ち（請求の対象外）</span><b class="' + (t.pending ? "wait" : "") + '">' + yen(t.pending) + '</b></div></div>';
-          h += '<p class="small muted">' + (d.closed ? "前の月の分は、毎月1日に自動で請求として記録されます。先生の確認が必要なものから順に並びます。" : "この月はまだ途中です。月が終わると、翌月1日に自動で請求として記録されます。") + '</p>';
+          var closeDay = d.closeDay || 3, closeOn = d.closeOn ? Number(d.closeOn.slice(5, 7)) + "月" + Number(d.closeOn.slice(8, 10)) + "日" : "翌月" + closeDay + "日";
+          if (d.closeWaiting) h += '<p class="lc-notice" role="status">' + closeOn + 'の0時10分に、請求できる状態の生徒の分が自動で請求として記録されます。それまでに生徒ごとの内容を確かめ、直すところがあれば生徒ページで直してください。</p>';
+          h += '<p class="small muted">' + (!d.closed ? "この月はまだ途中です。月が終わると、翌月" + closeDay + "日の0時10分に自動で請求として記録されます（1日・2日は内容を確かめる期間です）。" : d.closeWaiting ? "先生の確認が必要なものから順に並びます。" : "前の月の分は、毎月" + closeDay + "日に自動で請求として記録されます。先生の確認が必要なものから順に並びます。") + '</p>';
           if (!rows.length) h += '<div class="empty">この月に授業・請求のある生徒はいません。</div>';
           else h += '<div class="bo-list">' + rows.map(function (r) {
             var st = BO_STATE[r.state] || BO_STATE.review, sid = encodeURIComponent(r.studentId);

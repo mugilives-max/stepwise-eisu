@@ -83,3 +83,15 @@ test('a month still in progress and an empty month explain themselves', async ()
   const empty = await open([]);
   assert.match(empty.html(), /この月に授業・請求のある生徒はいません/);
 });
+
+// 請求の自動確定は翌月3日。1日・2日は確定待ちとして知らせる（2026-10-01）
+test('during the checking days the page says when the month will be recorded', async () => {
+  let ui = await open([R()], { closeOn: '2026-10-03', closeWaiting: true, closeDay: 3 });
+  assert.match(ui.html(), /role="status">10月3日の0時10分に、請求できる状態の生徒の分が自動で請求として記録されます。/);
+  assert.doesNotMatch(ui.html(), /毎月1日/);
+  ui = await open([R()], { closeOn: '2026-10-03', closeWaiting: false, closeDay: 3 });
+  assert.doesNotMatch(ui.html(), /role="status">10月3日/);
+  assert.match(ui.html(), /前の月の分は、毎月3日に自動で請求として記録されます。/);
+  ui = await open([R()], { closed: false, closeOn: '2026-11-03', closeWaiting: false, closeDay: 3 });
+  assert.match(ui.html(), /翌月3日の0時10分に自動で請求として記録されます（1日・2日は内容を確かめる期間です）。/);
+});
