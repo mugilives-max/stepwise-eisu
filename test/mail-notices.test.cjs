@@ -49,3 +49,16 @@ test('parent invoice mails say 授業料, not the retired 月謝', () => {
   assert.match(created.body, /^授業料の請求内容を記録しました。/); assert.match(voided.body, /^授業料の請求を取り消しました。/);
   assert.doesNotMatch(created.body + voided.body, /月謝/);
 });
+
+// 見直し候補 7: 科目だけの修正では生徒に「授業の予定を変更しました」を送らない
+test('a subject-only change does not mail the student; a change of date, time, length or format does', () => {
+  const h = createHarness({ iterations: 10 }), c = h.context(), calls = [];
+  c.studentEmailNotifyOfferChanged_ = (...args) => { calls.push(args); return { ok: true, status: 'sent' }; };
+  const base = { id: 's1', studentId: 'test-a', date: '2026-09-15', start: '15:00', min: 60, subject: '数学', deliveryMode: 'in_person', status: 'booked', done: '' };
+  const run = (op, patch) => c.schedulingEditNotice_({ id: 'w-' + op }, { id: 'test-a', name: '架空生徒A' }, { op, slot: base }, { op, slot: { ...base, ...patch } });
+  for (const op of ['editBooked', 'editOffered', 'editLessonSubject']) assert.equal(run(op, { subject: '英語' }).status, 'skipped', op);
+  assert.equal(calls.length, 0);
+  run('editBooked', { start: '16:00' }); run('editOffered', { date: '2026-09-16' }); run('setSlotDeliveryMode', { deliveryMode: 'online' }); run('editBooked', { min: 90, subject: '英語' });
+  assert.equal(calls.length, 4, 'real schedule changes still mail the student');
+  assert.equal(calls[3][3].subject, '英語', 'a mail for a time change shows the corrected subject too');
+});

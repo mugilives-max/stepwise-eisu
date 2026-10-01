@@ -181,6 +181,9 @@ function schedulingEditGate_(before,desired,force,editId,op) {
 }
 function schedulingEditNotice_(write,student,before,after) {
   if(before.op==='editLessonSubject')return {status:'skipped',recorded:true};
+  // 日時・時間・形式が同じなら（科目や種類だけの修正なら）生徒に変更のメールは送らない（2026-10-01）
+  var b=before.slot||{},a=after.slot||{};
+  if(String(b.date)===String(a.date)&&String(b.start)===String(a.start)&&Number(b.min)===Number(a.min)&&String(b.deliveryMode||'')===String(a.deliveryMode||''))return {status:'skipped',recorded:true};
   if(schedulingExpectedMatches_(before.slot,after.slot)||typeof studentEmailNotifyOfferChanged_!=='function')return {status:'skipped',recorded:true};
   try{return studentEmailNotifyOfferChanged_(student,'offer-edited:'+write.id,schedulingPublicSnapshot_(before.slot),schedulingPublicSnapshot_(after.slot));}
   catch(e){return {status:'failed',recorded:false,warning:'変更は保存しました。変更通知の準備を確認できませんでした'};}
