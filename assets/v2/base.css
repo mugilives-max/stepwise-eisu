@@ -230,3 +230,21 @@ form.rec button.link { justify-self: start; text-decoration: none; color: var(--
 /* ---- 複数行の入力欄（1行の入力欄と同じ見た目に） ---- */
 textarea { font: inherit; color: var(--ink); padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); width: 100%; resize: vertical; line-height: 1.6; }
 textarea:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+/* ---- 段階のあるスライダー（理解度）: 太い帯・段階の点・白い丸のつまみ。--t は 0〜1 ---- */
+.slider-head { display: flex; justify-content: space-between; align-items: baseline; }
+.slider-value { color: var(--ink); font-size: 14px; }
+.slider { --h: 40px; --r: 18px; position: relative; height: var(--h); margin-top: 2px; }
+.slider-track { position: absolute; inset: 0; border-radius: 999px; background: #e6e9ee; overflow: hidden; }
+.slider-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: calc((100% - 2 * var(--r) - 4px) * var(--t) + 2 * var(--r) + 4px); background: var(--primary); border-radius: 999px; transition: width .12s ease-out; }
+.slider-track i { position: absolute; top: 50%; left: calc(var(--r) + 2px + (100% - 2 * var(--r) - 4px) * var(--k)); width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #9aa6b2; }
+.slider-track i.on { background: rgba(255, 255, 255, .75); }
+.slider.unset .fill { width: 0; }
+.slider input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0 2px; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; border: 0; }
+.slider input[type=range]:focus { outline: none; }
+.slider input[type=range]::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+.slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: calc(2 * var(--r)); height: calc(2 * var(--r)); margin-top: calc((var(--h) - 2 * var(--r)) / 2); border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
+.slider input[type=range]::-moz-range-track { height: 100%; background: transparent; }
+.slider input[type=range]::-moz-range-thumb { width: calc(2 * var(--r)); height: calc(2 * var(--r)); border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
+.slider.unset input[type=range]::-webkit-slider-thumb { opacity: .55; }
+.slider.unset input[type=range]::-moz-range-thumb { opacity: .55; }
+.slider input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--primary); outline-offset: 2px; }

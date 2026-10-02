@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux11';
-import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261003-ux11';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux11';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux12';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux12';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux12';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '';
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
@@ -68,7 +68,7 @@ export function recordPage(ctx, lessonId) {
   else h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
   // 2. 今日の授業
   h += `<h2>今日の授業</h2><div><div class="field-label">扱った範囲</div>${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows && rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button></div>
-    <div><div class="field-label">理解度</div>${seg('note.understanding', CHOICES.understanding.map(([v]) => [v, v]).reverse(), n.understanding, esc)}<div class="small muted seg-cap"><span>1 まだ分かっていない</span><span>5 よく分かっている</span></div></div>
+    ${slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.slice().reverse() })}
     <label>コメント<textarea name="comment" maxlength="2000" rows="4" placeholder="授業の様子・できるようになったこと（公開するときは必須）">${esc(r.comment)}</textarea></label>
     <details class="more"${r.parentMessage ? ' open' : ''}><summary>保護者への連絡</summary><textarea name="parentMessage" maxlength="1000" rows="2" aria-label="保護者への連絡" placeholder="例: 次回は小テストをします">${esc(r.parentMessage)}</textarea></details>
     <details class="more planned"${n.plannedUnit ? ' open' : ''}><summary>授業計画の予定と比べる</summary><div class="stack"><label>予定していた単元<input name="note.plannedUnit" maxlength="1000" value="${esc(n.plannedUnit || '')}" placeholder="例: 不定詞の名詞的用法"></label>
