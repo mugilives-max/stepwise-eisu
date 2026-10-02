@@ -39,6 +39,8 @@
       "migrations_dir": "migrations-v2"
     }
   ],
+  // ファイルの置き場所（成績票・請求書・支払明細など、すべて）。公開しないバケット。鍵は 'f/<id>' だけ（cf/v2/files.mjs）
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "stepwise-files" }],
   "env": {
     "local": {
       "vars": { "ALLOW_ORIGIN": "*", "AUTH_MODE": "mock", "NL_ENABLED": "0" },
@@ -55,7 +57,8 @@
           "database_id": "00000000-0000-4000-8000-000000000002",
           "migrations_dir": "migrations-v2"
         }
-      ]
+      ],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "stepwise-files-local" }]
     }
   }
 }

@@ -19,7 +19,6 @@ async function world() {
   const exam = async (extra = {}) => (await h.ok('grades/exams/save', { auth, studentId: kid.id, kind: 'regular', name: '1学期期末テスト', date: '2026-07-05', ...extra })).examId;
   return { h, auth, fam, kid, other, parent, teacherAuth, teacher, k, exam };
 }
-const b64 = s => Buffer.from(s).toString('base64');
 
 test('managers record everything; teachers see and enter only their subjects plus the total', async () => {
   const { h, auth, kid, other, teacherAuth, exam } = await world();
@@ -64,33 +63,34 @@ test('families see everything with lesson counts; students see scores, next step
   assert.equal(st.nextTest.days, 18);
 });
 
-test('score sheets are sent in pieces, wait for import, and only the right people can open them', async () => {
-  const { h, auth, kid, other, parent, k } = await world();
-  const body = 'x'.repeat(1000), parts = [body.slice(0, 600), body.slice(600)];
-  assert.equal((await h.call('family/grades/upload', { auth: parent, studentId: kid.id, idx: 0, chunks: 1, name: 'a.exe', mime: 'application/x-msdownload', size: 3, data: b64('abc') })).error.code, 'badType');
-  const first = await h.ok('family/grades/upload', { auth: parent, studentId: kid.id, idx: 0, chunks: 2, name: '中間 個票.pdf', mime: 'application/pdf', size: 1000, note: '2学期中間', data: b64(parts[0]) });
-  assert.equal(first.done, false);
-  assert.equal((await h.call('family/grades/file', { auth: parent, id: first.fileId })).error.code, 'notFound', '送っている途中は開けない');
-  const last = await h.ok('family/grades/upload', { auth: parent, studentId: kid.id, fileId: first.fileId, idx: 1, chunks: 2, data: b64(parts[1]) });
-  assert.equal(last.done, true);
+test('score sheets go to the shared file store, wait for import, and only the right people can open them', async () => {
+  const { h, auth, kid, parent, k } = await world();
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(991, 1)]);
+  assert.equal((await h.call('family/grades/upload', { auth: parent, studentId: kid.id, name: 'a.exe', mime: 'application/x-msdownload', size: 3 })).error.code, 'badType');
+  const st = await h.ok('family/grades/upload', { auth: parent, studentId: kid.id, name: '中間 個票.pdf', mime: 'application/pdf', size: pdf.length, note: '2学期中間' });
+  assert.match(st.uploadUrl, /^files\/put\?t=ft\./);
+  assert.equal((await h.ok('grades/overview', { auth })).files.length, 0, '中身が届くまでは一覧に出ない');
+  const put = await h.raw('POST', st.uploadUrl, pdf);
+  assert.equal(put.status, 200, await put.clone().text());
+  assert.equal((await h.raw('POST', st.uploadUrl, pdf)).status, 403, '送る鍵は1回だけ');
   assert.match(h.mails().at(-1).subject, /成績票/);
   const ov = await h.ok('grades/overview', { auth });
   assert.deepEqual(ov.files.map(f => [f.name, f.status, f.uploadedByKind]), [['中間 個票.pdf', 'new', 'family']]);
-  const got = [];
-  for (let i = 0; i < 2; i++) got.push(Buffer.from((await h.ok('grades/files/read', { auth, id: first.fileId, idx: i })).data, 'base64').toString());
-  assert.equal(got.join(''), body);
-  assert.equal((await h.call('student/grades/file', { k, id: first.fileId })).error.code, 'notFound', '生徒は自分が送ったものだけ');
-  // 大きさが合わなければ捨てる
-  const bad = await h.ok('student/grades/upload', { k, idx: 0, chunks: 2, name: 'photo.jpg', mime: 'image/jpeg', size: 999, data: b64('abc') });
-  assert.equal((await h.call('student/grades/upload', { k, fileId: bad.fileId, idx: 1, chunks: 2, data: b64('def') })).error.code, 'incomplete');
-  assert.equal(h.rows('select count(*) n from examFiles where id = ?', bad.fileId)[0].n, 0);
-  const ok = await h.ok('student/grades/upload', { k, idx: 0, chunks: 1, name: 'photo.jpg', mime: 'image/jpeg', size: 3, data: b64('abc') });
+  const link = await h.ok('files/link', { auth, id: st.fileId });
+  const got = await h.raw('GET', link.url);
+  assert.equal(got.headers.get('content-type'), 'application/pdf');
+  assert.deepEqual(Buffer.from(await got.arrayBuffer()), pdf);
+  assert.equal((await h.ok('files/link', { auth: parent, id: st.fileId })).name, '中間 個票.pdf', '保護者も開ける');
+  assert.equal((await h.call('files/link', { k, id: st.fileId })).error.code, 'notFound', '生徒は自分が送ったものだけ');
+  // 生徒の写真
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60, 2)]);
+  const mine = await h.ok('student/grades/upload', { k, name: 'photo.jpg', mime: 'image/jpeg', size: jpg.length });
+  assert.equal((await h.raw('POST', mine.uploadUrl, jpg)).status, 200);
   assert.equal((await h.ok('student/grades', { k })).files.length, 1);
-  assert.equal((await h.ok('student/grades/file', { k, id: ok.fileId })).data, b64('abc'));
-  assert.equal((await h.call('family/grades/upload', { auth: parent, studentId: 'su_nobody', idx: 0, chunks: 1, name: 'x', mime: 'image/png', size: 3, data: b64('abc') })).error.code, 'notFound');
-  await h.ok('grades/files/resolve', { auth, id: first.fileId, status: 'imported' });
-  assert.equal((await h.ok('grades/overview', { auth })).files.length, 1, '取り込んだら一覧から外れる（生徒の写真が残る）');
-  assert.ok(other);
+  assert.ok((await h.ok('files/link', { k, id: mine.fileId })).url);
+  await h.ok('grades/files/resolve', { auth, id: st.fileId, status: 'imported' });
+  assert.deepEqual((await h.ok('grades/overview', { auth })).files.map(f => f.name), ['photo.jpg'], '取り込んだら一覧から外れる');
+  assert.equal((await h.ok('family/grades', { auth: parent })).students.find(s => s.id === kid.id).files.length, 2);
 });
 
 test('tests shared by families wait for results until recorded or marked as no result, and reminders go out only after the switch-over', async () => {

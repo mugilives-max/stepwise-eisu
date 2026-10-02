@@ -1,9 +1,9 @@
 // 生徒の画面（作り直し v2）。専用リンク（?k=）で開く。予定と「変更・お休みの連絡」、学習、成績（成績票を送る）、予定の共有。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
 import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage6b';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage6b';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage6b';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage6c';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage6c';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage6c';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
@@ -45,7 +45,7 @@ app.addEventListener('submit', ev => {
   const v = Object.fromEntries(new FormData(ev.target).entries());
   if (ev.target.dataset.form === 'gr-upload') {
     const file = ev.target.querySelector('input[type=file]').files[0]; if (!file) return;
-    return run(async () => { const r = await uploadFile(file, v.note || '', body => call('student/grades/upload', { ...body, k })); if (r.ok) { grades = null; say('成績票を送りました。先生が確かめて点数を入れます', 'ok'); } else say(r.error.message, 'error'); });
+    return run(async () => { const r = await uploadFile(file, v.note || '', meta => call('student/grades/upload', { ...meta, k })); if (r.ok) { grades = null; say('成績票を送りました。先生が確かめて点数を入れます', 'ok'); } else say(r.error.message, 'error'); });
   }
   run(async () => { const r = await call('student/events/add', { ...v, k }); if (r.ok) { sched = null; say('共有しました', 'ok'); } else say(r.error.message, 'error'); });
 });
@@ -55,7 +55,7 @@ app.addEventListener('click', ev => {
   if (a === 'change') { change = { id: b.dataset.id, pick: '', note: '' }; return render(); }
   if (a === 'pick') { const n = document.getElementById('change-note'); if (n) change.note = n.value; change.pick = b.dataset.c; return render(); }
   if (a === 'close-change') { change = null; return render(); }
-  if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openFile({ chunks: Number(b.dataset.chunks), mime: b.dataset.mime }, idx => call('student/grades/file', { k, id: b.dataset.id, idx }), win); if (!r.ok) say(r.error.message, 'error'); }); return; }
+  if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openFile(() => call('files/link', { k, id: b.dataset.id }), win); if (!r.ok) say(r.error.message, 'error'); }); return; }
   // 書いた内容は、送信中の表示に描き直す前に読んでおく（描き直すと入力欄が作り直される）
   if (a === 'send-change') { const n = document.getElementById('change-note'); if (n) change.note = n.value.trim(); }
   run(async () => {

@@ -14,11 +14,11 @@ import { migrateRecordsRoutes } from './migrate-records.mjs';
 import { billingRoutes, autoCloseInvoices } from './billing.mjs';
 import { migrateBillingRoutes } from './migrate-billing.mjs';
 import { gradesRoutes, remindTestResults } from './grades.mjs';
+import { fileRoutes, handleTransfer, cleanupFiles } from './files.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes };
-const MAX_BODY = 200000, UPLOAD_BODY = 1000000; // 成績票を分けて送る操作だけ大きくてよい（cf/v2/grades.mjs）
-const isUpload = route => /^(grades|family\/grades|student\/grades)\/(files\/)?upload$/.test(route);
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes };
+const MAX_BODY = 200000;
 
 // 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
 export async function runV2Scheduled(env, now = Date.now()) {
@@ -27,12 +27,19 @@ export async function runV2Scheduled(env, now = Date.now()) {
   const result = await autoConfirm(c);
   result.invoices = await autoCloseInvoices(c);
   result.tests = await remindTestResults(c);
+  result.files = await cleanupFiles(c);
   if (c.effects.length) await deliverEffects(env, c.db, await recordEffects(c.db, c.effects, c.now));
   return result;
 }
 
 export async function handleV2(request, env, ctx, head = {}) {
   const reply = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...head } });
+  // ファイルの中身を送る・開く口だけは JSON ではない（cf/v2/files.mjs）
+  const path = new URL(request.url).pathname.replace(/^\/v2\//, '');
+  if (env.DB2 && (path === 'files/put' || path === 'files/get')) {
+    try { return await handleTransfer(request, env, ctx, path, head); }
+    catch { return reply(500, { ok: false, error: { code: 'server', message: '処理に失敗しました。もう一度お試しください' } }); }
+  }
   if (request.method !== 'POST') return reply(405, { ok: false, error: { code: 'method', message: 'POST で送ってください' } });
   if (!env.DB2) return reply(503, { ok: false, error: { code: 'unavailable', message: '準備中です' } });
   const route = new URL(request.url).pathname.replace(/^\/v2\//, '');
@@ -41,7 +48,7 @@ export async function handleV2(request, env, ctx, head = {}) {
   let body;
   try {
     const text = await request.text();
-    if (text.length > (isUpload(route) ? UPLOAD_BODY : MAX_BODY)) throw new Error('too large');
+    if (text.length > MAX_BODY) throw new Error('too large');
     body = text ? JSON.parse(text) : {};
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('not object');
   } catch { return reply(400, { ok: false, error: { code: 'badRequest', message: '送った内容を読めませんでした' } }); }

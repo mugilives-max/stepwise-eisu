@@ -1,6 +1,6 @@
 // 成績の見せ方（保護者・生徒・スタッフで共通）。推移のグラフ・試験ごとのカード・成績票を送る・開く。
 // グラフは得点率（点数 ÷ 満点）と偏差値を別々に描く（1つのグラフに目盛りを2つ置かない）。
-import { esc } from '/assets/v2/api.js';
+import { esc, API } from '/assets/v2/api.js';
 
 const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
 export const jst = t => new Date(Date.parse(t) + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' '); // 保存した時刻（UTC）を日本時間で
@@ -65,10 +65,10 @@ export function examCard(e, { lessons = null, actions = '' } = {}) {
 const STATUS = { new: ['確かめ待ち', 'warn'], imported: ['取り込み済み', 'ok'], dismissed: ['確認済み', 'gray'] };
 export function fileList(files, action) {
   if (!files.length) return '';
-  return '<div class="list">' + files.map(f => `<div><div>${esc(f.name)} <span class="tag ${(STATUS[f.status] || ['', 'gray'])[1]}">${(STATUS[f.status] || [f.status])[0]}</span><div class="small muted">${esc(jst(f.createdAt).slice(0, 10))}${f.note ? '・' + esc(f.note) : ''}</div></div><div><button data-action="${action}" data-id="${esc(f.id)}" data-chunks="${f.chunks}" data-mime="${esc(f.mime)}">開く</button></div></div>`).join('') + '</div>';
+  return '<div class="list">' + files.map(f => `<div><div>${esc(f.name)} <span class="tag ${(STATUS[f.status] || ['', 'gray'])[1]}">${(STATUS[f.status] || [f.status])[0]}</span><div class="small muted">${esc(jst(f.createdAt).slice(0, 10))}${f.note ? '・' + esc(f.note) : ''}</div></div><div><button data-action="${action}" data-id="${esc(f.id)}">開く</button></div></div>`).join('') + '</div>';
 }
 export const uploadForm = (dis, extra = '') => `<form class="stack" data-form="gr-upload">${extra}<label>成績票の写真か PDF<input type="file" name="file" accept="image/*,application/pdf" required></label>
-  <label>一言（任意）<input name="note" maxlength="200" placeholder="例: 2学期中間テストの個票"></label><button class="primary"${dis}>送る</button><p class="small muted">写真は読みやすい大きさに縮めて送ります。10MB まで。</p></form>`;
+  <label>一言（任意）<input name="note" maxlength="200" placeholder="例: 2学期中間テストの個票"></label><button class="primary"${dis}>送る</button><p class="small muted">写真は読みやすい大きさに縮めて送ります。20MB まで。</p></form>`;
 
 // 保護者・生徒の画面: 次のテスト・推移・試験のカード・成績票
 export function gradesView(st, { who, dis = '' }) {
@@ -95,31 +95,23 @@ async function shrink(file) {
     return blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
   } catch { return file; }
 }
-const toB64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
-const CHUNK = 600 * 1024;
-// send(body) は 1 回分を送る関数（route と認証は呼ぶ側で付ける）
-export async function uploadFile(rawFile, note, send) {
+// 送る: start(meta) で送る鍵をもらい（領域の操作。route と認証は呼ぶ側で付ける）、中身をそのまま送る。
+// 中身は種類を付けずに送る（ブラウザの事前確認を起こさないため。種類はサーバーが中身から確かめる）
+export async function uploadFile(rawFile, note, start) {
   const file = await shrink(rawFile);
-  if (file.size > 10 * 1024 * 1024) return { ok: false, error: { message: 'ファイルは10MBまでにしてください' } };
+  if (file.size > 20 * 1024 * 1024) return { ok: false, error: { message: 'ファイルは20MBまでにしてください' } };
   const mime = file.type === 'image/jpg' ? 'image/jpeg' : file.type;
-  const bytes = new Uint8Array(await file.arrayBuffer()), chunks = Math.max(1, Math.ceil(bytes.length / CHUNK));
-  let fileId = '', r;
-  for (let i = 0; i < chunks; i++) {
-    const body = { idx: i, chunks, data: toB64(bytes.subarray(i * CHUNK, (i + 1) * CHUNK)) };
-    if (i === 0) Object.assign(body, { name: file.name, mime, size: bytes.length, note }); else body.fileId = fileId;
-    r = await send(body);
-    if (!r.ok) return r;
-    fileId = r.fileId;
-  }
-  return r;
+  const r = await start({ name: file.name, mime, size: file.size, note });
+  if (!r.ok) return r;
+  try {
+    const res = await fetch(API + r.uploadUrl, { method: 'POST', body: new Blob([file]) });
+    return await res.json().catch(() => ({ ok: false, error: { message: '送れませんでした。もう一度お試しください' } }));
+  } catch { return { ok: false, error: { message: '通信できませんでした。電波の良いところでもう一度お試しください' } }; }
 }
-// 開く: 分けて読んで1つにし、新しいタブ（win）に出す。開けなければ保存する
-export async function openFile(meta, read, win) {
-  const parts = [];
-  for (let i = 0; i < meta.chunks; i++) { const r = await read(i); if (!r.ok) { if (win) win.close(); return r; } parts.push(Uint8Array.from(atob(r.data), ch => ch.charCodeAt(0))); }
-  const url = URL.createObjectURL(new Blob(parts, { type: meta.mime }));
-  if (win && !win.closed) win.location.href = url;
-  else { const a = document.createElement('a'); a.href = url; a.download = 'seisekihyo' + (meta.mime === 'application/pdf' ? '.pdf' : '.jpg'); a.click(); }
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+// 開く: link() で開く鍵（5分）をもらい、先に開いておいた新しいタブ（win）に出す。タブが開けなければこの画面で開く
+export async function openFile(link, win) {
+  const r = await link();
+  if (!r.ok) { if (win) win.close(); return r; }
+  if (win && !win.closed) win.location.href = API + r.url; else location.href = API + r.url;
   return { ok: true };
 }

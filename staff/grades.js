@@ -1,6 +1,6 @@
 // スタッフの画面: 成績（6段目）。#grades（一覧・届いた成績票・結果の入力待ち）と #grades=<生徒>（試験の記録・入力）。
 // 講師は担当の生徒の担当科目だけ入力でき、ほかの科目は合計だけ見える。成績票は教室管理者だけ。
-import { examCard, gradeCharts, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261002-stage6b';
+import { examCard, gradeCharts, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261002-stage6c';
 
 let overview = null, student = null, studentFor = '', editing = '', prefill = null;
 export function resetGrades() { overview = null; student = null; studentFor = ''; editing = ''; prefill = null; }
@@ -13,7 +13,7 @@ export function gradesOverviewPage(ctx) {
   let h = `<h1>成績</h1><p class="sub">定期テストと模試の記録。生徒・保護者から届いた成績票を確かめて、点数を入れます。</p>${ctx.notice()}`;
   if (overview.loading) return h + '<p class="muted">読み込んでいます…</p>';
   if (ctx.isManager) h += `<h2>届いた成績票（${overview.files.length}件）</h2>` + (overview.files.length ? '<div class="list">' + overview.files.map(f => `<div><div><strong>${esc(f.studentName)}</strong> ${esc(f.name)}<div class="small muted">${esc(jst(f.createdAt).slice(5))}・${f.uploadedByKind === 'family' ? '保護者' : f.uploadedByKind === 'student' ? '生徒' : 'スタッフ'}${f.note ? '・' + esc(f.note) : ''}</div></div>
-    <div class="row"><button data-action="gr-open" data-id="${esc(f.id)}" data-chunks="${f.chunks}" data-mime="${esc(f.mime)}">開く</button><a href="#grades=${encodeURIComponent(f.studentId)}">点数を入れる</a></div></div>`).join('') + '</div>' : '<p class="small muted">取り込み待ちの成績票はありません。</p>');
+    <div class="row"><button data-action="gr-open" data-id="${esc(f.id)}">開く</button><a href="#grades=${encodeURIComponent(f.studentId)}">点数を入れる</a></div></div>`).join('') + '</div>' : '<p class="small muted">取り込み待ちの成績票はありません。</p>');
   h += `<h2>結果の入力待ちのテスト（${overview.pendingTests.length}件）</h2><p class="small muted">生徒・保護者が共有したテストの予定のうち、終わったのに結果がまだないもの。</p>` + pendingList(ctx, overview.pendingTests, true);
   h += '<h2>生徒</h2><div class="list">' + overview.students.map(s => `<div><div><a href="#grades=${encodeURIComponent(s.id)}"><strong>${esc(s.name)}</strong></a> <span class="small muted">${esc(s.grade || '')}${s.subjects ? '・担当 ' + s.subjects.map(esc).join('・') : ''}</span>
     <div class="small muted">${s.latest ? `記録 ${s.latest.count}件・最新 ${esc(md(s.latest.date))}` : 'まだ記録がありません'}</div></div><div></div></div>`).join('') + '</div>';
@@ -82,7 +82,7 @@ function examForm(ctx, e) {
 export async function gradesSubmit(ctx, kind, el) {
   if (kind === 'gr-upload') {
     const file = el.querySelector('input[type=file]').files[0], note = new FormData(el).get('note') || ''; if (!file) return true;
-    const r = await uploadFile(file, note, body => ctx.call('grades/files/upload', { ...body, studentId: studentFor }));
+    const r = await uploadFile(file, note, meta => ctx.call('grades/files/upload', { ...meta, studentId: studentFor }));
     if (r.ok) { student = null; studentFor = ''; ctx.say('成績票を残しました', 'ok'); } else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
     return true;
   }
@@ -133,5 +133,5 @@ export async function gradesClick(ctx, a, b) {
 }
 // 成績票を開く（app.js のクリックで、新しいタブを先に開いてから呼ぶ）
 export function openGradeFile(ctx, b, win) {
-  return openFile({ chunks: Number(b.dataset.chunks), mime: b.dataset.mime }, idx => ctx.call('grades/files/read', { id: b.dataset.id, idx }), win);
+  return openFile(() => ctx.call('files/link', { id: b.dataset.id }), win);
 }

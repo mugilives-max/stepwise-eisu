@@ -6,6 +6,17 @@ const { createD1 } = require('./d1-harness.cjs');
 
 const T0 = Date.parse('2026-10-02T03:00:00Z');
 
+// R2（env.FILES）の代わり。メモリに置く
+function fakeR2() {
+  const m = new Map();
+  return {
+    _m: m,
+    async put(k, v, o) { const b = v instanceof Uint8Array ? v : new Uint8Array(await new Response(v).arrayBuffer()); m.set(k, { b, o }); return {}; },
+    async get(k) { const x = m.get(k); return x ? { body: new Blob([x.b]).stream(), httpMetadata: x.o && x.o.httpMetadata, size: x.b.length } : null; },
+    async delete(k) { m.delete(k); },
+  };
+}
+
 async function createV2({ legacyConfig = true } = {}) {
   const util = await import('../../cf/v2/util.mjs');
   util.setPasswordIterationsForTest(1000);
@@ -13,13 +24,19 @@ async function createV2({ legacyConfig = true } = {}) {
   const db = createD1(), db2 = createD1({ dir: 'migrations-v2' });
   if (legacyConfig) for (const [k, v] of [['adminToken', 'legacy-teacher-token'], ['adminTokenExp', String(T0 + 86400e3)], ['teacherEmail', 'owner@example.invalid']])
     db._sqlite.prepare('insert into config (key, value) values (?, ?)').run(k, v);
-  const env = { DB: db, DB2: db2 }, h = { clock: T0, env, db, db2, util };
+  const env = { DB: db, DB2: db2, FILES: fakeR2() }, h = { clock: T0, env, db, db2, util };
   h.call = async (route, body = {}) => {
     const realNow = Date.now; Date.now = () => h.clock;
     try {
       const res = await handleV2(new Request('https://api.example.invalid/v2/' + route, { method: 'POST', body: JSON.stringify(body) }), env, null);
       return { status: res.status, ...(await res.json()) };
     } finally { Date.now = realNow; }
+  };
+  // ファイルの中身を送る（POST の生の中身）・開く（GET）。url は 'files/put?t=…' の形
+  h.raw = async (method, url, bytes) => {
+    const realNow = Date.now; Date.now = () => h.clock;
+    try { return await handleV2(new Request('https://api.example.invalid/v2/' + url, { method, body: bytes ? Buffer.from(bytes) : undefined }), env, null); }
+    finally { Date.now = realNow; }
   };
   h.ok = async (route, body) => { const r = await h.call(route, body); assert.equal(r.ok, true, route + ' ' + JSON.stringify(r)); return r; };
   h.rows = (sql, ...a) => db2._sqlite.prepare(sql).all(...a);
