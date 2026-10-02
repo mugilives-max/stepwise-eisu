@@ -1,10 +1,10 @@
 // 保護者の画面（作り直し v2）。ログイン・招待・再設定、子どもの予定と「変更・お休みの連絡」、学習、計画・お支払い（family/money.js）、予定の共有、アカウント。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-ux2';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-ux2';
-import { moneyView } from '/family/money.js?v=20261002-ux2';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-ux2';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-ux3';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-ux3';
+import { moneyView } from '/family/money.js?v=20261002-ux3';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-ux3';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';

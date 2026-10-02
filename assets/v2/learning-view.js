@@ -1,6 +1,6 @@
 // 作り直し（v2）の「学習」の部品（保護者・生徒で共通）。公開した授業記録と宿題。
 import { esc } from '/assets/v2/api.js';
-import { mdw } from '/assets/v2/schedule-view.js?v=20261002-ux2';
+import { mdw } from '/assets/v2/schedule-view.js?v=20261002-ux3';
 
 const HW_STATUS = { open: ['warn', '未完了'], reported: ['', 'できたと報告（先生の確認待ち）'], confirmed: ['ok', '先生が確認'] };
 const dueText = h => h.dueMode === 'none' ? '期限なし' : h.due ? mdw(h.due) + 'まで' : h.dueMode === 'nextLesson' ? '次の授業まで' : '';

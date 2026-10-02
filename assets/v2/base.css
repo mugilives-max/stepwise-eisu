@@ -172,3 +172,11 @@ h2 .count { font-size: 12px; background: var(--warn-soft); color: var(--warn); b
 a.small-btn { display: inline-block; text-decoration: none; padding: 6px 12px; font-size: 13px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: var(--white); white-space: nowrap; }
 a.small-btn.primary { background: var(--primary); border-color: var(--primary); color: var(--white); font-weight: 700; }
 button.small-btn { white-space: nowrap; }
+
+/* ---- 生徒の画面: 上のタブ（横に流れる） ---- */
+.tabs2 { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 6px 0 4px; padding-bottom: 2px; }
+.tabs2::-webkit-scrollbar { display: none; }
+.tabs2 a { flex: none; text-decoration: none; font-size: 13.5px; padding: 6px 12px; border-radius: 999px; background: #eef1f4; color: var(--muted); white-space: nowrap; }
+.tabs2 a.on { background: var(--primary); color: var(--white); font-weight: 700; }
+.rows .todo.left { opacity: .55; }
+.rows .todo .tags { display: flex; gap: 4px; }

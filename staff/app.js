@@ -1,20 +1,22 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-ux2';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-ux2';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-ux2';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-ux2';
-import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-ux2';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261002-ux2';
-import { monthlyPage, settingsPage } from '/staff/hubs.js?v=20261002-ux2';
-import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-ux2';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-ux2';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-ux3';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-ux3';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-ux3';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-ux3';
+import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-ux3';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261002-ux3';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261002-ux3';
+import { monthlyPage, settingsPage } from '/staff/hubs.js?v=20261002-ux3';
+import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-ux3';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-ux3';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
 const STATUS_LABEL = { invited: '招待中', active: '利用中', stopped: '停止' };
 const app = document.getElementById('app'), nav = document.getElementById('nav');
+let lastPage = '';
 let me = null, busy = false, notice = null, staffList = null, shownLink = null, bootstrap = null;
 
 const legacyToken = () => { try { return localStorage.getItem('sw_admt') || ''; } catch { return ''; } };
@@ -25,6 +27,7 @@ function route() {
   if (h.startsWith('#family=')) return { page: 'family', id: decodeURIComponent(h.slice(8)) };
   if (h.startsWith('#record=')) return { page: 'record', id: decodeURIComponent(h.slice(8)) };
   if (h.startsWith('#grades=')) return { page: 'gradesOf', id: decodeURIComponent(h.slice(8)) };
+  if (h.startsWith('#student=')) { const [id, tab] = h.slice(9).split('/'); return { page: 'student', id: decodeURIComponent(id), tab: tab || 'summary' }; }
   return { page: h.slice(1) || 'home' };
 }
 const say = (message, kind = '') => { notice = message ? { message, kind } : null; };
@@ -46,14 +49,14 @@ const ICON = {
 function navItems() {
   if (!me) return [];
   const m = me.roles.includes('manager'), t = me.roles.includes('teacher');
-  if (m) return [['home', '今日'], ['schedule', '予定'], ['families', '生徒', 'students'], ['monthly', '月の仕事'], ['settings', '設定']];
-  if (t) return [['home', '今日'], ['schedule', '予定'], ['grades', '生徒', 'students'], ['payroll', '報酬'], ['settings', '設定']];
+  if (m) return [['home', '今日'], ['schedule', '予定'], ['students', '生徒'], ['monthly', '月の仕事'], ['settings', '設定']];
+  if (t) return [['home', '今日'], ['schedule', '予定'], ['students', '生徒'], ['payroll', '報酬'], ['settings', '設定']];
   return [['home', '今日'], ['settings', '設定']]; // システム管理者だけのとき
 }
 // いまの画面が、どの入口の下にあるか
 function tabOf(page) {
   const m = me && me.roles.includes('manager');
-  if (['family', 'families', 'gradesOf', 'grades'].includes(page)) return m ? 'families' : 'grades';
+  if (['student', 'family', 'families', 'gradesOf', 'grades'].includes(page)) return 'students';
   if (['records', 'record'].includes(page)) return 'home';
   if (['plans', 'billing'].includes(page)) return 'monthly';
   if (page === 'payroll') return m ? 'monthly' : 'payroll';
@@ -135,12 +138,12 @@ async function loadStaff() {
   if (!r.ok) { if (r.error.code === 'needLogin') return signedOut(); say(r.error.message, 'error'); staffList = []; } else staffList = r.staff;
   render();
 }
-function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); resetToday(); say('ログインし直してください', 'error'); render(); }
+function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); resetToday(); resetStudents(); say('ログインし直してください', 'error'); render(); }
 // 各ページ（families.js・migrate.js）に渡す共通の道具
 const ctx = {
   call: (route, body = {}) => call(route, body, store.get()), esc, render: () => render(), dis: () => dis(), notice: () => noticeHtml(),
   say: (m, k) => say(m, k), handleAuth: r => { if (r && r.error && r.error.code === 'needLogin') { signedOut(); return true; } return false; },
-  afterMigrate: () => { resetFamilies(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetToday(); },
+  afterMigrate: () => { resetFamilies(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetToday(); resetStudents(); },
   get isManager() { return !!me && me.roles.includes('manager'); },
 };
 
@@ -154,6 +157,8 @@ function render() {
   else if (r.page === 'schedule' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = schedulePage(ctx, me);
   else if (r.page === 'records' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = recordsPage(ctx);
   else if (r.page === 'record' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = recordPage(ctx, r.id);
+  else if (r.page === 'students' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = studentsPage(ctx);
+  else if (r.page === 'student' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = studentPage(ctx, r.id, r.tab);
   else if (r.page === 'grades' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = gradesOverviewPage(ctx);
   else if (r.page === 'payroll' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = payrollPage(ctx, me);
   else if (r.page === 'gradesOf' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = gradesStudentPage(ctx, r.id);
@@ -232,10 +237,13 @@ app.addEventListener('click', ev => {
     if (r) say(r.error.message, 'error');
   });
 });
-app.addEventListener('input', ev => { const n = ev.target.dataset && ev.target.dataset.input; if (n) familiesInput(ctx, n, ev.target); });
+app.addEventListener('input', ev => { const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
 window.addEventListener('hashchange', () => {
-  // 「今日」に戻ってきたら読み直す（記録を書いたあとなど）
-  if (route().page === 'home') resetToday();
+  // 「今日」「生徒」に戻ってきたら読み直す（記録を書いたあとなど）。同じ生徒の画面のタブを切り替えるときは読み直さない
+  const pg = route().page;
+  if (pg === 'home') resetToday();
+  if ((pg === 'student' && lastPage !== 'student') || pg === 'students') resetStudents();
+  lastPage = pg;
   if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); say(''); render(); });
 
 (async function boot() {
