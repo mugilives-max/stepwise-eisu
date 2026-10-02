@@ -357,3 +357,16 @@ body.focus main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .ublock > .hwrow:first-child input { font-weight: 700; }
 .ublock > .hwrow:first-child { grid-template-columns: minmax(0, 1fr) auto; }
 .rec-row .v b { font-weight: 700; }
+/* ---- 予定（スマホ）: カレンダーは2週分の窓（選んだ週が一番上）、すぐ下に選んだ日とそのあとの予定 ---- */
+.cal-win { position: relative; }
+.cal-handle { display: none; }
+.day-band { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; padding: 6px 4px; margin-top: 8px; background: #eef1f4; border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+@media (max-width: 719px) {
+  .cal-win { max-height: calc(24px + 2 * 74px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .cal-win::-webkit-scrollbar { display: none; }
+  .cal-win.open { max-height: none; overflow: visible; }
+  .cal-win .wd { position: sticky; top: 0; z-index: 1; background: var(--white); height: 24px; box-sizing: border-box; }
+  .cal-handle { display: block; width: 100%; padding: 6px 0 4px; border: 0; background: none; }
+  .cal-handle span { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 4px; background: #c9d1da; }
+  .sch-bar + p.small.muted { display: none; }
+}

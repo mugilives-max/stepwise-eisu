@@ -1,7 +1,7 @@
 // スタッフの画面: 家族と生徒（教室管理者）。家族を先に登録し、その下に生徒を登録する。
 // ctx は app.js から渡す共通の道具（call / say / render / run / esc / busy / notice）。
 // 一覧はすっきり、直す・足す・生徒ごとの操作は押すと下から出る画面で（famSheet = { mode, id }）。
-import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261003-ux23';
+import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261003-ux24';
 const STATUS = { invited: ['warn', '招待前・登録待ち'], active: ['', '利用中'], stopped: ['gray', '停止'] };
 const STUDENT_STATUS = { enrolled: ['', '在籍'], paused: ['warn', '休会'], left: ['gray', '退会'] };
 const MODE = { '': '未設定', in_person: '対面', online: 'オンライン' };

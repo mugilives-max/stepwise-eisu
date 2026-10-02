@@ -1,8 +1,9 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux23';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux24';
 
 let month = null, data = null, sel = null, sheet = null, families = null, loadedFor = '';
+let calOpen = false, calTop = 0; // スマホ: カレンダーは2週分（選んだ週が一番上）。calOpen で月全体
 // sheet: 下から出る画面。{ kind: 'lesson', id, edit } / { kind: 'create' } / { kind: 'off' } / { kind: 'meeting' } / { kind: 'todo' }
 const ymOf = d => d.slice(0, 7);
 const addMonths = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1)); return t.toISOString().slice(0, 7); };
@@ -43,6 +44,7 @@ export function schedulePage(ctx, me) {
   h += ctx.notice();
   h += '<div class="sch">';
   // 月の表
+  h += `<div class="cal-win${calOpen ? ' open' : ''}">`;
   h += '<div class="month2">' + ['日', '月', '火', '水', '木', '金', '土'].map((w, i) => `<div class="wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`).join('');
   const start = gridStart(month);
   for (let i = 0; i < 42; i++) {
@@ -59,18 +61,38 @@ export function schedulePage(ctx, me) {
     h += `<button class="cell${ymOf(d) !== month ? ' out' : ''}${d === sel ? ' sel' : ''}${d === data.today ? ' today' : ''}" data-action="sch-day" data-date="${d}" aria-label="${mdw(d)} 授業${ls.length}件">`
       + `<span class="num${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}">${Number(d.slice(8))}</span>${shown.join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</button>`;
   }
-  h += '</div>';
+  h += '</div></div>';
+  h += `<button class="cal-handle" data-action="sch-cal" aria-label="${calOpen ? 'カレンダーをたたむ' : '月全体を見る'}"><span></span></button>`;
   h += `<div class="sch-day">${dayPanel(ctx, me, manager, nameOf, staffOf)}</div></div>`;
+  alignCal();
   if (sheet) h += sheetHtml(ctx, me, manager, nameOf, staffOf, held);
   return h;
 }
 
-// 選んだ日の一覧（1行ずつ。押すと下から詳しい画面）
+// スマホ: カレンダーの窓を、選んだ週が一番上に来るように動かす（前の位置からすっと）
+function alignCal() {
+  requestAnimationFrame(() => {
+    const win = document.querySelector('.cal-win'); if (!win || win.classList.contains('open') || getComputedStyle(win).overflowY === 'visible') return;
+    const cell = win.querySelector('.cell.sel') || win.querySelector('.cell.today'), wd = win.querySelector('.wd'); if (!cell) return;
+    const target = cell.offsetTop - (wd ? wd.offsetHeight : 0);
+    win.scrollTop = calTop; win.scrollTo({ top: target, behavior: Math.abs(calTop - target) > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' });
+    calTop = target;
+    win.addEventListener('scroll', () => { calTop = win.scrollTop; }, { passive: true });
+  });
+}
+// 選んだ日の一覧と、そのあとの6日（1行ずつ。押すと下から詳しい画面）
 function dayPanel(ctx, me, manager, nameOf, staffOf) {
-  const { esc } = ctx, d = sel;
+  const last = addDays(gridStart(month), 41);
+  let h = oneDay(ctx, me, manager, nameOf, staffOf, sel, true);
+  for (let i = 1; i <= 6; i++) { const d = addDays(sel, i); if (d > last) break; h += oneDay(ctx, me, manager, nameOf, staffOf, d, false); }
+  return h;
+}
+function oneDay(ctx, me, manager, nameOf, staffOf, d, first) {
+  const { esc } = ctx;
   const ls = data.lessons.filter(l => l.date === d).sort((a, b) => a.start.localeCompare(b.start)), offs = data.unavailability.filter(o => o.date === d), evs = data.events.filter(e => e.date <= d && d <= e.dateTo), mts = data.meetings.filter(m => m.date === d);
-  let h = `<div class="day-title"><strong>${mdw(d)}</strong><span class="muted small">授業 ${ls.filter(l => l.status in RANK).length}件</span><span style="flex:1"></span>${manager ? '<button class="small-btn" data-action="sch-sheet" data-k="create">＋ この日に仮予定</button>' : ''}</div>`;
-  if (!ls.length && !offs.length && !evs.length && !mts.length) return h + '<p class="muted small">この日の予定はありません。</p>';
+  let h = first ? `<div class="day-title"><strong>${mdw(d)}</strong><span class="muted small">授業 ${ls.filter(l => l.status in RANK).length}件</span><span style="flex:1"></span>${manager ? '<button class="small-btn" data-action="sch-sheet" data-k="create">＋ この日に仮予定</button>' : ''}</div>`
+    : `<button class="day-band" data-action="sch-day" data-date="${d}">${mdw(d)}</button>`;
+  if (!ls.length && !offs.length && !evs.length && !mts.length) return h + `<p class="muted small"${first ? '' : ' style="margin:4px 2px 8px"'}>予定はありません。</p>`;
   h += '<div class="rows">';
   evs.forEach(e => { h += `<div class="ev ${e.kind}"><span class="t">${e.start ? e.start + '〜' : '終日'}</span><span class="b">${EVENT_KIND[e.kind]}：${esc(e.studentName)} ${esc(e.title)}</span>${manager ? `<button class="x" data-action="sch-ev-del" data-id="${esc(e.id)}" aria-label="消す"${ctx.dis()}>×</button>` : ''}</div>`; });
   offs.forEach(o => { h += `<div class="ev off"><span class="t">${o.start ? o.start + '〜' + o.end : '終日'}</span><span class="b">休み：${esc(o.staffId ? staffOf[o.staffId] || '' : '教室全体')} ${esc(o.note)}</span>${manager || o.staffId === me.id ? `<button class="x" data-action="sch-off-del" data-id="${esc(o.id)}" aria-label="消す"${ctx.dis()}>×</button>` : ''}</div>`; });
@@ -196,7 +218,8 @@ export async function scheduleClick(ctx, a, b) {
   const id = b.dataset.id, l = id ? lessonById(id) : null;
   if (a === 'sch-month') { month = addMonths(month, Number(b.dataset.n)); sel = month + '-01'; data = null; sheet = null; return true; }
   if (a === 'sch-today') { const t = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); sel = t; if (ymOf(t) !== month) { month = ymOf(t); data = null; } return true; }
-  if (a === 'sch-day') { sel = b.dataset.date; return true; }
+  if (a === 'sch-day') { sel = b.dataset.date; if (b.classList.contains('day-band')) window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
+  if (a === 'sch-cal') { calOpen = !calOpen; return true; }
   if (a === 'sch-goto') { sel = b.dataset.date; sheet = b.dataset.id ? { kind: 'lesson', id: b.dataset.id } : null; if (ymOf(sel) !== month) { month = ymOf(sel); data = null; } return true; }
   if (a === 'sch-sheet') { sheet = { kind: b.dataset.k }; return true; }
   if (a === 'sch-open') { sheet = { kind: 'lesson', id }; return true; }
