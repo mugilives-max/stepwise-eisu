@@ -60,7 +60,7 @@ export async function recordsPlan(old, db2) {
 
 // 全部を順に写し直す: 写した生徒・家族につながる行（新しい仕組みで入れた予定・記録・宿題も）を、あとの段から順に消して、
 // 家族・生徒 → 予定 → 授業記録 → 計画・請求 の順に写す。切り替え前（live でない）だけ使える。
-async function copyAll(c, b) {
+export async function copyAll(c, b) {
   await requireStaff(c, b, 'sysadmin');
   if (b.confirm !== true) fail('needConfirm', '確認してから写してください');
   if (!c.env.DB) fail('unavailable', '今の台帳に接続できません', 503);

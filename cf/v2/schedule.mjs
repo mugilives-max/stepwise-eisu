@@ -46,7 +46,7 @@ const requestView = r => ({ id: r.id, lessonId: r.lessonId, kind: r.kind, note: 
 const eventView = e => ({ id: e.id, studentId: e.studentId, kind: e.kind, date: e.date, dateTo: e.dateTo, start: e.start, end: e.end, title: e.title, createdByKind: e.createdByKind, version: e.version });
 
 // ---- カレンダー（切り替え前は held） ----
-async function calendarEffect(c, kind, lesson, studentName) {
+export async function calendarEffect(c, kind, lesson, studentName) {
   const live = await isLive(c);
   if (kind === 'delete') {
     if (lesson.calendarEventId && !lesson.calendarEventId.startsWith('swv2')) c.effects.push({ kind: 'calendarDelete', eventId: lesson.calendarEventId, audience: 'calendar', held: !live });

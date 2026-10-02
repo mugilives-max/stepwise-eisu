@@ -11,6 +11,7 @@ import { runWrite, runNaturalSchedule, recordEffects, deliverEffects, backfillMe
 import { handleV2, runV2Scheduled } from "../v2/index.mjs";
 import { handlePush, deliverNotice, pushEnabled, PUSH_ACTIONS } from "./push.mjs";
 import { EFFECT_ADMIN_OPS, handleEffectsAdmin } from "./effects-admin.mjs";
+import { frozenAt, allowedWhenFrozen, MOVED } from "./cutover.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -36,6 +37,11 @@ export default {
   async scheduled(event, env) {
     if (env.WRITE_MODE !== "worker") return;
     const failed = [];
+    // 新しい仕組みに切り替えたあと（今の仕組みは読むだけ）は、今の仕組みの自動処理を止めて、新しい仕組みのものだけを動かす
+    if (await frozenAt(env)) {
+      if (env.DB2) { try { await runV2Scheduled(env); } catch (e) { throw new Error("v2 scheduled failed"); } }
+      return;
+    }
     if (env.BILLING_AUTO_CLOSE === "1") {
       try { const done = await runWrite({}, env, { monthlyBilling: true }); if (done.result.error) failed.push("Monthly billing failed"); }
       catch (e) { failed.push("Monthly billing failed"); }
@@ -103,6 +109,7 @@ export default {
       try {
         const readOnly = await handleRead(inner, scoped);
         if (readOnly !== null) return reply(readOnly, 200, head);
+        if (await frozenAt(env)) return reply(MOVED, 200, head);
         const done = await runWrite(inner, scoped);
         if (done.effects.length) {
           const ids = await recordEffects(env.DB, done.effects);
@@ -163,6 +170,8 @@ export default {
     // 書き込み。WRITE_MODE=worker のときだけ受ける（それまでは Apps Script が正本）。
     // 台帳を書いたら応答を返し、そのあとでメール・カレンダーを Apps Script に頼む。
     if (env.WRITE_MODE === "worker" && !isReadAction(body)) {
+      // 切り替えたあとは書き込みを断る（ログイン・ログアウトだけ通す）
+      if (!allowedWhenFrozen(body) && await frozenAt(env)) return reply(MOVED, 200, head);
       try {
         const done = await runWrite(body, scope);
         const after = async () => {

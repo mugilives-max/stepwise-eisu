@@ -9,7 +9,7 @@ export function migratePage(ctx) {
   h += `<h2>まとめて写し直す</h2><p class="small muted">一度写したあとで今の仕組みのデータが増えたときは、ここから 1→2→3→4 を順に写し直します。写した生徒につながる予定・記録・宿題・計画・請求は、新しい仕組みで入れたものも含めて置き換わります（切り替え前だけ使えます）。</p>
     <p><button class="primary" data-action="mig-all"${ctx.dis()}>全部を順に写し直す</button></p>`;
   h += `<h2>1. 家族と生徒</h2><p><button data-action="mig-preview"${ctx.dis()}>${preview ? 'もう一度見る' : 'どう写るかを見る'}</button></p>`;
-  if (!preview) return h + schedulePart(ctx) + recordsPart(ctx) + billingPart(ctx) + checkPart(ctx) + cutoverPart(ctx);
+  if (!preview) return h + schedulePart(ctx) + recordsPart(ctx) + billingPart(ctx) + checkPart(ctx) + cutoverPart(ctx) + switchPart(ctx);
   const students = preview.families.reduce((n, f) => n + f.students.length, 0);
   h += `<h2>写すもの</h2><p>${preview.families.length}家族・${students}人${preview.copiedFamilies ? `（いまの新しい台帳には、前に写した ${preview.copiedFamilies}家族があります。写し直すと置き換えます）` : ''}</p>`;
   if (preview.problems.length) h += `<h2>気になる点（${preview.problems.length}件）</h2><ul>${preview.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`;
@@ -17,7 +17,7 @@ export function migratePage(ctx) {
     <div class="small muted">${esc(f.guardianName || '保護者名なし')}・${esc(f.email || 'メールなし')}${f.phone ? '・' + esc(f.phone) : ''}</div>
     <div class="small">${f.students.map(s => `${esc(s.name)}（${esc(s.grade || '学年なし')}・${s.status === 'enrolled' ? '在籍' : s.status === 'paused' ? '休会' : '退会'}・${Number(s.baseRate30 || 0).toLocaleString('ja-JP')}円/30分）`).join('、') || '生徒なし'}</div></div><div></div></div>`).join('') + '</div>';
   h += `<p><button class="primary" data-action="mig-apply"${ctx.dis()}>この内容で新しい台帳に写す</button></p>`;
-  return h + schedulePart(ctx) + recordsPart(ctx) + billingPart(ctx) + checkPart(ctx) + cutoverPart(ctx);
+  return h + schedulePart(ctx) + recordsPart(ctx) + billingPart(ctx) + checkPart(ctx) + cutoverPart(ctx) + switchPart(ctx);
 }
 // 5. 照らし合わせ: 今の台帳の元の件数・金額と、写したものを並べる
 function checkPart(ctx) {
@@ -34,6 +34,21 @@ function checkPart(ctx) {
   }).join('') + '</table></div>';
   if (check.skip.length) h += `<h3>写さないもの（決めたこと）</h3><ul class="small">${check.skip.map(x => `<li>${esc(x.table)}（${x.count}件）: ${esc(x.why)}</li>`).join('')}</ul>`;
   return h;
+}
+// 7. 切り替え: 1つのボタンで、読むだけ → 最後の写し直し → 照らし合わせ → 切り替え → カレンダー →（選べば）登録の案内。元に戻すこともできる
+let switched = null;
+function switchPart(ctx) {
+  const { esc } = ctx, live = cutover && cutover.live;
+  let h = `<h2>7. 切り替え</h2><p class="small muted">手順は docs/CUTOVER_RUNBOOK.md。月初（今の仕組みで前月分の請求が確定したあと）の、授業のない時間に行います。先に「6. 切り替えの予行」を押して、今の状態を確かめてください。</p>`;
+  if (switched) h += `<div class="notice ok small">切り替えました。写したもの: ${switched.copied.families}家族・${switched.copied.students}人・授業 ${switched.copied.lessons}件・記録 ${switched.copied.records}件・請求 ${switched.copied.invoices}件。カレンダーに作った予定 ${switched.calendarCreated}件。登録の案内 ${switched.invited}件${switched.inviteFailed.length ? `（送れなかった家族: ${switched.inviteFailed.map(esc).join('・')}）` : ''}。<br>次は、自分で新しい画面を一通り試してから、保護者・生徒・講師に案内を送ってください（手順書の案内文 B・C・D）。</div>`;
+  if (!cutover) return h + '<p class="small muted">「6. 切り替えの予行」を押すと、ここに切り替えのボタンが出ます。</p>';
+  if (live) return h + `<p><strong>切り替え済みです。</strong>今の仕組みは読むだけになっています。</p>
+    <details><summary class="small">元に戻す（当日のうちに問題が見つかったとき）</summary><p class="small">保護者へのメール・カレンダーを止め、今の仕組みの「読むだけ」を外します。新しい仕組みで受けた連絡や記録は、今の仕組みに手で入れ直してください。</p>
+    <form class="row" data-form="mig-rollback"><input name="confirm" placeholder="元に戻す と入れる" required><button class="danger"${ctx.dis()}>元に戻す</button></form></details>`;
+  return h + `<div class="sheet stack small"><div>押すと次の順に行います。照らし合わせで「違う」が出たら、そこで止めて今の仕組みを元に戻します（何も切り替えません）。</div>
+    <ol style="margin:0;padding-left:1.4em"><li>今の仕組みを「読むだけ」にする（書き込みと、毎日の自動処理を止める）</li><li>最後の「全部を順に写し直す」</li><li>照らし合わせ</li><li>切り替える（保護者へのメール・カレンダーを動かす）</li><li>カレンダーの予定がない今日以降の授業・面談の予定を作る</li><li>（選んだとき）保護者ページに登録していない家族に、登録の案内を送る</li></ol></div>
+    <form class="stack" data-form="mig-switch"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="sendInvites" value="1" style="width:auto"> 登録していない家族に、登録の案内を送る</label>
+    <div class="row"><input name="confirm" placeholder="切り替える と入れる" required><button class="primary"${ctx.dis()}>切り替える</button></div></form>`;
 }
 // 6. 切り替えの予行: 切り替えた瞬間に何が起きるかを数える（何もしない）
 function cutoverPart(ctx) {
@@ -71,6 +86,14 @@ function billingPart(ctx) {
   return h;
 }
 export async function migrateSubmit(ctx, kind, el) {
+  if (kind === 'mig-switch' || kind === 'mig-rollback') {
+    const v = Object.fromEntries(new FormData(el).entries());
+    if (kind === 'mig-switch' && !confirm('今から切り替えますか？ 今の仕組みは読むだけになり、保護者へのメールとカレンダーが動き始めます。')) return true;
+    const r = await ctx.call(kind === 'mig-switch' ? 'admin/cutover/apply' : 'admin/cutover/rollback', { confirm: v.confirm, sendInvites: v.sendInvites === '1' });
+    if (r.ok) { if (kind === 'mig-switch') switched = r; else switched = null; cutover = await ctx.call('admin/cutover/preview').then(x => x.ok ? x : null); ctx.afterMigrate(); ctx.say(kind === 'mig-switch' ? '切り替えました' : '元に戻しました。今の仕組みは書き込めます', 'ok'); }
+    else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
+    return true;
+  }
   if (kind !== 'mig-compare') return false;
   const month = new FormData(el).get('month');
   const r = await ctx.call('admin/migrate/billing/compare', { month });
