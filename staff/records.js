@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux22';
-import { sheet, rowButton, rowLink, slider, iconBox, miniIcon } from '/staff/ui.js?v=20261003-ux22';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux22';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux23';
+import { sheet, rowButton, rowLink, slider, iconBox, miniIcon } from '/staff/ui.js?v=20261003-ux23';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux23';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
 let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。先に読んでおいた相手の記録も入る。記録の画面を離れたら捨てる
@@ -94,8 +94,8 @@ export function recordPage(ctx, lessonId) {
   h += `<form class="rec" id="rec-form" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}"><div class="group">`;
   if (!checks.length) h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
   // 今日の授業
-  const range = (rgRows || []).map(rangeLine).filter(Boolean).join('、');
-  h += row('range', '範囲', range ? esc(range) : '', '範囲（教材とページ）');
+  const range = (rgRows || []).filter(b => blockLine(b)).map(b => `${b.unit.trim() ? `<b>${esc(b.unit.trim())}</b> ` : ''}${esc(b.items.map(itemLine).filter(Boolean).join('、'))}`).join(' / ');
+  h += row('range', '範囲', range, '単元・教材とページ');
   h += slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.map(([v]) => [v, v]).reverse(), compact: true, icon: 'understanding' });
   h += `<label class="rec-line rec-text">${iconBox('comment', 'コメント')}<textarea class="grow" name="comment" maxlength="2000" rows="2" placeholder="授業の様子（公開するときは必須）">${esc(r.comment)}</textarea></label>`;
   // 今日出す宿題・次回へ（押すと開く）
@@ -111,7 +111,7 @@ export function recordPage(ctx, lessonId) {
   h += `<datalist id="rec-materials">${(rec.materials || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
     </div><p class="small muted" style="margin:8px 2px 0">書いた内容は自動で保存されます（画面を離れると下書きに）。生徒・保護者に見せるときは右上の「公開」。</p>`;
   // 開く画面（いつもフォームの中に置く）
-  h += panelHtml('range', '扱った範囲', `${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button>`);
+  h += panelHtml('range', '何をやったか', `${rangeRows(ctx)}<button type="button" class="link small" data-action="ub-add"${rgRows.length >= 5 ? ' disabled' : ''}>＋ 単元を足す</button>`);
   h += panelHtml('hw', '宿題と前回のこと', beforePart(ctx)
     + (checks.length ? `<div class="rec-block"><div class="rec-label">前回の宿題 <span>○やった △一部 ×やってない（△×は次へ持ち越し）</span></div>${checksPart(ctx)}</div>
       ${slider(esc, { name: 'note.homeworkAccuracy', label: '正答率', value: String(n.homeworkAccuracy || '').replace(/\s*%$/, ''), options: ACCURACY, compact: true })}` : '')
@@ -190,17 +190,33 @@ function seg(name, options, value, esc) {
   const v = value || '', legacy = v && !options.some(o => o[0] === v);
   return `<div class="chk" role="radiogroup">${legacy ? `<label><input type="radio" name="${name}" value="${esc(v)}" checked><span>前: ${esc(v)}</span></label>` : ''}${options.map(([ov, lb]) => `<label><input type="radio" name="${name}" value="${ov}"${ov === v ? ' checked' : ''}><span>${lb}</span></label>`).join('')}</div>`;
 }
-// 扱った範囲の行: 教材と範囲（宿題と同じ形）。「Keywork p.10〜12、単語 p.3」の文にして保存する
+// 扱った範囲: 単元（何をやったか。例: 二次方程式）のまとまりごとに、教材と範囲の行。rgRows = [{ unit, items: [{ material, text }] }]
+// 保存するときは rangeParts（単元・教材・範囲の行）と、見せる文「二次方程式（FS2 p.40-44、ワーク p.3）」にする
+const emptyBlock = (material = '') => ({ unit: '', items: [{ material, text: '' }] });
 function rangeRowsFrom(record) {
-  if (record && record.rangeParts && record.rangeParts.length) return record.rangeParts.map(p => ({ material: p.material || '', text: [p.unit, pagesText(p.pages)].filter(Boolean).join(' ') }));
-  if (record && record.range) return [{ material: '', text: record.range }]; // 前の形（文だけ）はそのまま1行に
-  return [{ material: '', text: '' }];
+  const parts = record && record.rangeParts || [];
+  if (parts.length) {
+    const blocks = [];
+    for (const p of parts) {
+      const last = blocks.at(-1), item = { material: p.material || '', text: /^[\d\s\-~～ー−]+$/.test(p.pages || '') ? pagesText(p.pages) : p.pages || '' }; // 数字だけ（前の仕組みの形）は p. を付ける
+      if (last && last.unit === (p.unit || '')) last.items.push(item); else blocks.push({ unit: p.unit || '', items: [item] });
+    }
+    return blocks;
+  }
+  if (record && record.range) return [{ unit: record.range, items: [{ material: '', text: '' }] }]; // 前の形（文だけ）は単元の欄に
+  return [emptyBlock()];
 }
-const rangeLine = x => [x.material, x.text].map(s => (s || '').trim()).filter(Boolean).join(' ');
+// 古い形（{ material, text } の並び。この端末に残っていた書きかけ）も読めるように
+const asBlocks = rows => (rows || []).length && !rows[0].items ? [{ unit: '', items: rows.map(x => ({ material: x.material || '', text: x.text || '' })) }] : rows;
+const itemLine = x => [x.material, x.text].map(v => (v || '').trim()).filter(Boolean).join(' ');
+const blockLine = b => { const its = b.items.map(itemLine).filter(Boolean).join('、'), u = (b.unit || '').trim(); return u && its ? `${u}（${its}）` : u || its; };
+const rangeText = blocks => asBlocks(blocks || []).map(blockLine).filter(Boolean).join(' / ');
+const rangePartsOf = blocks => asBlocks(blocks || []).flatMap(b => { const u = (b.unit || '').trim(), its = b.items.filter(itemLine); return its.length ? its.map(x => ({ unit: u, material: (x.material || '').trim(), pages: (x.text || '').trim() })) : u ? [{ unit: u, material: '', pages: '' }] : []; });
 function rangeRows(ctx) {
   const { esc } = ctx;
-  return (rgRows || []).map((x, i) => `<div class="hwrow" data-rg="${i}"><input data-rgf="material" maxlength="60" value="${esc(x.material)}" placeholder="教材（例: Keywork）" list="rec-materials" aria-label="教材"><input data-rgf="text" maxlength="60" value="${esc(x.text)}" placeholder="範囲（例: p.10-12 不定詞）" aria-label="範囲">
-    <button type="button" class="icon" data-action="rg-remove" data-i="${i}" aria-label="この範囲を外す">×</button></div>`).join('');
+  return (rgRows || []).map((b, i) => `<div class="ublock" data-ub="${i}"><div class="hwrow"><input data-ubf="unit" maxlength="100" value="${esc(b.unit)}" placeholder="単元（例: 二次方程式・受動態）" aria-label="単元"><button type="button" class="icon" data-action="ub-remove" data-i="${i}" aria-label="この単元を外す">×</button></div>
+    ${b.items.map((x, j) => `<div class="hwrow two" data-ui="${i}.${j}"><input data-uif="material" maxlength="60" value="${esc(x.material)}" placeholder="教材" list="rec-materials" aria-label="教材"><input data-uif="text" maxlength="60" value="${esc(x.text)}" placeholder="範囲（p.10-12）" aria-label="範囲"></div>`).join('')}
+    <button type="button" class="link small" data-action="ub-item-add" data-i="${i}">＋ 教材を足す</button></div>`).join('');
 }
 // 前回の宿題: 1件1行。印は ○ やってきた・△ 一部・× やってこなかった（値は hidden に入れて送る）
 const MARKS = [['done', '○', 'やってきた'], ['partial', '△', '一部'], ['notDone', '×', 'やってこなかった']];
@@ -227,8 +243,7 @@ function bodyOf(st, publish = false) {
   const R = st.rec, saved = R.record || { comment: '', parentMessage: '', staffNotes: {} }, d = R.draftInputs;
   const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = String((d ? d.staffNotes[k] : (saved.staffNotes || {})[k]) || '');
   if (!staffNotes.plannedUnit.trim()) staffNotes.pace = ''; // 予定がないときは進度を書かない
-  const rows = st.rgRows || [];
-  return { lessonId: R.lesson.id, version: R.record && R.record.id ? R.record.version : undefined, range: rows.map(rangeLine).filter(Boolean).join('、'), rangeParts: rows.filter(rangeLine).map(x => ({ unit: (x.text || '').trim(), material: (x.material || '').trim(), pages: '' })),
+  return { lessonId: R.lesson.id, version: R.record && R.record.id ? R.record.version : undefined, range: rangeText(st.rgRows), rangeParts: rangePartsOf(st.rgRows),
     comment: d ? d.comment : saved.comment || '', parentMessage: d ? d.parentMessage : saved.parentMessage || '', staffNotes,
     homework: (st.hwRows || []).filter(x => (x.title || '').trim() || (x.material || '').trim()).map(x => ({ id: x.id || '', kind: x.kind || 'homework', title: (x.title || '').trim() || x.material, material: (x.title || '').trim() ? x.material : '', dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject || R.lesson.subject })),
     homeworkChecks: (R.checks || []).map(x => ({ id: x.id, result: R.draftChecks && R.draftChecks[x.id] !== undefined ? R.draftChecks[x.id] : x.checkedHere ? x.checkResult : '' })), publish };
@@ -252,7 +267,7 @@ function restoreLocal(st) {
     const raw = localStorage.getItem(LKEY(st.rec.lesson.id)); if (!raw) return false;
     const l = JSON.parse(raw);
     if (l.v !== (st.rec.record ? st.rec.record.version : 0) || Date.now() - l.at > 30 * 86400e3) { clearLocal(st.rec.lesson.id); return false; }
-    Object.assign(st.rec, { draftInputs: l.draftInputs, draftChecks: l.draftChecks, draftHo: l.draftHo }); st.hwRows = l.hwRows || st.hwRows; st.rgRows = l.rgRows || st.rgRows;
+    Object.assign(st.rec, { draftInputs: l.draftInputs, draftChecks: l.draftChecks, draftHo: l.draftHo }); st.hwRows = l.hwRows || st.hwRows; st.rgRows = asBlocks(l.rgRows) || st.rgRows;
     return dirty(st);
   } catch { return false; }
 }
@@ -282,7 +297,10 @@ export function autosaveOnLeave(ctx) {
 }
 // 宿題の入力欄の今の値を読む（描き直す前に）
 function readHomework() {
-  if (rgRows) document.querySelectorAll('[data-rg]').forEach(row => { const i = Number(row.dataset.rg); if (rgRows[i]) row.querySelectorAll('[data-rgf]').forEach(f => { rgRows[i][f.dataset.rgf] = f.value; }); });
+  if (rgRows) {
+    document.querySelectorAll('[data-ub]').forEach(el => { const b = rgRows[Number(el.dataset.ub)], u = el.querySelector('[data-ubf=unit]'); if (b && u) b.unit = u.value; });
+    document.querySelectorAll('[data-ui]').forEach(el => { const [i, j] = el.dataset.ui.split('.').map(Number), x = rgRows[i] && rgRows[i].items[j]; if (x) el.querySelectorAll('[data-uif]').forEach(f => { x[f.dataset.uif] = f.value; }); });
+  }
   if (!hwRows) return;
   document.querySelectorAll('[data-hw]').forEach(row => { const i = Number(row.dataset.hw); if (hwRows[i]) row.querySelectorAll('[data-hwf]').forEach(f => { hwRows[i][f.dataset.hwf] = f.value; }); });
 }
@@ -355,8 +373,9 @@ export async function recordsClick(ctx, a, b) {
   if (a === 'hw-close') { hwOpen = ''; return true; }
   if (a === 'hw-add') { hwRows.push({ kind: 'homework', title: '', material: (hwRows.at(-1) || {}).material || '', dueMode: 'nextLesson', dueSubject: rec.lesson.subject, dueDate: '' }); return true; } // 同じ教材が続くことが多いので前の行の教材を入れておく
   if (a === 'hw-remove') { hwRows.splice(Number(b.dataset.i), 1); return true; }
-  if (a === 'rg-add') { rgRows.push({ material: (rgRows.at(-1) || {}).material || '', text: '' }); return true; }
-  if (a === 'rg-remove') { rgRows.splice(Number(b.dataset.i), 1); if (!rgRows.length) rgRows.push({ material: '', text: '' }); return true; }
+  if (a === 'ub-add') { rgRows.push(emptyBlock(((rgRows.at(-1) || {}).items || []).at(-1)?.material || '')); return true; }
+  if (a === 'ub-remove') { rgRows.splice(Number(b.dataset.i), 1); if (!rgRows.length) rgRows.push(emptyBlock()); return true; }
+  if (a === 'ub-item-add') { const bl = rgRows[Number(b.dataset.i)]; if (bl && bl.items.length < 10) bl.items.push({ material: (bl.items.at(-1) || {}).material || '', text: '' }); return true; } // 同じ教材が続くことが多いので前の行の教材を入れておく
   if (a === 'ho-read' || a === 'ho-close') { const r = await ctx.call(a === 'ho-read' ? 'handover/read' : 'handover/close', { id: b.dataset.id }); if (r.ok) { await refreshHandover(ctx); pending = null; } else ctx.say(r.error.message, 'error'); return true; }
   return false;
 }

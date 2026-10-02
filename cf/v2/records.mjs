@@ -18,7 +18,7 @@ export const NOTE_CHOICES = {
 function cleanRangeParts(list) {
   if (list === undefined) return [];
   if (!Array.isArray(list) || list.length > 10) fail('badRange', '扱った範囲の項目は10件までにしてください');
-  return list.map(p => ({ unit: String(p.unit || '').trim().slice(0, 60), material: String(p.material || '').trim().slice(0, 60), pages: String(p.pages || '').trim().slice(0, 30) })).filter(p => p.unit || p.material || p.pages);
+  return list.map(p => ({ unit: String(p.unit || '').trim().slice(0, 100), material: String(p.material || '').trim().slice(0, 60), pages: String(p.pages || '').trim().slice(0, 60) })).filter(p => p.unit || p.material || p.pages);
 }
 const fullName = s => [s.familyName, s.givenName].filter(Boolean).join(' ');
 const parse = (v, d) => { try { return JSON.parse(v); } catch { return d; } };

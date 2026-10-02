@@ -352,3 +352,8 @@ body.focus main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .bar-seg .seg2 button { padding: 5px 12px; font-size: 13.5px; max-width: 40vw; }
 .rec-sub { text-align: center; font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 .rec-sub b.ok { color: var(--ok); } .rec-sub b.warn { color: var(--warn); }
+/* ---- 範囲: 単元のまとまり ---- */
+.ublock { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.ublock > .hwrow:first-child input { font-weight: 700; }
+.ublock > .hwrow:first-child { grid-template-columns: minmax(0, 1fr) auto; }
+.rec-row .v b { font-weight: 700; }

@@ -127,7 +127,8 @@ test('teacher-only fields: understanding, pace and homework are chosen from fixe
   const s2 = await h.ok('records/save', { auth: teacherAuth, lessonId: l.id, version: s.record.version, range: 'x', rangeParts: parts, comment: 'x', staffNotes: { plannedUnit: '不定詞', pace: 'onTrack' } });
   assert.equal(s2.record.staffNotes.pace, 'onTrack');
   const next = await make('2026-10-02', '11:00');
-  assert.deepEqual((await h.ok('records/lesson', { auth: teacherAuth, lessonId: next.id })).materials, ['Keywork'], 'この生徒で使った教材を候補に出す');
+  const ctxNext = await h.ok('records/lesson', { auth: teacherAuth, lessonId: next.id });
+  assert.deepEqual(ctxNext.materials, ['Keywork'], 'この生徒で使った教材を候補に出す');
 });
 
 test('free text copied from the current ledger stays until it is changed', async () => {

@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux22';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux22';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux22';
-import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261003-ux22';
-import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux22';
-import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux22';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux22';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux22';
-import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux22';
-import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux22';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux22';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux23';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux23';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux23';
+import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261003-ux23';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux23';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux23';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux23';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux23';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux23';
+import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux23';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux23';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
