@@ -1,10 +1,10 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux13';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux13';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux13';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux14';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux14';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux14';
 
-let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '';
+let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = ''; // panel: 記録の画面で開いているもの（range・hw・next）
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
 // 選ぶ項目（表記がずれないように）。サーバーの NOTE_CHOICES（cf/v2/records.mjs）と同じ値
 const CHOICES = {
@@ -15,9 +15,8 @@ const CHOICES = {
 // 宿題ごとのチェック（前回までの宿題）。値はサーバーの CHECK_RESULTS（cf/v2/records.mjs）と同じ
 // 宿題の正答率は10%刻みで選ぶ（数字を打たない）
 const ACCURACY = Array.from({ length: 11 }, (_, i) => [String(i * 10), i * 10 + '%']);
-const CHECKS = [['', 'まだ'], ['done', 'やってきた'], ['partial', '一部'], ['notDone', 'やってこなかった']];
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
-export function leaveRecords() { hwOpen = ''; }
+export function leaveRecords() { hwOpen = ''; panel = ''; }
 export function resetRecords() { hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; rgRows = null; }
 // 扱った範囲の1件を文に: 「不定詞 Keywork p.10〜12」
 function pagesText(p) { const s = String(p || '').trim().replace(/^p\.?\s*/i, '').replace(/\s*[-~～ー−]\s*/g, '〜'); return s ? 'p.' + s : ''; }
@@ -42,14 +41,15 @@ export function recordsPage(ctx) {
   return h;
 }
 
-// 記録を書く画面（授業の流れの順）: 授業の前に見ること → 前回の宿題（チェックと正答率）→ 今日の授業 → 今日出す宿題 → 次回へ
+// 記録を書く画面（スマホで1画面に収める）。前回の宿題は1件1行で ○△×、理解度・正答率は細いスライダー、
+// 範囲・今日の宿題・次回へは要点を1行で出し、押すと開く（宿題は左から、ほかは下から）。開く画面もフォームの中に常に置き、閉じているときは隠す
 export function recordPage(ctx, lessonId) {
   const { esc } = ctx;
   if (recFor !== lessonId) {
-    recFor = lessonId; rec = null; hwRows = null; rgRows = null;
+    recFor = lessonId; rec = null; hwRows = null; rgRows = null; panel = '';
     ctx.call('records/lesson', { lessonId }).then(r => {
       if (recFor !== lessonId) return;
-      if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); if (!hwRows.length && !r.record) hwRows.push({ kind: 'homework', title: '', material: '', dueMode: 'nextLesson', dueSubject: r.lesson.subject, dueDate: '' }); rgRows = rangeRowsFrom(r.record); } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
+      if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); rgRows = rangeRowsFrom(r.record); } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
       ctx.render();
     });
   }
@@ -58,32 +58,52 @@ export function recordPage(ctx, lessonId) {
   const l = rec.lesson, saved = rec.record || { range: '', comment: '', parentMessage: '', staffNotes: {}, status: 'none' };
   const r = rec.draftInputs ? { ...saved, ...rec.draftInputs } : saved, n = r.staffNotes || {};
   const future = l.date > rec.today, locked = r.status === 'void';
+  while (hwRows.length < 3) hwRows.push({ kind: 'homework', title: '', material: '', dueMode: 'nextLesson', dueSubject: l.subject, dueDate: '' }); // 宿題ははじめから3行（空の行は保存しない）
   const state = r.status === 'published' ? '<span class="tag ok">公開済み</span>' : r.status === 'draft' ? '<span class="tag warn">下書き</span>' : r.status === 'void' ? '<span class="tag gray">無効</span>' : '';
-  let h = `<div class="page-head"><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1>${state}</div><p class="sub" style="margin-top:0">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}${rec.student.grade ? '・' + esc(rec.student.grade) : ''}</p>${ctx.notice()}`;
+  let h = `<div class="page-head"><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1>${state}</div><div class="small muted">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}${rec.student.grade ? '・' + esc(rec.student.grade) : ''}</div>${ctx.notice()}`;
   h += beforePart(ctx);
   if (future) return h + '<p class="notice">授業の日になったら記録を書けます。</p>' + handoverForm(ctx);
   if (locked) return h + `<p class="notice">この記録は無効にしました（${esc(r.voidReason || '')}）。</p>`;
-  const checks = rec.checks || [];
-  h += `<form class="stack rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}">`;
-  // 1. 前回の宿題: 宿題ごとのチェックと正答率（宿題がないときは出さない。前の値は残す）
-  if (checks.length) h += `<h2>前回の宿題</h2>${checksPart(ctx)}${slider(esc, { name: 'note.homeworkAccuracy', label: '正答率', value: String(n.homeworkAccuracy || '').replace(/\s*%$/, ''), options: ACCURACY })}`;
+  const checks = rec.checks || [], due = rec.nextSameSubject ? mdw(rec.nextSameSubject.date) : 'まだ決まっていません';
+  h += `<form class="rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}">`;
+  // 前回の宿題: 1件1行で ○（やってきた）△（一部）×（やってこなかった）。同じ印をもう一度押すと外す
+  if (checks.length) h += `<div class="rec-block"><div class="rec-label">前回の宿題 <span>○やった △一部 ×やってない（△×は次へ持ち越し）</span></div>${checksPart(ctx)}</div>
+    ${slider(esc, { name: 'note.homeworkAccuracy', label: '正答率', value: String(n.homeworkAccuracy || '').replace(/\s*%$/, ''), options: ACCURACY, compact: true })}`;
   else h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
-  // 2. 今日の授業
-  h += `<h2>今日の授業</h2><div><div class="field-label">扱った範囲</div>${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows && rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button></div>
-    ${slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.slice().reverse() })}
-    <label>コメント<textarea name="comment" maxlength="2000" rows="4" placeholder="授業の様子・できるようになったこと（公開するときは必須）">${esc(r.comment)}</textarea></label>
-    <details class="more"${r.parentMessage ? ' open' : ''}><summary>保護者への連絡</summary><textarea name="parentMessage" maxlength="1000" rows="2" aria-label="保護者への連絡" placeholder="例: 次回は小テストをします">${esc(r.parentMessage)}</textarea></details>
-    <details class="more planned"${n.plannedUnit ? ' open' : ''}><summary>授業計画の予定と比べる</summary><div class="stack"><label>予定していた単元<input name="note.plannedUnit" maxlength="1000" value="${esc(n.plannedUnit || '')}" placeholder="例: 不定詞の名詞的用法"></label>
-      <div class="pace"><div class="field-label">予定に対して</div>${seg('note.pace', CHOICES.pace, n.pace, esc)}</div></div></details>`;
-  // 3. 今日出す宿題
-  h += `<h2>宿題</h2><p class="small muted" style="margin:0">期限は次の${esc(l.subject)}の授業（${rec.nextSameSubject ? mdw(rec.nextSameSubject.date) : 'まだ決まっていません'}）</p>${homeworkRows(ctx)}<button type="button" class="link small" data-action="hw-add"${hwRows && hwRows.length >= 10 ? ' disabled' : ''}>＋ 宿題を足す</button>`;
-  // 4. 次回へ
-  h += `<h2>次回へ</h2><label>次回やること・気をつけること<textarea name="note.nextFocus" maxlength="1000" rows="2" placeholder="例: 副詞的用法から。to のあとを原形にするミスに注意">${esc(n.nextFocus || '')}</textarea></label>
-    <label>メモ<textarea name="note.memo" maxlength="1000" rows="2" placeholder="任意">${esc(n.memo || '')}</textarea></label>
-    <datalist id="rec-materials">${(rec.materials || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
-    <div class="actionbar row"><button type="submit" name="publish" value="0"${ctx.dis()}>下書き保存</button><button class="primary" type="submit" name="publish" value="1"${ctx.dis()}>保存して公開</button></div>
-    <p class="small muted" style="margin:0">公開すると、範囲・コメント・保護者への連絡・宿題とそのチェックが生徒と保護者に見えます。決定の授業は実施済みになります。</p></form>`;
+  // 今日の授業
+  const range = (rgRows || []).map(rangeLine).filter(Boolean).join('、');
+  h += row('range', '範囲', range ? esc(range) : '', '教材とページ');
+  h += slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.map(([v]) => [v, v]).reverse(), compact: true });
+  h += `<textarea name="comment" maxlength="2000" rows="3" aria-label="コメント" placeholder="コメント（授業の様子。公開するときは必須）">${esc(r.comment)}</textarea>`;
+  // 今日出す宿題・次回へ（押すと開く）
+  const hw = hwRows.filter(x => hwText(x).trim());
+  h += row('hw', '宿題', hw.length ? esc(hwText(hw[0])) + (hw.length > 1 ? ` <span class="muted">ほか${hw.length - 1}件</span>` : '') : '', `出すときは押す（次の${l.subject} ${due}まで）`);
+  const nextBits = [n.nextFocus, r.parentMessage ? '保護者へ: ' + r.parentMessage : '', n.memo ? 'メモあり' : ''].filter(Boolean);
+  h += row('next', '次回へ', nextBits.length ? esc(nextBits.join('・')) : '', '次回やること・保護者へ・メモ');
+  h += `<datalist id="rec-materials">${(rec.materials || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
+    <div class="actionbar row"><button type="submit" name="publish" value="0"${ctx.dis()}>下書き</button><button class="primary" type="submit" name="publish" value="1" style="flex:1"${ctx.dis()}>保存して公開</button></div>
+    <p class="small muted" style="margin:4px 0 0">公開すると、範囲・コメント・保護者への連絡・宿題とそのチェックが生徒と保護者に見えます。</p>`;
+  // 開く画面（いつもフォームの中に置く）
+  h += panelHtml('range', '扱った範囲', `${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button>`);
+  h += panelHtml('hw', '宿題', `<p class="small muted" style="margin:0">期限は次の${esc(l.subject)}の授業（${due}）。使わない行は空のままで大丈夫です。</p>${homeworkRows(ctx)}${hwRows.every(x => hwText(x).trim()) && hwRows.length < 10 ? '<button type="button" class="link small" data-action="hw-add">＋ もう1つ</button>' : ''}`, 'left');
+  h += panelHtml('next', '次回へ', `<label>次回やること・気をつけること<textarea name="note.nextFocus" maxlength="1000" rows="2" placeholder="副詞的用法から。to のあとを原形にするミスに注意">${esc(n.nextFocus || '')}</textarea></label>
+    <label>保護者への連絡<textarea name="parentMessage" maxlength="1000" rows="2" placeholder="次回は小テストをします">${esc(r.parentMessage)}</textarea></label>
+    <label>メモ<textarea name="note.memo" maxlength="1000" rows="2" placeholder="講師どうしのメモ">${esc(n.memo || '')}</textarea></label>
+    <div class="planned stack" style="margin:0"><label>授業計画で予定していた単元<input name="note.plannedUnit" maxlength="1000" value="${esc(n.plannedUnit || '')}" placeholder="不定詞の名詞的用法"></label>
+      <div class="pace"><div class="field-label">予定に対して</div>${seg('note.pace', CHOICES.pace, n.pace, esc)}</div></div>`);
+  h += '</form>';
   return h + handoverForm(ctx) + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
+}
+// 1行の要点（押すと開く）
+function row(key, label, value, placeholder) {
+  return `<button type="button" class="rec-row" data-action="rec-open" data-k="${key}"><span class="k">${label}</span><span class="v${value ? '' : ' ph'}">${value || placeholder}</span><span class="go">›</span></button>`;
+}
+// 開く画面（下から、宿題は左から）。閉じているときも中の入力欄はフォームに残る
+function panelHtml(key, title, body, side = 'bottom') {
+  const on = panel === key;
+  return `<div class="panel-overlay${on ? ' open' : ''}" data-action="rec-close"></div><section class="panel ${side}${on ? ' open' : ''}" aria-label="${title}"${on ? '' : ' aria-hidden="true" inert'}>
+    <div class="panel-head"><strong>${title}</strong><button type="button" class="icon" data-action="rec-close" aria-label="閉じる">×</button></div><div class="panel-body">${body}</div>
+    <div class="panel-foot"><button type="button" class="primary" data-action="rec-close">完了</button></div></section>`;
 }
 // 授業の前に見ること（1つの枠に）: 前回の記録・次回やること・引き継ぎメモ・近いテスト
 function beforePart(ctx) {
@@ -116,24 +136,20 @@ function rangeRows(ctx) {
   return (rgRows || []).map((x, i) => `<div class="hwrow" data-rg="${i}"><input data-rgf="material" maxlength="60" value="${esc(x.material)}" placeholder="教材（例: Keywork）" list="rec-materials" aria-label="教材"><input data-rgf="text" maxlength="60" value="${esc(x.text)}" placeholder="範囲（例: p.10-12 不定詞）" aria-label="範囲">
     <button type="button" class="icon" data-action="rg-remove" data-i="${i}" aria-label="この範囲を外す">×</button></div>`).join('');
 }
-// 前回までの宿題: 宿題ごとに まだ・やってきた・一部・やってこなかった を選ぶ（保存すると宿題に付く）
+// 前回の宿題: 1件1行。印は ○ やってきた・△ 一部・× やってこなかった（値は hidden に入れて送る）
+const MARKS = [['done', '○', 'やってきた'], ['partial', '△', '一部'], ['notDone', '×', 'やってこなかった']];
 function checksPart(ctx) {
   const { esc } = ctx, list = rec.checks || [];
   const cur = x => rec.draftChecks && rec.draftChecks[x.id] !== undefined ? rec.draftChecks[x.id] : x.checkedHere ? x.checkResult : '';
-  const before = x => x.checkResult && !x.checkedHere ? '・前の授業では' + (CHECKS.find(c => c[0] === x.checkResult) || ['', ''])[1] : '';
-  return list.map(x => `<div class="hwchk"><div><strong>${esc(hwText(x))}</strong>${x.dueSubject && x.dueSubject !== rec.lesson.subject ? ` <span class="small muted">${esc(x.dueSubject)}</span>` : ''}
-      <span class="small muted">${x.assignedOn ? mdw(x.assignedOn) : ''}${x.status === 'reported' ? '・<span style="color:var(--ok)">できたと報告あり</span>' : ''}${before(x)}</span></div>
-      <div class="chk" role="radiogroup" aria-label="${esc(hwText(x))}">${CHECKS.map(([v, lb]) => `<label><input type="radio" name="chk.${esc(x.id)}" value="${v}"${cur(x) === v ? ' checked' : ''}><span>${lb}</span></label>`).join('')}</div></div>`).join('')
-    + '<p class="small muted" style="margin:0">「一部」「やってこなかった」は次の授業へ持ち越します。</p>';
+  return list.map(x => `<div class="hwline"><span class="t">${esc(hwText(x))}${x.status === 'reported' ? ' <span class="tag ok">できた報告</span>' : ''}${x.checkResult && !x.checkedHere ? ` <span class="tag gray">前回${(MARKS.find(m => m[0] === x.checkResult) || ['', ''])[1]}</span>` : ''}</span>
+    <span class="mk3" role="group" aria-label="${esc(hwText(x))}">${MARKS.map(([v, m, lb]) => `<button type="button" class="${v}${cur(x) === v ? ' on' : ''}" data-action="chk-set" data-id="${esc(x.id)}" data-v="${v}" aria-pressed="${cur(x) === v}" aria-label="${lb}">${m}</button>`).join('')}</span>
+    <input type="hidden" name="chk.${esc(x.id)}" value="${esc(cur(x))}"></div>`).join('');
 }
-
 // 宿題の行: 教材（前に使った教材が候補）と範囲だけ。移行で写した形（持ち物・日付の期限）はそのまま残して印だけ出す
 function homeworkRows(ctx) {
   const { esc } = ctx;
-  if (!hwRows || !hwRows.length) return '<p class="small muted">宿題はまだありません。</p>';
   const old = x => x.kind === 'item' ? '持ち物（前の形式）' : x.dueMode === 'date' ? `期限 ${x.dueDate ? mdw(x.dueDate) : ''}（前の形式）` : x.dueMode === 'none' ? '期限なし（前の形式）' : '';
-  return hwRows.map((x, i) => `<div class="hwrow" data-hw="${i}"><input data-hwf="material" maxlength="100" value="${esc(x.material || '')}" placeholder="教材（例: Keywork）" list="rec-materials" aria-label="教材"><input data-hwf="title" maxlength="200" value="${esc(x.title || '')}" placeholder="範囲（例: p.10-12）" aria-label="範囲">
-    <button type="button" class="icon" data-action="hw-remove" data-i="${i}" aria-label="この宿題を外す">×</button>${old(x) || (x.status && x.status !== 'open') ? `<div class="small muted" style="grid-column:1/-1">${old(x)}${x.status && x.status !== 'open' ? ` <span class="tag ${x.status === 'confirmed' ? 'ok' : 'warn'}">${x.status === 'confirmed' ? '確認済み' : 'できたと報告'}</span>` : ''}</div>` : ''}</div>`).join('');
+  return hwRows.map((x, i) => `<div class="hwrow two" data-hw="${i}"><input data-hwf="material" maxlength="100" value="${esc(x.material || '')}" placeholder="教材" list="rec-materials" aria-label="教材"><input data-hwf="title" maxlength="200" value="${esc(x.title || '')}" placeholder="範囲（p.10-12）" aria-label="範囲">${old(x) || (x.status && x.status !== 'open') ? `<div class="small muted" style="grid-column:1/-1">${old(x)}${x.status && x.status !== 'open' ? ` <span class="tag ${x.status === 'confirmed' ? 'ok' : 'warn'}">${x.status === 'confirmed' ? '確認済み' : 'できたと報告'}</span>` : ''}</div>` : ''}</div>`).join('');
 }
 function handoverForm(ctx) {
   const { esc } = ctx;
@@ -173,7 +189,7 @@ export async function recordsSubmit(ctx, kind, el, ev) {
     const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = v['note.' + k] || '';
     if (!staffNotes.plannedUnit.trim()) staffNotes.pace = ''; // 予定がないときは進度を書かない
     const r = await ctx.call('records/save', { lessonId: rec.lesson.id, version: el.dataset.version ? Number(el.dataset.version) : undefined, range: rgRows.map(rangeLine).filter(Boolean).join('、'), rangeParts: rgRows.filter(rangeLine).map(x => ({ unit: (x.text || '').trim(), material: (x.material || '').trim(), pages: '' })), comment: v.comment, parentMessage: v.parentMessage, staffNotes, homework: hwRows.filter(x => (x.title || '').trim() || (x.material || '').trim()).map(x => ({ id: x.id || '', kind: x.kind || 'homework', title: (x.title || '').trim() || x.material, material: (x.title || '').trim() ? x.material : '', dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject || rec.lesson.subject })), homeworkChecks: (rec.checks || []).map(x => ({ id: x.id, result: v['chk.' + x.id] || '' })), publish });
-    if (r.ok) { recFor = ''; pending = null; ctx.say(publish ? '保存して公開しました' : '下書きを保存しました', 'ok'); }
+    if (r.ok) { recFor = ''; pending = null; panel = ''; ctx.say(publish ? '保存して公開しました' : '下書きを保存しました', 'ok'); }
     else if (r.error && r.error.code === 'conflict') ctx.say(r.error.message + '（書いた内容は画面に残っています。コピーしてから更新してください）', 'error');
     else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
     return true;
@@ -194,6 +210,9 @@ export async function recordsSubmit(ctx, kind, el, ev) {
   return false;
 }
 export async function recordsClick(ctx, a, b) {
+  if (a === 'rec-open') { panel = b.dataset.k; return true; }
+  if (a === 'rec-close') { panel = ''; return true; }
+  if (a === 'chk-set') { const cur = (rec.draftChecks || {})[b.dataset.id] || ''; rec.draftChecks = { ...(rec.draftChecks || {}), [b.dataset.id]: cur === b.dataset.v ? '' : b.dataset.v }; return true; }
   if (a === 'hw-open') { hwOpen = b.dataset.id; ctx.say(''); return true; }
   if (a === 'hw-close') { hwOpen = ''; return true; }
   if (a === 'hw-add') { hwRows.push({ kind: 'homework', title: '', material: (hwRows.at(-1) || {}).material || '', dueMode: 'nextLesson', dueSubject: rec.lesson.subject, dueDate: '' }); return true; } // 同じ教材が続くことが多いので前の行の教材を入れておく

@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux13';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux13';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux13';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs } from '/staff/records.js?v=20261003-ux13';
-import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux13';
-import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux13';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux13';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux13';
-import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux13';
-import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux13';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux13';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux14';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux14';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux14';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs } from '/staff/records.js?v=20261003-ux14';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux14';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux14';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux14';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux14';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux14';
+import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux14';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux14';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -194,11 +194,11 @@ function render() {
   else if (r.page === 'settings') h = settingsPage(ctx, me);
   else h = r.page === 'account' ? accountPage() : r.page === 'staff' ? staffPage() : (me.roles.includes('manager') || me.roles.includes('teacher')) ? todayPage(ctx, me) : settingsPage(ctx, me);
   app.className = !me || ['invite', 'reset', 'forgot'].includes(r.page) ? 'narrow' : r.page === 'schedule' ? 'wide' : '';
-  const was = app.querySelector('.bsheet'), wasLabel = was && was.getAttribute('aria-label'), wasTop = was ? was.scrollTop : 0;
+  const was = app.querySelector('.bsheet, .panel.open'), wasLabel = was && was.getAttribute('aria-label'), wasBody = was && (was.querySelector('.panel-body') || was), wasTop = wasBody ? wasBody.scrollTop : 0;
   app.innerHTML = backHtml(r) + h;
-  const now = app.querySelector('.bsheet');
-  if (now && wasLabel === now.getAttribute('aria-label')) { now.classList.add('still'); now.scrollTop = wasTop; }
-  if (now && notice && notice.kind === 'error') now.querySelector('.bsheet-body').insertAdjacentHTML('afterbegin', noticeHtml()); // 下から出る画面の中でも見えるように
+  const now = app.querySelector('.bsheet, .panel.open');
+  if (now && wasLabel === now.getAttribute('aria-label')) { now.classList.add('still'); (now.querySelector('.panel-body') || now).scrollTop = wasTop; }
+  if (now && notice && notice.kind === 'error') now.querySelector('.bsheet-body, .panel-body').insertAdjacentHTML('afterbegin', noticeHtml()); // 下から出る画面の中でも見えるように
 }
 
 // ---------- 操作 ----------
@@ -267,7 +267,7 @@ app.addEventListener('click', ev => {
     if (r) say(r.error.message, 'error');
   });
 });
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { const x = app.querySelector('.bsheet-head button.icon'); if (x) x.click(); } });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { const x = app.querySelector('.bsheet-head button.icon, .panel.open .panel-head button.icon'); if (x) x.click(); } });
 app.addEventListener('change', ev => { if (ev.target.dataset && ev.target.dataset.slider) sliderInput(ev.target); }); // 押しただけのときは change だけ来ることがある
 app.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.slider) return sliderInput(ev.target); const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
 window.addEventListener('hashchange', () => {
