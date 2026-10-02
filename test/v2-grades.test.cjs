@@ -1,5 +1,5 @@
 'use strict';
-// 作り直し（v2）6段目: 成績（試験・科目ごと・全体・志望校判定・振り返り・成績票）。cf/v2/grades.mjs
+// 作り直し（v2）6段目: 成績（試験・科目ごと・全体・振り返り・成績票）。cf/v2/grades.mjs
 // 時計は 2026-10-02 12:00（日本時間）から始まる。
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -21,20 +21,20 @@ async function world() {
 }
 const b64 = s => Buffer.from(s).toString('base64');
 
-test('managers record everything; teachers see and enter only their subjects plus the total; judgments stay hidden from teachers', async () => {
+test('managers record everything; teachers see and enter only their subjects plus the total', async () => {
   const { h, auth, kid, other, teacherAuth, exam } = await world();
-  const id = await exam({ kind: 'mock', name: '第1回 全県模試', judgments: [{ school: '架空高校', result: 'B' }], totalDeviation: 58.4 });
+  const id = await exam({ kind: 'mock', name: '第1回 全県模試', totalDeviation: 58.4 });
   await h.ok('grades/scores/save', { auth, examId: id, scores: [{ subject: '数学', score: 72, max: 100, deviation: 60.1 }, { subject: '英語', score: 65, max: 100, deviation: 55 }] });
   assert.equal((await h.call('grades/scores/save', { auth, examId: id, scores: [{ subject: '国語', score: 120, max: 100 }] })).error.code, 'badNumber', '満点を超える点数は断る');
   await h.ok('grades/reviews/save', { auth, examId: id, good: '計算が速くなった', issues: '英作文', nextSteps: '毎日1題の英作文' });
   const m = (await h.ok('grades/student', { auth, studentId: kid.id })).exams[0];
-  assert.deepEqual([m.total.score, m.total.max, m.total.fromSubjects, m.total.deviation, m.judgments[0].result], [137, 200, true, 58.4, 'B'], '全体が空なら科目の合計');
+  assert.deepEqual([m.total.score, m.total.max, m.total.fromSubjects, m.total.deviation], [137, 200, true, 58.4], '全体が空なら科目の合計');
+  assert.equal(m.judgments, undefined, '志望校判定は持たない');
   const t = (await h.ok('grades/student', { auth: teacherAuth, studentId: kid.id }));
   assert.deepEqual(t.subjects, ['数学']);
   assert.deepEqual(t.exams[0].scores.map(s => s.subject), ['数学'], 'ほかの科目の点数は見せない');
   assert.deepEqual(t.exams[0].otherSubjects, ['英語']);
   assert.equal(t.exams[0].total.score, 137, '合計は見せる');
-  assert.equal(t.exams[0].judgments, undefined, '志望校判定は見せない');
   assert.deepEqual(t.exams[0].review, { issues: '英作文', nextSteps: '毎日1題の英作文', version: 1 }, '良かった点は見せない（課題と次の対策）');
   assert.equal((await h.call('grades/scores/save', { auth: teacherAuth, examId: id, scores: [{ subject: '英語', score: 80, max: 100 }] })).error.code, 'forbidden', '担当でない科目は入力できない');
   await h.ok('grades/scores/save', { auth: teacherAuth, examId: id, scores: [{ subject: '数学', score: 75, max: 100 }] });
@@ -51,17 +51,16 @@ test('managers record everything; teachers see and enter only their subjects plu
 
 test('families see everything with lesson counts; students see scores, next steps and the days to the next test', async () => {
   const { h, auth, kid, parent, k, exam } = await world();
-  const id = await exam({ judgments: [{ school: '架空高校', result: 'A' }] });
+  const id = await exam();
   await h.ok('grades/scores/save', { auth, examId: id, scores: [{ subject: '数学', score: 80, max: 100, average: 61.2, rank: 12, rankOf: 150 }] });
   await h.ok('grades/reviews/save', { auth, examId: id, good: 'よい', issues: '課題', nextSteps: '次はこれ' });
   await h.ok('family/events/add', { auth: parent, studentId: kid.id, kind: 'test', date: '2026-10-20', dateTo: '2026-10-21', title: '2学期中間テスト' });
   const fam = (await h.ok('family/grades', { auth: parent })).students.find(s => s.id === kid.id);
-  assert.deepEqual([fam.exams[0].scores[0].rank, fam.exams[0].judgments[0].result, fam.exams[0].review.good], [12, 'A', 'よい']);
+  assert.deepEqual([fam.exams[0].scores[0].rank, fam.exams[0].review.good], [12, 'よい']);
   assert.deepEqual([fam.nextTest.title, fam.nextTest.days], ['2学期中間テスト', 18]);
   assert.ok(fam.lessons[0], '試験ごとに、その前の授業の回数');
   const st = await h.ok('student/grades', { k });
   assert.deepEqual(st.exams[0].review, { nextSteps: '次はこれ' }, '生徒には次の対策だけ');
-  assert.equal(st.exams[0].judgments, undefined);
   assert.equal(st.nextTest.days, 18);
 });
 

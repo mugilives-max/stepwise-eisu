@@ -1,6 +1,6 @@
 // スタッフの画面: 成績（6段目）。#grades（一覧・届いた成績票・結果の入力待ち）と #grades=<生徒>（試験の記録・入力）。
-// 講師は担当の生徒の担当科目だけ入力でき、ほかの科目は合計だけ見える。志望校判定と成績票は教室管理者だけ。
-import { examCard, gradeCharts, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261002-stage6';
+// 講師は担当の生徒の担当科目だけ入力でき、ほかの科目は合計だけ見える。成績票は教室管理者だけ。
+import { examCard, gradeCharts, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261002-stage6b';
 
 let overview = null, student = null, studentFor = '', editing = '', prefill = null;
 export function resetGrades() { overview = null; student = null; studentFor = ''; editing = ''; prefill = null; }
@@ -52,14 +52,14 @@ export function gradesStudentPage(ctx, studentId) {
   }
   return h;
 }
-// 試験の入力欄（作る・直す）。科目の行・全体（教室管理者）・志望校判定（教室管理者）・振り返り
+// 試験の入力欄（作る・直す）。科目の行・全体（教室管理者）・振り返り
 function examForm(ctx, e) {
   const { esc } = ctx, st = student, manager = st.manager, p = e ? null : prefill;
   const v = (x, k) => x && x[k] !== null && x[k] !== undefined ? esc(String(x[k])) : '';
   let subjects;
   if (!manager) subjects = st.subjects.map(s => (e && e.scores.find(x => x.subject === s)) || { subject: s });
   else { subjects = e ? e.scores.slice() : st.lessonSubjects.map(s => ({ subject: s })); while (subjects.length < (e ? e.scores.length + 2 : Math.max(5, subjects.length))) subjects.push({ subject: '' }); }
-  const t = e ? e.total : {}, j = e && e.judgments ? e.judgments.slice() : []; while (manager && j.length < 3) j.push({ school: '', result: '' });
+  const t = e ? e.total : {};
   const r = e && e.review || {};
   const field = (name, label, val, attrs = '') => `<label>${label}<input name="${name}" value="${val}" ${attrs}></label>`;
   const numAttrs = 'inputmode="decimal" style="width:5.5em"';
@@ -72,8 +72,7 @@ function examForm(ctx, e) {
     <div style="overflow-x:auto"><table class="small"><tr><th>科目</th><th>点数</th><th>満点</th><th>平均点</th><th>順位</th><th>人数</th><th>偏差値</th></tr>
     ${subjects.map((s, i) => `<tr><td><input name="s.${i}.subject" maxlength="20" value="${esc(s.subject)}" style="width:6em"${manager ? '' : ' readonly'}><input type="hidden" name="s.${i}.orig" value="${esc(s.score !== undefined || s.max !== undefined ? s.subject : '')}"></td>
       ${['score', 'max', 'average', 'rank', 'rankOf', 'deviation'].map(k => `<td><input name="s.${i}.${k}" value="${v(s, k)}" ${numAttrs}${k === 'max' && !e && s.subject ? ' placeholder="100"' : ''}></td>`).join('')}</tr>`).join('')}</table></div>
-    ${manager ? `<div class="small muted">全体（空なら科目の合計を出します）</div><div class="row">${field('totalScore', '合計', v(e && t.fromSubjects ? null : t, 'score'), numAttrs)}${field('totalMax', '満点', v(e && t.fromSubjects ? null : t, 'max'), numAttrs)}${field('totalRank', '順位', v(t, 'rank'), numAttrs)}${field('totalRankOf', '人数', v(t, 'rankOf'), numAttrs)}${field('totalDeviation', '偏差値', v(t, 'deviation'), numAttrs)}</div>
-      <div class="small muted">志望校判定（模試）</div>${j.map((x, i) => `<div class="row"><input name="j.${i}.school" maxlength="40" placeholder="学校名" value="${esc(x.school)}" style="flex:2"><input name="j.${i}.result" maxlength="20" placeholder="判定（例: B）" value="${esc(x.result)}" style="flex:1"></div>`).join('')}` : ''}
+    ${manager ? `<div class="small muted">全体（空なら科目の合計を出します）</div><div class="row">${field('totalScore', '合計', v(e && t.fromSubjects ? null : t, 'score'), numAttrs)}${field('totalMax', '満点', v(e && t.fromSubjects ? null : t, 'max'), numAttrs)}${field('totalRank', '順位', v(t, 'rank'), numAttrs)}${field('totalRankOf', '人数', v(t, 'rankOf'), numAttrs)}${field('totalDeviation', '偏差値', v(t, 'deviation'), numAttrs)}</div>` : ''}
     <div class="small muted">振り返り</div>${manager ? `<label>良かった点<textarea name="good" maxlength="1000" rows="2">${esc(r.good || '')}</textarea></label>` : ''}
     <label>課題<textarea name="issues" maxlength="1000" rows="2">${esc(r.issues || '')}</textarea></label><label>次の対策<textarea name="nextSteps" maxlength="1000" rows="2" placeholder="生徒にも見えます">${esc(r.nextSteps || '')}</textarea></label>
     <div class="row"><button class="primary"${ctx.dis()}>保存</button><button type="button" data-action="gr-close"${ctx.dis()}>やめる</button></div></form>`;
@@ -92,7 +91,6 @@ export async function gradesSubmit(ctx, kind, el) {
   const exam = { id, version: id ? Number(el.dataset.version) : undefined, studentId: studentFor, kind: v.kind, name: v.name, date: v.date, grade: v.grade, eventId: v.eventId };
   if (student.manager) {
     Object.assign(exam, { totalScore: v.totalScore, totalMax: v.totalMax, totalRank: v.totalRank, totalRankOf: v.totalRankOf, totalDeviation: v.totalDeviation });
-    exam.judgments = Object.keys(v).filter(k => /^j\.\d+\.school$/.test(k)).map(k => ({ school: v[k], result: v[k.replace('school', 'result')] })).filter(x => x.school.trim());
   }
   let r = await ctx.call('grades/exams/save', exam);
   if (r.ok) {

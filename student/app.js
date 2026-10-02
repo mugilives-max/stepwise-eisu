@@ -1,9 +1,9 @@
 // 生徒の画面（作り直し v2）。専用リンク（?k=）で開く。予定と「変更・お休みの連絡」、学習、成績（成績票を送る）、予定の共有。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
 import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage6';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage6';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage6';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage6b';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage6b';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage6b';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';

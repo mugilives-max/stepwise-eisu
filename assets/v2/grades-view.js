@@ -57,7 +57,6 @@ export function examCard(e, { lessons = null, actions = '' } = {}) {
   if (tparts.length) h += `<div>${tparts.join('　')}</div>`;
   if (e.scores.length) h += `<table class="small" style="width:100%">${e.scores.map(scoreRow).join('')}</table>`;
   if (e.otherSubjects && e.otherSubjects.length) h += `<div class="small muted">ほかの科目（${e.otherSubjects.map(esc).join('・')}）は合計に入っています</div>`;
-  if (e.judgments && e.judgments.length) h += `<div class="small">志望校判定: ${e.judgments.map(j => `${esc(j.school)} <strong>${esc(j.result)}</strong>`).join('、')}</div>`;
   const r = e.review;
   if (r && (r.good || r.issues || r.nextSteps)) h += `<div class="small">${r.good ? `<div><strong>良かった点</strong> ${esc(r.good)}</div>` : ''}${r.issues ? `<div><strong>課題</strong> ${esc(r.issues)}</div>` : ''}${r.nextSteps ? `<div><strong>次の対策</strong> ${esc(r.nextSteps)}</div>` : ''}</div>`;
   if (lessons && Object.keys(lessons.counts).length) h += `<div class="small muted">この試験までの授業（${esc(md(lessons.from))}〜）: ${Object.entries(lessons.counts).map(([s, c]) => `${esc(s)} ${c}回`).join('・')}</div>`;

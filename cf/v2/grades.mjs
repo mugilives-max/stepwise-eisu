@@ -1,7 +1,7 @@
 // 成績（6段目）。migrations-v2/0008_grades.sql、docs/REQUIREMENTS.md 5-2
-// - 教室管理者: すべてを見て入力する（試験・科目ごと・全体・志望校判定・振り返り・成績票）
-// - 講師: 担当の生徒の、担当科目の点数を見て入力する。ほかの科目は合計だけ。志望校判定と成績票は見ない
-// - 保護者: 推移・振り返り・成績票・その期間の授業の実施状況。成績票の写真や PDF を送れる
+// - 教室管理者: すべてを見て入力する（試験・科目ごと・全体・振り返り・成績票）
+// - 講師: 担当の生徒の、担当科目の点数を見て入力する。ほかの科目は合計だけ。成績票は見ない
+// - 保護者: 推移・振り返り・成績票・その期間の授業の実施状況。模試の志望校判定は持たない（成績票の PDF で足りる）。成績票の写真や PDF を送れる
 // - 生徒: 科目ごとの点数の推移・次の対策・次のテストまでの日数。成績票の写真や PDF を送れる
 // 成績票は送られた順に「取り込み待ち」に並び、スタッフが中身を確かめて点数を入れる。
 import { fail, newId, iso, audit } from './util.mjs';
@@ -64,7 +64,6 @@ async function examsOf(c, studentId, who, subjects = null) {
     const total = { score: e.totalScore ?? sum(all, 'score'), max: e.totalMax ?? sum(all, 'max'), rank: e.totalRank, rankOf: e.totalRankOf, deviation: e.totalDeviation, fromSubjects: e.totalScore === null && all.length > 0 };
     const out = { id: e.id, kind: e.kind, name: e.name, date: e.date, grade: e.grade, total, scores: all.map(scoreView), version: e.version };
     if (who === 'teacher') { out.scores = all.filter(s => subjects.includes(s.subject)).map(scoreView); out.otherSubjects = all.filter(s => !subjects.includes(s.subject)).map(s => s.subject); }
-    if (who === 'manager' || who === 'family') out.judgments = parse(e.judgments, []);
     if (r) out.review = who === 'student' ? { nextSteps: r.nextSteps } : who === 'teacher' ? { issues: r.issues, nextSteps: r.nextSteps, version: r.version } : { good: r.good, issues: r.issues, nextSteps: r.nextSteps, version: r.version };
     return out;
   });
@@ -153,22 +152,17 @@ async function saveExam(c, me, b) {
   if (!['regular', 'mock'].includes(kind)) fail('badKind', '定期テストか模試かを選んでください');
   if (!name || name.length > 40) fail('badName', '試験の名前を40文字以内で入れてください（例: 2学期中間テスト）');
   if (!validDate(date) || date > todayJst(c.now)) fail('badDate', '実施日（今日まで）を入れてください');
-  // 全体の数と志望校判定は教室管理者だけ
+  // 全体の数は教室管理者だけ
   const manager = isManager(me);
   const t = manager ? { totalScore: num(b.totalScore ?? old?.totalScore, { max: 100000 }), totalMax: num(b.totalMax ?? old?.totalMax, { max: 100000 }), totalRank: num(b.totalRank ?? old?.totalRank, { int: true, min: 1 }), totalRankOf: num(b.totalRankOf ?? old?.totalRankOf, { int: true, min: 1 }), totalDeviation: num(b.totalDeviation ?? old?.totalDeviation, { max: 150 }) }
     : old ? { totalScore: old.totalScore, totalMax: old.totalMax, totalRank: old.totalRank, totalRankOf: old.totalRankOf, totalDeviation: old.totalDeviation } : { totalScore: null, totalMax: null, totalRank: null, totalRankOf: null, totalDeviation: null };
-  let judgments = old ? old.judgments : '[]';
-  if (manager && b.judgments !== undefined) {
-    if (!Array.isArray(b.judgments) || b.judgments.length > 10) fail('badJudgments', '志望校判定は10校までにしてください');
-    judgments = JSON.stringify(b.judgments.map(j => ({ school: String(j.school || '').trim().slice(0, 40), result: String(j.result || '').trim().slice(0, 20) })).filter(j => j.school));
-  }
   const eventId = old ? old.eventId : String(b.eventId || '');
   if (eventId && !(await c.db.prepare("select 1 from sharedEvents where id = ? and studentId = ?").bind(eventId, s.id).first())) fail('badEvent', 'テストの予定が見つかりません');
   const now = iso(c.now), id = old ? old.id : newId('ex');
-  if (old) await c.db.prepare('update exams set kind = ?, name = ?, date = ?, grade = ?, totalScore = ?, totalMax = ?, totalRank = ?, totalRankOf = ?, totalDeviation = ?, judgments = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')
-    .bind(kind, name, date, grade, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, judgments, now, id, old.version).run();
-  else await c.db.prepare("insert into exams (id, studentId, kind, name, date, grade, eventId, totalScore, totalMax, totalRank, totalRankOf, totalDeviation, judgments, createdBy, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, s.id, kind, name, date, grade, eventId, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, judgments, 'staff:' + me.id, now, now).run();
+  if (old) await c.db.prepare('update exams set kind = ?, name = ?, date = ?, grade = ?, totalScore = ?, totalMax = ?, totalRank = ?, totalRankOf = ?, totalDeviation = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')
+    .bind(kind, name, date, grade, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, now, id, old.version).run();
+  else await c.db.prepare("insert into exams (id, studentId, kind, name, date, grade, eventId, totalScore, totalMax, totalRank, totalRankOf, totalDeviation, createdBy, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, s.id, kind, name, date, grade, eventId, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, 'staff:' + me.id, now, now).run();
   await audit(c, old ? 'examUpdate' : 'examCreate', id, { kind, date });
   return { examId: id };
 }
