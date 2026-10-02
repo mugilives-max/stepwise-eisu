@@ -1,8 +1,9 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-ux7';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-ux8';
+import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261002-ux8';
 
-let pending = null, reported = null, rec = null, recFor = '', hwRows = null, parts = [];
+let pending = null, reported = null, rec = null, recFor = '', hwRows = null, parts = [], hwOpen = '';
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
 // 選ぶ項目（表記がずれないように）。サーバーの NOTE_CHOICES（cf/v2/records.mjs）と同じ値
 const CHOICES = {
@@ -11,23 +12,29 @@ const CHOICES = {
   homeworkReview: [['done', 'やってきた'], ['partial', '一部だけ'], ['notDone', 'やってこなかった'], ['none', '宿題なし']],
 };
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
-export function resetRecords() { pending = null; reported = null; rec = null; recFor = ''; hwRows = null; parts = []; }
+export function leaveRecords() { hwOpen = ''; }
+export function resetRecords() { hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; parts = []; }
 // 扱った範囲の1件を文に: 「不定詞 Keywork p.10〜12」
 function pagesText(p) { const s = String(p || '').trim().replace(/^p\.?\s*/i, '').replace(/\s*[-~～ー−]\s*/g, '〜'); return s ? 'p.' + s : ''; }
 const partText = p => [p.unit, p.material, pagesText(p.pages)].filter(Boolean).join(' ');
 
-// 「記録」: 記録待ちと、宿題の確認待ち
+// 「記録」: 記録待ちと、宿題の確認待ち。宿題は押すと下から「確認した・やり直し」
 export function recordsPage(ctx) {
   const { esc } = ctx;
-  if (!pending) { ctx.call('records/pending').then(r => { pending = r.ok ? r : { lessons: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); }); return '<h1>記録</h1><p class="muted">読み込んでいます…</p>'; }
+  const head = `<div class="page-head"><h1>記録</h1></div>`;
+  if (!pending) { ctx.call('records/pending').then(r => { pending = r.ok ? r : { lessons: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); }); return head + '<p class="muted">読み込んでいます…</p>'; }
   if (!reported) { ctx.call('homework/reported').then(r => { reported = r.ok ? r.homework : []; ctx.render(); }); }
-  let h = `<h1>記録</h1>${ctx.notice()}`;
+  let h = head + ctx.notice();
   if (pending.unreadHandover) h += `<p class="notice">まだ読んでいない引き継ぎメモが ${pending.unreadHandover}件あります。記録を書く画面に出ます。</p>`;
-  h += `<h2>記録待ち（${pending.lessons.length}件・直近60日）</h2>`;
-  h += pending.lessons.length ? '<div class="list">' + pending.lessons.map(l => `<div><div>${mdw(l.date)} ${l.start} <strong>${esc(l.studentName)}</strong> ${esc(l.subject)} ${l.draft ? '<span class="tag warn">下書き</span>' : ''}</div><div><a href="#record=${encodeURIComponent(l.id)}">記録を書く</a></div></div>`).join('') + '</div>' : '<p class="muted">記録待ちの授業はありません。</p>';
-  h += `<h2>宿題の確認待ち（${reported ? reported.length : '…'}件）</h2>`;
-  if (reported) h += reported.length ? '<div class="list">' + reported.map(w => `<div><div><strong>${esc(w.studentName)}</strong> ${esc(w.title)}${w.material ? '（' + esc(w.material) + '）' : ''}<div class="small muted">できたと報告 ${esc(String(w.reportedAt).slice(5, 16).replace('T', ' '))}</div></div>
-      <div class="row"><button class="primary" data-action="hw-confirm" data-id="${esc(w.id)}" data-version="${w.version}"${ctx.dis()}>確認した</button><button data-action="hw-redo" data-id="${esc(w.id)}" data-version="${w.version}"${ctx.dis()}>やり直し</button></div></div>`).join('') + '</div>' : '<p class="muted">確認待ちの宿題はありません。</p>';
+  h += `<h2>記録待ち${pending.lessons.length ? ` <span class="count">${pending.lessons.length}</span>` : ''}</h2>`;
+  h += pending.lessons.length ? '<div class="rows">' + pending.lessons.map(l => rowLink('#record=' + encodeURIComponent(l.id), `${mdw(l.date)} ${l.start} ${esc(l.studentName)}`, esc(l.subject), l.draft ? '<span class="tag warn">下書き</span>' : '')).join('') + '</div><p class="small muted">直近60日の、実施済み・始まった授業のうち記録がないもの。</p>' : '<p class="muted small">記録待ちの授業はありません。</p>';
+  h += `<h2>宿題の確認待ち${reported && reported.length ? ` <span class="count">${reported.length}</span>` : ''}</h2>`;
+  if (!reported) h += '<p class="muted small">読み込んでいます…</p>';
+  else h += reported.length ? '<div class="rows">' + reported.map(w => rowButton(esc, 'hw-open', { id: w.id }, `${esc(w.studentName)} ${esc(w.title)}`, `${w.material ? esc(w.material) + '・' : ''}できたと報告 ${esc(String(w.reportedAt).slice(5, 16).replace('T', ' ').replace('-', '/'))}`)).join('') + '</div>' : '<p class="muted small">確認待ちの宿題はありません。</p>';
+  const w = hwOpen && reported && reported.find(x => x.id === hwOpen);
+  if (w) h += sheet(esc, w.studentName + ' の宿題', `<p style="margin-top:0"><strong>${esc(w.title)}</strong>${w.material ? `<br><span class="small muted">${esc(w.material)}</span>` : ''}</p>
+    <form class="stack" data-form="hw-review" data-id="${esc(w.id)}" data-version="${w.version}"><label>やり直してほしいところ（やり直しのときだけ。生徒・保護者に見えます）<textarea name="note" maxlength="300" rows="2" placeholder="例: 問3と問5をもう一度"></textarea></label>
+    <div class="row"><button class="primary" name="act" value="confirm"${ctx.dis()}>確認した</button><button name="act" value="redo"${ctx.dis()}>やり直しを伝える</button></div></form>`, 'hw-close');
   return h;
 }
 
@@ -35,12 +42,12 @@ export function recordsPage(ctx) {
 export function recordPage(ctx, lessonId) {
   const { esc } = ctx;
   if (recFor !== lessonId) { recFor = lessonId; rec = null; hwRows = null; ctx.call('records/lesson', { lessonId }).then(r => { if (recFor !== lessonId) return; if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); parts = r.record && r.record.rangeParts ? r.record.rangeParts.map(x => ({ ...x })) : []; } else { rec = { error: r.error.message }; ctx.handleAuth(r); } ctx.render(); }); }
-  if (!rec) return '<h1>授業記録</h1><p class="muted">読み込んでいます…</p>';
+  if (!rec) return '<p class="muted" style="margin-top:24px">読み込んでいます…</p>';
   if (rec.error) return `<h1>授業記録</h1><p class="notice error">${esc(rec.error)}</p>`;
   const l = rec.lesson, saved = rec.record || { range: '', comment: '', parentMessage: '', staffNotes: {}, status: 'none' };
   const r = rec.draftInputs ? { ...saved, ...rec.draftInputs } : saved, n = r.staffNotes || {};
   const future = l.date > rec.today, locked = r.status === 'void';
-  let h = `<h1>${esc(rec.student.name)} ${esc(l.subject)}</h1><p class="sub">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}・${esc(rec.student.grade || '')}・記録 ${r.status === 'published' ? '<span class="tag ok">公開済み</span>' : r.status === 'draft' ? '<span class="tag warn">下書き</span>' : r.status === 'void' ? '<span class="tag gray">無効</span>' : '<span class="tag gray">まだ</span>'}</p>${ctx.notice()}`;
+  let h = `<div class="page-head"><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1></div><p class="sub" style="margin-top:0">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}・${esc(rec.student.grade || '')}・記録 ${r.status === 'published' ? '<span class="tag ok">公開済み</span>' : r.status === 'draft' ? '<span class="tag warn">下書き</span>' : r.status === 'void' ? '<span class="tag gray">無効</span>' : '<span class="tag gray">まだ</span>'}</p>${ctx.notice()}`;
   // 引き継ぎメモ（読んでいないものを先に）
   const unread = rec.handover.filter(x => !x.read);
   if (rec.handover.length) h += `<h2>引き継ぎメモ${unread.length ? `（未読 ${unread.length}）` : ''}</h2><div class="list">` + rec.handover.map(x => `<div><div><span class="small muted">${esc(x.authorName)}・${esc(x.createdAt.slice(5, 10).replace('-', '/'))}</span><div style="white-space:pre-wrap">${esc(x.body)}</div></div>
@@ -61,9 +68,9 @@ export function recordPage(ctx, lessonId) {
     <label>保護者への連絡（任意）<textarea name="parentMessage" maxlength="1000" rows="2">${esc(r.parentMessage)}</textarea></label>
     <h2>宿題・持ち物</h2>${homeworkRows(ctx)}<p><button type="button" data-action="hw-add"${hwRows && hwRows.length >= 10 ? ' disabled' : ''}>＋ 宿題を足す</button></p>
     <h2>講師用（生徒・保護者には見せない）</h2>${staffNoteFields(ctx, n)}
-    <div class="row"><button type="submit" name="publish" value="0"${ctx.dis()}>下書き保存</button><button class="primary" type="submit" name="publish" value="1"${ctx.dis()}>保存して公開</button></div>
+    <div class="actionbar row"><button type="submit" name="publish" value="0"${ctx.dis()}>下書き保存</button><button class="primary" type="submit" name="publish" value="1"${ctx.dis()}>保存して公開</button></div>
     <p class="small muted">「保存して公開」で、生徒・保護者のページに記録と宿題が出ます。決定の授業は実施済みになります。公開したあとで直したときは、もう一度「保存して公開」を押すまで前の版が見えます。</p></form>`;
-  return h + handoverForm(ctx) + (ctx.isManager && rec.record && rec.record.id ? `<h2>記録を無効にする</h2><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form>` : '');
+  return h + handoverForm(ctx) + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
 }
 // 扱った範囲の入力補助: 内容・教材・ページを入れて「足す」と、範囲の欄に「不定詞 Keywork p.10〜12」の形で足す
 function rangeHelper(ctx) {
@@ -103,8 +110,8 @@ function homeworkRows(ctx) {
 }
 function handoverForm(ctx) {
   const { esc } = ctx;
-  return `<h2>引き継ぎメモを書く</h2><form class="stack" data-form="ho-add"><label>次の担当・代講への伝言<textarea name="body" maxlength="1000" rows="3" placeholder="例: 分数の約分でつまずきやすい。前回は通分まで確認済み"></textarea></label>
-    <label>だれに<select name="toStaffId"><option value="">この生徒を担当する全員</option>${rec.staff.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label><button${ctx.dis()}>残す</button></form>`;
+  return `<details class="more"><summary>引き継ぎメモを書く</summary><form class="stack" data-form="ho-add"><label>次の担当・代講への伝言<textarea name="body" maxlength="1000" rows="3" placeholder="例: 分数の約分でつまずきやすい。前回は通分まで確認済み"></textarea></label>
+    <label>だれに<select name="toStaffId"><option value="">この生徒を担当する全員</option>${rec.staff.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label><button${ctx.dis()}>残す</button></form></details>`;
 }
 // 宿題の入力欄の今の値を読む（描き直す前に）
 function readHomework() {
@@ -126,6 +133,13 @@ export function captureRecordInputs() {
 async function refreshHandover(ctx) { const r = await ctx.call('records/lesson', { lessonId: rec.lesson.id }); if (r.ok) rec.handover = r.handover; }
 
 export async function recordsSubmit(ctx, kind, el, ev) {
+  if (kind === 'hw-review') {
+    const act = ev && ev.submitter ? ev.submitter.value : 'confirm', note = new FormData(el).get('note') || '';
+    if (act === 'redo' && !note.trim()) { ctx.say('やり直してほしいところを書いてください', 'error'); return true; }
+    const r = await ctx.call('homework/review', { id: el.dataset.id, version: Number(el.dataset.version), action: act, note: act === 'redo' ? note : '' });
+    if (r.ok) { reported = null; hwOpen = ''; ctx.say(act === 'confirm' ? '確認しました' : 'やり直しを伝えました', 'ok'); } else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
+    return true;
+  }
   if (kind === 'rec-save') {
     const v = Object.fromEntries(new FormData(el).entries()), publish = ev && ev.submitter && ev.submitter.value === '1';
     const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = v['note.' + k] || '';
@@ -152,6 +166,8 @@ export async function recordsSubmit(ctx, kind, el, ev) {
   return false;
 }
 export async function recordsClick(ctx, a, b) {
+  if (a === 'hw-open') { hwOpen = b.dataset.id; ctx.say(''); return true; }
+  if (a === 'hw-close') { hwOpen = ''; return true; }
   if (a === 'hw-add') { hwRows.push({ kind: 'homework', title: '', material: '', dueMode: 'nextLesson', dueSubject: rec.lesson.subject, dueDate: '' }); return true; }
   if (a === 'hw-remove') { hwRows.splice(Number(b.dataset.i), 1); return true; }
   if (a === 'range-add') {
@@ -169,12 +185,5 @@ export async function recordsClick(ctx, a, b) {
     return true;
   }
   if (a === 'ho-read' || a === 'ho-close') { const r = await ctx.call(a === 'ho-read' ? 'handover/read' : 'handover/close', { id: b.dataset.id }); if (r.ok) { await refreshHandover(ctx); pending = null; } else ctx.say(r.error.message, 'error'); return true; }
-  if (a === 'hw-confirm' || a === 'hw-redo') {
-    let note = '';
-    if (a === 'hw-redo') { note = prompt('やり直してほしいところを書いてください（生徒・保護者に見えます）') || ''; if (!note.trim()) return true; }
-    const r = await ctx.call('homework/review', { id: b.dataset.id, version: Number(b.dataset.version), action: a === 'hw-confirm' ? 'confirm' : 'redo', note });
-    if (r.ok) { reported = null; ctx.say(a === 'hw-confirm' ? '確認しました' : 'やり直しを伝えました', 'ok'); } else ctx.say(r.error.message, 'error');
-    return true;
-  }
   return false;
 }

@@ -1,27 +1,27 @@
 // スタッフの画面: 家族と生徒（教室管理者）。家族を先に登録し、その下に生徒を登録する。
 // ctx は app.js から渡す共通の道具（call / say / render / run / esc / busy / notice）。
+// 一覧はすっきり、直す・足す・生徒ごとの操作は押すと下から出る画面で（famSheet = { mode, id }）。
+import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261002-ux8';
 const STATUS = { invited: ['warn', '招待前・登録待ち'], active: ['', '利用中'], stopped: ['gray', '停止'] };
 const STUDENT_STATUS = { enrolled: ['', '在籍'], paused: ['warn', '休会'], left: ['gray', '退会'] };
 const MODE = { '': '未設定', in_person: '対面', online: 'オンライン' };
-let list = null, detail = null, query = '', openCreate = false, shown = null, editing = null;
+let list = null, detail = null, query = '', shown = null, famSheet = null;
 
-export function resetFamilies() { list = null; detail = null; shown = null; editing = null; }
+export function resetFamilies() { list = null; detail = null; shown = null; famSheet = null; }
 
 const tag = ([cls, label]) => `<span class="tag ${cls}">${label}</span>`;
 const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
 const match = (f, q) => !q || [f.name, f.guardianName, f.email, ...f.students.map(s => s.name + (s.familyKana || '') + (s.givenKana || ''))].join(' ').toLowerCase().includes(q.toLowerCase());
 
 export function familiesPage(ctx) {
-  const { esc } = ctx;
-  if (!list) { load(ctx); return '<h1>家族と生徒</h1><p class="muted">読み込んでいます…</p>'; }
-  let h = `<h1>家族と生徒</h1><p class="sub">契約は家族ごと。生徒は必ずどこかの家族に入ります。兄弟は同じ家族に入れてください。</p>${ctx.notice()}`;
-  h += `<div class="row"><input type="search" placeholder="名前・ふりがな・メールで探す" value="${esc(query)}" data-input="fam-query" style="flex:1;min-width:200px"><button data-action="fam-create-toggle"${ctx.dis()}>${openCreate ? '閉じる' : '家族を登録'}</button></div>`;
-  if (openCreate) h += `<form class="stack" data-form="fam-create"><h2>家族を登録</h2>${familyInputs(esc, {})}<button class="primary"${ctx.dis()}>登録する</button><p class="small muted">登録したあと、この家族の画面で生徒を足し、保護者ページの招待を送れます。</p></form>`;
+  const { esc } = ctx, head = '<div class="page-head"><h1>家族と生徒</h1></div>';
+  if (!list) { load(ctx); return head + '<p class="muted">読み込んでいます…</p>'; }
+  let h = head + `<p class="sub" style="margin-top:0">契約は家族ごと。生徒は必ずどこかの家族に入ります。兄弟は同じ家族に入れてください。</p>${ctx.notice()}`;
+  h += `<div class="row"><input type="search" placeholder="名前・ふりがな・メールで探す" value="${esc(query)}" data-input="fam-query" style="flex:1;min-width:180px"><button class="primary" data-action="fam-sheet" data-mode="create"${ctx.dis()}>家族を登録</button></div>`;
   const shownList = list.filter(f => match(f, query));
-  h += `<h2>${shownList.length}家族</h2><div class="list">` + shownList.map(f => `<div><div><a href="#family=${encodeURIComponent(f.id)}"><strong>${esc(f.name)}</strong></a> ${tag(STATUS[f.status] || ['gray', f.status])}${f.testOnly ? '<span class="tag gray">テスト</span>' : ''}
-      <div class="small muted">${esc(f.guardianName || '保護者名なし')}・${esc(f.email || 'メールなし')}</div>
-      <div class="small">${f.students.length ? f.students.map(s => `${esc(s.name)}（${esc(s.grade || '学年なし')}）${s.status === 'enrolled' ? '' : tag(STUDENT_STATUS[s.status])}`).join('、') : '<span class="muted">生徒がいません</span>'}</div></div>
-      <div><a href="#family=${encodeURIComponent(f.id)}">開く</a></div></div>`).join('') + '</div>';
+  h += `<h2>${shownList.length}家族</h2><div class="rows">` + shownList.map(f => rowLink('#family=' + encodeURIComponent(f.id), `${esc(f.name)} ${tag(STATUS[f.status] || ['gray', f.status])}${f.testOnly ? '<span class="tag gray">テスト</span>' : ''}`,
+    `${f.students.length ? f.students.map(s => `${esc(s.name)}（${esc(s.grade || '学年なし')}）${s.status === 'enrolled' ? '' : tag(STUDENT_STATUS[s.status])}`).join('、') : '生徒がいません'}<br>${esc(f.guardianName || '保護者名なし')}・${esc(f.email || 'メールなし')}`)).join('') + '</div>';
+  if (famSheet && famSheet.mode === 'create') h += sheet(esc, '家族を登録', `<form class="stack" data-form="fam-create">${familyInputs(esc, {})}<button class="primary"${ctx.dis()}>登録する</button><p class="small muted">登録したあと、この家族の画面で生徒を足し、保護者ページの招待を送れます。</p></form>`, 'fam-close');
   return h;
 }
 
@@ -46,27 +46,33 @@ function studentInputs(esc, s) {
 
 export function familyDetailPage(ctx, id) {
   const { esc } = ctx;
-  if (!detail || detail.id !== id) { loadDetail(ctx, id); return '<h1>家族</h1><p class="muted">読み込んでいます…</p>'; }
+  if (!detail || detail.id !== id) { loadDetail(ctx, id); return '<p class="muted" style="margin-top:24px">読み込んでいます…</p>'; }
   const f = detail;
-  let h = `<h1>${esc(f.name)} ${tag(STATUS[f.status] || ['gray', f.status])}</h1>${ctx.notice()}`;
+  let h = `<div class="page-head"><h1>${esc(f.name)}</h1>${tag(STATUS[f.status] || ['gray', f.status])}</div>${ctx.notice()}`;
   if (shown) h += `<div class="notice ok"><p>${esc(shown.text)}</p>${shown.url ? `<p class="copy">${esc(shown.url)}</p><button data-action="copy" data-text="${esc(shown.url)}">リンクをコピー</button>` : ''}</div>`;
-  h += `<h2>保護者</h2><form class="stack" data-form="fam-update">${familyInputs(esc, f)}<div class="row"><button class="primary"${ctx.dis()}>保存</button></div></form>
-    <p class="small muted">保護者ページ: ${f.hasPassword ? '登録済み（ログインできます）' : '未登録'}</p>
-    <div class="row"><button data-action="pv-open" data-kind="family" data-id="${esc(f.id)}">保護者ページを見る（プレビュー）</button>${f.email && f.status !== 'stopped' ? `<button data-action="fam-invite"${ctx.dis()}>${f.hasPassword ? '登録のやり直しを案内する' : '保護者ページの招待を送る'}</button>` : ''}
-      ${f.status === 'stopped' ? `<button data-action="fam-status" data-status="${f.hasPassword ? 'active' : 'invited'}"${ctx.dis()}>再開する</button>` : `<button class="danger" data-action="fam-status" data-status="stopped"${ctx.dis()}>停止する</button>`}</div>`;
-  h += `<h2>生徒（${f.students.length}人）</h2><div class="list">` + f.students.map(s => editing === s.id
-    ? `<div><form class="stack" data-form="stu-update" data-id="${esc(s.id)}" data-version="${s.version}" style="grid-column:1/-1">${studentInputs(esc, s)}<div class="row"><button class="primary"${ctx.dis()}>保存</button><button type="button" data-action="stu-cancel">やめる</button></div></form></div>`
-    : `<div><div><strong>${esc(s.name)}</strong> ${tag(STUDENT_STATUS[s.status])}${s.testOnly ? '<span class="tag gray">テスト</span>' : ''}
-      <div class="small muted">${esc(s.grade || '学年なし')}・${esc(s.school || '学校なし')}・${MODE[s.deliveryMode || '']}・基本単価 ${yen(s.baseRate30)}（30分）</div>
-      ${s.note ? `<div class="small">${esc(s.note)}</div>` : ''}</div>
-      <div class="row"><button data-action="stu-edit" data-id="${esc(s.id)}"${ctx.dis()}>編集</button>
-      <button data-action="pv-open" data-kind="student" data-id="${esc(s.id)}">生徒ページを見る（プレビュー）</button>
-      <button data-action="copy" data-text="${esc(s.link)}">専用リンクをコピー</button>
-      <button data-action="stu-newlink" data-id="${esc(s.id)}" data-version="${s.version}"${ctx.dis()}>リンクを作り直す</button>
-      <button data-action="stu-move-open" data-id="${esc(s.id)}"${ctx.dis()}>別の家族へ移す</button></div>
-      ${editing === 'move:' + s.id ? `<form class="row" data-form="stu-move" data-id="${esc(s.id)}" data-version="${s.version}" style="grid-column:1/-1"><select name="familyId">${(list || []).filter(x => x.id !== f.id).map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select><button class="primary"${ctx.dis()}>移す</button><button type="button" data-action="stu-cancel">やめる</button></form>` : ''}</div>`).join('') + '</div>';
-  h += `<h2>生徒を足す</h2><form class="stack" data-form="stu-create">${studentInputs(esc, { status: 'enrolled' })}<button class="primary"${ctx.dis()}>この家族に生徒を足す</button></form>`;
-  return h;
+  h += '<h2>保護者</h2><div class="rows">' + rowButton(esc, 'fam-sheet', { mode: 'family', id: f.id }, esc(f.guardianName || '保護者名なし'), `${esc(f.email || 'メールなし')}${f.phone ? '・' + esc(f.phone) : ''}・保護者ページ ${f.hasPassword ? '登録済み' : '未登録'}${f.note ? '<br>メモ: ' + esc(f.note) : ''}`) + '</div>';
+  h += `<div class="row" style="margin-top:10px"><button data-action="pv-open" data-kind="family" data-id="${esc(f.id)}">保護者ページを見る（プレビュー）</button>${f.email && f.status !== 'stopped' ? `<button data-action="fam-invite"${ctx.dis()}>${f.hasPassword ? '登録のやり直しを案内する' : '保護者ページの招待を送る'}</button>` : ''}
+    ${f.status === 'stopped' ? `<button data-action="fam-status" data-status="${f.hasPassword ? 'active' : 'invited'}"${ctx.dis()}>再開する</button>` : `<button class="danger" data-action="fam-status" data-status="stopped"${ctx.dis()}>停止する</button>`}</div>`;
+  h += `<h2>生徒（${f.students.length}人）</h2><div class="rows">` + f.students.map(s => rowButton(esc, 'fam-sheet', { mode: 'student', id: s.id }, `${esc(s.name)} ${tag(STUDENT_STATUS[s.status])}${s.testOnly ? '<span class="tag gray">テスト</span>' : ''}`,
+    `${esc(s.grade || '学年なし')}・${esc(s.school || '学校なし')}・${MODE[s.deliveryMode || '']}・基本単価 ${yen(s.baseRate30)}（30分）`)).join('') + '</div>';
+  h += `<p style="margin-top:10px"><button data-action="fam-sheet" data-mode="add"${ctx.dis()}>＋ 生徒を足す</button></p>`;
+  return h + familySheet(ctx, f);
+}
+function familySheet(ctx, f) {
+  const { esc } = ctx, m = famSheet && famSheet.mode;
+  if (!m || m === 'create') return '';
+  if (m === 'family') return sheet(esc, '保護者の情報を直す', `<form class="stack" data-form="fam-update">${familyInputs(esc, f)}<button class="primary"${ctx.dis()}>保存</button></form>`, 'fam-close');
+  if (m === 'add') return sheet(esc, '生徒を足す', `<form class="stack" data-form="stu-create">${studentInputs(esc, { status: 'enrolled' })}<button class="primary"${ctx.dis()}>この家族に生徒を足す</button></form>`, 'fam-close');
+  const s = f.students.find(x => x.id === famSheet.id); if (!s) return '';
+  if (m === 'edit') return sheet(esc, s.name + ' を直す', `<form class="stack" data-form="stu-update" data-id="${esc(s.id)}" data-version="${s.version}">${studentInputs(esc, s)}<div class="row"><button class="primary"${ctx.dis()}>保存</button><button type="button" data-action="fam-sheet" data-mode="student" data-id="${esc(s.id)}">やめる</button></div></form>`, 'fam-close');
+  if (m === 'move') return sheet(esc, s.name + ' を別の家族へ移す', `<form class="stack" data-form="stu-move" data-id="${esc(s.id)}" data-version="${s.version}"><label>移す先の家族<select name="familyId">${(list || []).filter(x => x.id !== f.id).map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><div class="row"><button class="primary"${ctx.dis()}>移す</button><button type="button" data-action="fam-sheet" data-mode="student" data-id="${esc(s.id)}">やめる</button></div></form>`, 'fam-close');
+  return sheet(esc, s.name, `<p class="small muted" style="margin-top:0">${esc(s.grade || '学年なし')}・${esc(s.school || '学校なし')}・${MODE[s.deliveryMode || '']}・基本単価 ${yen(s.baseRate30)}（30分）${s.note ? '<br>メモ: ' + esc(s.note) : ''}</p>
+    <div class="stack"><a class="btn" href="#student=${encodeURIComponent(s.id)}">生徒の画面を開く</a>
+    <button data-action="fam-sheet" data-mode="edit" data-id="${esc(s.id)}"${ctx.dis()}>登録内容を直す</button>
+    <button data-action="pv-open" data-kind="student" data-id="${esc(s.id)}">生徒ページを見る（プレビュー）</button>
+    <button data-action="copy" data-text="${esc(s.link)}">専用リンクをコピー</button>
+    <button data-action="stu-newlink" data-id="${esc(s.id)}" data-version="${s.version}"${ctx.dis()}>専用リンクを作り直す</button>
+    <button data-action="fam-sheet" data-mode="move" data-id="${esc(s.id)}"${ctx.dis()}>別の家族へ移す</button></div>`, 'fam-close');
 }
 
 async function load(ctx) {
@@ -90,19 +96,19 @@ export async function familiesSubmit(ctx, kind, el) {
   let r;
   if (kind === 'fam-create') {
     r = await ctx.call('admin/families/create', v);
-    if (r.ok) { openCreate = false; list = null; location.hash = '#family=' + encodeURIComponent(r.family.id); ctx.say('家族を登録しました。続けて生徒を足してください', 'ok'); return true; }
+    if (r.ok) { famSheet = null; list = null; location.hash = '#family=' + encodeURIComponent(r.family.id); ctx.say('家族を登録しました。続けて生徒を足してください', 'ok'); return true; }
   } else if (kind === 'fam-update') {
     r = await ctx.call('admin/families/update', { id: detail.id, version: detail.version, ...v });
-    if (r.ok) { detail = null; list = null; ctx.say('保存しました', 'ok'); return true; }
+    if (r.ok) { famSheet = null; detail = null; list = null; ctx.say('保存しました', 'ok'); return true; }
   } else if (kind === 'stu-create') {
     r = await ctx.call('admin/students/create', { familyId: detail.id, ...studentBody(v) });
-    if (r.ok) { detail = null; list = null; ctx.say(r.student.name + ' さんを足しました', 'ok'); return true; }
+    if (r.ok) { famSheet = null; detail = null; list = null; ctx.say(r.student.name + ' さんを足しました', 'ok'); return true; }
   } else if (kind === 'stu-update') {
     r = await ctx.call('admin/students/update', { id: el.dataset.id, version: Number(el.dataset.version), ...studentBody(v) });
-    if (r.ok) { editing = null; detail = null; list = null; ctx.say('保存しました', 'ok'); return true; }
+    if (r.ok) { famSheet = null; detail = null; list = null; ctx.say('保存しました', 'ok'); return true; }
   } else if (kind === 'stu-move') {
     r = await ctx.call('admin/students/move', { id: el.dataset.id, version: Number(el.dataset.version), familyId: v.familyId });
-    if (r.ok) { editing = null; detail = null; list = null; ctx.say(r.student.name + ' さんを移しました', 'ok'); return true; }
+    if (r.ok) { famSheet = null; detail = null; list = null; ctx.say(r.student.name + ' さんを移しました', 'ok'); return true; }
   } else return false;
   if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
   return true;
@@ -111,10 +117,8 @@ export async function familiesSubmit(ctx, kind, el) {
 // 押す（ボタン）。扱ったら true
 export async function familiesClick(ctx, a, b) {
   let r;
-  if (a === 'fam-create-toggle') { openCreate = !openCreate; ctx.say(''); return true; }
-  if (a === 'stu-edit') { editing = b.dataset.id; return true; }
-  if (a === 'stu-move-open') { editing = 'move:' + b.dataset.id; return true; }
-  if (a === 'stu-cancel') { editing = null; return true; }
+  if (a === 'fam-sheet') { famSheet = { mode: b.dataset.mode, id: b.dataset.id || '' }; ctx.say(''); return true; }
+  if (a === 'fam-close') { famSheet = null; return true; }
   if (a === 'fam-invite') {
     r = await ctx.call('admin/families/invite', { id: detail.id });
     if (r.ok) { shown = { text: r.mailHeld ? '招待のリンクを作りました。まだ切り替え前のため、メールは実際には送っていません。試すときはこのリンクを使ってください（7日有効・1回だけ）。' : '招待のメールを送りました。届かないときは、このリンクを LINE などで渡してください（7日有効・1回だけ）。', url: r.inviteUrl }; ctx.say(''); return true; }
@@ -125,7 +129,7 @@ export async function familiesClick(ctx, a, b) {
   } else if (a === 'stu-newlink') {
     if (!confirm('専用リンクを作り直しますか？ 今のリンクはすぐに使えなくなります。生徒に新しいリンクを渡してください。')) return true;
     r = await ctx.call('admin/students/newLink', { id: b.dataset.id, version: Number(b.dataset.version) });
-    if (r.ok) { detail = null; shown = { text: r.student.name + ' さんの新しい専用リンクです。', url: r.student.link }; ctx.say(''); return true; }
+    if (r.ok) { famSheet = null; detail = null; shown = { text: r.student.name + ' さんの新しい専用リンクです。', url: r.student.link }; ctx.say(''); return true; }
   } else return false;
   if (r && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
   return true;
@@ -136,4 +140,4 @@ export function familiesInput(ctx, name, el) {
   const again = document.querySelector('[data-input="fam-query"]'); if (again) { again.focus(); again.setSelectionRange(pos, pos); }
   return true;
 }
-export function leaveFamilies() { shown = null; editing = null; }
+export function leaveFamilies() { shown = null; famSheet = null; }

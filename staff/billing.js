@@ -1,9 +1,11 @@
 // スタッフの画面: 授業計画（#plans）と請求（#billing、キャンセル料を含む）。5段目。教室管理者だけ。設定の「授業の種類と標準料金」（#kinds）も。
 // 計画は月ごとに生徒の行を並べる。請求は月ごとに家族の行を並べ、開くと内訳。
-import { sheet, rowButton } from '/staff/ui.js?v=20261002-ux7';
-let plans = null, planMonth = '', editing = '', consentFor = '', addFor = '', kindOpen = null;
+import { sheet, rowButton } from '/staff/ui.js?v=20261002-ux8';
+// 下から出る画面: lineOpen（計画の行）・editing（直す）・consentFor（承諾を記録）・addFor（足す）・openFamily（請求の内訳）・feeOpen（キャンセル料）
+let plans = null, planMonth = '', editing = '', consentFor = '', addFor = '', kindOpen = null, lineOpen = '', feeOpen = '';
 let bill = null, billMonth = '', openFamily = '', detail = null, fees = null;
-export function resetBilling() { kindOpen = null; plans = null; bill = null; detail = null; fees = null; editing = ''; consentFor = ''; addFor = ''; openFamily = ''; }
+export function leaveBilling() { kindOpen = null; lineOpen = editing = consentFor = addFor = openFamily = feeOpen = ''; }
+export function resetBilling() { kindOpen = null; lineOpen = feeOpen = ''; plans = null; bill = null; detail = null; fees = null; editing = ''; consentFor = ''; addFor = ''; openFamily = ''; }
 
 const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
 const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
@@ -27,7 +29,7 @@ function needPlans(ctx) {
 export function plansPage(ctx) {
   const { esc } = ctx;
   needPlans(ctx);
-  let h = `<h1>授業計画</h1><p class="sub">月ごとの授業計画（科目・回数・1回の時間・1回の授業料）。下書きを作って家族にお知らせし、保護者が承認します。料金は承認した計画で決まります。</p>${ctx.notice()}${monthPicker(planMonth, 'pl-month')}`;
+  let h = `<div class="page-head"><h1>授業計画</h1></div><p class="sub" style="margin-top:0">月ごとの授業計画（科目・回数・1回の時間・1回の授業料）。下書きを作って家族にお知らせし、保護者が承認します。料金は承認した計画で決まります。</p>${ctx.notice()}${monthPicker(planMonth, 'pl-month')}`;
   if (plans.loading) return h + '<p class="muted">読み込んでいます…</p>';
   h += `<p><button data-action="pl-copy"${ctx.dis()}>先月と同じ内容で下書きを作る（在籍の全員）</button></p>`;
   const byFamily = {};
@@ -40,6 +42,7 @@ export function plansPage(ctx) {
     h += '</div>';
   }
   if (!plans.students.length) h += '<p class="muted">在籍の生徒がいません。</p>';
+  h += planSheet(ctx);
   h += '<p class="small muted" style="margin-top:16px">授業の種類と標準料金は「設定」にあります（<a href="#kinds">開く</a>）。</p>';
   return h;
 }
@@ -47,27 +50,42 @@ function studentPlans(ctx, s) {
   const { esc } = ctx;
   let h = `<div><h3 style="margin:8px 0 4px">${esc(s.name)} <span class="small muted">基本単価 ${yen(s.baseRate30)}/30分${s.status === 'paused' ? '・休会' : ''}</span></h3>`;
   if (s.unplanned) h += `<p class="small notice">計画に入っていない授業が ${s.unplanned}件あります（承認がないと請求できません）。</p>`;
-  if (s.lines.length) h += '<div class="list">' + s.lines.map(l => lineRow(ctx, s, l)).join('') + '</div>';
+  if (s.lines.length) h += '<div class="rows">' + s.lines.map(l => lineRow(ctx, s, l)).join('') + '</div>';
   else h += '<p class="small muted">この月の計画はまだありません。</p>';
-  h += addFor === s.id ? lineForm(ctx, s, null) : `<p><button data-action="pl-add" data-id="${esc(s.id)}"${ctx.dis()}>＋ 計画を足す</button></p>`;
+  h += `<p style="margin:6px 0 4px"><button class="small-btn" data-action="pl-add" data-id="${esc(s.id)}"${ctx.dis()}>＋ 計画を足す</button></p>`;
   return h + '</div>';
 }
+const lineCount = l => l.status === 'approved' && l.approvedCount !== l.count ? `${l.approvedCount}回（お知らせ ${l.count}回）` : `${l.count}回`;
+const lineWhole = l => l.startDate === plans.month + '-01' && l.endDate === monthEnd(plans.month);
 function lineRow(ctx, s, l) {
   const { esc } = ctx, [label, cls] = LINE_STATUS[l.status];
-  const whole = l.startDate === plans.month + '-01' && l.endDate === monthEnd(plans.month);
-  const count = l.status === 'approved' && l.approvedCount !== l.count ? `${l.approvedCount}回（お知らせ ${l.count}回）` : `${l.count}回`;
-  let h = `<div><div><strong>${esc(l.subject)}</strong>${l.kind !== '通常' ? ` <span class="tag gray">${esc(l.kind)}</span>` : ''}${l.parentId ? ' <span class="tag">追加</span>' : ''} <span class="tag ${cls}">${label}</span>
-    <div class="small">${whole ? '' : md(l.startDate) + '〜' + md(l.endDate) + '・'}${count}・1回 ${l.minutes}分 ${yen(l.fee)}　<span class="muted">決定・実施 ${l.assigned}回${l.tentative ? `・仮予定 ${l.tentative}回` : ''}</span></div>
-    ${l.comment ? `<div class="small muted">${esc(l.comment)}</div>` : ''}
-    ${l.status === 'approved' || l.status === 'declined' ? `<div class="small muted">${l.approvedBy === 'family' ? '保護者ページで' : esc(l.approvedVia) + 'で'}${l.status === 'approved' ? '承認' : '見送り'}（${esc(l.consentDate)}）${l.approvalNote ? '・' + esc(l.approvalNote) : ''}${l.familyAck === 'confirmed' ? '・保護者が確認済み' : l.familyAck === 'inquiry' ? '・<strong>保護者から問い合わせ</strong>: ' + esc(l.familyAckNote) : l.approvedBy === 'staff' ? '・保護者の確認待ち' : ''}</div>` : ''}</div>
-    <div class="row">${l.locked ? '<span class="small muted">請求済みの授業あり</span>' : `<button data-action="pl-edit" data-id="${esc(l.id)}"${ctx.dis()}>直す</button>`}
+  return rowButton(esc, 'pl-line', { id: l.id }, `${esc(l.subject)}${l.kind !== '通常' ? ` <span class="tag gray">${esc(l.kind)}</span>` : ''}${l.parentId ? ' <span class="tag">追加</span>' : ''} <span class="tag ${cls}">${label}</span>`,
+    `${lineWhole(l) ? '' : md(l.startDate) + '〜' + md(l.endDate) + '・'}${lineCount(l)}・1回 ${l.minutes}分 ${yen(l.fee)}・決定・実施 ${l.assigned}回${l.tentative ? `・仮予定 ${l.tentative}回` : ''}${l.familyAck === 'inquiry' ? '・<strong style="color:var(--danger)">保護者から問い合わせ</strong>' : ''}`);
+}
+// 計画の行を押したとき・直す・承諾を記録・足す（下から出る画面）
+function planSheet(ctx) {
+  const { esc } = ctx;
+  const find = id => { for (const s of plans.students) { const l = s.lines.find(x => x.id === id); if (l) return [s, l]; } return []; };
+  if (addFor) { const s = plans.students.find(x => x.id === addFor); return s ? sheet(esc, s.name + ' の計画を足す', lineForm(ctx, s, null), 'pl-close') : ''; }
+  if (editing) { const [s, l] = find(editing); return l ? sheet(esc, `${s.name} ${l.subject} を直す`, lineForm(ctx, s, l), 'pl-close') : ''; }
+  if (consentFor) {
+    const [s, l] = find(consentFor); if (!l) return '';
+    return sheet(esc, `${s.name} ${l.subject} の承諾を記録`, `<form class="stack" data-form="pl-consent" data-id="${esc(l.id)}" data-version="${l.version}"><div class="small muted">LINE・電話・対面で承諾をもらったときに記録します。保護者ページにも出て、保護者が確かめられます。</div>
+      <div class="row"><label style="flex:1">承諾をもらった日<input type="date" name="consentDate" required></label><label style="flex:1">方法<input name="via" maxlength="40" placeholder="LINE・電話・対面" required></label></div><label>回数<input type="number" name="approvedCount" min="1" max="${l.count}" value="${l.count}" style="width:6em"></label>
+      <label>メモ（授業のあとで承諾をもらったときは必須）<input name="note" maxlength="300"></label><div class="row"><button class="primary"${ctx.dis()}>承認として記録</button><button type="button" data-action="pl-close"${ctx.dis()}>やめる</button></div></form>`, 'pl-close');
+  }
+  if (!lineOpen) return '';
+  const [s, l] = find(lineOpen); if (!l) return '';
+  const [label, cls] = LINE_STATUS[l.status];
+  let body = `<p style="margin-top:0"><span class="tag ${cls}">${label}</span>${l.kind !== '通常' ? ` <span class="tag gray">${esc(l.kind)}</span>` : ''}${l.parentId ? ' <span class="tag">追加</span>' : ''}</p>
+    <div class="small">${md(l.startDate)}〜${md(l.endDate)}・${lineCount(l)}・1回 ${l.minutes}分 ${yen(l.fee)}</div><div class="small muted">決定・実施 ${l.assigned}回${l.tentative ? `・仮予定 ${l.tentative}回` : ''}</div>`;
+  if (l.comment) body += `<div class="small" style="margin-top:6px">保護者への説明: ${esc(l.comment)}</div>`;
+  if (l.status === 'approved' || l.status === 'declined') body += `<div class="small muted" style="margin-top:6px">${l.approvedBy === 'family' ? '保護者ページで' : esc(l.approvedVia) + 'で'}${l.status === 'approved' ? '承認' : '見送り'}（${esc(l.consentDate)}）${l.approvalNote ? '・' + esc(l.approvalNote) : ''}${l.familyAck === 'confirmed' ? '・保護者が確認済み' : l.familyAck === 'inquiry' ? '' : l.approvedBy === 'staff' ? '・保護者の確認待ち' : ''}</div>`;
+  if (l.familyAck === 'inquiry') body += `<p class="notice error small">保護者から問い合わせ: ${esc(l.familyAckNote)}</p>`;
+  body += `<div class="row" style="margin-top:14px">${l.locked ? '<span class="small muted">請求済みの授業があるので直せません</span>' : `<button data-action="pl-edit" data-id="${esc(l.id)}"${ctx.dis()}>直す</button>`}
     ${l.status !== 'approved' ? `<button data-action="pl-consent" data-id="${esc(l.id)}"${ctx.dis()}>承諾を記録</button>` : ''}
-    ${l.locked ? '' : `<button class="danger" data-action="pl-delete" data-id="${esc(l.id)}" data-version="${l.version}"${ctx.dis()}>消す</button>`}</div></div>`;
-  if (editing === l.id) h += `<div>${lineForm(ctx, s, l)}</div>`;
-  if (consentFor === l.id) h += `<div><form class="stack sheet" data-form="pl-consent" data-id="${esc(l.id)}" data-version="${l.version}"><div class="small muted">LINE・電話・対面で承諾をもらったときに記録します。保護者ページにも出て、保護者が確かめられます。</div>
-    <div class="row"><label>承諾をもらった日<input type="date" name="consentDate" required></label><label>方法<input name="via" maxlength="40" placeholder="LINE・電話・対面" required></label><label>回数<input type="number" name="approvedCount" min="1" max="${l.count}" value="${l.count}" style="width:6em"></label></div>
-    <label>メモ（授業のあとで承諾をもらったときは必須）<input name="note" maxlength="300"></label><div class="row"><button class="primary"${ctx.dis()}>承認として記録</button><button type="button" data-action="pl-close"${ctx.dis()}>やめる</button></div></form></div>`;
-  return h;
+    ${l.locked ? '' : `<button class="danger" data-action="pl-delete" data-id="${esc(l.id)}" data-version="${l.version}"${ctx.dis()}>消す</button>`}</div>`;
+  return sheet(esc, `${s.name} ${l.subject}`, body, 'pl-close');
 }
 // 承認のお願いを送るボタン（計画・請求の画面で共通）。同じ家族に1日1回まで
 function remindButton(ctx, familyId, n, last) {
@@ -79,7 +97,7 @@ function lineForm(ctx, s, l) {
   const std = kinds.find(k => k.name === (l ? l.kind : '通常')) || {};
   const minutes = l ? l.minutes : std.standardMinutes || 60, fee = l ? l.fee : std.standardFee || Math.round(s.baseRate30 * minutes / 30);
   const parents = s.lines.filter(x => !x.parentId && x.status !== 'declined' && (!l || x.id !== l.id));
-  return `<form class="stack sheet" data-form="pl-save" data-student="${esc(s.id)}"${l ? ` data-id="${esc(l.id)}" data-version="${l.version}"` : ''}>
+  return `<form class="stack" data-form="pl-save" data-student="${esc(s.id)}"${l ? ` data-id="${esc(l.id)}" data-version="${l.version}"` : ''}>
     ${l && l.status !== 'draft' ? '<p class="small notice">直すと承認は消えて下書きに戻ります。もう一度お知らせしてください。</p>' : ''}
     <div class="row"><label style="flex:1">科目<input name="subject" maxlength="30" value="${esc(l ? l.subject : '')}" required></label>
     <label>種類<select name="kind">${(kinds.length ? kinds : [{ name: '通常' }]).map(k => `<option${(l ? l.kind : '通常') === k.name ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
@@ -121,20 +139,29 @@ export function billingPage(ctx) {
     ctx.call('billing/month', { month: want }).then(r => { if (billMonth !== want) return; bill = r.ok ? r : { month: want, families: [], voided: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); });
   }
   if (!fees) { fees = { loading: true }; ctx.call('billing/fees/list').then(r => { fees = r.ok ? r : { fees: [] }; ctx.render(); }); }
-  let h = `<h1>請求</h1><p class="sub">家族ごと・月ごとの請求。月の分は翌月3日の0時10分に自動で確定します（確かめることがある家族は止まります）。1日・2日に内容を確かめてください。</p>${ctx.notice()}`;
+  let h = `<div class="page-head"><h1>請求</h1></div><p class="sub" style="margin-top:0">家族ごと・月ごとの請求。月の分は翌月3日の0時10分に自動で確定します（確かめることがある家族は止まります）。1日・2日に内容を確かめてください。</p>${ctx.notice()}`;
   h += feesPart(ctx);
   h += `<h2>月の請求</h2>${monthPicker(billMonth, 'bl-month')}`;
   if (bill.loading) return h + '<p class="muted">読み込んでいます…</p>';
   if (!bill.families.length) h += '<p class="muted">この月に請求するものはありません。</p>';
-  h += '<div class="list">' + bill.families.map(f => {
-    const st = f.invoice ? INV_STATUS[f.invoice.status] : f.preview.issues.length ? ['確かめることあり', 'danger'] : f.preview.pendingCount ? ['承認待ちの授業あり', 'warn'] : ['確定前', 'gray'];
-    return `<div><div><strong>${esc(f.name)}</strong> <span class="tag ${st[1]}">${st[0]}</span> ${yen(f.invoice ? f.invoice.total : f.preview.total)}
-      ${f.preview && f.preview.issues.length ? `<ul class="small">${f.preview.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}${f.preview && f.preview.pendingCount ? `<div class="small muted">計画の承認がない授業 ${f.preview.pendingCount}件（請求に入りません）</div>` : ''}${f.preview && f.proposedPlans ? `<div class="row">${remindButton(ctx, f.familyId, f.proposedPlans, f.remindedAt)}</div>` : ''}</div>
-      <div><button data-action="bl-open" data-id="${esc(f.familyId)}"${ctx.dis()}>${openFamily === f.familyId ? '閉じる' : '内訳'}</button></div></div>${openFamily === f.familyId ? `<div>${detailPart(ctx)}</div>` : ''}`;
+  h += '<div class="rows">' + bill.families.map(f => {
+    const st = invStatus(f), n = f.preview ? f.preview.issues.length : 0;
+    return rowButton(esc, 'bl-open', { id: f.familyId }, `${esc(f.name)} <span class="tag ${st[1]}">${st[0]}</span>`,
+      `${yen(f.invoice ? f.invoice.total : f.preview.total)}${n ? `・確かめること ${n}件` : ''}${f.preview && f.preview.pendingCount ? `・承認のない授業 ${f.preview.pendingCount}件` : ''}`);
   }).join('') + '</div>';
+  const f = openFamily && bill.families.find(x => x.familyId === openFamily);
+  if (f) {
+    const st = invStatus(f);
+    let body = `<p style="margin-top:0"><span class="tag ${st[1]}">${st[0]}</span></p>`;
+    if (f.preview && f.preview.issues.length) body += `<ul class="small">${f.preview.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`;
+    if (f.preview && f.preview.pendingCount) body += `<div class="small muted">計画の承認がない授業 ${f.preview.pendingCount}件（請求に入りません）</div>`;
+    if (f.preview && f.proposedPlans) body += `<div class="row" style="margin:6px 0">${remindButton(ctx, f.familyId, f.proposedPlans, f.remindedAt)}</div>`;
+    h += sheet(esc, `${f.name}（${monthLabel(billMonth)}）`, body + detailPart(ctx), 'bl-close', { wide: true });
+  }
   if (bill.voided.length) h += `<h3>取り消した請求</h3><ul class="small">${bill.voided.map(v => `<li>${esc(v.name)} ${yen(v.total)}（${esc(v.voidReason)}）</li>`).join('')}</ul>`;
   return h;
 }
+const invStatus = f => f.invoice ? INV_STATUS[f.invoice.status] : f.preview.issues.length ? ['確かめることあり', 'danger'] : f.preview.pendingCount ? ['承認待ちの授業あり', 'warn'] : ['確定前', 'gray'];
 function detailPart(ctx) {
   const { esc } = ctx;
   if (!detail || detail.familyId !== openFamily || detail.month !== billMonth) {
@@ -147,7 +174,7 @@ function detailPart(ctx) {
   if (detail.invoice) {
     const v = detail.invoice, byStudent = {};
     for (const i of detail.items) (byStudent[i.studentName] = byStudent[i.studentName] || []).push(i);
-    let h = `<div class="sheet stack"><div>確定 ${esc(v.confirmedAt.slice(0, 10))}（${v.confirmedBy === 'auto' ? '自動' : v.confirmedBy === 'legacy' ? '今の仕組みから写し' : '手で確定'}）${v.reportedAt ? '・振込の連絡 ' + esc(v.reportedAt.slice(0, 10)) : ''}${v.paidOn ? '・入金 ' + esc(v.paidOn) + '（' + esc(v.paidMethod) + '）' : ''}</div>`;
+    let h = `<div class="stack"><div>確定 ${esc(v.confirmedAt.slice(0, 10))}（${v.confirmedBy === 'auto' ? '自動' : v.confirmedBy === 'legacy' ? '今の仕組みから写し' : '手で確定'}）${v.reportedAt ? '・振込の連絡 ' + esc(v.reportedAt.slice(0, 10)) : ''}${v.paidOn ? '・入金 ' + esc(v.paidOn) + '（' + esc(v.paidMethod) + '）' : ''}</div>`;
     for (const [name, items] of Object.entries(byStudent)) h += `<div><strong>${esc(name)}</strong><table class="small" style="width:100%">${items.map(row).join('')}</table></div>`;
     h += `<div><strong>合計 ${yen(v.total)}</strong></div>`;
     if (v.status === 'paid') h += `<form class="row" data-form="bl-unpaid" data-id="${esc(v.id)}" data-version="${v.version}"><input name="reason" maxlength="300" placeholder="入金の記録を戻す理由" style="flex:1" required><button${ctx.dis()}>入金の記録を戻す</button></form>`;
@@ -156,7 +183,7 @@ function detailPart(ctx) {
     return h + '</div>';
   }
   const p = detail.preview;
-  let h = '<div class="sheet stack">';
+  let h = '<div class="stack">';
   for (const s of p.students) {
     h += `<div><strong>${esc(s.name)}</strong> ${yen(s.total)}<table class="small" style="width:100%">${s.items.map(row).join('')}</table>`;
     if (s.pending.length) h += `<div class="small muted">計画の承認がない授業（請求に入りません。承認されたら次の請求に入ります）: ${s.pending.map(x => `${md(x.date)} ${esc(x.subject)}（見込み ${yen(x.estimate)}）`).join('、')}</div>`;
@@ -174,16 +201,21 @@ function feesPart(ctx) {
   if (fees.loading) return '';
   const open = fees.fees.filter(f => f.decision === 'pending' || f.reliefStatus === 'pending');
   const rest = fees.fees.filter(f => !open.includes(f) && !f.invoiceId);
-  let h = `<h2>キャンセル料${open.length ? `（判断待ち ${open.length}件）` : ''}</h2>`;
+  let h = `<h2>キャンセル料${open.length ? ` <span class="count">${open.length}</span>` : ''}</h2>`;
   if (!fees.fees.length) return h + '<p class="small muted">請求前のキャンセル料はありません。</p>';
-  const head = f => `<strong>${esc(f.studentName)}</strong> ${md(f.date)} ${esc(f.start)} ${esc(f.subject)} <span class="tag gray">${FEE_TYPE[f.type]}</span> 規定額 ${yen(f.standardAmount)}${f.receivedAt ? `<div class="small muted">連絡 ${esc(f.receivedAt.slice(5, 16).replace('T', ' '))}</div>` : ''}`;
-  h += '<div class="list">' + open.map(f => f.reliefStatus === 'pending'
-    ? `<div><div>${head(f)}<div class="small">いまの金額 ${yen(f.amount)}・<strong>減額・免除の申請</strong>: ${esc(f.reliefReason)}</div>
-      <form class="stack" data-form="fee-relief" data-id="${esc(f.id)}" data-version="${f.version}"><div class="row"><select name="result"><option value="unchanged">そのまま</option><option value="reduced">減額する</option><option value="waived">免除する</option></select><input type="number" name="amount" min="0" placeholder="減額後の金額" style="width:9em"></div>
-      <input name="response" maxlength="300" placeholder="回答（保護者に見えます）" required><button class="primary"${ctx.dis()}>回答する</button></form></div></div>`
-    : `<div><div>${head(f)}<form class="stack" data-form="fee-decide" data-id="${esc(f.id)}" data-version="${f.version}"><div class="row"><select name="decision"><option value="charge">規定どおり（${yen(f.standardAmount)}）</option><option value="adjust">減額する</option><option value="waive">免除する</option></select><input type="number" name="amount" min="0" placeholder="減額後の金額" style="width:9em"></div>
-      <input name="note" maxlength="300" placeholder="減額・免除の理由（保護者に見えます）"><button class="primary"${ctx.dis()}>決める</button></form></div></div>`).join('')
-    + rest.map(f => `<div><div>${head(f)}<div class="small">${f.decision === 'charge' ? '規定どおり' : f.decision === 'waive' ? '免除' : '減額'} ${yen(f.amount)}${f.note ? '・' + esc(f.note) : ''}${f.reliefStatus ? '・申請への回答済み' : ''}（請求前）</div></div></div>`).join('') + '</div>';
+  const title = f => `${esc(f.studentName)} ${md(f.date)} ${esc(f.start)} ${esc(f.subject)}`;
+  h += '<div class="rows">' + open.map(f => rowButton(esc, 'fee-open', { id: f.id }, `${title(f)} <span class="tag danger">${f.reliefStatus === 'pending' ? '減額・免除の申請' : '判断待ち'}</span>`, `${FEE_TYPE[f.type]}・規定額 ${yen(f.standardAmount)}`)).join('')
+    + rest.map(f => `<div class="todo"><span class="b"><strong>${title(f)}</strong><small class="muted">${f.decision === 'charge' ? '規定どおり' : f.decision === 'waive' ? '免除' : '減額'} ${yen(f.amount)}${f.note ? '・' + esc(f.note) : ''}${f.reliefStatus ? '・申請への回答済み' : ''}（請求前）</small></span></div>`).join('') + '</div>';
+  const f = feeOpen && open.find(x => x.id === feeOpen);
+  if (f) {
+    let body = `<div class="small">${FEE_TYPE[f.type]}・規定額 ${yen(f.standardAmount)}${f.receivedAt ? `<br><span class="muted">連絡 ${esc(f.receivedAt.slice(5, 16).replace('T', ' '))}</span>` : ''}</div>`;
+    body += f.reliefStatus === 'pending'
+      ? `<p class="small">いまの金額 ${yen(f.amount)}<br><strong>減額・免除の申請</strong>: ${esc(f.reliefReason)}</p><form class="stack" data-form="fee-relief" data-id="${esc(f.id)}" data-version="${f.version}"><div class="row"><select name="result" style="flex:1"><option value="unchanged">そのまま</option><option value="reduced">減額する</option><option value="waived">免除する</option></select><input type="number" name="amount" min="0" placeholder="減額後の金額" style="flex:1"></div>
+        <label>回答（保護者に見えます）<input name="response" maxlength="300" required></label><button class="primary"${ctx.dis()}>回答する</button></form>`
+      : `<form class="stack" data-form="fee-decide" data-id="${esc(f.id)}" data-version="${f.version}" style="margin-top:10px"><div class="row"><select name="decision" style="flex:1"><option value="charge">規定どおり（${yen(f.standardAmount)}）</option><option value="adjust">減額する</option><option value="waive">免除する</option></select><input type="number" name="amount" min="0" placeholder="減額後の金額" style="flex:1"></div>
+        <label>減額・免除の理由（保護者に見えます）<input name="note" maxlength="300"></label><button class="primary"${ctx.dis()}>決める</button></form>`;
+    h += sheet(esc, `キャンセル料 ${f.studentName} ${md(f.date)}`, body, 'fee-close');
+  }
   return h;
 }
 
@@ -194,19 +226,19 @@ export async function billingSubmit(ctx, kind, el) {
   let r, msg;
   if (kind === 'pl-save') {
     r = await ctx.call('billing/plans/save', { id, version: id ? version : undefined, studentId: el.dataset.student, subject: v.subject, kind: v.kind, count: num(v.count), minutes: num(v.minutes), fee: num(v.fee), startDate: v.startDate, endDate: v.endDate, parentId: v.parentId, comment: v.comment });
-    msg = '下書きにしました。「お知らせする」で家族に送ります'; if (r.ok) { editing = ''; addFor = ''; plans = null; }
+    msg = '下書きにしました。「お知らせする」で家族に送ります'; if (r.ok) { editing = addFor = lineOpen = ''; plans = null; }
   } else if (kind === 'pl-consent') {
     r = await ctx.call('billing/plans/consent', { id, version, consentDate: v.consentDate, via: v.via, approvedCount: num(v.approvedCount), note: v.note });
-    msg = '承認として記録しました'; if (r.ok) { consentFor = ''; plans = null; }
+    msg = '承認として記録しました'; if (r.ok) { consentFor = lineOpen = ''; plans = null; }
   } else if (kind === 'kind-save') {
     r = await ctx.call('billing/kinds/save', { name: v.name, standardMinutes: num(v.standardMinutes) || 0, standardFee: num(v.standardFee) || 0, active: v.active === '1' });
     msg = '授業の種類を保存しました'; if (r.ok) { plans = null; kindOpen = null; }
   } else if (kind === 'fee-decide') {
     r = await ctx.call('billing/fees/decide', { id, version, decision: v.decision, amount: num(v.amount), note: v.note });
-    msg = 'キャンセル料を決めました'; if (r.ok) { fees = null; bill = null; }
+    msg = 'キャンセル料を決めました'; if (r.ok) { fees = null; bill = null; feeOpen = ''; }
   } else if (kind === 'fee-relief') {
     r = await ctx.call('billing/fees/relief', { id, version, result: v.result, amount: num(v.amount), response: v.response });
-    msg = '申請に回答しました'; if (r.ok) { fees = null; bill = null; }
+    msg = '申請に回答しました'; if (r.ok) { fees = null; bill = null; feeOpen = ''; }
   } else if (kind === 'bl-paid') {
     r = await ctx.call('billing/paid', { id, version, paidOn: v.paidOn, method: v.method }); msg = '入金を記録しました'; if (r.ok) { bill = null; detail = null; }
   } else if (kind === 'bl-unpaid') {
@@ -222,13 +254,17 @@ export async function billingClick(ctx, a, b) {
   let r, msg;
   if (a === 'kind-open') { kindOpen = b.dataset.name; return true; }
   if (a === 'kind-close') { kindOpen = null; return true; }
-  if (a === 'pl-month') { planMonth = shift(planMonth, Number(b.dataset.d)); editing = consentFor = addFor = ''; return true; }
+  if (a === 'pl-month') { planMonth = shift(planMonth, Number(b.dataset.d)); editing = consentFor = addFor = lineOpen = ''; return true; }
+  if (a === 'pl-line') { lineOpen = b.dataset.id; editing = consentFor = addFor = ''; ctx.say(''); return true; }
+  if (a === 'fee-open') { feeOpen = b.dataset.id; ctx.say(''); return true; }
+  if (a === 'fee-close') { feeOpen = ''; return true; }
+  if (a === 'bl-close') { openFamily = ''; detail = null; return true; }
   if (a === 'bl-month') { billMonth = shift(billMonth, Number(b.dataset.d)); openFamily = ''; return true; }
-  if (a === 'pl-add') { addFor = b.dataset.id; editing = consentFor = ''; return true; }
+  if (a === 'pl-add') { addFor = b.dataset.id; editing = consentFor = lineOpen = ''; return true; }
   if (a === 'pl-edit') { editing = b.dataset.id; consentFor = addFor = ''; return true; }
   if (a === 'pl-consent') { consentFor = b.dataset.id; editing = addFor = ''; return true; }
-  if (a === 'pl-close') { editing = consentFor = addFor = ''; return true; }
-  if (a === 'bl-open') { openFamily = openFamily === b.dataset.id ? '' : b.dataset.id; detail = null; return true; }
+  if (a === 'pl-close') { editing = consentFor = addFor = lineOpen = ''; return true; }
+  if (a === 'bl-open') { openFamily = b.dataset.id; detail = null; ctx.say(''); return true; }
   if (a === 'pl-copy') {
     if (!confirm(`${monthLabel(planMonth)}の計画の下書きを、先月と同じ内容で作りますか？ もう計画がある科目は作りません。`)) return true;
     r = await ctx.call('billing/plans/copyMonth', { month: planMonth }); msg = r.ok ? `下書きを ${r.created}件 作りました` : ''; if (r.ok) plans = null;
@@ -240,7 +276,7 @@ export async function billingClick(ctx, a, b) {
     r = await ctx.call('billing/plans/remind', { familyId: b.dataset.family }); msg = r.ok ? `承認のお願いを送りました（${r.reminded}件）` : ''; if (r.ok) { plans = null; bill = null; }
   } else if (a === 'pl-delete') {
     if (!confirm('この計画を消しますか？')) return true;
-    r = await ctx.call('billing/plans/delete', { id: b.dataset.id, version: Number(b.dataset.version) }); msg = '消しました'; if (r.ok) plans = null;
+    r = await ctx.call('billing/plans/delete', { id: b.dataset.id, version: Number(b.dataset.version) }); msg = '消しました'; if (r.ok) { plans = null; lineOpen = ''; }
   } else if (a === 'bl-confirm') {
     if (!confirm('この内容で請求を確定しますか？ 保護者ページに出て、メールでお知らせします。')) return true;
     r = await ctx.call('billing/confirm', { familyId: openFamily, month: billMonth, expectedTotal: Number(b.dataset.total) }); msg = '請求を確定しました'; if (r.ok) { bill = null; detail = null; fees = null; }

@@ -192,3 +192,14 @@ section.step h2 { margin-top: 12px; }
 a.back { display: inline-block; margin: 14px 0 -14px; padding: 4px 0; font-size: 14px; color: var(--primary); text-decoration: none; }
 .rows button.todo { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; text-align: left; font: inherit; color: var(--ink); }
 .bsheet h3 { font-size: 14px; margin: 16px 0 6px; }
+/* ---- 下から出る画面: 描き直しでは動かさない・広い版（表のあるもの） ---- */
+.bsheet.still { animation: none; }
+@media (min-width: 720px) { .bsheet.wide { width: min(820px, 94vw); } }
+.bsheet .stack > a.btn { text-align: center; }
+/* ---- 書く画面の保存ボタン: 画面の下に貼りつける ---- */
+.actionbar { position: sticky; bottom: 0; z-index: 5; background: var(--paper); border-top: 1px solid var(--line); padding: 10px 0; margin-top: 8px; }
+@media (max-width: 720px) { body.has-tabs .actionbar { bottom: calc(60px + env(safe-area-inset-bottom)); } }
+/* ---- たまに使うものはたたむ ---- */
+details.more { margin: 18px 0; }
+details.more > summary { cursor: pointer; color: var(--primary); font-size: 14px; padding: 6px 0; }
+details.more[open] > summary { margin-bottom: 6px; }
