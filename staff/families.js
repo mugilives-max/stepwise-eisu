@@ -48,7 +48,7 @@ export function familyDetailPage(ctx, id) {
   const { esc } = ctx;
   if (!detail || detail.id !== id) { loadDetail(ctx, id); return '<h1>家族</h1><p class="muted">読み込んでいます…</p>'; }
   const f = detail;
-  let h = `<p class="small"><a href="#families">← 家族と生徒</a></p><h1>${esc(f.name)} ${tag(STATUS[f.status] || ['gray', f.status])}</h1>${ctx.notice()}`;
+  let h = `<h1>${esc(f.name)} ${tag(STATUS[f.status] || ['gray', f.status])}</h1>${ctx.notice()}`;
   if (shown) h += `<div class="notice ok"><p>${esc(shown.text)}</p>${shown.url ? `<p class="copy">${esc(shown.url)}</p><button data-action="copy" data-text="${esc(shown.url)}">リンクをコピー</button>` : ''}</div>`;
   h += `<h2>保護者</h2><form class="stack" data-form="fam-update">${familyInputs(esc, f)}<div class="row"><button class="primary"${ctx.dis()}>保存</button></div></form>
     <p class="small muted">保護者ページ: ${f.hasPassword ? '登録済み（ログインできます）' : '未登録'}</p>

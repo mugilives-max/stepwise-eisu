@@ -1,8 +1,9 @@
-// スタッフの画面: 授業計画（#plans）と請求（#billing、キャンセル料を含む）。5段目。教室管理者だけ。
+// スタッフの画面: 授業計画（#plans）と請求（#billing、キャンセル料を含む）。5段目。教室管理者だけ。設定の「授業の種類と標準料金」（#kinds）も。
 // 計画は月ごとに生徒の行を並べる。請求は月ごとに家族の行を並べ、開くと内訳。
-let plans = null, planMonth = '', editing = '', consentFor = '', addFor = '';
+import { sheet, rowButton } from '/staff/ui.js?v=20261002-ux7';
+let plans = null, planMonth = '', editing = '', consentFor = '', addFor = '', kindOpen = null;
 let bill = null, billMonth = '', openFamily = '', detail = null, fees = null;
-export function resetBilling() { plans = null; bill = null; detail = null; fees = null; editing = ''; consentFor = ''; addFor = ''; openFamily = ''; }
+export function resetBilling() { kindOpen = null; plans = null; bill = null; detail = null; fees = null; editing = ''; consentFor = ''; addFor = ''; openFamily = ''; }
 
 const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
 const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
@@ -16,13 +17,16 @@ const FEE_TYPE = { late: '開始前の連絡', noshow: '開始後・連絡なし
 const monthPicker = (m, action) => `<div class="row"><button data-action="${action}" data-d="-1">◀</button><strong style="min-width:8em;text-align:center">${monthLabel(m)}</strong><button data-action="${action}" data-d="1">▶</button></div>`;
 
 // ---------- 計画 ----------
-export function plansPage(ctx) {
-  const { esc } = ctx;
+function needPlans(ctx) {
   if (!planMonth) planMonth = shift(thisMonth(), new Date(Date.now() + 9 * 3600e3).getUTCDate() >= 15 ? 1 : 0);
   if (!plans || plans.month !== planMonth) {
     const want = planMonth; plans = { month: want, loading: true };
     ctx.call('billing/plans/list', { month: want }).then(r => { if (planMonth !== want) return; plans = r.ok ? r : { month: want, students: [], kinds: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); });
   }
+}
+export function plansPage(ctx) {
+  const { esc } = ctx;
+  needPlans(ctx);
   let h = `<h1>授業計画</h1><p class="sub">月ごとの授業計画（科目・回数・1回の時間・1回の授業料）。下書きを作って家族にお知らせし、保護者が承認します。料金は承認した計画で決まります。</p>${ctx.notice()}${monthPicker(planMonth, 'pl-month')}`;
   if (plans.loading) return h + '<p class="muted">読み込んでいます…</p>';
   h += `<p><button data-action="pl-copy"${ctx.dis()}>先月と同じ内容で下書きを作る（在籍の全員）</button></p>`;
@@ -36,7 +40,7 @@ export function plansPage(ctx) {
     h += '</div>';
   }
   if (!plans.students.length) h += '<p class="muted">在籍の生徒がいません。</p>';
-  h += kindsPart(ctx);
+  h += '<p class="small muted" style="margin-top:16px">授業の種類と標準料金は「設定」にあります（<a href="#kinds">開く</a>）。</p>';
   return h;
 }
 function studentPlans(ctx, s) {
@@ -88,12 +92,24 @@ function lineForm(ctx, s, l) {
     <label>保護者への説明（任意）<input name="comment" maxlength="500" value="${esc(l ? l.comment : '')}" placeholder="例: 2学期中間テストに向けて計算の復習"></label>
     <div class="row"><button class="primary"${ctx.dis()}>${l ? '直して下書きにする' : '下書きを作る'}</button><button type="button" data-action="pl-close"${ctx.dis()}>やめる</button></div></form>`;
 }
-function kindsPart(ctx) {
+// 設定の「授業の種類と標準料金」（#kinds）。種類を押すと下から直す画面
+export function kindsPage(ctx) {
   const { esc } = ctx;
-  return `<h2>授業の種類と標準</h2><p class="small muted">計画を作るときの初期値です。標準の料金が0円なら、生徒の基本単価で計算します。</p><div class="list">` + plans.kinds.map(k => `<div><form class="row" data-form="kind-save" style="flex:1">
-    <strong style="min-width:5em">${esc(k.name)}</strong><input type="hidden" name="name" value="${esc(k.name)}"><label>標準の時間<input type="number" name="standardMinutes" min="0" max="300" step="15" value="${k.standardMinutes}" style="width:6em"></label>
-    <label>標準の料金<input type="number" name="standardFee" min="0" max="100000" value="${k.standardFee}" style="width:7em"></label><label><input type="checkbox" name="active" value="1"${k.active ? ' checked' : ''}> 使う</label><button${ctx.dis()}>保存</button></form></div>`).join('') + `</div>
-    <form class="row" data-form="kind-save" style="margin-top:8px"><input name="name" maxlength="20" placeholder="新しい種類（例: 講習）" required><input type="number" name="standardMinutes" min="0" max="300" step="15" placeholder="標準の時間" style="width:8em"><input type="number" name="standardFee" min="0" max="100000" placeholder="標準の料金" style="width:8em"><input type="hidden" name="active" value="1"><button${ctx.dis()}>足す</button></form>`;
+  needPlans(ctx);
+  let h = `<div class="page-head"><h1>授業の種類と標準料金</h1></div><p class="sub">計画を作るときの初期値です。標準の料金が0円なら、生徒の基本単価で計算します。</p>${ctx.notice()}`;
+  if (plans.loading) return h + '<p class="muted">読み込んでいます…</p>';
+  h += '<div class="rows">' + plans.kinds.map(k => rowButton(esc, 'kind-open', { name: k.name }, `${esc(k.name)}${k.active ? '' : ' <span class="tag gray">使わない</span>'}`,
+    `標準 ${k.standardMinutes ? k.standardMinutes + '分' : '時間なし'}・${k.standardFee ? yen(k.standardFee) : '生徒の基本単価'}`)).join('') + '</div>';
+  h += `<p style="margin-top:12px"><button data-action="kind-open" data-name=""${ctx.dis()}>種類を足す</button></p>`;
+  if (kindOpen !== null) {
+    const k = plans.kinds.find(x => x.name === kindOpen);
+    const body = `<form class="stack" data-form="kind-save">${k ? `<input type="hidden" name="name" value="${esc(k.name)}">` : '<label>名前<input name="name" maxlength="20" placeholder="例: 講習" required></label>'}
+      <div class="row"><label style="flex:1">標準の時間（分）<input type="number" name="standardMinutes" min="0" max="300" step="15" value="${k ? k.standardMinutes : ''}"></label><label style="flex:1">標準の料金（円）<input type="number" name="standardFee" min="0" max="100000" value="${k ? k.standardFee : ''}"></label></div>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="active" value="1"${!k || k.active ? ' checked' : ''} style="width:auto"> 計画で使う</label>
+      <button class="primary"${ctx.dis()}>${k ? '保存' : '足す'}</button></form>`;
+    h += sheet(esc, k ? k.name : '授業の種類を足す', body, 'kind-close');
+  }
+  return h;
 }
 
 // ---------- 請求 ----------
@@ -184,7 +200,7 @@ export async function billingSubmit(ctx, kind, el) {
     msg = '承認として記録しました'; if (r.ok) { consentFor = ''; plans = null; }
   } else if (kind === 'kind-save') {
     r = await ctx.call('billing/kinds/save', { name: v.name, standardMinutes: num(v.standardMinutes) || 0, standardFee: num(v.standardFee) || 0, active: v.active === '1' });
-    msg = '授業の種類を保存しました'; if (r.ok) plans = null;
+    msg = '授業の種類を保存しました'; if (r.ok) { plans = null; kindOpen = null; }
   } else if (kind === 'fee-decide') {
     r = await ctx.call('billing/fees/decide', { id, version, decision: v.decision, amount: num(v.amount), note: v.note });
     msg = 'キャンセル料を決めました'; if (r.ok) { fees = null; bill = null; }
@@ -204,6 +220,8 @@ export async function billingSubmit(ctx, kind, el) {
 }
 export async function billingClick(ctx, a, b) {
   let r, msg;
+  if (a === 'kind-open') { kindOpen = b.dataset.name; return true; }
+  if (a === 'kind-close') { kindOpen = null; return true; }
   if (a === 'pl-month') { planMonth = shift(planMonth, Number(b.dataset.d)); editing = consentFor = addFor = ''; return true; }
   if (a === 'bl-month') { billMonth = shift(billMonth, Number(b.dataset.d)); openFamily = ''; return true; }
   if (a === 'pl-add') { addFor = b.dataset.id; editing = consentFor = ''; return true; }

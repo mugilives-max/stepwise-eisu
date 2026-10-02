@@ -188,3 +188,7 @@ button.small-btn { white-space: nowrap; }
 section.step { border: 1px solid var(--line); border-radius: 12px; padding: 2px 14px 10px; margin: 12px 0; background: var(--white); }
 section.step.now { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
 section.step h2 { margin-top: 12px; }
+/* ---- 戻る（入口の下の画面の左上）と、押せる一覧の行（button） ---- */
+a.back { display: inline-block; margin: 14px 0 -14px; padding: 4px 0; font-size: 14px; color: var(--primary); text-decoration: none; }
+.rows button.todo { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; text-align: left; font: inherit; color: var(--ink); }
+.bsheet h3 { font-size: 14px; margin: 16px 0 6px; }

@@ -1,23 +1,24 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-ux6';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-ux6';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-ux6';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-ux6';
-import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-ux6';
-import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261002-ux6';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261002-ux6';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261002-ux6';
-import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-ux6';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-ux6';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-ux7';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-ux7';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-ux7';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-ux7';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-ux7';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261002-ux7';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261002-ux7';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261002-ux7';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-ux7';
+import { sheet, rowButton } from '/staff/ui.js?v=20261002-ux7';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-ux7';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
 const STATUS_LABEL = { invited: '招待中', active: '利用中', stopped: '停止' };
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 let lastPage = '';
-let me = null, busy = false, notice = null, staffList = null, shownLink = null, bootstrap = null;
+let me = null, busy = false, notice = null, staffList = null, shownLink = null, bootstrap = null, staffOpen = '';
 
 const legacyToken = () => { try { return localStorage.getItem('sw_admt') || ''; } catch { return ''; } };
 function route() {
@@ -60,8 +61,20 @@ function tabOf(page) {
   if (['records', 'record'].includes(page)) return 'home';
   if (['plans', 'billing'].includes(page)) return 'monthly';
   if (page === 'payroll') return m ? 'monthly' : 'payroll';
-  if (['staff', 'migrate', 'account'].includes(page)) return 'settings';
+  if (['staff', 'migrate', 'account', 'rates', 'kinds'].includes(page)) return 'settings';
   return page;
+}
+// 戻る（入口の下の画面の左上）。来た道をたどる。直接開いたときは、その画面の入口へ
+let trail = [], lastHash = location.hash || '#home';
+function parentOf(r) {
+  if (r.page === 'gradesOf') return '#student=' + encodeURIComponent(r.id) + '/grades';
+  const t = tabOf(r.page);
+  return t === r.page ? '' : '#' + t;
+}
+function backHtml(r) {
+  if (!me || ['invite', 'reset', 'forgot'].includes(r.page)) return '';
+  const top = parentOf(r); if (!top) return '';
+  return `<a class="back" href="${esc(trail.at(-1) || top)}">‹ 戻る</a>`;
 }
 function renderNav() {
   if (!me) { nav.innerHTML = ''; document.body.classList.remove('has-tabs'); return; }
@@ -110,7 +123,7 @@ function resetPage() { return `<h1>新しいパスワード</h1>${noticeHtml()}$
 
 // ---------- ログインしたあとの画面 ----------
 function accountPage() {
-  return `<h1>アカウント</h1><p>${esc(me.name)}（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
+  return `<div class="page-head"><h1>アカウント</h1></div><p>${esc(me.name)}（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
     <h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label>
     <label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" maxlength="128" required></label>
@@ -122,15 +135,23 @@ const roleChecks = (name, chosen) => `<div class="checks">${Object.keys(ROLE_LAB
 function staffPage() {
   if (!me.roles.includes('sysadmin')) return '<h1>スタッフ</h1><p class="notice error">システム管理者だけが使えます。</p>';
   if (!staffList) { loadStaff(); return '<h1>スタッフ</h1><p class="muted">読み込んでいます…</p>'; }
-  let h = `<h1>スタッフ</h1><p class="sub">スタッフのアカウントと役割。講師は担当の授業と生徒だけ、教室管理者は運営のすべて、システム管理者は設定とアカウントを扱えます。</p>${noticeHtml()}`;
+  let h = `<div class="page-head"><h1>スタッフ</h1></div><p class="sub">講師は担当の授業と生徒だけ、教室管理者は運営のすべて、システム管理者は設定とアカウントを扱えます。</p>${noticeHtml()}`;
   if (shownLink) h += `<div class="notice ok"><p>${esc(shownLink.name)} さんに招待のメールを送りました。届かないときは、このリンクを LINE などで渡してください（7日有効・1回だけ使えます）。</p><p class="copy">${esc(shownLink.url)}</p><button data-action="copy-link"${dis()}>リンクをコピー</button></div>`;
-  h += '<div class="list">' + staffList.map(s => `<div><div><strong>${esc(s.name)}</strong> <span class="tag ${s.status === 'active' ? '' : s.status === 'invited' ? 'warn' : 'gray'}">${STATUS_LABEL[s.status] || s.status}</span><div class="small muted">${esc(s.email)}</div>
-      <form data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" value="${esc(s.familyName || s.name)}"></label><label style="flex:1">名<input name="givenName" maxlength="30" value="${esc(s.givenName || '')}"></label></div><p class="small muted" style="margin:0">名前は担当の表示と報酬の明細に出ます。</p>${roleChecks('roles', s.roles)}<div class="row" style="margin-top:6px"><button class="small"${dis()}>名前と役割を保存</button></div></form></div>
-      <div class="row">${s.status === 'invited' ? `<button data-action="reinvite" data-id="${esc(s.id)}" data-name="${esc(s.name)}"${dis()}>招待をやり直す</button>` : ''}
-      ${s.status === 'stopped' ? `<button data-action="status" data-status="active" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>再開する</button>` : s.id === me.id ? '' : `<button class="danger" data-action="status" data-status="stopped" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>停止する</button>`}</div></div>`).join('') + '</div>';
-  h += `<h2>スタッフを招待する</h2><form class="stack" data-form="invite-staff"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" required></label><label style="flex:1">名<input name="givenName" maxlength="30"></label></div>
-    <label>メールアドレス<input type="email" name="email" required></label><div><div class="small muted">役割</div>${roleChecks('roles', ['teacher'])}</div>
-    <button class="primary"${dis()}>招待のメールを送る</button></form>`;
+  h += '<div class="rows">' + staffList.map(s => rowButton(esc, 'st-open', { id: s.id }, `${esc(s.name)} <span class="tag ${s.status === 'active' ? '' : s.status === 'invited' ? 'warn' : 'gray'}">${STATUS_LABEL[s.status] || s.status}</span>`,
+    esc(s.roles.map(r => ROLE_LABEL[r] || r).join('・') + '・' + s.email))).join('') + '</div>';
+  h += `<p style="margin-top:12px"><button class="primary" data-action="st-open" data-id="new"${dis()}>スタッフを招待する</button></p>`;
+  if (staffOpen === 'new') {
+    h += sheet(esc, 'スタッフを招待する', `<form class="stack" data-form="invite-staff"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" required></label><label style="flex:1">名<input name="givenName" maxlength="30"></label></div>
+      <label>メールアドレス<input type="email" name="email" required></label><div><div class="small muted">役割</div>${roleChecks('roles', ['teacher'])}</div>
+      <button class="primary"${dis()}>招待のメールを送る</button></form>`, 'st-close');
+  } else if (staffOpen) {
+    const s = staffList.find(x => x.id === staffOpen);
+    if (s) h += sheet(esc, s.name, `<p class="small muted" style="margin-top:0">${esc(s.email)}・${STATUS_LABEL[s.status] || s.status}</p>
+      <form class="stack" data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" value="${esc(s.familyName || s.name)}"></label><label style="flex:1">名<input name="givenName" maxlength="30" value="${esc(s.givenName || '')}"></label></div><p class="small muted" style="margin:0">名前は担当の表示と報酬の明細に出ます。</p>
+      <div><div class="small muted">役割</div>${roleChecks('roles', s.roles)}</div><button class="primary"${dis()}>名前と役割を保存</button></form>
+      <div class="row" style="margin-top:14px">${s.status === 'invited' ? `<button data-action="reinvite" data-id="${esc(s.id)}" data-name="${esc(s.name)}"${dis()}>招待をやり直す</button>` : ''}
+      ${s.status === 'stopped' ? `<button data-action="status" data-status="active" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>再開する</button>` : s.id === me.id ? '' : `<button class="danger" data-action="status" data-status="stopped" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>停止する</button>`}</div>`, 'st-close');
+  }
   return h;
 }
 async function loadStaff() {
@@ -166,12 +187,14 @@ function render() {
   else if (r.page === 'family' && me.roles.includes('manager')) h = familyDetailPage(ctx, r.id);
   else if (r.page === 'plans' && me.roles.includes('manager')) h = plansPage(ctx);
   else if (r.page === 'billing' && me.roles.includes('manager')) h = billingPage(ctx);
+  else if (r.page === 'kinds' && me.roles.includes('manager')) h = kindsPage(ctx);
+  else if (r.page === 'rates' && me.roles.includes('manager')) h = ratesPage(ctx);
   else if (r.page === 'migrate' && me.roles.includes('sysadmin')) h = migratePage(ctx);
   else if (r.page === 'monthly' && me.roles.includes('manager')) h = monthlyPage(ctx);
   else if (r.page === 'settings') h = settingsPage(ctx, me);
   else h = r.page === 'account' ? accountPage() : r.page === 'staff' ? staffPage() : (me.roles.includes('manager') || me.roles.includes('teacher')) ? todayPage(ctx, me) : settingsPage(ctx, me);
   app.className = !me || ['invite', 'reset', 'forgot'].includes(r.page) ? 'narrow' : r.page === 'schedule' ? 'wide' : '';
-  app.innerHTML = h;
+  app.innerHTML = backHtml(r) + h;
 }
 
 // ---------- 操作 ----------
@@ -198,10 +221,10 @@ app.addEventListener('submit', ev => {
     else if (kind === 'password') { r = await call('staff/password', { current: v.current, next: v.next }, store.get()); if (r.ok) { el.reset(); return say('パスワードを変えました', 'ok'); } }
     else if (kind === 'invite-staff') {
       r = await call('admin/staff/invite', { familyName: v.familyName, givenName: v.givenName, email: v.email, roles: checked(el, 'roles') }, store.get());
-      if (r.ok) { shownLink = { name: r.staff.name, url: r.inviteUrl }; staffList = null; return say(''); }
+      if (r.ok) { shownLink = { name: r.staff.name, url: r.inviteUrl }; staffList = null; staffOpen = ''; return say(''); }
     } else if (kind === 'roles') {
       r = await call('admin/staff/update', { id: el.dataset.id, version: Number(el.dataset.version), familyName: v.familyName, givenName: v.givenName, roles: checked(el, 'roles') }, store.get());
-      if (r.ok) { staffList = null; if (me && r.staff.id === me.id) me = { ...me, name: r.staff.name }; resetSchedule(); return say(r.staff.name + ' さんの名前と役割を保存しました', 'ok'); }
+      if (r.ok) { staffList = null; staffOpen = ''; if (me && r.staff.id === me.id) me = { ...me, name: r.staff.name }; resetSchedule(); return say(r.staff.name + ' さんの名前と役割を保存しました', 'ok'); }
     }
     if (!r) return;
     if (r.error && r.error.code === 'needLogin' && me) return signedOut();
@@ -218,6 +241,8 @@ app.addEventListener('click', ev => {
   // 保護者ページ・生徒ページのプレビュー: 新しいタブを先に開いてから、プレビューの鍵をもらって移す
   if (a === 'pv-open') { const win = window.open('', '_blank'); run(async () => { const r = await call('admin/preview/start', { kind: b.dataset.kind, id: b.dataset.id }, store.get()); if (r.ok) { if (win && !win.closed) win.location.href = r.url; else location.href = r.url; } else { if (win) win.close(); say(r.error.message, 'error'); } }); return; }
   if (a === 'pr-print' || a === 'pr-print-mine') { if (!payrollPrint(ctx, a, b, me)) { say('印刷の窓を開けませんでした。ポップアップを許可してください', 'error'); render(); } return; }
+  if (a === 'st-open') { staffOpen = b.dataset.id; shownLink = null; say(''); render(); return; }
+  if (a === 'st-close') { staffOpen = ''; render(); return; }
   if (a === 'gr-resolve') { const sel = document.querySelector(`[data-resolve-exam="${b.dataset.id}"]`); b.dataset.exam = sel ? sel.value : ''; }
   captureRecordInputs();
   run(async () => {
@@ -227,20 +252,28 @@ app.addEventListener('click', ev => {
       r = await call('staff/bootstrap', { legacyToken: legacyToken() });
       if (r.ok) { bootstrap = null; location.hash = '#invite=' + r.inviteUrl.split('#invite=')[1]; return; }
     } else if (a === 'logout') { await call('staff/logout', {}, store.get()); store.set(''); me = null; location.hash = ''; return say('ログアウトしました', 'ok'); }
-    else if (a === 'reinvite') { r = await call('admin/staff/reinvite', { id: b.dataset.id }, store.get()); if (r.ok) { shownLink = { name: b.dataset.name, url: r.inviteUrl }; return say(''); } }
+    else if (a === 'reinvite') { r = await call('admin/staff/reinvite', { id: b.dataset.id }, store.get()); if (r.ok) { shownLink = { name: b.dataset.name, url: r.inviteUrl }; staffOpen = ''; return say(''); } }
     else if (a === 'status') {
       if (b.dataset.status === 'stopped' && !confirm('このスタッフを停止しますか？ ログイン中の端末もすぐに使えなくなります。')) return;
       r = await call('admin/staff/update', { id: b.dataset.id, version: Number(b.dataset.version), status: b.dataset.status }, store.get());
-      if (r.ok) { staffList = null; return say(r.staff.name + ' さんを' + STATUS_LABEL[r.staff.status] + 'にしました', 'ok'); }
+      if (r.ok) { staffList = null; staffOpen = ''; return say(r.staff.name + ' さんを' + STATUS_LABEL[r.staff.status] + 'にしました', 'ok'); }
     }
     if (r && r.error && r.error.code === 'needLogin' && me) return signedOut();
     if (r) say(r.error.message, 'error');
   });
 });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { const x = app.querySelector('.bsheet-head button.icon'); if (x) x.click(); } });
 app.addEventListener('input', ev => { const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
 window.addEventListener('hashchange', () => {
   // 「今日」「生徒」に戻ってきたら読み直す（記録を書いたあとなど）。同じ生徒の画面のタブを切り替えるときは読み直さない
-  const pg = route().page;
+  const pg = route().page, hash = location.hash || '#home';
+  if (pg !== lastPage) {
+    const i = trail.lastIndexOf(hash);
+    if (i >= 0) trail = trail.slice(0, i); // 戻ってきた
+    else if (!parentOf(route())) trail = []; // 入口を開いた
+    else trail.push(lastHash);
+  }
+  lastHash = hash; staffOpen = '';
   if (pg === 'home') resetToday();
   if (pg === 'monthly') resetMonthly();
   if ((pg === 'student' && lastPage !== 'student') || pg === 'students') resetStudents();

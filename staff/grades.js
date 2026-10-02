@@ -1,6 +1,6 @@
 // スタッフの画面: 成績（6段目）。#grades（一覧・届いた成績票・結果の入力待ち）と #grades=<生徒>（試験の記録・入力）。
 // 講師は担当の生徒の担当科目だけ入力でき、ほかの科目は合計だけ見える。成績票は教室管理者だけ。
-import { examCard, gradeCharts, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261002-ux6';
+import { examCard, gradeCharts, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261002-ux7';
 
 let overview = null, student = null, studentFor = '', editing = '', prefill = null;
 export function resetGrades() { overview = null; student = null; studentFor = ''; editing = ''; prefill = null; }
@@ -32,7 +32,7 @@ export function gradesStudentPage(ctx, studentId) {
     studentFor = studentId; student = null; editing = prefill ? 'new' : '';
     ctx.call('grades/student', { studentId }).then(r => { if (studentFor !== studentId) return; student = r.ok ? r : { error: r.error.message }; if (!r.ok) ctx.handleAuth(r); ctx.render(); });
   }
-  let h = `<p class="small"><a href="#grades">← 成績</a></p>`;
+  let h = '';
   if (!student) return h + '<p class="muted">読み込んでいます…</p>';
   if (student.error) return h + `<p class="notice error">${esc(student.error)}</p>`;
   const st = student;

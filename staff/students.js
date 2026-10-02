@@ -1,7 +1,7 @@
 // スタッフの「生徒」（docs/UX_STRUCTURE.md 3）。#students（家族ごとの一覧）と #student=<id>/<タブ>（1人の生徒の画面）。
 // タブ: 概要・予定・記録と宿題・成績・計画と請求・基本情報。講師は担当の生徒だけで、計画と請求・基本情報は出ない。
-import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261002-ux6';
-import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261002-ux6';
+import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261002-ux7';
+import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261002-ux7';
 
 let list = null, query = '', hub = null, hubFor = '';
 export function resetStudents() { list = null; hub = null; hubFor = ''; }
@@ -41,7 +41,7 @@ export function studentsInput(ctx, name, el) {
 export function studentPage(ctx, id, tab) {
   const { esc } = ctx;
   if (hubFor !== id) { hubFor = id; hub = null; ctx.call('students/hub', { studentId: id }).then(r => { if (hubFor !== id) return; hub = r.ok ? r : { error: r.error.message }; if (!r.ok) ctx.handleAuth(r); ctx.render(); }); }
-  let h = '<p class="small" style="margin:10px 0 0"><a href="#students">← 生徒</a></p>';
+  let h = '';
   if (!hub) return h + '<p class="muted">読み込んでいます…</p>';
   if (hub.error) return h + `<p class="notice error">${esc(hub.error)}</p>`;
   const s = hub.student, tabs = TABS.filter(t => !t[2] || hub.manager);

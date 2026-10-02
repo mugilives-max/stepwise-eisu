@@ -1,6 +1,6 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-ux6';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-ux7';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, parts = [];
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
@@ -36,11 +36,11 @@ export function recordPage(ctx, lessonId) {
   const { esc } = ctx;
   if (recFor !== lessonId) { recFor = lessonId; rec = null; hwRows = null; ctx.call('records/lesson', { lessonId }).then(r => { if (recFor !== lessonId) return; if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); parts = r.record && r.record.rangeParts ? r.record.rangeParts.map(x => ({ ...x })) : []; } else { rec = { error: r.error.message }; ctx.handleAuth(r); } ctx.render(); }); }
   if (!rec) return '<h1>授業記録</h1><p class="muted">読み込んでいます…</p>';
-  if (rec.error) return `<p class="small"><a href="#records">← 記録</a></p><h1>授業記録</h1><p class="notice error">${esc(rec.error)}</p>`;
+  if (rec.error) return `<h1>授業記録</h1><p class="notice error">${esc(rec.error)}</p>`;
   const l = rec.lesson, saved = rec.record || { range: '', comment: '', parentMessage: '', staffNotes: {}, status: 'none' };
   const r = rec.draftInputs ? { ...saved, ...rec.draftInputs } : saved, n = r.staffNotes || {};
   const future = l.date > rec.today, locked = r.status === 'void';
-  let h = `<p class="small"><a href="#records">← 記録</a> ・ <a href="#schedule">予定</a></p><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1><p class="sub">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}・${esc(rec.student.grade || '')}・記録 ${r.status === 'published' ? '<span class="tag ok">公開済み</span>' : r.status === 'draft' ? '<span class="tag warn">下書き</span>' : r.status === 'void' ? '<span class="tag gray">無効</span>' : '<span class="tag gray">まだ</span>'}</p>${ctx.notice()}`;
+  let h = `<h1>${esc(rec.student.name)} ${esc(l.subject)}</h1><p class="sub">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}・${esc(rec.student.grade || '')}・記録 ${r.status === 'published' ? '<span class="tag ok">公開済み</span>' : r.status === 'draft' ? '<span class="tag warn">下書き</span>' : r.status === 'void' ? '<span class="tag gray">無効</span>' : '<span class="tag gray">まだ</span>'}</p>${ctx.notice()}`;
   // 引き継ぎメモ（読んでいないものを先に）
   const unread = rec.handover.filter(x => !x.read);
   if (rec.handover.length) h += `<h2>引き継ぎメモ${unread.length ? `（未読 ${unread.length}）` : ''}</h2><div class="list">` + rec.handover.map(x => `<div><div><span class="small muted">${esc(x.authorName)}・${esc(x.createdAt.slice(5, 10).replace('-', '/'))}</span><div style="white-space:pre-wrap">${esc(x.body)}</div></div>

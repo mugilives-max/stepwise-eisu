@@ -1,7 +1,8 @@
-// スタッフの画面: 報酬（7段目）。#payroll
-// 教室管理者: 月ごとの講師の明細（見込み・確定・支払い）、調整、時給と源泉徴収。講師: 自分の支払明細だけ（印刷・PDF で保存できる）。
-let month = '', list = null, open = '', detail = null, rates = null, mine = null;
-export function resetPayroll() { list = null; detail = null; rates = null; mine = null; open = ''; }
+// スタッフの画面: 報酬（7段目）。#payroll と、設定の「時給と源泉徴収」（#rates）。
+// 教室管理者: 月ごとの講師の明細（見込み・確定・支払い）、調整。時給と源泉徴収は設定の下。講師: 自分の支払明細だけ（印刷・PDF で保存できる）。
+import { sheet, rowButton } from '/staff/ui.js?v=20261002-ux7';
+let month = '', list = null, open = '', detail = null, rates = null, mine = null, rateOpen = '';
+export function resetPayroll() { list = null; detail = null; rates = null; mine = null; open = ''; rateOpen = ''; }
 
 const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
 const hm = m => `${Math.floor(m / 60)}時間${m % 60 ? (m % 60) + '分' : ''}`;
@@ -34,7 +35,6 @@ export function payrollPage(ctx, me) {
   if (!ctx.isManager) return minePage(ctx, me);
   if (!month) month = shift(thisMonth(), -1);
   if (!list || list.month !== month) { const want = month; list = { month: want, loading: true }; detail = null; ctx.call('payroll/month', { month: want }).then(r => { if (month !== want) return; list = r.ok ? r : { month: want, staff: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); }); }
-  if (!rates) { rates = { loading: true }; ctx.call('payroll/rates/list').then(r => { rates = r.ok ? r : { staff: [] }; ctx.render(); }); }
   let h = `<h1>報酬</h1><p class="sub">講師（業務委託）の報酬。月末締め・翌月25日払い。実施済みの授業と、日が過ぎた面談を数えます。準備と交通費は数えません。</p>${ctx.notice()}
     <div class="row"><button data-action="pr-month" data-d="-1">◀</button><strong style="min-width:8em;text-align:center">${label(month)}</strong><button data-action="pr-month" data-d="1">▶</button></div>`;
   if (list.loading) return h + '<p class="muted">読み込んでいます…</p>';
@@ -46,7 +46,7 @@ export function payrollPage(ctx, me) {
       <div class="small muted">授業 ${hm((p || v).lessonMinutes)}${(p || v).meetingMinutes ? '・面談 ' + hm((p || v).meetingMinutes) : ''}</div>${v && v.issues.length ? `<ul class="small">${v.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}</div>
       <div><button data-action="pr-open" data-id="${esc(s.staffId)}"${ctx.dis()}>${open === s.staffId ? '閉じる' : '明細'}</button></div></div>${open === s.staffId ? `<div>${detailPart(ctx, s.name)}</div>` : ''}`;
   }).join('') + '</div>' : '<p class="muted">この月の勤務はありません。</p>';
-  h += ratesPart(ctx);
+  h += '<p class="small muted" style="margin-top:16px">時給と源泉徴収は「設定」にあります（<a href="#rates">開く</a>）。</p>';
   return h;
 }
 function detailPart(ctx, name) {
@@ -74,13 +74,29 @@ function detailPart(ctx, name) {
   else if (!ended) h += '<p class="small muted">月が終わってから確定できます（月末締め）。</p>';
   return h + '</div>';
 }
-function ratesPart(ctx) {
+// 設定の「時給と源泉徴収」（#rates）。講師ごとの行を押すと、下から時給の履歴・新しい時給・源泉徴収
+export function ratesPage(ctx) {
   const { esc } = ctx;
-  if (rates.loading) return '';
-  return `<h2>時給と源泉徴収</h2><p class="small muted">時給は、変えた月から新しい時給で計算します（確定した明細は変わりません）。源泉徴収が要るかは、税務署か税理士に確かめてから決めてください。</p>` + (rates.staff.length ? '<div class="list">' + rates.staff.map(s => `<div><div style="flex:1"><strong>${esc(s.name)}</strong>${s.status === 'stopped' ? ' <span class="tag gray">停止</span>' : ''}
-    <div class="small">${s.rates.length ? s.rates.map(r => `${label(r.startsOn)}から 授業 ${yen(r.lessonHourly)}・面談 ${yen(r.meetingHourly)}`).join('<br>') : '<span class="muted">時給が決まっていません</span>'}</div>
-    <form class="row" data-form="pr-rate" data-staff="${esc(s.id)}" style="margin-top:6px"><label>いつから<input type="month" name="startsOn" required value="${esc(month)}"></label><label>授業の時給<input type="number" name="lessonHourly" min="0" max="20000" style="width:7em" required value="${s.rates[0] ? s.rates[0].lessonHourly : ''}"></label><label>面談の時給<input type="number" name="meetingHourly" min="0" max="20000" style="width:7em" required value="${s.rates[0] ? s.rates[0].meetingHourly : 1500}"></label><button${ctx.dis()}>保存</button></form>
-    <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:4px"><input type="checkbox" data-action="pr-withholding" data-staff="${esc(s.id)}" data-version="${s.version}"${s.withholding ? ' checked' : ''} style="width:auto"> 源泉徴収をする（10.21%）</label></div><div></div></div>`).join('') + '</div>' : '<p class="small muted">講師がいません。「スタッフ」で招待してください。</p>');
+  if (!rates) { rates = { loading: true }; ctx.call('payroll/rates/list').then(r => { rates = r.ok ? r : { staff: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); }); }
+  let h = `<div class="page-head"><h1>時給と源泉徴収</h1></div><p class="sub">時給は、変えた月から新しい時給で計算します（確定した明細は変わりません）。源泉徴収が要るかは、税務署か税理士に確かめてから決めてください。</p>${ctx.notice()}`;
+  if (rates.loading) return h + '<p class="muted">読み込んでいます…</p>';
+  if (!rates.staff.length) return h + '<p class="small muted">講師がいません。「スタッフ」で招待してください。</p>';
+  h += '<div class="rows">' + rates.staff.map(s => {
+    const now = s.rates[0];
+    return rowButton(esc, 'rt-open', { staff: s.id }, `${esc(s.name)}${s.status === 'stopped' ? ' <span class="tag gray">停止</span>' : ''}${now ? '' : ' <span class="tag danger">時給なし</span>'}`,
+      (now ? `授業 ${yen(now.lessonHourly)}・面談 ${yen(now.meetingHourly)}（${label(now.startsOn)}から）` : '時給が決まっていません') + (s.withholding ? '・源泉徴収あり' : ''));
+  }).join('') + '</div>';
+  const s = rateOpen && rates.staff.find(x => x.id === rateOpen);
+  if (s) {
+    const now = s.rates[0];
+    const body = (s.rates.length ? '<div class="small">' + s.rates.map(r => `${label(r.startsOn)}から 授業 ${yen(r.lessonHourly)}・面談 ${yen(r.meetingHourly)}`).join('<br>') + '</div>' : '<p class="small muted">時給が決まっていません。</p>')
+      + `<h3>時給を決める</h3><form class="stack" data-form="pr-rate" data-staff="${esc(s.id)}"><label>いつから<input type="month" name="startsOn" required value="${esc(thisMonth())}"></label>
+      <div class="row"><label style="flex:1">授業の時給（円）<input type="number" name="lessonHourly" min="0" max="20000" required value="${now ? now.lessonHourly : ''}"></label><label style="flex:1">面談の時給（円）<input type="number" name="meetingHourly" min="0" max="20000" required value="${now ? now.meetingHourly : 1500}"></label></div>
+      <button class="primary"${ctx.dis()}>この時給にする</button></form>
+      <h3>源泉徴収</h3><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-action="pr-withholding" data-staff="${esc(s.id)}" data-version="${s.version}"${s.withholding ? ' checked' : ''}${ctx.dis()} style="width:auto"> 源泉徴収をする（10.21%）</label>`;
+    h += sheet(esc, s.name + ' さんの時給', body, 'rt-close');
+  }
+  return h;
 }
 
 // 講師: 自分の支払明細
@@ -100,7 +116,7 @@ function minePage(ctx, me) {
 export async function payrollSubmit(ctx, kind, el) {
   const v = Object.fromEntries(new FormData(el).entries()), id = el.dataset.id, version = Number(el.dataset.version);
   let r, msg;
-  if (kind === 'pr-rate') { r = await ctx.call('payroll/rates/save', { staffId: el.dataset.staff, startsOn: v.startsOn, lessonHourly: Number(v.lessonHourly), meetingHourly: Number(v.meetingHourly) }); msg = '時給を保存しました'; if (r.ok) { rates = null; list = null; detail = null; } }
+  if (kind === 'pr-rate') { r = await ctx.call('payroll/rates/save', { staffId: el.dataset.staff, startsOn: v.startsOn, lessonHourly: Number(v.lessonHourly), meetingHourly: Number(v.meetingHourly) }); msg = '時給を保存しました'; if (r.ok) { rates = null; list = null; detail = null; rateOpen = ''; } }
   else if (kind === 'pr-adj') { r = await ctx.call('payroll/adjust/add', { staffId: open, month, label: v.label, amount: Number(v.amount) }); msg = '調整を足しました'; if (r.ok) { detail = null; list = null; } }
   else if (kind === 'pr-paid') { r = await ctx.call('payroll/paid', { id, version, paidOn: v.paidOn }); msg = '支払いを記録しました'; if (r.ok) { detail = null; list = null; } }
   else if (kind === 'pr-unpaid') { if (!confirm('支払いの記録を戻しますか？')) return true; r = await ctx.call('payroll/paid', { id, version, undo: true }); msg = '支払いの記録を戻しました'; if (r.ok) { detail = null; list = null; } }
@@ -112,6 +128,8 @@ export async function payrollSubmit(ctx, kind, el) {
 export async function payrollClick(ctx, a, b) {
   let r, msg;
   if (a === 'pr-month') { month = shift(month, Number(b.dataset.d)); open = ''; return true; }
+  if (a === 'rt-open') { rateOpen = b.dataset.staff; return true; }
+  if (a === 'rt-close') { rateOpen = ''; return true; }
   if (a === 'pr-open') { open = open === b.dataset.id ? '' : b.dataset.id; detail = null; return true; }
   if (a === 'pr-print' || a === 'pr-print-mine') return false; // app.js で（新しい窓を先に開くため）
   if (a === 'pr-confirm') {

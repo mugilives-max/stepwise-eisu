@@ -1,4 +1,4 @@
-// スタッフの「月の仕事」と「設定」（docs/UX_STRUCTURE.md 3）。
+// スタッフの「月の仕事」と「設定」（docs/UX_STRUCTURE.md 3）。設定は アカウント・教室の運営（時給・授業の種類）・システム（スタッフ・移行）。
 // 月の仕事は、月の流れの順（前月分の請求 → 翌月の計画 → 翌月の予定表 → 前月分の報酬）に、どこまで済んだかを出す（API monthly/overview）。
 let overview = null;
 export function resetMonthly() { overview = null; }
@@ -45,10 +45,9 @@ export function monthlyPage(ctx) {
 
 export function settingsPage(ctx, me) {
   const { esc } = ctx, roles = me.roles;
-  let h = `<div class="page-head"><h1>設定</h1></div>${ctx.notice()}<div class="rows">`;
-  if (roles.includes('sysadmin')) h += card(esc, '#staff', 'スタッフ', '招待・役割・停止');
-  if (roles.includes('manager')) h += card(esc, '#payroll', '時給と源泉徴収', '「報酬」の下にあります') + card(esc, '#plans', '授業の種類と標準料金', '「計画」の下にあります');
-  if (roles.includes('sysadmin')) h += card(esc, '#migrate', '移行と切り替え', '今の仕組みからの写し・照らし合わせ・切り替え');
-  h += card(esc, '#account', 'アカウント', 'パスワード・ログアウト') + '</div>';
+  let h = `<div class="page-head"><h1>設定</h1></div>${ctx.notice()}`;
+  h += '<div class="rows">' + card(esc, '#account', me.name + ' さん', me.email + '・パスワード・ログアウト') + '</div>';
+  if (roles.includes('manager')) h += '<h2>教室の運営</h2><div class="rows">' + card(esc, '#rates', '時給と源泉徴収', '講師ごとの授業・面談の時給、源泉徴収') + card(esc, '#kinds', '授業の種類と標準料金', '計画を作るときの初期値') + '</div>';
+  if (roles.includes('sysadmin')) h += '<h2>システム</h2><div class="rows">' + card(esc, '#staff', 'スタッフ', '招待・名前と役割・停止') + card(esc, '#migrate', '移行と切り替え', '今の仕組みからの写し・照らし合わせ・切り替え') + '</div>';
   return h;
 }
