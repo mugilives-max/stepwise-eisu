@@ -22,7 +22,7 @@ const DAY = 86400e3;
 export function lineView(l, extra = {}) {
   return { id: l.id, studentId: l.studentId, parentId: l.parentId, subject: l.subject, kind: l.kind, startDate: l.startDate, endDate: l.endDate, count: l.count, minutes: l.minutes, fee: l.fee,
     comment: l.comment, status: l.status, approvedCount: l.approvedCount, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedBy: l.approvedBy ? (l.approvedBy === 'family' ? 'family' : 'staff') : '',
-    approvedVia: l.approvedVia, consentDate: l.consentDate, approvalNote: l.approvalNote, familyAck: l.familyAck, familyAckAt: l.familyAckAt, familyAckNote: l.familyAckNote, version: l.version, ...extra };
+    approvedVia: l.approvedVia, consentDate: l.consentDate, approvalNote: l.approvalNote, familyAck: l.familyAck, familyAckAt: l.familyAckAt, familyAckNote: l.familyAckNote, remindedAt: l.remindedAt || '', version: l.version, ...extra };
 }
 const feeView = f => ({ id: f.id, lessonId: f.lessonId, studentId: f.studentId, type: f.type, receivedAt: f.receivedAt, standardAmount: f.standardAmount, amount: f.amount, decision: f.decision, note: f.note,
   reliefStatus: f.reliefStatus, reliefReason: f.reliefReason, reliefResponse: f.reliefResponse, invoiceId: f.invoiceId, date: f.date, start: f.start, minutes: f.minutes, subject: f.subject, version: f.version });
@@ -226,6 +226,31 @@ export const billingRoutes = {
     await audit(c, 'planSend', '', { lines: drafts.length });
     return { sent: drafts.length };
   },
+  // 承認のお願い: 承認待ちの計画を、家族にもう一度メールで知らせる（同じ家族に1日1回まで）
+  'billing/plans/remind': async (c, b) => {
+    await requireStaff(c, b, 'manager');
+    const ids = await familyStudentIds(c, String(b.familyId || ''));
+    if (!ids.length) fail('notFound', '家族が見つかりません', 404);
+    const q = `(${ids.map(() => '?').join(', ')})`;
+    const lines = (await c.db.prepare(`select * from planLines where status = 'proposed' and studentId in ${q} order by startDate, subject`).bind(...ids).all()).results;
+    if (!lines.length) fail('nothing', '承認待ちの計画はありません');
+    const today = todayJst(c.now), last = lines.map(l => l.remindedAt).filter(Boolean).sort().at(-1) || '';
+    if (last && todayJst(Date.parse(last)) === today) fail('tooSoon', '今日はもう承認のお願いを送りました。明日以降にもう一度送れます', 409);
+    const names = Object.fromEntries((await c.db.prepare(`select * from students where id in ${q}`).bind(...ids).all()).results.map(s => [s.id, fullName(s)]));
+    // その計画を待っている授業（決定・実施済みで、承認済みの計画に入っていないもの）の数も添える
+    let waiting = 0;
+    for (const sid of [...new Set(lines.map(l => l.studentId))]) {
+      const sb = await studentBilling(c.db, sid);
+      waiting += sb.lessons.filter(ls => !sb.line[ls.id] && !ls.invoiceId && lines.some(l => lineMatches(l, ls))).length;
+    }
+    await familyNotice(c, lines[0].studentId, '授業計画の承認のお願い', 'まだ承認をいただいていない授業計画があります。内容をご確認のうえ、保護者ページから承認をお願いします。\n'
+      + lines.map(l => `・${names[l.studentId]}さん ${l.subject}${l.kind !== '通常' ? '（' + l.kind + '）' : ''} ${md(l.startDate)}〜${md(l.endDate)} ${l.count}回・1回 ${yen(l.fee)}`).join('\n')
+      + (waiting ? `\nこの計画に当たる授業が、すでに${waiting}回決まっています（実施済みを含みます）。` : ''));
+    const now = iso(c.now);
+    await c.db.batch(lines.map(l => c.db.prepare('update planLines set remindedAt = ? where id = ?').bind(now, l.id)));
+    await audit(c, 'planRemind', String(b.familyId), { lines: lines.length, waiting });
+    return { reminded: lines.length, waiting };
+  },
   // LINE・電話・対面での承諾を記録する（保護者ページにも出て、保護者が確かめられる）
   'billing/plans/consent': async (c, b) => {
     const me = await requireStaff(c, b, 'manager');
@@ -336,7 +361,8 @@ export const billingRoutes = {
       const inv = await activeInvoice(c, f.id, month);
       if (inv) { rows.push({ familyId: f.id, name: f.name, invoice: invoiceView(inv) }); continue; }
       const p = await monthPreview(c, f.id, month);
-      if (p.students.length || p.issues.length) rows.push({ familyId: f.id, name: f.name, preview: { total: p.total, issues: p.issues, pendingCount: p.pendingCount, canConfirm: p.canConfirm, auto: p.auto } });
+      const asks = (await c.db.prepare("select count(*) n, max(remindedAt) last from planLines where status = 'proposed' and studentId in (select id from students where familyId = ?)").bind(f.id).first());
+      if (p.students.length || p.issues.length) rows.push({ familyId: f.id, name: f.name, preview: { total: p.total, issues: p.issues, pendingCount: p.pendingCount, canConfirm: p.canConfirm, auto: p.auto }, proposedPlans: asks.n, remindedAt: asks.last || '' });
     }
     const voided = (await c.db.prepare("select v.*, f.name from invoices v join families f on f.id = v.familyId where v.month = ? and v.status = 'void' order by v.voidedAt").bind(month).all()).results;
     return { month, closeOn: shiftMonth(month, 1) + '-03', families: rows, voided: voided.map(v => ({ ...invoiceView(v), name: v.name })) };

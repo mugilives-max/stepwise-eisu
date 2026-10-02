@@ -30,7 +30,8 @@ export function plansPage(ctx) {
   for (const s of plans.students) (byFamily[s.familyId] = byFamily[s.familyId] || []).push(s);
   for (const group of Object.values(byFamily)) {
     const drafts = group.reduce((n, s) => n + s.lines.filter(l => l.status === 'draft').length, 0);
-    h += `<div class="sheet stack"><div class="row" style="justify-content:space-between"><strong>${esc(group[0].familyLabel)}</strong>${drafts ? `<button class="primary" data-action="pl-send" data-family="${esc(group[0].familyId)}"${ctx.dis()}>下書き ${drafts}件をお知らせする</button>` : ''}</div>`;
+    const asks = group.flatMap(s => s.lines.filter(l => l.status === 'proposed')), last = asks.map(l => l.remindedAt).filter(Boolean).sort().at(-1) || '';
+    h += `<div class="sheet stack"><div class="row" style="justify-content:space-between"><strong>${esc(group[0].familyLabel)}</strong><div class="row">${drafts ? `<button class="primary" data-action="pl-send" data-family="${esc(group[0].familyId)}"${ctx.dis()}>下書き ${drafts}件をお知らせする</button>` : ''}${asks.length ? remindButton(ctx, group[0].familyId, asks.length, last) : ''}</div></div>`;
     for (const s of group) h += studentPlans(ctx, s);
     h += '</div>';
   }
@@ -63,6 +64,10 @@ function lineRow(ctx, s, l) {
     <div class="row"><label>承諾をもらった日<input type="date" name="consentDate" required></label><label>方法<input name="via" maxlength="40" placeholder="LINE・電話・対面" required></label><label>回数<input type="number" name="approvedCount" min="1" max="${l.count}" value="${l.count}" style="width:6em"></label></div>
     <label>メモ（授業のあとで承諾をもらったときは必須）<input name="note" maxlength="300"></label><div class="row"><button class="primary"${ctx.dis()}>承認として記録</button><button type="button" data-action="pl-close"${ctx.dis()}>やめる</button></div></form></div>`;
   return h;
+}
+// 承認のお願いを送るボタン（計画・請求の画面で共通）。同じ家族に1日1回まで
+function remindButton(ctx, familyId, n, last) {
+  return `<button data-action="pl-remind" data-family="${ctx.esc(familyId)}"${ctx.dis()}>承認のお願いを送る（${n}件）</button>${last ? `<span class="small muted">前回 ${md(new Date(Date.parse(last) + 9 * 3600e3).toISOString().slice(0, 10))}</span>` : ''}`;
 }
 // 計画の行の入力欄（新しく足す・直す）。初期値は授業の種類の標準 → 基本単価
 function lineForm(ctx, s, l) {
@@ -108,7 +113,7 @@ export function billingPage(ctx) {
   h += '<div class="list">' + bill.families.map(f => {
     const st = f.invoice ? INV_STATUS[f.invoice.status] : f.preview.issues.length ? ['確かめることあり', 'danger'] : f.preview.pendingCount ? ['承認待ちの授業あり', 'warn'] : ['確定前', 'gray'];
     return `<div><div><strong>${esc(f.name)}</strong> <span class="tag ${st[1]}">${st[0]}</span> ${yen(f.invoice ? f.invoice.total : f.preview.total)}
-      ${f.preview && f.preview.issues.length ? `<ul class="small">${f.preview.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}${f.preview && f.preview.pendingCount ? `<div class="small muted">計画の承認がない授業 ${f.preview.pendingCount}件（請求に入りません）</div>` : ''}</div>
+      ${f.preview && f.preview.issues.length ? `<ul class="small">${f.preview.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}${f.preview && f.preview.pendingCount ? `<div class="small muted">計画の承認がない授業 ${f.preview.pendingCount}件（請求に入りません）</div>` : ''}${f.preview && f.proposedPlans ? `<div class="row">${remindButton(ctx, f.familyId, f.proposedPlans, f.remindedAt)}</div>` : ''}</div>
       <div><button data-action="bl-open" data-id="${esc(f.familyId)}"${ctx.dis()}>${openFamily === f.familyId ? '閉じる' : '内訳'}</button></div></div>${openFamily === f.familyId ? `<div>${detailPart(ctx)}</div>` : ''}`;
   }).join('') + '</div>';
   if (bill.voided.length) h += `<h3>取り消した請求</h3><ul class="small">${bill.voided.map(v => `<li>${esc(v.name)} ${yen(v.total)}（${esc(v.voidReason)}）</li>`).join('')}</ul>`;
@@ -212,6 +217,9 @@ export async function billingClick(ctx, a, b) {
   } else if (a === 'pl-send') {
     if (!confirm('この家族に、下書きの計画をまとめてお知らせしますか？ 保護者ページに出て、承認をお願いするメールが届きます。')) return true;
     r = await ctx.call('billing/plans/send', { familyId: b.dataset.family }); msg = r.ok ? `${r.sent}件をお知らせしました` : ''; if (r.ok) plans = null;
+  } else if (a === 'pl-remind') {
+    if (!confirm('この家族に、承認待ちの計画の「承認のお願い」をメールで送りますか？')) return true;
+    r = await ctx.call('billing/plans/remind', { familyId: b.dataset.family }); msg = r.ok ? `承認のお願いを送りました（${r.reminded}件）` : ''; if (r.ok) { plans = null; bill = null; }
   } else if (a === 'pl-delete') {
     if (!confirm('この計画を消しますか？')) return true;
     r = await ctx.call('billing/plans/delete', { id: b.dataset.id, version: Number(b.dataset.version) }); msg = '消しました'; if (r.ok) plans = null;

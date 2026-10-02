@@ -205,3 +205,21 @@ test('a lesson shorter or longer than the plan is charged by the time, rounding 
   const { typedFee } = await import('../cf/v2/migrate-billing.mjs');
   assert.deepEqual([typedFee(933, 90), typedFee(833, 90), typedFee(700, 90), typedFee(1667, 90), typedFee(1234, 60)], [2800, 2500, 2100, 5000, 2468]);
 });
+
+test('staff can send a reminder for plans still waiting for approval, once a day per family', async () => {
+  const { h, auth, kid, plan, lesson } = await world();
+  assert.equal((await h.call('billing/plans/remind', { auth, familyId: kid.familyId })).error.code, 'nothing');
+  await plan(kid.id);
+  await h.ok('billing/plans/send', { auth, familyId: kid.familyId });
+  await lesson(kid.id, '2026-09-08'); await lesson(kid.id, '2026-09-15');
+  const r = await h.ok('billing/plans/remind', { auth, familyId: kid.familyId });
+  assert.deepEqual([r.reminded, r.waiting], [1, 2]);
+  const mail = h.mails().at(-1);
+  assert.match(mail.subject, /授業計画の承認のお願い/); assert.match(mail.body, /すでに2回決まっています/);
+  assert.equal(mail.status, 'dismissed', '切り替え前は送らない');
+  assert.equal((await h.call('billing/plans/remind', { auth, familyId: kid.familyId })).error.code, 'tooSoon');
+  h.clock += 86400e3;
+  await h.ok('billing/plans/remind', { auth, familyId: kid.familyId });
+  const month = await h.ok('billing/month', { auth, month: '2026-09' });
+  assert.equal(month.families[0].proposedPlans, 1);
+});
