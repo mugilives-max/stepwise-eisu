@@ -1,11 +1,12 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux17';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux17';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux17';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux18';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux18';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux18';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
-let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。記録の画面を離れたら捨てる // panel: 記録の画面で開いているもの（range・hw・next）
+let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。先に読んでおいた相手の記録も入る。記録の画面を離れたら捨てる
+let swapFrom = '', swapTo = '', swapDir = '', slidePending = false; // 切り替えの動き（押した人と前の人） // 切り替えの丸い背景を、前に出ていた人から滑らせるため // panel: 記録の画面で開いているもの（range・hw・next）
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
 // 選ぶ項目（表記がずれないように）。サーバーの NOTE_CHOICES（cf/v2/records.mjs）と同じ値
 const CHOICES = {
@@ -17,7 +18,7 @@ const CHOICES = {
 // 宿題の正答率は10%刻みで選ぶ（数字を打たない）
 const ACCURACY = Array.from({ length: 11 }, (_, i) => [String(i * 10), i * 10 + '%']);
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
-export function leaveRecords(page) { hwOpen = ''; panel = ''; if (page !== 'record') kept = {}; }
+export function leaveRecords(page) { hwOpen = ''; panel = ''; if (page !== 'record') { kept = {}; swapFrom = swapTo = ''; } }
 export function resetRecords() { kept = {}; hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; rgRows = null; }
 // 扱った範囲の1件を文に: 「不定詞 Keywork p.10〜12」
 function pagesText(p) { const s = String(p || '').trim().replace(/^p\.?\s*/i, '').replace(/\s*[-~～ー−]\s*/g, '〜'); return s ? 'p.' + s : ''; }
@@ -48,14 +49,14 @@ export function recordsPage(ctx) {
 export function recordPage(ctx, lessonId) {
   const { esc } = ctx;
   if (recFor !== lessonId) {
-    const prev = recFor && rec && rec.lesson ? { rec, hwRows, rgRows } : null;
+    const prev = recFor && rec && rec.lesson ? { rec, hwRows, rgRows, touched: true } : null;
     if (prev) kept[recFor] = prev;
     recFor = lessonId; rec = null; hwRows = null; rgRows = null; panel = '';
     const back = kept[lessonId]; delete kept[lessonId];
     if (back) { ({ rec, hwRows, rgRows } = back); if (prev && (prev.rec.together || []).length) rec.together = prev.rec.together; } // 切り替えて戻ってきた: 書きかけのまま（並びの記録の状態は新しいほうを使う）
     else ctx.call('records/lesson', { lessonId }).then(r => {
       if (recFor !== lessonId) return;
-      if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); rgRows = rangeRowsFrom(r.record); } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
+      if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); rgRows = rangeRowsFrom(r.record); prefetch(ctx, r); } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
       ctx.render();
     });
   }
@@ -110,13 +111,36 @@ export function recordPage(ctx, lessonId) {
   return h + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
 }
 // 2人同時の授業の切り替え（ChatGPT の Chat/Work のような形）。名字が同じなら名前で出す。公開済みは ✓、下書きは ・
+function prefetch(ctx, r) {
+  for (const x of r.together || []) {
+    if (x.id === r.lesson.id || kept[x.id]) continue;
+    ctx.call('records/lesson', { lessonId: x.id }).then(o => { if (o.ok && !kept[x.id] && recFor !== x.id) kept[x.id] = { rec: o, hwRows: o.homework.map(y => ({ ...y })), rgRows: rangeRowsFrom(o.record) }; });
+  }
+}
+// 丸い背景を、前の人から今の人へ滑らせ、中身を滑る向きに少しずらして出す。描き直しが続いても、最後に描いたあとで1回だけ動かす
+function slideSeg() {
+  if (slidePending) return; slidePending = true;
+  requestAnimationFrame(() => {
+    slidePending = false;
+    const seg = document.querySelector('.seg2'); if (!seg) return;
+    const ind = seg.querySelector('.ind'), to = seg.querySelector('button.on'), moved = swapTo && to.dataset.id === swapTo;
+    const from = (moved && seg.querySelector(`button[data-id="${CSS.escape(swapFrom)}"]`)) || to;
+    const put = b => { ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft - 3}px)`; };
+    ind.style.transition = 'none'; put(from); void ind.offsetWidth; ind.style.transition = ''; seg.classList.add('ready'); put(to);
+    if (moved && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const dx = swapDir === 'next' ? 14 : -14;
+      document.querySelectorAll('.rec-head, form.rec').forEach(el => el.animate([{ opacity: .35, transform: `translateX(${dx}px)` }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.32, .72, 0, 1)' }));
+    }
+    if (moved) swapFrom = swapTo = swapDir = '';
+  });
+}
 function togetherPart(ctx) {
   const { esc } = ctx, list = rec.together || [];
   if (list.length < 2) return '';
-  const sameFamily = new Set(list.map(x => x.familyName)).size < list.length;
-  return `<div class="seg2" role="tablist" aria-label="同じ時間の授業">${list.map(x => {
-    const on = x.id === rec.lesson.id, mark = x.recordStatus === 'published' ? ' <span class="ok">✓</span>' : x.recordStatus === 'draft' || kept[x.id] ? ' <span class="muted">・</span>' : '';
-    return `<button type="button" role="tab" aria-selected="${on}" class="${on ? 'on' : ''}" data-action="rec-switch" data-id="${esc(x.id)}">${esc(sameFamily ? x.givenName || x.name : x.familyName || x.name)}さん${mark}</button>`;
+  slideSeg();
+  return `<div class="seg2" role="tablist" aria-label="同じ時間の授業"><span class="ind" aria-hidden="true"></span>${list.map(x => {
+    const on = x.id === rec.lesson.id, mark = x.recordStatus === 'published' ? ' <span class="ok">✓</span>' : x.recordStatus === 'draft' || (kept[x.id] && kept[x.id].touched) ? ' <span class="muted">・</span>' : '';
+    return `<button type="button" role="tab" aria-selected="${on}" class="${on ? 'on' : ''}" data-action="rec-switch" data-id="${esc(x.id)}">${esc(x.name)}${mark}</button>`;
   }).join('')}</div>`;
 }
 // 1行の要点（押すと開く）
@@ -241,7 +265,7 @@ export async function recordsSubmit(ctx, kind, el, ev) {
   return false;
 }
 export async function recordsClick(ctx, a, b) {
-  if (a === 'rec-switch') { if (b.dataset.id !== recFor) location.replace('#record=' + encodeURIComponent(b.dataset.id)); return true; } // 履歴を増やさない（戻るは前の画面へ）
+  if (a === 'rec-switch') { if (b.dataset.id !== recFor) { const ids = (rec.together || []).map(x => x.id); swapDir = ids.indexOf(b.dataset.id) > ids.indexOf(recFor) ? 'next' : 'prev'; swapTo = b.dataset.id; swapFrom = recFor; location.replace('#record=' + encodeURIComponent(b.dataset.id)); } return true; } // 履歴を増やさない（戻るは前の画面へ）
   if (a === 'rec-open') { panel = b.dataset.k; return true; }
   if (a === 'rec-close') { panel = ''; return true; }
   if (a === 'chk-set') { const cur = (rec.draftChecks || {})[b.dataset.id] || ''; rec.draftChecks = { ...(rec.draftChecks || {}), [b.dataset.id]: cur === b.dataset.v ? '' : b.dataset.v }; return true; }
