@@ -1,6 +1,6 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux27';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux28';
 
 let month = null, data = null, sel = null, sheet = null, families = null, loadedFor = '';
 // スマホ（ライフベアの形）: はじめは月全体。日付を押すと、その週が一番上まで滑り上がり、下から一覧が出る（2週分）。同じ日をもう一度押すか取っ手で月全体に戻る
@@ -11,16 +11,24 @@ const ymOf = d => d.slice(0, 7);
 const addMonths = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1)); return t.toISOString().slice(0, 7); };
 const gridStart = ym => { const first = new Date(ym + '-01T00:00:00Z'); return new Date(first - first.getUTCDay() * 86400e3).toISOString().slice(0, 10); };
 const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400e3).toISOString().slice(0, 10);
-export function resetSchedule() { data = null; loadedFor = ''; sheet = null; }
+export function resetSchedule() { data = null; loadedFor = ''; sheet = null; cache = {}; }
+// 月ごとに読んだ予定をとっておく（スワイプで月を変えたとき、すぐ出せるように。前後の月は先に読んでおく）。予定を変えたら捨てる
+let cache = {}, swipeAt = 0, slideIn = '';
 // 月の表では、生徒ごとに授業をまとめ、まだ決まっていないものがあればその色で出す
 const RANK = { held: 0, proposed: 1, decided: 2, done: 3 };
 
+function prefetchNear(ctx) {
+  for (const m of [addMonths(month, -1), addMonths(month, 1)]) {
+    if (cache[m]) continue;
+    const from = gridStart(m); ctx.call('schedule/staff/range', { from, to: addDays(from, 41) }).then(r => { if (r.ok && !cache[m]) cache[m] = r; });
+  }
+}
 async function load(ctx) {
   const from = gridStart(month), to = addDays(from, 41);
   loadedFor = month;
   const r = await ctx.call('schedule/staff/range', { from, to });
   if (!r.ok) { if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); data = { lessons: [], openRequests: [], events: [], unavailability: [], meetings: [], students: [], staff: [], kinds: ['通常'], today: '', error: true }; }
-  else { data = r; if (!sel) sel = r.today; }
+  else { data = r; cache[month] = r; if (!sel) sel = r.today; prefetchNear(ctx); }
   ctx.render();
 }
 
@@ -33,6 +41,7 @@ function shortNames() {
 export function schedulePage(ctx, me) {
   const { esc } = ctx, manager = me.roles.includes('manager');
   if (!month) month = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 7);
+  if ((!data || loadedFor !== month) && cache[month]) { data = cache[month]; loadedFor = month; prefetchNear(ctx); } // 先に読んであった月はすぐ出す
   if (!data || loadedFor !== month) { if (loadedFor !== month) load(ctx); return '<p class="muted" style="margin-top:20px">読み込んでいます…</p>'; }
   const nameOf = Object.fromEntries(data.students.map(s => [s.id, s.name])), staffOf = Object.fromEntries(data.staff.map(s => [s.id, s.name])), short = shortNames();
   const held = {}; data.lessons.filter(l => l.status === 'held').forEach(l => { held[l.studentId] = (held[l.studentId] || 0) + 1; });
@@ -77,6 +86,7 @@ export function schedulePage(ctx, me) {
 // スマホ: カレンダーの窓の高さと位置を、前の形から新しい形へ 0.38秒で動かす（最初は速く、最後はゆっくり）。一覧は下から出入りする
 let animPending = false;
 function animCal(ctx) {
+  setTimeout(() => { bindDrag(ctx); bindSwipe(ctx); }, 0); // 描くたびに、取っ手と月の表に指の動きを付ける（動きの途中でも）
   if (animPending) return; animPending = true; // 続けて描き直しても、最後に描いた画面で1回だけ動かす
   requestAnimationFrame(() => {
     animPending = false;
@@ -98,7 +108,39 @@ function animCal(ctx) {
     if (day && day.classList.contains('leaving')) day.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(60vh)', opacity: 0 }], { duration: 300, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }).onfinish = () => day.remove();
     win.addEventListener('scroll', () => { if (!calOpen) calTop = win.scrollTop; }, { passive: true });
   });
-  requestAnimationFrame(() => bindDrag(ctx));
+}
+// 月の表を左右にスワイプ: 指に付いて動き、2割以上か素早く払えば次（左へ）・前（右へ）の月へ滑って替わる。足りなければ戻る
+const EASE = 'cubic-bezier(.32, .72, 0, 1)';
+function bindSwipe(ctx) {
+  const win = document.querySelector('.cal-win'), grid = win && win.querySelector('.month2'); if (!grid) return;
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (slideIn && !still) grid.animate([{ transform: `translateX(${slideIn === 'next' ? 60 : -60}%)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: EASE });
+  slideIn = '';
+  let x0 = null, y0 = 0, dx = 0, horiz = null, lastX = 0, lastT = 0, v = 0;
+  win.onpointerdown = e => { if (e.pointerType === 'mouse') return; x0 = lastX = e.clientX; y0 = e.clientY; dx = 0; v = 0; horiz = null; lastT = e.timeStamp; };
+  win.onpointermove = e => {
+    if (x0 === null) return;
+    const ddx = e.clientX - x0, ddy = e.clientY - y0;
+    if (horiz === null && Math.abs(ddx) + Math.abs(ddy) > 10) horiz = Math.abs(ddx) > Math.abs(ddy) * 1.2;
+    if (!horiz) return;
+    dx = ddx; v = (e.clientX - lastX) / Math.max(1, e.timeStamp - lastT); lastX = e.clientX; lastT = e.timeStamp;
+    grid.style.transform = `translateX(${dx}px)`; grid.style.opacity = String(1 - Math.min(.5, Math.abs(dx) / win.offsetWidth * .7));
+  };
+  const end = () => {
+    if (x0 === null) return; x0 = null; if (!horiz) return; swipeAt = Date.now();
+    const W = win.offsetWidth, go = Math.abs(dx) > W * .2 || (Math.abs(v) > .4 && Math.abs(dx) > 24), dir = dx < 0 ? 'next' : 'prev';
+    const a = grid.animate([{ transform: `translateX(${dx}px)`, opacity: Number(grid.style.opacity || 1) }, go ? { transform: `translateX(${dx < 0 ? -W : W}px)`, opacity: 0 } : { transform: 'none', opacity: 1 }],
+      { duration: still ? 1 : go ? 200 : 240, easing: go ? 'cubic-bezier(.4, 0, 1, 1)' : EASE, fill: 'forwards' });
+    let finished = false; // 動きが止まっても（画面が描かれていないときなど）、少し待てば必ず月を替える
+    const fin = () => {
+      if (finished) return; finished = true;
+      if (!go) { grid.style.transform = ''; grid.style.opacity = ''; a.cancel(); return; }
+      month = addMonths(month, dir === 'next' ? 1 : -1); sel = month + '-01'; sheet = null;
+      calOpen = true; wasOpen = true; calH = null; calTop = null; slideIn = dir; ctx.render();
+    };
+    a.onfinish = fin; setTimeout(fin, (still ? 1 : go ? 200 : 240) + 150);
+  };
+  win.onpointerup = end; win.onpointercancel = end;
 }
 // 取っ手を下へ引く: 引いた分だけカレンダーが広がり、一覧は薄くなる。約70px 以上か、素早く払ったら閉じて月全体へ。足りなければ元へ戻る
 function bindDrag(ctx) {
@@ -227,7 +269,7 @@ function meetingForm(ctx) {
 const lessonById = id => (data && data.lessons ? data.lessons.find(l => l.id === id) : null); // ほかの画面のボタン（data-id つき）でも落ちないように
 const values = el => Object.fromEntries(new FormData(el).entries());
 async function after(ctx, r, okMessage) {
-  if (r.ok) { data = null; loadedFor = ''; if (sheet && sheet.kind === 'lesson') sheet = null; if (okMessage) ctx.say(okMessage, 'ok'); return true; }
+  if (r.ok) { data = null; loadedFor = ''; cache = {}; if (sheet && sheet.kind === 'lesson') sheet = null; if (okMessage) ctx.say(okMessage, 'ok'); return true; }
   if (r.error && r.error.needForce && confirm(r.error.message)) return 'force';
   if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
   return true;
@@ -239,7 +281,7 @@ export async function scheduleSubmit(ctx, kind, el) {
     const body = { studentId: v.studentId, date: v.date, start: v.start, minutes: Number(v.minutes), subject: v.subject, kind: v.kind, deliveryMode: v.deliveryMode, staffId: v.staffId, repeat: Number(v.repeat), hold: v.send === 'hold' };
     let r = await ctx.call('schedule/lessons/create', body);
     if ((await after(ctx, r, '')) === 'force') r = await ctx.call('schedule/lessons/create', { ...body, force: true });
-    if (r.ok) { sheet = null; sel = v.date; ctx.say(r.held ? `${r.created}件を予定表に入れました（まだ送っていません）` : `${r.created}件の仮予定を送りました${r.confirmBy ? '（締め切り ' + Number(r.confirmBy.slice(5, 7)) + '/' + Number(r.confirmBy.slice(8)) + '）' : ''}`, 'ok'); data = null; loadedFor = ''; }
+    if (r.ok) { sheet = null; cache = {}; sel = v.date; ctx.say(r.held ? `${r.created}件を予定表に入れました（まだ送っていません）` : `${r.created}件の仮予定を送りました${r.confirmBy ? '（締め切り ' + Number(r.confirmBy.slice(5, 7)) + '/' + Number(r.confirmBy.slice(8)) + '）' : ''}`, 'ok'); data = null; loadedFor = ''; }
     return true;
   }
   if (kind === 'sch-update') {
@@ -256,9 +298,10 @@ export async function scheduleSubmit(ctx, kind, el) {
 
 export async function scheduleClick(ctx, a, b) {
   const id = b.dataset.id, l = id ? lessonById(id) : null;
-  if (a === 'sch-month') { month = addMonths(month, Number(b.dataset.n)); sel = month + '-01'; data = null; sheet = null; return true; }
+  if (a === 'sch-month') { month = addMonths(month, Number(b.dataset.n)); sel = month + '-01'; data = null; sheet = null; slideIn = Number(b.dataset.n) > 0 ? 'next' : 'prev'; calOpen = true; wasOpen = true; calH = calTop = null; return true; } // 矢印でもスワイプと同じく滑って替わる
   if (a === 'sch-today') { const t = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); sel = t; if (ymOf(t) !== month) { month = ymOf(t); data = null; } return true; }
   if (a === 'sch-day') {
+    if (Date.now() - swipeAt < 400) return true; // スワイプした指を離したときの押し
     const d = b.dataset.date;
     if (b.classList.contains('day-band')) { sel = d; window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
     if (phone() && calOpen) { sel = d; calOpen = false; } // 月全体から日を押した: その週を上へ、一覧を下から

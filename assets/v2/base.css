@@ -358,7 +358,8 @@ body.focus main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .ublock > .hwrow:first-child { grid-template-columns: minmax(0, 1fr) auto; }
 .rec-row .v b { font-weight: 700; }
 /* ---- 予定（スマホ）: カレンダーは2週分の窓（選んだ週が一番上）、すぐ下に選んだ日とそのあとの予定 ---- */
-.cal-win { position: relative; }
+.cal-win { position: relative; touch-action: pan-y; overflow-x: hidden; } /* 縦はスクロール、横はスワイプで月を変える */
+.cal-win .month2 { will-change: transform; }
 .cal-handle { display: none; }
 .day-band { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; padding: 6px 4px; margin-top: 8px; background: #eef1f4; border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
 @media (max-width: 719px) {
