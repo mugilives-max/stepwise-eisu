@@ -147,3 +147,28 @@ button.small-btn.warn { background: var(--warn-soft); border-color: #f1d9ad; col
 @keyframes sheet-up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 @media (min-width: 720px) { .bsheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%); width: min(560px, 92vw); border-radius: 14px; animation: none; } .bsheet .grab { display: none; } }
 @media (prefers-reduced-motion: reduce) { .bsheet { animation: none; } }
+
+/* ---- メニュー（アイコンつき）。スマホでは画面の下に固定（親指で押せる位置） ---- */
+nav a { display: inline-flex; align-items: center; gap: 5px; }
+nav svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 720px) {
+  body.has-tabs nav#nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--white); border-top: 1px solid var(--line); display: flex; justify-content: space-around; gap: 0; margin: 0; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); overflow: visible; }
+  body.has-tabs nav#nav a { flex: 1; flex-direction: column; gap: 1px; font-size: 10.5px; padding: 4px 0; border-radius: 8px; text-align: center; }
+  body.has-tabs nav#nav a.on { background: none; }
+  body.has-tabs nav#nav svg { width: 22px; height: 22px; }
+  body.has-tabs main { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  body.has-tabs .bsheet { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+.page-head { display: flex; align-items: baseline; gap: 10px; }
+.page-head h1 { margin-bottom: 4px; }
+h2 .count { font-size: 12px; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 0 8px; font-weight: 700; }
+.rows .todo { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 12px 2px; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+.rows .todo:hover { background: #f4f7fb; }
+.rows .todo .b { display: grid; gap: 1px; }
+.rows .todo .n { font-weight: 700; color: var(--warn); font-size: 16px; }
+.rows .lesson-row { display: grid; grid-template-columns: 4.2em minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.rows .lesson-row .b { text-decoration: none; color: var(--ink); }
+.rows .lesson-row .act { text-align: right; }
+a.small-btn { display: inline-block; text-decoration: none; padding: 6px 12px; font-size: 13px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: var(--white); white-space: nowrap; }
+a.small-btn.primary { background: var(--primary); border-color: var(--primary); color: var(--white); font-weight: 700; }
+button.small-btn { white-space: nowrap; }

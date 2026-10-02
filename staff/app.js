@@ -1,13 +1,15 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-ux1';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-ux1';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-ux1';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-ux1';
-import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-ux1';
-import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-ux1';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-ux1';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-ux2';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-ux2';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-ux2';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-ux2';
+import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-ux2';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261002-ux2';
+import { monthlyPage, settingsPage } from '/staff/hubs.js?v=20261002-ux2';
+import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-ux2';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-ux2';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -32,12 +34,37 @@ const roleTags = roles => roles.map(r => `<span class="tag">${esc(ROLE_LABEL[r] 
 
 async function run(task) { if (busy) return; busy = true; render(); try { await task(); } finally { busy = false; render(); } }
 
+// メニュー（docs/UX_STRUCTURE.md 3）: 教室管理者は 今日・予定・生徒・月の仕事・設定、講師は 今日・予定・生徒・報酬。スマホでは画面の下に出る
+const ICON = {
+  home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+  schedule: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  students: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/>',
+  monthly: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  payroll: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+};
+function navItems() {
+  if (!me) return [];
+  const m = me.roles.includes('manager'), t = me.roles.includes('teacher');
+  if (m) return [['home', '今日'], ['schedule', '予定'], ['families', '生徒', 'students'], ['monthly', '月の仕事'], ['settings', '設定']];
+  if (t) return [['home', '今日'], ['schedule', '予定'], ['grades', '生徒', 'students'], ['payroll', '報酬'], ['settings', '設定']];
+  return [['home', '今日'], ['settings', '設定']]; // システム管理者だけのとき
+}
+// いまの画面が、どの入口の下にあるか
+function tabOf(page) {
+  const m = me && me.roles.includes('manager');
+  if (['family', 'families', 'gradesOf', 'grades'].includes(page)) return m ? 'families' : 'grades';
+  if (['records', 'record'].includes(page)) return 'home';
+  if (['plans', 'billing'].includes(page)) return 'monthly';
+  if (page === 'payroll') return m ? 'monthly' : 'payroll';
+  if (['staff', 'migrate', 'account'].includes(page)) return 'settings';
+  return page;
+}
 function renderNav() {
-  const r = route().page;
-  if (!me) { nav.innerHTML = ''; return; }
-  const items = [['home', 'ホーム'], ...(me.roles.includes('manager') || me.roles.includes('teacher') ? [['schedule', '予定'], ['records', '記録'], ['grades', '成績'], ['payroll', '報酬']] : []), ...(me.roles.includes('manager') ? [['families', '家族と生徒'], ['plans', '計画'], ['billing', '請求']] : []), ...(me.roles.includes('sysadmin') ? [['staff', 'スタッフ'], ['migrate', '移行']] : []), ['account', 'アカウント']];
-  const on = r === 'family' ? 'families' : r === 'record' ? 'records' : r === 'gradesOf' ? 'grades' : r;
-  nav.innerHTML = items.map(([k, label]) => `<a href="#${k}" class="${on === k ? 'on' : ''}">${label}</a>`).join('');
+  if (!me) { nav.innerHTML = ''; document.body.classList.remove('has-tabs'); return; }
+  const on = tabOf(route().page);
+  nav.innerHTML = navItems().map(([k, label, icon]) => `<a href="#${k}" class="${on === k ? 'on' : ''}"${on === k ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[icon || k] || ''}</svg><span>${label}</span></a>`).join('');
+  document.body.classList.add('has-tabs');
 }
 
 // ---------- ログインしていないときの画面 ----------
@@ -79,10 +106,6 @@ function invitePage(token) {
 function resetPage() { return `<h1>新しいパスワード</h1>${noticeHtml()}${newPasswordForm('reset', 'パスワードを変える')}`; }
 
 // ---------- ログインしたあとの画面 ----------
-function homePage() {
-  return `<h1>${esc(me.name)} さん</h1><p>${roleTags(me.roles)}</p>${noticeHtml()}
-    <p class="notice">新しい管理画面は作っている途中です。今使えるのは、アカウント・スタッフ・家族と生徒・予定・記録・成績・報酬・計画・請求・移行の準備です。ここで登録・変更した内容は、切り替えまで今の仕組みには反映されません。授業・請求などの毎日の作業は、今までどおり <a href="/kanri/?stay=1">今の管理画面</a> を使ってください。保護者・生徒からの見え方は「家族と生徒」の各家族の「プレビュー」で確かめられます。</p>`;
-}
 function accountPage() {
   return `<h1>アカウント</h1><p>${esc(me.name)}（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
     <h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
@@ -112,12 +135,12 @@ async function loadStaff() {
   if (!r.ok) { if (r.error.code === 'needLogin') return signedOut(); say(r.error.message, 'error'); staffList = []; } else staffList = r.staff;
   render();
 }
-function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); say('ログインし直してください', 'error'); render(); }
+function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); resetToday(); say('ログインし直してください', 'error'); render(); }
 // 各ページ（families.js・migrate.js）に渡す共通の道具
 const ctx = {
   call: (route, body = {}) => call(route, body, store.get()), esc, render: () => render(), dis: () => dis(), notice: () => noticeHtml(),
   say: (m, k) => say(m, k), handleAuth: r => { if (r && r.error && r.error.code === 'needLogin') { signedOut(); return true; } return false; },
-  afterMigrate: () => { resetFamilies(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); },
+  afterMigrate: () => { resetFamilies(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetToday(); },
   get isManager() { return !!me && me.roles.includes('manager'); },
 };
 
@@ -139,7 +162,9 @@ function render() {
   else if (r.page === 'plans' && me.roles.includes('manager')) h = plansPage(ctx);
   else if (r.page === 'billing' && me.roles.includes('manager')) h = billingPage(ctx);
   else if (r.page === 'migrate' && me.roles.includes('sysadmin')) h = migratePage(ctx);
-  else h = r.page === 'account' ? accountPage() : r.page === 'staff' ? staffPage() : homePage();
+  else if (r.page === 'monthly' && me.roles.includes('manager')) h = monthlyPage(ctx);
+  else if (r.page === 'settings') h = settingsPage(ctx, me);
+  else h = r.page === 'account' ? accountPage() : r.page === 'staff' ? staffPage() : (me.roles.includes('manager') || me.roles.includes('teacher')) ? todayPage(ctx, me) : settingsPage(ctx, me);
   app.className = !me || ['invite', 'reset', 'forgot'].includes(r.page) ? 'narrow' : r.page === 'schedule' ? 'wide' : '';
   app.innerHTML = h;
 }
@@ -191,7 +216,7 @@ app.addEventListener('click', ev => {
   if (a === 'gr-resolve') { const sel = document.querySelector(`[data-resolve-exam="${b.dataset.id}"]`); b.dataset.exam = sel ? sel.value : ''; }
   captureRecordInputs();
   run(async () => {
-    if (await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b) || await billingClick(ctx, a, b) || await gradesClick(ctx, a, b) || await payrollClick(ctx, a, b)) return;
+    if (await todayClick(ctx, a, b) || await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b) || await billingClick(ctx, a, b) || await gradesClick(ctx, a, b) || await payrollClick(ctx, a, b)) return;
     let r;
     if (a === 'bootstrap') {
       r = await call('staff/bootstrap', { legacyToken: legacyToken() });
@@ -208,7 +233,10 @@ app.addEventListener('click', ev => {
   });
 });
 app.addEventListener('input', ev => { const n = ev.target.dataset && ev.target.dataset.input; if (n) familiesInput(ctx, n, ev.target); });
-window.addEventListener('hashchange', () => { if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); say(''); render(); });
+window.addEventListener('hashchange', () => {
+  // 「今日」に戻ってきたら読み直す（記録を書いたあとなど）
+  if (route().page === 'home') resetToday();
+  if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); say(''); render(); });
 
 (async function boot() {
   const auth = store.get();
