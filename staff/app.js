@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux18';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux18';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux18';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs } from '/staff/records.js?v=20261003-ux18';
-import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux18';
-import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux18';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux18';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux18';
-import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux18';
-import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux18';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux18';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux19';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux19';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux19';
+import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs } from '/staff/records.js?v=20261003-ux19';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux19';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux19';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux19';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux19';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux19';
+import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux19';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux19';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -83,7 +83,18 @@ function renderBack(r) {
   if (old) old.remove();
   if (html) bar.insertAdjacentHTML('afterbegin', html);
   document.body.classList.toggle('has-back', !!html);
+  // 記録を書く画面: 上の帯に名前と日時・三本線（「ステップワイズ」は出さない）。下のメニューは隠して、その画面だけにする
+  const info = r.page === 'record' && me ? recordBar() : null;
+  bar.querySelectorAll('.bar-title, .bar-right').forEach(x => x.remove());
+  if (info) {
+    const back = bar.querySelector('a.back');
+    (back || bar.firstElementChild).insertAdjacentHTML(back ? 'afterend' : 'beforebegin', `<div class="bar-title"><strong>${info.title}</strong><small>${info.sub}</small></div>`);
+    bar.querySelector('.bar-title').insertAdjacentHTML('afterend', `<div class="bar-right">${info.right}</div>`);
+  }
+  document.body.classList.toggle('focus', r.page === 'record' && !!me);
 }
+// 書くと高さが伸びる入力欄
+const grow = t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; };
 function renderNav() {
   if (!me) { nav.innerHTML = ''; document.body.classList.remove('has-tabs'); return; }
   const on = tabOf(route().page);
@@ -203,8 +214,9 @@ function render() {
   else h = r.page === 'account' ? accountPage() : r.page === 'staff' ? staffPage() : (me.roles.includes('manager') || me.roles.includes('teacher')) ? todayPage(ctx, me) : settingsPage(ctx, me);
   app.className = !me || ['invite', 'reset', 'forgot'].includes(r.page) ? 'narrow' : r.page === 'schedule' ? 'wide' : '';
   const was = app.querySelector('.bsheet, .panel.open'), wasLabel = was && was.getAttribute('aria-label'), wasBody = was && (was.querySelector('.panel-body') || was), wasTop = wasBody ? wasBody.scrollTop : 0;
-  renderBack(r);
   app.innerHTML = h;
+  renderBack(r);
+  app.querySelectorAll('textarea.grow').forEach(grow);
   const now = app.querySelector('.bsheet, .panel.open');
   if (now && wasLabel === now.getAttribute('aria-label')) { now.classList.add('still'); (now.querySelector('.panel-body') || now).scrollTop = wasTop; }
   if (now && notice && notice.kind === 'error') now.querySelector('.bsheet-body, .panel-body').insertAdjacentHTML('afterbegin', noticeHtml()); // 下から出る画面の中でも見えるように
@@ -244,7 +256,7 @@ app.addEventListener('submit', ev => {
     say(r.error.message, 'error');
   });
 });
-app.addEventListener('click', ev => {
+document.addEventListener('click', ev => {
   if (ev.target.dataset && ev.target.dataset.slider) return sliderInput(ev.target); // まだ選んでいないスライダーの左端を押したとき（値が変わらず change が来ない）
   const b = ev.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
@@ -278,7 +290,7 @@ app.addEventListener('click', ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { const x = app.querySelector('.bsheet-head button.icon, .panel.open .panel-head button.icon'); if (x) x.click(); } });
 app.addEventListener('change', ev => { if (ev.target.dataset && ev.target.dataset.slider) sliderInput(ev.target); }); // 押しただけのときは change だけ来ることがある
-app.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.slider) return sliderInput(ev.target); const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
+app.addEventListener('input', ev => { if (ev.target.classList && ev.target.classList.contains('grow')) grow(ev.target); if (ev.target.dataset && ev.target.dataset.slider) return sliderInput(ev.target); const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
 window.addEventListener('hashchange', () => {
   // 「今日」「生徒」に戻ってきたら読み直す（記録を書いたあとなど）。同じ生徒の画面のタブを切り替えるときは読み直さない
   const pg = route().page, hash = location.hash || '#home';

@@ -312,3 +312,22 @@ form.rec > textarea { margin: 8px 0; }
 .seg2.ready .ind { opacity: 1; }
 .seg2.ready button.on { background: none; box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .seg2 .ind { transition: none; } }
+/* ---- 記録を書く画面のまとまり: 上の帯に名前、本文は1枚の白い枠（iPhone の設定のような形）、下に保存の帯。下のメニューは隠す ---- */
+.bar-title { flex: 1; min-width: 0; text-align: center; line-height: 1.25; }
+.bar-title strong { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-title small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-right { flex-shrink: 0; width: 40px; display: grid; place-items: center; }
+body.focus .top .brand { display: none; }
+body.focus .top .in { flex-wrap: nowrap; }
+body.focus nav#nav { display: none !important; }
+body.focus main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+.group { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; margin: 10px 0 0; }
+.group > .rec-row:last-child, .group > .rec-line:last-child { border-bottom: 0; }
+.group .rec-row, .group .rec-line { padding: 11px 0; }
+.rec-text { align-items: start; grid-template-columns: 48px minmax(0, 1fr); cursor: text; }
+.rec-text .k { padding-top: 2px; }
+.rec-text textarea { border: 0; padding: 0; background: none; resize: none; min-height: 1.6em; line-height: 1.6; outline: none; color: var(--ink); }
+.rec-text:focus-within .k { color: var(--primary); }
+.savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); background: var(--white); border-top: 1px solid var(--line); }
+.savebar .primary { padding-left: 18px; padding-right: 18px; }
+@media (min-width: 720px) { .savebar { left: 50%; transform: translateX(-50%); width: min(860px, 100%); border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }

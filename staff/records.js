@@ -1,12 +1,14 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux18';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux18';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux18';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux19';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux19';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux19';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
 let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。先に読んでおいた相手の記録も入る。記録の画面を離れたら捨てる
-let swapFrom = '', swapTo = '', swapDir = '', slidePending = false; // 切り替えの動き（押した人と前の人） // 切り替えの丸い背景を、前に出ていた人から滑らせるため // panel: 記録の画面で開いているもの（range・hw・next）
+let swapFrom = '', swapTo = '', swapDir = '', slidePending = false;
+let bar = null; // 画面の上の帯（記録の画面だけ）: 名前と日時・三本線。app.js が描く
+export const recordBar = () => bar; // 切り替えの動き（押した人と前の人） // 切り替えの丸い背景を、前に出ていた人から滑らせるため // panel: 記録の画面で開いているもの（range・hw・next）
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
 // 選ぶ項目（表記がずれないように）。サーバーの NOTE_CHOICES（cf/v2/records.mjs）と同じ値
 const CHOICES = {
@@ -60,6 +62,7 @@ export function recordPage(ctx, lessonId) {
       ctx.render();
     });
   }
+  bar = null;
   if (!rec) return '<p class="muted" style="margin-top:24px">読み込んでいます…</p>';
   if (rec.error) return `<h1>授業記録</h1><p class="notice error">${esc(rec.error)}</p>`;
   const l = rec.lesson, saved = rec.record || { range: '', comment: '', parentMessage: '', staffNotes: {}, status: 'none' };
@@ -68,24 +71,25 @@ export function recordPage(ctx, lessonId) {
   while (hwRows.length < 3) hwRows.push({ kind: 'homework', title: '', material: '', dueMode: 'nextLesson', dueSubject: l.subject, dueDate: '' }); // 宿題ははじめから3行（空の行は保存しない）
   const state = r.status === 'published' ? '<span class="tag ok">公開済み</span>' : r.status === 'draft' ? '<span class="tag warn">下書き</span>' : r.status === 'void' ? '<span class="tag gray">無効</span>' : '';
   const when = `<div class="small muted">${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}${rec.student.grade ? '・' + esc(rec.student.grade) : ''}</div>`;
+  const title = `${esc(rec.student.name)}・${esc(l.subject)}`, sub = `${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}${rec.student.grade ? '・' + esc(rec.student.grade) : ''}`;
   if (future || locked) {
-    const h0 = `<div class="page-head"><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1>${state}</div>${when}${ctx.notice()}${beforePart(ctx)}`;
+    bar = { title, sub, right: '' };
+    const h0 = `${ctx.notice()}${beforePart(ctx)}`;
     return future ? h0 + '<p class="notice">授業の日になったら記録を書けます。</p>' + handoverForm(ctx) : h0 + `<p class="notice">この記録は無効にしました（${esc(r.voidReason || '')}）。</p>`;
   }
   const checks = rec.checks || [], due = rec.nextSameSubject ? mdw(rec.nextSameSubject.date) : 'まだ決まっていません';
   const curCheck = x => rec.draftChecks && rec.draftChecks[x.id] !== undefined ? rec.draftChecks[x.id] : x.checkedHere ? x.checkResult : '';
   const unchecked = checks.filter(x => !curCheck(x)).length, unread = rec.handover.filter(x => !x.read).length;
-  // 左上の三本線。まだチェックしていない宿題や読んでいない引き継ぎメモがあるときは点を付ける
-  let h = togetherPart(ctx);
-  h += `<div class="page-head rec-head"><button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
-    <div class="t"><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1>${when}</div>${state}</div>${ctx.notice()}`;
-  h += `<form class="rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}">`;
+  // 上の帯: 戻る・名前と日時・三本線（まだチェックしていない宿題や読んでいない引き継ぎメモがあるときは点）
+  bar = { title, sub, right: `<button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>` };
+  let h = togetherPart(ctx) + ctx.notice();
+  h += `<form class="rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}"><div class="group">`;
   if (!checks.length) h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
   // 今日の授業
   const range = (rgRows || []).map(rangeLine).filter(Boolean).join('、');
   h += row('range', '範囲', range ? esc(range) : '', '教材とページ');
   h += slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.map(([v]) => [v, v]).reverse(), compact: true });
-  h += `<textarea name="comment" maxlength="2000" rows="3" aria-label="コメント" placeholder="コメント（授業の様子。公開するときは必須）">${esc(r.comment)}</textarea>`;
+  h += `<label class="rec-line rec-text"><span class="k">コメント</span><textarea class="grow" name="comment" maxlength="2000" rows="2" placeholder="授業の様子（公開するときは必須）">${esc(r.comment)}</textarea></label>`;
   // 今日出す宿題・次回へ（押すと開く）
   const hw = hwRows.filter(x => hwText(x).trim());
   const hwSum = [checks.length ? `前回 ${checks.length - unchecked}/${checks.length}` : '', hw.length ? `今日 ${esc(hwText(hw[0]))}${hw.length > 1 ? ` ほか${hw.length - 1}件` : ''}` : ''].filter(Boolean).join('・');
@@ -93,14 +97,15 @@ export function recordPage(ctx, lessonId) {
   const nextBits = [n.nextFocus, r.parentMessage ? '保護者へ: ' + r.parentMessage : '', n.memo ? 'メモあり' : ''].filter(Boolean);
   h += row('next', '次回へ', nextBits.length ? esc(nextBits.join('・')) : '', '次回やること・保護者へ・メモ');
   h += `<datalist id="rec-materials">${(rec.materials || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
-    <div class="actionbar row"><button type="submit" name="publish" value="0"${ctx.dis()}>下書き</button><button class="primary" type="submit" name="publish" value="1" style="flex:1"${ctx.dis()}>保存して公開</button></div>
-    <p class="small muted" style="margin:4px 0 0">公開すると、範囲・コメント・保護者への連絡・宿題とそのチェックが生徒と保護者に見えます。</p>`;
+    </div><div class="savebar">${state}<span style="flex:1"></span><button type="submit" name="publish" value="0"${ctx.dis()}>下書き</button><button class="primary" type="submit" name="publish" value="1"${ctx.dis()}>保存して公開</button></div>`;
   // 開く画面（いつもフォームの中に置く）
   h += panelHtml('range', '扱った範囲', `${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button>`);
   h += panelHtml('hw', '宿題と前回のこと', beforePart(ctx)
     + (checks.length ? `<div class="rec-block"><div class="rec-label">前回の宿題 <span>○やった △一部 ×やってない（△×は次へ持ち越し）</span></div>${checksPart(ctx)}</div>
       ${slider(esc, { name: 'note.homeworkAccuracy', label: '正答率', value: String(n.homeworkAccuracy || '').replace(/\s*%$/, ''), options: ACCURACY, compact: true })}` : '')
-    + `<div class="rec-label" style="margin-top:6px">今日の宿題 <span>期限は次の${esc(l.subject)}の授業（${due}）。使わない行は空でよい</span></div>${homeworkRows(ctx)}${hwRows.every(x => hwText(x).trim()) && hwRows.length < 10 ? '<button type="button" class="link small" data-action="hw-add">＋ もう1つ</button>' : ''}`, 'left');
+    + `<div class="rec-label" style="margin-top:6px">今日の宿題 <span>期限は次の${esc(l.subject)}の授業（${due}）。使わない行は空でよい</span></div>${homeworkRows(ctx)}${hwRows.every(x => hwText(x).trim()) && hwRows.length < 10 ? '<button type="button" class="link small" data-action="hw-add">＋ もう1つ</button>' : ''}
+    <p class="small muted" style="margin:14px 0 0">公開すると、範囲・コメント・保護者への連絡・宿題とそのチェックが生徒と保護者に見えます。決定の授業は実施済みになります。</p>
+    ${ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><div class="row"><input id="rec-void-reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button type="button" class="danger" data-action="rec-void"${ctx.dis()}>無効にする</button></div></details>` : ''}`, 'left');
   h += panelHtml('next', '次回へ', `<label>次回やること・気をつけること<textarea name="note.nextFocus" maxlength="1000" rows="2" placeholder="副詞的用法から。to のあとを原形にするミスに注意">${esc(n.nextFocus || '')}</textarea></label>
     <label>保護者への連絡<textarea name="parentMessage" maxlength="1000" rows="2" placeholder="次回は小テストをします">${esc(r.parentMessage)}</textarea></label>
     <label>メモ<textarea name="note.memo" maxlength="1000" rows="2" placeholder="講師どうしのメモ">${esc(n.memo || '')}</textarea></label>
@@ -108,7 +113,7 @@ export function recordPage(ctx, lessonId) {
     <div class="planned stack" style="margin:0"><label>授業計画で予定していた単元<input name="note.plannedUnit" maxlength="1000" value="${esc(n.plannedUnit || '')}" placeholder="不定詞の名詞的用法"></label>
       <div class="pace"><div class="field-label">予定に対して</div>${seg('note.pace', CHOICES.pace, n.pace, esc)}</div></div>`);
   h += '</form>';
-  return h + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
+  return h;
 }
 // 2人同時の授業の切り替え（ChatGPT の Chat/Work のような形）。名字が同じなら名前で出す。公開済みは ✓、下書きは ・
 function prefetch(ctx, r) {
@@ -267,6 +272,13 @@ export async function recordsSubmit(ctx, kind, el, ev) {
 export async function recordsClick(ctx, a, b) {
   if (a === 'rec-switch') { if (b.dataset.id !== recFor) { const ids = (rec.together || []).map(x => x.id); swapDir = ids.indexOf(b.dataset.id) > ids.indexOf(recFor) ? 'next' : 'prev'; swapTo = b.dataset.id; swapFrom = recFor; location.replace('#record=' + encodeURIComponent(b.dataset.id)); } return true; } // 履歴を増やさない（戻るは前の画面へ）
   if (a === 'rec-open') { panel = b.dataset.k; return true; }
+  if (a === 'rec-void') {
+    const reason = (document.getElementById('rec-void-reason') || {}).value || '';
+    if (!confirm('この記録を無効にしますか？ 生徒・保護者のページから消え、未完了の宿題も取り下げます。')) return true;
+    const r = await ctx.call('records/void', { id: rec.record.id, version: rec.record.version, reason });
+    if (r.ok) { recFor = ''; pending = null; panel = ''; ctx.say('記録を無効にしました', 'ok'); } else ctx.say(r.error.message, 'error');
+    return true;
+  }
   if (a === 'rec-close') { panel = ''; return true; }
   if (a === 'chk-set') { const cur = (rec.draftChecks || {})[b.dataset.id] || ''; rec.draftChecks = { ...(rec.draftChecks || {}), [b.dataset.id]: cur === b.dataset.v ? '' : b.dataset.v }; return true; }
   if (a === 'hw-open') { hwOpen = b.dataset.id; ctx.say(''); return true; }
