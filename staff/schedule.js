@@ -1,6 +1,6 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux26';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux27';
 
 let month = null, data = null, sel = null, sheet = null, families = null, loadedFor = '';
 // スマホ（ライフベアの形）: はじめは月全体。日付を押すと、その週が一番上まで滑り上がり、下から一覧が出る（2週分）。同じ日をもう一度押すか取っ手で月全体に戻る
@@ -64,19 +64,19 @@ export function schedulePage(ctx, me) {
       + `<span class="num${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}">${Number(d.slice(8))}</span>${shown.join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</button>`;
   }
   h += '</div></div>';
-  h += `<button class="cal-handle" data-action="sch-cal" aria-label="${calOpen ? '選んだ日の予定を出す' : '月全体を見る'}"><span></span></button>`;
+  if (!calOpen || !phone()) h += `<div class="cal-handle" role="separator" aria-label="下へ引くと月全体に戻る"><span></span></div>`; // 取っ手: 下へ引くと閉じる（押しただけでは何もしない）
   const changed = shownSel && shownSel !== sel; shownSel = sel;
   const showDay = !calOpen || !phone(), leaving = calOpen && !wasOpen && phone();
   if (showDay || leaving) h += `<div class="sch-day${changed && showDay && !wasOpen ? ' enter' : ''}${leaving ? ' leaving' : ''}">${dayPanel(ctx, me, manager, nameOf, staffOf)}</div>`;
   h += '</div>';
-  animCal();
+  animCal(ctx);
   if (sheet) h += sheetHtml(ctx, me, manager, nameOf, staffOf, held);
   return h;
 }
 
 // スマホ: カレンダーの窓の高さと位置を、前の形から新しい形へ 0.38秒で動かす（最初は速く、最後はゆっくり）。一覧は下から出入りする
 let animPending = false;
-function animCal() {
+function animCal(ctx) {
   if (animPending) return; animPending = true; // 続けて描き直しても、最後に描いた画面で1回だけ動かす
   requestAnimationFrame(() => {
     animPending = false;
@@ -98,6 +98,27 @@ function animCal() {
     if (day && day.classList.contains('leaving')) day.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(60vh)', opacity: 0 }], { duration: 300, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }).onfinish = () => day.remove();
     win.addEventListener('scroll', () => { if (!calOpen) calTop = win.scrollTop; }, { passive: true });
   });
+  requestAnimationFrame(() => bindDrag(ctx));
+}
+// 取っ手を下へ引く: 引いた分だけカレンダーが広がり、一覧は薄くなる。約70px 以上か、素早く払ったら閉じて月全体へ。足りなければ元へ戻る
+function bindDrag(ctx) {
+  const hd = document.querySelector('.cal-handle'), win = document.querySelector('.cal-win'), day = document.querySelector('.sch-day');
+  if (!hd || !win || !day || calOpen || !phone()) return;
+  let y0 = null, dy = 0, lastY = 0, lastT = 0, v = 0, twoH = 0, full = 0, top0 = 0;
+  const apply = d => { const q = Math.min(1, d / Math.max(1, full - twoH)); win.style.maxHeight = twoH + (full - twoH) * q + 'px'; win.scrollTop = top0 * (1 - q); day.style.opacity = String(1 - q * 0.7); };
+  hd.onpointerdown = e => { y0 = lastY = e.clientY; lastT = e.timeStamp; dy = 0; v = 0; twoH = win.offsetHeight; full = win.scrollHeight; top0 = win.scrollTop; try { hd.setPointerCapture(e.pointerId); } catch {} hd.classList.add('grab'); };
+  hd.onpointermove = e => { if (y0 === null) return; dy = Math.max(0, e.clientY - y0); v = (e.clientY - lastY) / Math.max(1, e.timeStamp - lastT); lastY = e.clientY; lastT = e.timeStamp; apply(dy); };
+  const end = () => {
+    if (y0 === null) return; y0 = null; hd.classList.remove('grab');
+    const close = dy > 70 || (v > 0.5 && dy > 16), fromD = dy, toD = close ? Math.max(1, full - twoH) : 0, ms = close ? 260 : 220, t0 = performance.now(), ease = q => 1 - Math.pow(1 - q, 3);
+    const step = now => {
+      const q = Math.min(1, (now - t0) / ms); apply(fromD + (toD - fromD) * ease(q));
+      if (q < 1) return requestAnimationFrame(step);
+      if (close) { calOpen = true; wasOpen = true; calH = full; calTop = 0; ctx.render(); } else { day.style.opacity = ''; }
+    };
+    requestAnimationFrame(step);
+  };
+  hd.onpointerup = end; hd.onpointercancel = end;
 }
 // 選んだ日の一覧と、そのあとの6日（1行ずつ。押すと下から詳しい画面）
 function dayPanel(ctx, me, manager, nameOf, staffOf) {
@@ -245,7 +266,6 @@ export async function scheduleClick(ctx, a, b) {
     else sel = d;
     return true;
   }
-  if (a === 'sch-cal') { calOpen = !calOpen; return true; }
   if (a === 'sch-goto') { sel = b.dataset.date; sheet = b.dataset.id ? { kind: 'lesson', id: b.dataset.id } : null; if (ymOf(sel) !== month) { month = ymOf(sel); data = null; } return true; }
   if (a === 'sch-sheet') { sheet = { kind: b.dataset.k }; return true; }
   if (a === 'sch-open') { sheet = { kind: 'lesson', id }; return true; }

@@ -366,8 +366,9 @@ body.focus main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
   .cal-win::-webkit-scrollbar { display: none; }
   .sch-day.leaving { pointer-events: none; }
   .cal-win .wd { position: sticky; top: 0; z-index: 1; background: var(--white); height: 24px; box-sizing: border-box; }
-  .cal-handle { display: block; width: 100%; padding: 6px 0 4px; border: 0; background: none; }
-  .cal-handle span { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 4px; background: #c9d1da; }
+  .cal-handle { display: block; width: 100%; padding: 10px 0 8px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .cal-handle span { display: block; width: 44px; height: 5px; margin: 0 auto; border-radius: 5px; background: #c9d1da; transition: background .15s, width .15s; }
+  .cal-handle.grab span { background: #9aa6b2; width: 52px; }
   .sch-bar + p.small.muted { display: none; }
 }
 /* ---- 動き（全体）: 画面の移り変わり・閉じる動き・選んだ日・押したときの手応え。「視差効果を減らす」では付けない ---- */
