@@ -162,3 +162,35 @@ test('a record whose lesson is gone is not copied; copying everything again keep
   h.db2._sqlite.prepare("insert into settings (key, value, updatedAt) values ('live', '1', '')").run();
   assert.equal((await h.call('admin/migrate/all/apply', { auth, confirm: true })).error.code, 'live', '切り替えたあとは使えない');
 });
+
+test('homework is checked one by one in the next lesson record: done is confirmed, partial and not done carry over, families see the result', async () => {
+  const { h, parent, teacherAuth, make, k } = await world();
+  const a = await make('2026-10-02', '09:00'), b = await make('2026-10-09', '17:00'), c3 = await make('2026-10-16', '17:00');
+  await h.ok('records/save', { auth: teacherAuth, lessonId: a.id, comment: '一回目', homework: [{ title: 'ワーク p.10', dueMode: 'nextLesson', dueSubject: '数学' }, { title: 'プリント', dueMode: 'nextLesson', dueSubject: '数学' }], publish: true });
+  const [w1, w2] = h.rows("select * from homework order by sortOrder, createdAt");
+  await h.ok('student/homework/report', { k, id: w1.id });
+  h.clock = Date.parse('2026-10-09T09:00:00Z');
+  const ctxB = await h.ok('records/lesson', { auth: teacherAuth, lessonId: b.id });
+  assert.deepEqual(ctxB.checks.map(x => [x.title, x.status, x.assignedOn]), [['ワーク p.10', 'reported', '2026-10-02'], ['プリント', 'open', '2026-10-02']], '前回までの宿題');
+  assert.equal((await h.call('records/save', { auth: teacherAuth, lessonId: b.id, comment: 'x', homeworkChecks: [{ id: w1.id, result: 'maybe' }] })).error.code, 'badChecks');
+  const draft = await h.ok('records/save', { auth: teacherAuth, lessonId: b.id, comment: '二回目', staffNotes: { homeworkReview: 'done' }, homework: [{ title: '新しい宿題', dueMode: 'nextLesson', dueSubject: '数学' }], homeworkChecks: [{ id: w1.id, result: 'done' }, { id: w2.id, result: 'notDone' }] });
+  assert.equal(draft.record.staffNotes.homeworkReview, 'partial', '「やってきたか」はチェックから決まる');
+  const row = id => ({ ...h.rows('select status, checkResult, checkedRecordId from homework where id = ?', id)[0] });
+  assert.deepEqual(row(w1.id), { status: 'confirmed', checkResult: 'done', checkedRecordId: draft.record.id });
+  assert.deepEqual(row(w2.id), { status: 'open', checkResult: 'notDone', checkedRecordId: draft.record.id }, 'やってこなかったは未完了のまま');
+  await h.ok('records/save', { auth: teacherAuth, lessonId: b.id, version: draft.record.version, comment: '二回目', homework: (await h.ok('records/lesson', { auth: teacherAuth, lessonId: b.id })).homework.map(x => ({ id: x.id, title: x.title, dueMode: 'nextLesson', dueSubject: '数学' })), homeworkChecks: [{ id: w1.id, result: 'done' }, { id: w2.id, result: 'notDone' }], publish: true });
+  const fam = await h.ok('family/learning', { auth: parent });
+  assert.equal(fam.homework.find(x => x.id === w2.id).checkResult, 'notDone', '保護者にも見える');
+  assert.equal(fam.homework.find(x => x.id === w1.id).checkedRecordId, fam.records[0].id, 'どの授業でチェックしたか');
+  // 同じ記録を開き直すと、チェックしたものも出て付け直せる。外すと確認済みが戻る
+  const again = await h.ok('records/lesson', { auth: teacherAuth, lessonId: b.id });
+  assert.deepEqual(again.checks.map(x => [x.title, x.checkedHere, x.checkResult]), [['ワーク p.10', true, 'done'], ['プリント', true, 'notDone']]);
+  const recB = again.record;
+  await h.ok('records/save', { auth: teacherAuth, lessonId: b.id, version: recB.version, comment: '二回目', homework: again.homework.map(x => ({ id: x.id, title: x.title, dueMode: 'nextLesson', dueSubject: '数学' })), homeworkChecks: [{ id: w1.id, result: '' }, { id: w2.id, result: 'notDone' }], publish: true });
+  assert.deepEqual(row(w1.id), { status: 'open', checkResult: '', checkedRecordId: '' });
+  // 次の授業: 持ち越した宿題と、二回目に出した宿題が出る。前の授業より前の記録には、あとで出した宿題は出ない
+  h.clock = Date.parse('2026-10-16T09:00:00Z');
+  const ctxC = await h.ok('records/lesson', { auth: teacherAuth, lessonId: c3.id });
+  assert.deepEqual(ctxC.checks.map(x => [x.title, x.checkResult, x.checkedHere]), [['ワーク p.10', '', false], ['プリント', 'notDone', false], ['新しい宿題', '', false]]);
+  assert.deepEqual((await h.ok('records/lesson', { auth: teacherAuth, lessonId: a.id })).checks, [], '一回目の記録には、その授業で出した宿題もあとの宿題も出ない');
+});

@@ -1,7 +1,7 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-ux8';
-import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261002-ux8';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-ux9';
+import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261002-ux9';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, parts = [], hwOpen = '';
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
@@ -11,6 +11,8 @@ const CHOICES = {
   pace: [['onTrack', '予定どおり'], ['ahead', '予定より進んだ'], ['behind', '予定より遅れた']],
   homeworkReview: [['done', 'やってきた'], ['partial', '一部だけ'], ['notDone', 'やってこなかった'], ['none', '宿題なし']],
 };
+// 宿題ごとのチェック（前回までの宿題）。値はサーバーの CHECK_RESULTS（cf/v2/records.mjs）と同じ
+const CHECKS = [['', 'まだ'], ['done', 'やってきた'], ['partial', '一部'], ['notDone', 'やってこなかった']];
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
 export function leaveRecords() { hwOpen = ''; }
 export function resetRecords() { hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; parts = []; }
@@ -55,13 +57,13 @@ export function recordPage(ctx, lessonId) {
   // 参考: 前回・未完了の宿題・次回・テスト
   h += '<h2>参考</h2><div class="small">';
   if (rec.previous.length) { const p = rec.previous[0]; h += `<p><strong>前回</strong> ${mdw(p.date)} ${esc(p.subject)}：${esc(p.range || '')} ${p.staffNotes.understanding ? '／理解度 ' + esc(choiceLabel('understanding', p.staffNotes.understanding)) : ''}${p.staffNotes.nextFocus ? '／次回やること: ' + esc(p.staffNotes.nextFocus) : ''}</p>`; }
-  if (rec.openHomework.length) h += `<p><strong>未完了の宿題</strong> ${rec.openHomework.map(x => esc(x.title) + (x.status === 'reported' ? '（できたと報告）' : '')).join('、')}</p>`;
+  if (rec.openHomework.length && !(rec.checks || []).length) h += `<p><strong>未完了の宿題</strong> ${rec.openHomework.map(x => esc(x.title) + (x.status === 'reported' ? '（できたと報告）' : '')).join('、')}</p>`;
   h += `<p><strong>次の${esc(l.subject)}</strong> ${rec.nextSameSubject ? mdw(rec.nextSameSubject.date) : 'まだ決まっていません'}</p>`;
   if (rec.tests.length) h += `<p><strong>テスト</strong> ${rec.tests.map(t => mdw(t.date) + ' ' + esc(t.title)).join('、')}</p>`;
   h += '</div>';
   if (future) return h + '<p class="notice">授業の日になったら記録を書けます。</p>' + handoverForm(ctx);
   if (locked) return h + `<p class="notice">この記録は無効にしました（${esc(r.voidReason || '')}）。</p>`;
-  h += `<form class="stack" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}"><h2>生徒・保護者に見せる</h2>
+  h += `<form class="stack" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}">${checksPart(ctx)}<h2>生徒・保護者に見せる</h2>
     ${rangeHelper(ctx)}
     <label>扱った範囲（生徒・保護者に見えます）<input name="range" maxlength="500" value="${esc(r.range)}" placeholder="例: 不定詞 Keywork p.10〜12"></label>
     <label>コメント（公開するときは必須）<textarea name="comment" maxlength="2000" rows="4">${esc(r.comment)}</textarea></label>
@@ -71,6 +73,17 @@ export function recordPage(ctx, lessonId) {
     <div class="actionbar row"><button type="submit" name="publish" value="0"${ctx.dis()}>下書き保存</button><button class="primary" type="submit" name="publish" value="1"${ctx.dis()}>保存して公開</button></div>
     <p class="small muted">「保存して公開」で、生徒・保護者のページに記録と宿題が出ます。決定の授業は実施済みになります。公開したあとで直したときは、もう一度「保存して公開」を押すまで前の版が見えます。</p></form>`;
   return h + handoverForm(ctx) + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
+}
+// 前回までの宿題: 宿題ごとに まだ・やってきた・一部・やってこなかった を選ぶ（保存すると宿題に付く）
+function checksPart(ctx) {
+  const { esc } = ctx, list = rec.checks || [];
+  if (!list.length) return '';
+  const cur = x => rec.draftChecks && rec.draftChecks[x.id] !== undefined ? rec.draftChecks[x.id] : x.checkedHere ? x.checkResult : '';
+  const before = x => x.checkResult && !x.checkedHere ? '・前の授業では' + (CHECKS.find(c => c[0] === x.checkResult) || ['', ''])[1] : '';
+  return `<h2>前回までの宿題</h2><p class="small muted" style="margin:0">宿題ごとに選びます。「一部」「やってこなかった」は次の授業へ持ち越します。結果は生徒・保護者にも見えます。</p>`
+    + list.map(x => `<div class="hwchk"><div><strong>${esc(x.title)}</strong>${x.material ? ` <span class="small muted">${esc(x.material)}</span>` : ''}
+      <div class="small muted">${x.assignedOn ? mdw(x.assignedOn) + 'に出した' : ''}${x.status === 'reported' ? '・<span style="color:var(--ok)">できたと報告あり</span>' : ''}${before(x)}</div></div>
+      <div class="chk" role="radiogroup" aria-label="${esc(x.title)}">${CHECKS.map(([v, lb]) => `<label><input type="radio" name="chk.${esc(x.id)}" value="${v}"${cur(x) === v ? ' checked' : ''}><span>${lb}</span></label>`).join('')}</div></div>`).join('');
 }
 // 扱った範囲の入力補助: 内容・教材・ページを入れて「足す」と、範囲の欄に「不定詞 Keywork p.10〜12」の形で足す
 function rangeHelper(ctx) {
@@ -92,9 +105,10 @@ function staffNoteFields(ctx, n) {
     return `<label${cls ? ` class="${cls}"` : ''}>${label}<select name="note.${k}"><option value="">（選ばない）</option>${legacy ? `<option value="${esc(v)}" selected>前の記録: ${esc(v)}</option>` : ''}${CHOICES[k].map(([cv, cl]) => `<option value="${cv}"${cv === v ? ' selected' : ''}>${cl}</option>`).join('')}</select></label>`;
   };
   const input = (k, label, ph = '') => `<label>${label}<input name="note.${k}" maxlength="1000" value="${esc(n[k] || '')}"${ph ? ` placeholder="${esc(ph)}"` : ''}></label>`;
+  const hwReview = (rec.checks || []).length ? '<p class="small muted" style="margin:0">前回出した宿題をやってきたか: 上の「前回までの宿題」から自動で決まります。</p>' : select('homeworkReview', '前回出した宿題をやってきたか');
   return select('understanding', '理解度（5段階）')
     + `<div class="planned stack"><label>予定単元（授業計画があるとき）<input name="note.plannedUnit" maxlength="1000" value="${esc(n.plannedUnit || '')}" placeholder="例: 不定詞の名詞的用法"></label>${select('pace', '予定に対する進度', 'pace')}</div>`
-    + select('homeworkReview', '前回出した宿題をやってきたか')
+    + hwReview
     + input('homeworkAccuracy', '宿題の正答率（%・任意）', '例: 80')
     + `<label>次回やること・気をつけること<textarea name="note.nextFocus" maxlength="1000" rows="2" placeholder="例: 不定詞の副詞的用法から。to のあとを原形にするミスに注意">${esc(n.nextFocus || '')}</textarea></label>`
     + `<label>メモ<textarea name="note.memo" maxlength="1000" rows="2">${esc(n.memo || '')}</textarea></label>`;
@@ -126,6 +140,7 @@ export function captureRecordInputs() {
   const v = Object.fromEntries(new FormData(f).entries()), notes = {};
   for (const k of NOTE_KEYS) notes[k] = v['note.' + k] || '';
   rec.draftInputs = { range: v.range || '', comment: v.comment || '', parentMessage: v.parentMessage || '', staffNotes: notes };
+  rec.draftChecks = {}; for (const x of rec.checks || []) rec.draftChecks[x.id] = v['chk.' + x.id] || '';
   const helper = {}; f.querySelectorAll('[data-rh]').forEach(x => { helper[x.dataset.rh] = x.value; }); rec.draftHelper = helper;
 }
 
@@ -144,7 +159,7 @@ export async function recordsSubmit(ctx, kind, el, ev) {
     const v = Object.fromEntries(new FormData(el).entries()), publish = ev && ev.submitter && ev.submitter.value === '1';
     const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = v['note.' + k] || '';
     if (!staffNotes.plannedUnit.trim()) staffNotes.pace = ''; // 予定がないときは進度を書かない
-    const r = await ctx.call('records/save', { lessonId: rec.lesson.id, version: el.dataset.version ? Number(el.dataset.version) : undefined, range: v.range, rangeParts: parts, comment: v.comment, parentMessage: v.parentMessage, staffNotes, homework: hwRows.map(x => ({ id: x.id || '', kind: x.kind, title: x.title, material: x.material, dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject })), publish });
+    const r = await ctx.call('records/save', { lessonId: rec.lesson.id, version: el.dataset.version ? Number(el.dataset.version) : undefined, range: v.range, rangeParts: parts, comment: v.comment, parentMessage: v.parentMessage, staffNotes, homework: hwRows.map(x => ({ id: x.id || '', kind: x.kind, title: x.title, material: x.material, dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject })), homeworkChecks: (rec.checks || []).map(x => ({ id: x.id, result: v['chk.' + x.id] || '' })), publish });
     if (r.ok) { recFor = ''; pending = null; ctx.say(publish ? '保存して公開しました' : '下書きを保存しました', 'ok'); }
     else if (r.error && r.error.code === 'conflict') ctx.say(r.error.message + '（書いた内容は画面に残っています。コピーしてから更新してください）', 'error');
     else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');

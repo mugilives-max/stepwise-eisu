@@ -40,7 +40,7 @@ function homeworkView(h, lessons = []) {
     const next = lessons.find(l => l.date > after && ['proposed', 'decided'].includes(l.status) && (!h.dueSubject || l.subject === h.dueSubject));
     due = next ? next.date : '';
   }
-  return { id: h.id, recordId: h.recordId, kind: h.kind, title: h.title, material: h.material, dueMode: h.dueMode, dueDate: h.dueDate, dueSubject: h.dueSubject, due, status: h.status, reportedAt: h.reportedAt, reviewNote: h.reviewNote, version: h.version };
+  return { id: h.id, recordId: h.recordId, kind: h.kind, title: h.title, material: h.material, dueMode: h.dueMode, dueDate: h.dueDate, dueSubject: h.dueSubject, due, status: h.status, reportedAt: h.reportedAt, reviewNote: h.reviewNote, checkResult: h.checkResult || '', checkedAt: h.checkedAt || '', checkedRecordId: h.checkedRecordId || '', version: h.version };
 }
 function recordStaffView(r) {
   return r ? { id: r.id, lessonId: r.lessonId, status: r.status, range: r.range, comment: r.comment, parentMessage: r.parentMessage, staffNotes: parse(r.staffNotes, {}), rangeParts: parse(r.rangeParts, []), publishedAt: r.publishedAt, voidReason: r.voidReason, authorId: r.authorId, version: r.version } : null;
@@ -55,6 +55,31 @@ async function futureLessons(c, studentId) {
   return (await c.db.prepare("select date, subject, status from lessons where studentId = ? and status in ('proposed', 'decided') order by date, start").bind(studentId).all()).results;
 }
 
+// 宿題ごとのチェック [{ id, result }]。result: done（やってきた → 確認済み）/ partial・notDone（未完了のまま持ち越す）/ ''（チェックを外す）
+const CHECK_RESULTS = ['done', 'partial', 'notDone', ''];
+async function homeworkChecks(c, list, lesson, recordId, now, stmts) {
+  if (list === undefined) return [];
+  if (!Array.isArray(list) || list.length > 50) fail('badChecks', '宿題のチェックを確かめてください');
+  const out = [];
+  for (const x of list) {
+    const result = String((x && x.result) || '');
+    if (!CHECK_RESULTS.includes(result)) fail('badChecks', '宿題のチェックは「やってきた・一部・やってこなかった」から選んでください');
+    const h = await c.db.prepare('select * from homework where id = ?').bind(String((x && x.id) || '')).first();
+    if (!h || h.studentId !== lesson.studentId || h.kind !== 'homework' || h.recordId === recordId) fail('notFound', 'チェックする宿題が見つかりません', 404);
+    const here = h.checkedRecordId === recordId;
+    if (!here && !['open', 'reported'].includes(h.status)) fail('badStatus', 'この宿題はもう確認済みです。画面を更新してください', 409);
+    if (!result) {
+      // 外す: この記録で付けたチェックだけ戻す（確認済みにしていたら未完了へ）
+      if (here) stmts.push(c.db.prepare("update homework set status = case when status = 'confirmed' then 'open' else status end, checkResult = '', checkedAt = '', checkedRecordId = '', updatedAt = ?, version = version + 1 where id = ?").bind(now, h.id));
+      out.push(''); continue;
+    }
+    if (here && h.checkResult === result) { out.push(result); continue; }
+    if (result === 'done') stmts.push(c.db.prepare("update homework set status = 'confirmed', reviewedAt = ?, checkResult = 'done', checkedAt = ?, checkedRecordId = ?, updatedAt = ?, version = version + 1 where id = ?").bind(now, now, recordId, now, h.id));
+    else stmts.push(c.db.prepare("update homework set status = 'open', reportedAt = '', reportedBy = '', checkResult = ?, checkedAt = ?, checkedRecordId = ?, updatedAt = ?, version = version + 1 where id = ?").bind(result, now, recordId, now, h.id));
+    out.push(result);
+  }
+  return out;
+}
 function cleanHomework(list) {
   if (!Array.isArray(list) || list.length > 10) fail('badHomework', '宿題は10件までにしてください');
   return list.map((h, i) => {
@@ -89,6 +114,9 @@ export const recordRoutes = {
       record: recordStaffView(r),
       homework: hwRows.filter(h => r && h.recordId === r.id).map(h => homeworkView(h, lessons)),
       openHomework: hwRows.filter(h => (!r || h.recordId !== r.id) && ['open', 'reported'].includes(h.status)).map(h => homeworkView(h, lessons)),
+      // 宿題ごとのチェック: この授業より前に出した未完了の宿題と、この記録でチェックしたもの
+      checks: hwRows.filter(h => h.kind === 'homework' && (!r || h.recordId !== r.id) && (h._after || '') <= l.date
+        && (['open', 'reported'].includes(h.status) || (r && h.checkedRecordId === r.id))).map(h => ({ ...homeworkView(h, lessons), assignedOn: h._after || '', checkedHere: !!(r && h.checkedRecordId === r.id) })),
       previous: prev.results.map(p => ({ date: p.date, start: p.start, subject: p.subject, range: p.range, comment: p.comment, staffNotes: parse(p.staffNotes, {}) })),
       nextSameSubject: lessons.find(x => x.date > l.date && x.subject === l.subject) || null,
       tests: tests.map(t => ({ date: t.date, dateTo: t.dateTo, title: t.title })),
@@ -121,6 +149,9 @@ export const recordRoutes = {
     const rangeParts = cleanRangeParts(b.rangeParts);
     const hw = cleanHomework(b.homework || []);
     const id = old ? old.id : newId('lr'), now = iso(c.now), stmts = [];
+    const checks = await homeworkChecks(c, b.homeworkChecks, l, id, now, stmts);
+    const results = checks.filter(Boolean);
+    if (results.length) notes.homeworkReview = results.every(x => x === 'done') ? 'done' : results.every(x => x === 'notDone') ? 'notDone' : 'partial';
     const status = publish ? 'published' : old ? old.status : 'draft';
     const publishedJson = publish ? JSON.stringify({ range, comment, parentMessage }) : old ? old.publishedJson : '';
     if (old) stmts.push(c.db.prepare('update lessonRecords set range = ?, comment = ?, parentMessage = ?, staffNotes = ?, rangeParts = ?, status = ?, publishedJson = ?, publishedAt = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')

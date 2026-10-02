@@ -203,3 +203,14 @@ a.back { display: inline-block; margin: 14px 0 -14px; padding: 4px 0; font-size:
 details.more { margin: 18px 0; }
 details.more > summary { cursor: pointer; color: var(--primary); font-size: 14px; padding: 6px 0; }
 details.more[open] > summary { margin-bottom: 6px; }
+/* ---- 記録: 前回までの宿題のチェック（まだ・やってきた・一部・やってこなかった） ---- */
+.hwchk { display: grid; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.chk { display: flex; background: #eef1f4; border-radius: 10px; padding: 3px; }
+.chk label { flex: 1 1 auto; position: relative; display: block; margin: 0; }
+.chk input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chk span { display: block; text-align: center; padding: 8px 6px; font-size: 12.5px; border-radius: 8px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.chk input:checked + span { background: var(--white); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.chk input[value="done"]:checked + span { color: var(--ok); }
+.chk input[value="partial"]:checked + span { color: var(--warn); }
+.chk input[value="notDone"]:checked + span { color: var(--danger); }
+.chk input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: -2px; }
