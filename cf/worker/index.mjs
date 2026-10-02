@@ -8,7 +8,7 @@ import { health } from "./health.mjs";
 import { handleRead, isReadAction } from "./read.mjs";
 import { handleSync, syncStatus } from "./sync.mjs";
 import { runWrite, runNaturalSchedule, recordEffects, deliverEffects, backfillMeet } from "./write.mjs";
-import { handleV2 } from "../v2/index.mjs";
+import { handleV2, runV2Scheduled } from "../v2/index.mjs";
 import { handlePush, deliverNotice, pushEnabled, PUSH_ACTIONS } from "./push.mjs";
 import { EFFECT_ADMIN_OPS, handleEffectsAdmin } from "./effects-admin.mjs";
 
@@ -48,6 +48,8 @@ export default {
         if (done.result.error) failed.push("Schedule auto-confirm failed");
       } catch (e) { failed.push("Schedule auto-confirm failed"); }
     }
+    // 作り直し（v2）の台帳でも、締め切りを過ぎた仮予定を決定する（切り替え前はカレンダー・保護者へのメールを実際には出さない）
+    if (env.DB2) { try { await runV2Scheduled(env); } catch (e) { failed.push("v2 auto-confirm failed"); } }
     if (failed.length) throw new Error(failed.join("; "));
   },
   async fetch(request, env, ctx) {

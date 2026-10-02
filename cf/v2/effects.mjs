@@ -15,13 +15,17 @@ export async function recordEffects(db, items, now) {
 export async function deliverEffects(env, db, queued, fetcher = fetch) {
   if (!queued.length) return { sent: 0 };
   if (!env.GAS_URL || !env.SYNC_KEY) return { sent: 0, skipped: 'GAS_URL / SYNC_KEY が未設定' };
-  let error = '';
+  let error = '', payload = null;
   try {
     const res = await fetcher(env.GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, redirect: 'follow',
       body: JSON.stringify({ action: 'effects', key: env.SYNC_KEY, items: queued.map(q => { const { testOnly, audience, held, ...item } = q.item; return item; }) }) });
-    const payload = await res.json().catch(() => null);
+    payload = await res.json().catch(() => null);
     if (!res.ok || !payload || payload.error) error = (payload && payload.error) || ('HTTP ' + res.status);
   } catch (e) { error = String((e && e.message) || e); }
+  // カレンダーの仮の目印 → 本物の予定 ID と Meet の URL を、授業・面談に書き戻す（Meet は取れたときだけ）
+  const writebacks = payload && Array.isArray(payload.writebacks) ? payload.writebacks : [];
+  for (const table of ['lessons', 'meetings']) if (writebacks.length) await db.batch(writebacks.map(w => db.prepare(`update ${table} set calendarEventId = ?, meetUrl = case when ? <> '' then ? else meetUrl end where calendarEventId = ? or calendarEventId = ? || '@google.com'`)
+    .bind(String(w.eventId || ''), String(w.meetUrl || ''), String(w.meetUrl || ''), String(w.marker || ''), String(w.marker || ''))));
   const at = new Date().toISOString();
   await db.batch(queued.map(q => db.prepare('update effects set status = ?, attempts = attempts + 1, error = ?, sentAt = ? where id = ?')
     .bind(error ? 'failed' : 'sent', error.slice(0, 300), error ? '' : at, q.id)));

@@ -7,10 +7,21 @@ import { staffRoutes } from './staff.mjs';
 import { familyRoutes } from './family.mjs';
 import { peopleRoutes } from './people.mjs';
 import { migrateRoutes } from './migrate-identity.mjs';
+import { scheduleRoutes, autoConfirm } from './schedule.mjs';
+import { migrateScheduleRoutes } from './migrate-schedule.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes };
 const MAX_BODY = 200000;
+
+// 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する
+export async function runV2Scheduled(env, now = Date.now()) {
+  if (!env.DB2) return null;
+  const c = { env, db: env.DB2, now, effects: [], actor: null, userAgent: 'scheduled' };
+  const result = await autoConfirm(c);
+  if (c.effects.length) await deliverEffects(env, c.db, await recordEffects(c.db, c.effects, c.now));
+  return result;
+}
 
 export async function handleV2(request, env, ctx, head = {}) {
   const reply = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...head } });
