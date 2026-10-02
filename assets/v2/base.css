@@ -49,7 +49,7 @@ button:disabled { opacity: .55; cursor: default; }
 @media (max-width: 520px) { .list > div { grid-template-columns: 1fr; } }
 /* 予定（3段目） */
 .tag.ok { background: var(--ok-soft); color: var(--ok); }
-.planned:not(:has(input:not(:placeholder-shown))) .pace { display: none; }
+.planned:not(:has(input[name="note.plannedUnit"]:not(:placeholder-shown))) .pace { display: none; }
 button.link { border: 0; background: none; padding: 0 2px; min-height: 0; color: inherit; cursor: pointer; font: inherit; }
 .tag.danger { background: var(--danger-soft); color: var(--danger); }
 .day-head { grid-column: 1 / -1; display: block !important; padding: 14px 0 4px !important; border-bottom: 0 !important; font-weight: 700; color: var(--muted); font-size: 13.5px; }
@@ -216,3 +216,17 @@ details.more[open] > summary { margin-bottom: 6px; }
 .chk input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: -2px; }
 /* ---- 記録: 宿題の行（教材・範囲・外す） ---- */
 .hwrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; margin: 6px 0; }
+/* ---- 記録を書く画面: 授業の前に見る枠・小さな見出し・正答率 ---- */
+.before { display: grid; gap: 6px; background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0 4px; }
+.before .ho.unread { background: var(--warn-soft); border-radius: 6px; padding: 4px 6px; margin: 0 -6px; }
+.before .small-btn { margin-left: 6px; }
+.field-label { font-size: 13.5px; color: var(--muted); margin-bottom: 4px; }
+label.inline { display: flex; align-items: center; gap: 6px; }
+label.inline input { width: 6em; }
+.seg-cap { display: flex; justify-content: space-between; margin-top: 2px; }
+form.rec h2 { margin-top: 22px; }
+form.rec details.more { margin: 2px 0; }
+form.rec button.link { justify-self: start; text-decoration: none; color: var(--primary); }
+/* ---- 複数行の入力欄（1行の入力欄と同じ見た目に） ---- */
+textarea { font: inherit; color: var(--ink); padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); width: 100%; resize: vertical; line-height: 1.6; }
+textarea:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
