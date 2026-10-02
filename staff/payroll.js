@@ -1,6 +1,6 @@
 // スタッフの画面: 報酬（7段目）。#payroll と、設定の「時給と源泉徴収」（#rates）。
 // 教室管理者: 月ごとの講師の明細（見込み・確定・支払い）、調整。時給と源泉徴収は設定の下。講師: 自分の支払明細だけ（印刷・PDF で保存できる）。
-import { sheet, rowButton } from '/staff/ui.js?v=20261003-ux16';
+import { sheet, rowButton } from '/staff/ui.js?v=20261003-ux17';
 let month = '', list = null, open = '', detail = null, rates = null, mine = null, rateOpen = '';
 export function leavePayroll() { open = ''; rateOpen = ''; }
 export function resetPayroll() { list = null; detail = null; rates = null; mine = null; open = ''; rateOpen = ''; }

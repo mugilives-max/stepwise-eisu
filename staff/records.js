@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux16';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux16';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux16';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux17';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux17';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux17';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
 let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。記録の画面を離れたら捨てる // panel: 記録の画面で開いているもの（range・hw・next）
@@ -103,10 +103,11 @@ export function recordPage(ctx, lessonId) {
   h += panelHtml('next', '次回へ', `<label>次回やること・気をつけること<textarea name="note.nextFocus" maxlength="1000" rows="2" placeholder="副詞的用法から。to のあとを原形にするミスに注意">${esc(n.nextFocus || '')}</textarea></label>
     <label>保護者への連絡<textarea name="parentMessage" maxlength="1000" rows="2" placeholder="次回は小テストをします">${esc(r.parentMessage)}</textarea></label>
     <label>メモ<textarea name="note.memo" maxlength="1000" rows="2" placeholder="講師どうしのメモ">${esc(n.memo || '')}</textarea></label>
+    <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:-4px"><input type="checkbox" name="hoSend" value="1"${rec.draftHo ? ' checked' : ''} style="width:auto"> このメモを次の担当にも引き継ぎメモとして知らせる</label>
     <div class="planned stack" style="margin:0"><label>授業計画で予定していた単元<input name="note.plannedUnit" maxlength="1000" value="${esc(n.plannedUnit || '')}" placeholder="不定詞の名詞的用法"></label>
       <div class="pace"><div class="field-label">予定に対して</div>${seg('note.pace', CHOICES.pace, n.pace, esc)}</div></div>`);
   h += '</form>';
-  return h + handoverForm(ctx) + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
+  return h + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
 }
 // 2人同時の授業の切り替え（ChatGPT の Chat/Work のような形）。名字が同じなら名前で出す。公開済みは ✓、下書きは ・
 function togetherPart(ctx) {
@@ -194,6 +195,7 @@ export function captureRecordInputs() {
   const v = Object.fromEntries(new FormData(f).entries()), notes = {};
   for (const k of NOTE_KEYS) notes[k] = v['note.' + k] || '';
   rec.draftInputs = { comment: v.comment || '', parentMessage: v.parentMessage || '', staffNotes: notes };
+  rec.draftHo = v.hoSend === '1';
   rec.draftChecks = {}; for (const x of rec.checks || []) rec.draftChecks[x.id] = v['chk.' + x.id] || '';
 }
 
@@ -213,7 +215,12 @@ export async function recordsSubmit(ctx, kind, el, ev) {
     const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = v['note.' + k] || '';
     if (!staffNotes.plannedUnit.trim()) staffNotes.pace = ''; // 予定がないときは進度を書かない
     const r = await ctx.call('records/save', { lessonId: rec.lesson.id, version: el.dataset.version ? Number(el.dataset.version) : undefined, range: rgRows.map(rangeLine).filter(Boolean).join('、'), rangeParts: rgRows.filter(rangeLine).map(x => ({ unit: (x.text || '').trim(), material: (x.material || '').trim(), pages: '' })), comment: v.comment, parentMessage: v.parentMessage, staffNotes, homework: hwRows.filter(x => (x.title || '').trim() || (x.material || '').trim()).map(x => ({ id: x.id || '', kind: x.kind || 'homework', title: (x.title || '').trim() || x.material, material: (x.title || '').trim() ? x.material : '', dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject || rec.lesson.subject })), homeworkChecks: (rec.checks || []).map(x => ({ id: x.id, result: v['chk.' + x.id] || '' })), publish });
-    if (r.ok) { recFor = ''; pending = null; panel = ''; ctx.say(publish ? '保存して公開しました' : '下書きを保存しました', 'ok'); }
+    if (r.ok) {
+      // 「次の担当にも知らせる」: メモを引き継ぎメモとしても残す
+      let ho = '';
+      if (v.hoSend === '1' && staffNotes.memo.trim()) { const hr = await ctx.call('handover/add', { studentId: rec.student.id, body: staffNotes.memo.trim() }); ho = hr.ok ? '。メモを引き継ぎメモとしても残しました' : '。引き継ぎメモは残せませんでした（' + hr.error.message + '）'; }
+      recFor = ''; pending = null; panel = ''; ctx.say((publish ? '保存して公開しました' : '下書きを保存しました') + ho, 'ok');
+    }
     else if (r.error && r.error.code === 'conflict') ctx.say(r.error.message + '（書いた内容は画面に残っています。コピーしてから更新してください）', 'error');
     else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
     return true;

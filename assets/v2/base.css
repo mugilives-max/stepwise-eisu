@@ -189,7 +189,10 @@ section.step { border: 1px solid var(--line); border-radius: 12px; padding: 2px 
 section.step.now { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
 section.step h2 { margin-top: 12px; }
 /* ---- 戻る（入口の下の画面の左上）と、押せる一覧の行（button） ---- */
-a.back { display: inline-block; margin: 14px 0 -14px; padding: 4px 0; font-size: 14px; color: var(--primary); text-decoration: none; }
+a.back { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--white); box-shadow: 0 1px 6px rgba(0, 0, 0, .14); display: grid; place-items: center; color: var(--ink); text-decoration: none; margin: -2px 0; }
+a.back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+a.back:active { background: var(--soft); }
+body.has-back .top .in { padding-top: 6px; padding-bottom: 6px; }
 .rows button.todo { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; text-align: left; font: inherit; color: var(--ink); }
 .bsheet h3 { font-size: 14px; margin: 16px 0 6px; }
 /* ---- 下から出る画面: 描き直しでは動かさない・広い版（表のあるもの） ---- */
