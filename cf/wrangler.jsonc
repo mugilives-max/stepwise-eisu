@@ -13,6 +13,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "triggers": { "crons": ["10 15 * * *"] },
   "observability": { "enabled": true },
+  // 処理する場所をデータベース（D1・東京）の近くに自動で寄せる。入口が海外の拠点になる回線でも、問い合わせのたびに海を往復しないように
+  "placement": { "mode": "smart" },
   "vars": {
     "ALLOW_ORIGIN": "https://www.stepwise-education.jp",
     "NL_ENABLED": "1",
