@@ -171,3 +171,18 @@ test('the same teacher may teach two in-person lessons at once (after a check), 
   const l = h.rows("select * from lessons where studentId = ? and date = '2026-10-16'", kid2.id)[0];
   assert.match((await h.call('schedule/lessons/update', { auth, id: l.id, version: l.version, date: l.date, start: l.start, minutes: l.minutes, subject: l.subject, deliveryMode: 'online', staffId: me.id, force: true })).error.message, /オンライン/);
 });
+
+test('cancelling a decided lesson tells the family (held before the switch-over)', async () => {
+  const { h, auth, lesson } = await world();
+  await h.ok('schedule/lessons/create', { ...lesson, date: '2026-10-09' });
+  let l = h.rows('select * from lessons')[0];
+  await h.ok('schedule/lessons/decide', { auth, id: l.id, version: l.version });
+  l = h.rows('select * from lessons')[0];
+  const before = h.mails().length;
+  await h.ok('schedule/lessons/cancel', { auth, id: l.id, version: l.version });
+  const m = h.mails().slice(before).filter(x => x.audience === 'family');
+  assert.equal(m.length, 1, '保護者へ1通');
+  assert.match(m[0].subject, /授業をキャンセルしました/);
+  assert.match(m[0].body, /架空 一郎さんの10\/9\(金\) 17:00〜 数学の授業をキャンセルしました/);
+  assert.equal(m[0].status, 'dismissed', '切り替え前は送らない');
+});

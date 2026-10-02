@@ -377,6 +377,10 @@ export const scheduleRoutes = {
     const type = ['late', 'noshow'].includes(b.feeType) ? b.feeType : c.now < startMs(l.date, l.start) ? 'late' : 'noshow';
     const next = await setLesson(c, l, { status: 'cancelled' });
     await createCancelFee(c, l, type, type === 'late' ? iso(c.now) : '');
+    // 保護者へのお知らせ（切り替え前は送らずに残す）
+    const st = await c.db.prepare('select familyName, givenName from students where id = ?').bind(l.studentId).first();
+    const wd = '日月火水木金土'[new Date(l.date + 'T00:00:00Z').getUTCDay()];
+    await familyNotice(c, l.studentId, '授業をキャンセルしました', `${st ? [st.familyName, st.givenName].filter(Boolean).join(' ') + 'さんの' : ''}${Number(l.date.slice(5, 7))}/${Number(l.date.slice(8))}(${wd}) ${l.start}〜 ${l.subject}の授業をキャンセルしました。`);
     await calendarEffect(c, 'delete', l, '');
     await closeRequests(c, l.id, ['move', 'late', 'cancel', 'rest'], 'staff:' + c.actor.id);
     await audit(c, 'lessonCancel', l.id);
