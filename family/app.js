@@ -1,13 +1,14 @@
 // 保護者の画面（作り直し v2）。ログイン・招待・再設定、子どもの予定と「変更・お休みの連絡」、学習、計画・お支払い（family/money.js）、予定の共有、アカウント。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage5c';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage5c';
-import { moneyView } from '/family/money.js?v=20261002-stage5c';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage6';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage6';
+import { moneyView } from '/family/money.js?v=20261002-stage6';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage6';
 
 const store = session('sw2_family');
 const app = document.getElementById('app'), nav = document.getElementById('nav');
-let me = null, busy = false, notice = null, sched = null, change = null, inviteInfo = null, learning = null, money = null;
+let me = null, busy = false, notice = null, sched = null, change = null, inviteInfo = null, learning = null, money = null, grades = null;
 
 function route() {
   const h = location.hash;
@@ -58,6 +59,11 @@ function moneyPage() {
   const multi = new Set(money.plans.map(l => l.studentId).concat(money.fees.map(f => f.studentId))).size > 1;
   return `<h1>計画・お支払い</h1>${noticeHtml()}${moneyView(money, { multi, dis: dis() })}`;
 }
+function gradesPage() {
+  if (!grades) { call('family/grades', {}, store.get()).then(r => { grades = r.ok ? r : { students: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); return '<p class="muted">読み込んでいます…</p>'; }
+  const multi = grades.students.length > 1;
+  return `<h1>成績</h1>${noticeHtml()}` + grades.students.map(s => (multi ? `<h2>${esc(s.name)}さん</h2>` : '') + gradesView(s, { who: 'family', dis: dis() })).join('');
+}
 function accountPage() {
   return `<h1>アカウント</h1><p>${esc(me.name)}（${esc(me.email)}）</p>${noticeHtml()}<h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label><label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" required></label>
@@ -67,16 +73,16 @@ async function load() { const r = await call('family/schedule', {}, store.get())
 
 function render() {
   const r = route();
-  nav.innerHTML = me ? [['home', '予定'], ['learning', '学習'], ['money', '計画・お支払い'], ['events', '予定の共有'], ['account', 'アカウント']].map(([k, l]) => `<a href="#${k}" class="${r.page === k ? 'on' : ''}">${l}</a>`).join('') : '';
+  nav.innerHTML = me ? [['home', '予定'], ['learning', '学習'], ['grades', '成績'], ['money', '計画・お支払い'], ['events', '予定の共有'], ['account', 'アカウント']].map(([k, l]) => `<a href="#${k}" class="${r.page === k ? 'on' : ''}">${l}</a>`).join('') : '';
   let h;
   if (r.page === 'invite') h = invitePage(r.token);
   else if (r.page === 'reset') h = `<h1>新しいパスワード</h1>${noticeHtml()}${newPasswordForm('reset', 'パスワードを変える')}`;
   else if (!me) h = r.page === 'forgot' ? `<h1>パスワードの再設定</h1>${noticeHtml()}<form class="stack" data-form="forgot"><label>メールアドレス<input type="email" name="email" required></label><button class="primary"${dis()}>再設定のメールを送る</button></form><p><a href="#">ログインに戻る</a></p>` : loginPage();
-  else h = r.page === 'events' ? eventsPage() : r.page === 'learning' ? learningPage() : r.page === 'money' ? moneyPage() : r.page === 'account' ? accountPage() : homePage();
+  else h = r.page === 'events' ? eventsPage() : r.page === 'learning' ? learningPage() : r.page === 'money' ? moneyPage() : r.page === 'grades' ? gradesPage() : r.page === 'account' ? accountPage() : homePage();
   app.className = !me ? 'narrow' : '';
   app.innerHTML = h;
 }
-function signedIn(r) { store.set(r.auth); me = r.me; sched = null; learning = null; money = null; say(''); location.hash = '#home'; }
+function signedIn(r) { store.set(r.auth); me = r.me; sched = null; learning = null; money = null; grades = null; say(''); location.hash = '#home'; }
 
 app.addEventListener('submit', ev => {
   ev.preventDefault();
@@ -90,7 +96,12 @@ app.addEventListener('submit', ev => {
     else if (kind === 'invite') { r = await call('family/invite/accept', { token: route().token, password: v.password }); if (r.ok) return signedIn(r); }
     else if (kind === 'reset') { r = await call('family/reset/confirm', { token: route().token, password: v.password }); if (r.ok) return signedIn(r); }
     else if (kind === 'password') { r = await call('family/password', { current: v.current, next: v.next }, store.get()); if (r.ok) { el.reset(); return say('パスワードを変えました', 'ok'); } }
-    else if (kind === 'plan-decide') {
+    else if (kind === 'gr-upload') {
+      const file = el.querySelector('input[type=file]').files[0]; if (!file) return;
+      r = await uploadFile(file, v.note || '', body => call('family/grades/upload', { ...body, studentId: v.studentId }, store.get()));
+      if (r.ok) { grades = null; return say('成績票を送りました。先生が確かめて点数を入れます', 'ok'); }
+      if (r.error && !r.error.code) r.error.code = 'client';
+    } else if (kind === 'plan-decide') {
       const n = Number(v.count);
       if (n === 0 && !confirm('この計画を見送りますか？')) return;
       r = await call('family/plans/decide', { id: el.dataset.id, version: Number(el.dataset.version), approvedCount: n }, store.get()); if (r.ok) { money = null; return say(n ? '承認しました。ありがとうございます' : '見送りにしました', 'ok'); }
@@ -108,6 +119,7 @@ app.addEventListener('click', ev => {
   if (a === 'change') { change = { id: b.dataset.id, pick: '', note: '' }; return render(); }
   if (a === 'pick') { const n = document.getElementById('change-note'); if (n) change.note = n.value; change.pick = b.dataset.c; return render(); }
   if (a === 'close-change') { change = null; return render(); }
+  if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openFile({ chunks: Number(b.dataset.chunks), mime: b.dataset.mime }, idx => call('family/grades/file', { id: b.dataset.id, idx }, store.get()), win); if (!r.ok) say(r.error.message, 'error'); }); return; }
   // 書いた内容は、送信中の表示に描き直す前に読んでおく（描き直すと入力欄が作り直される）
   if (a === 'send-change') { const n = document.getElementById('change-note'); if (n) change.note = n.value.trim(); }
   run(async () => {

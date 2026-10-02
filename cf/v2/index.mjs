@@ -13,10 +13,12 @@ import { recordRoutes } from './records.mjs';
 import { migrateRecordsRoutes } from './migrate-records.mjs';
 import { billingRoutes, autoCloseInvoices } from './billing.mjs';
 import { migrateBillingRoutes } from './migrate-billing.mjs';
+import { gradesRoutes, remindTestResults } from './grades.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes };
-const MAX_BODY = 200000;
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes };
+const MAX_BODY = 200000, UPLOAD_BODY = 1000000; // 成績票を分けて送る操作だけ大きくてよい（cf/v2/grades.mjs）
+const isUpload = route => /^(grades|family\/grades|student\/grades)\/(files\/)?upload$/.test(route);
 
 // 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
 export async function runV2Scheduled(env, now = Date.now()) {
@@ -24,6 +26,7 @@ export async function runV2Scheduled(env, now = Date.now()) {
   const c = { env, db: env.DB2, now, effects: [], actor: null, userAgent: 'scheduled' };
   const result = await autoConfirm(c);
   result.invoices = await autoCloseInvoices(c);
+  result.tests = await remindTestResults(c);
   if (c.effects.length) await deliverEffects(env, c.db, await recordEffects(c.db, c.effects, c.now));
   return result;
 }
@@ -38,7 +41,7 @@ export async function handleV2(request, env, ctx, head = {}) {
   let body;
   try {
     const text = await request.text();
-    if (text.length > MAX_BODY) throw new Error('too large');
+    if (text.length > (isUpload(route) ? UPLOAD_BODY : MAX_BODY)) throw new Error('too large');
     body = text ? JSON.parse(text) : {};
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('not object');
   } catch { return reply(400, { ok: false, error: { code: 'badRequest', message: '送った内容を読めませんでした' } }); }

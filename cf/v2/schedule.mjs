@@ -222,7 +222,7 @@ function range(b, today) {
   if (to < from || Date.parse(to) - Date.parse(from) > 400 * DAY) fail('badRange', '期間を確かめてください');
   return { from, to };
 }
-async function studentByLink(c, b) {
+export async function studentByLink(c, b) {
   const code = String(b.k || '');
   const s = code && code.length <= 100 ? await c.db.prepare("select * from students where linkCode = ? and status <> 'left'").bind(code).first() : null;
   if (!s) fail('badLink', '専用リンクが正しくありません。先生から届いたリンクを開き直してください', 401);

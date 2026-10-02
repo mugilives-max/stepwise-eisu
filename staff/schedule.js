@@ -1,6 +1,6 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261002-stage5c';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261002-stage6';
 
 let month = null, data = null, sel = null, panel = '', editing = null, families = null, loadedFor = '';
 const ymOf = d => d.slice(0, 7);
