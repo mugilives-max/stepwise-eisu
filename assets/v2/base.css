@@ -180,3 +180,7 @@ button.small-btn { white-space: nowrap; }
 .tabs2 a.on { background: var(--primary); color: var(--white); font-weight: 700; }
 .rows .todo.left { opacity: .55; }
 .rows .todo .tags { display: flex; gap: 4px; }
+.seg a { flex: 1; text-align: center; text-decoration: none; padding: 7px 0; font-size: 13.5px; border-radius: 8px; color: var(--muted); }
+.seg a.on { background: var(--white); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.acct { font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+@media (max-width: 720px) { .acct { margin-left: auto; } }

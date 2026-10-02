@@ -1,10 +1,11 @@
-// 保護者の画面（作り直し v2）。ログイン・招待・再設定、子どもの予定と「変更・お休みの連絡」、学習、計画・お支払い（family/money.js）、予定の共有、アカウント。
+// 保護者の画面（作り直し v2）。入口は ホーム・予定・学習・お支払い（docs/UX_STRUCTURE.md 4）。子どもが2人以上なら上で切り替える。
+// ログイン・招待・再設定、予定と「変更・お休みの連絡」、テスト・行事を知らせる、記録と宿題・成績、計画の承認とお支払い（family/money.js）、アカウント（右上）。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-ux3';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-ux3';
-import { moneyView } from '/family/money.js?v=20261002-ux3';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-ux3';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-ux4';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-ux4';
+import { moneyView } from '/family/money.js?v=20261002-ux4';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-ux4';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';
@@ -41,33 +42,96 @@ function invitePage(token) {
   if (inviteInfo.error) return `<h1>保護者ページの登録</h1><p class="notice error">${esc(inviteInfo.error)}</p>`;
   return `<h1>保護者ページの登録</h1><p>${esc(inviteInfo.name)}（${esc(inviteInfo.email)}）のパスワードを決めてください。</p>${noticeHtml()}<input type="email" value="${esc(inviteInfo.email)}" autocomplete="username" hidden>${newPasswordForm('invite', '登録してはじめる')}`;
 }
+// ---- 入口（docs/UX_STRUCTURE.md 4）: ホーム・予定・学習・お支払い。スマホでは画面の下。アカウントは右上 ----
+const ICON = {
+  home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+  schedule: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  learning: '<path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5z"/>',
+  money: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+};
+const TABS = [['home', 'ホーム'], ['schedule', '予定'], ['learning', '学習'], ['money', 'お支払い']];
+// 前の URL（#events・#grades）も開けるように
+const pageOf = p => p === 'events' ? 'schedule' : p === 'grades' ? 'learning' : p;
+
+// 子どもの切り替え（2人以上のとき）。予定は「全員」も選べる。選んだ子どもはこのタブで覚える
+const KID_KEY = 'sw2_family_kid';
+let kid = (() => { try { return sessionStorage.getItem(KID_KEY) || ''; } catch { return ''; } })();
+const kids = () => (sched && sched.students) || [];
+function kidPicker(allowAll) {
+  const ks = kids(); if (ks.length < 2) return '';
+  if (!allowAll && !ks.some(s => s.id === kid)) kid = ks[0].id;
+  const opts = (allowAll ? [['', '全員']] : []).concat(ks.map(s => [s.id, s.name.split(' ').pop()]));
+  return '<div class="tabs2" role="tablist" aria-label="子ども">' + opts.map(([id, label]) => `<a href="javascript:void 0" role="tab" data-action="kid" data-id="${esc(id)}" class="${kid === id ? 'on' : ''}">${esc(label)}</a>`).join('') + '</div>';
+}
+const forKid = (rows, key = 'studentId') => !kid ? rows : rows.filter(x => x[key] === kid);
+const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
+
+// 読み込み（ホームは3つをいっしょに）
+function need(...what) {
+  const want = what.filter(w => !{ sched, learning, money, grades }[w]);
+  for (const w of want) {
+    if (w === 'sched') { sched = { loading: true }; call('family/schedule', {}, store.get()).then(r => { if (r.ok) sched = r; else if (r.error.code === 'needLogin') { store.set(''); me = null; } else { sched = { students: [], lessons: [], events: [], today: '' }; say(r.error.message, 'error'); } render(); }); }
+    if (w === 'learning') { learning = { loading: true }; call('family/learning', {}, store.get()).then(r => { learning = r.ok ? r : { records: [], homework: [], students: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); }
+    if (w === 'money') { money = { loading: true }; call('family/money', {}, store.get()).then(r => { money = r.ok ? r : { plans: [], fees: [], invoices: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); }
+    if (w === 'grades') { grades = { loading: true }; call('family/grades', {}, store.get()).then(r => { grades = r.ok ? r : { students: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); }
+  }
+  return what.some(w => { const v = { sched, learning, money, grades }[w]; return !v || v.loading; });
+}
+const loading = '<p class="muted" style="margin-top:20px">読み込んでいます…</p>';
+
+// ホーム: やること・次の授業・新しい記録
 function homePage() {
-  if (!sched) { load(); return '<p class="muted">読み込んでいます…</p>'; }
-  const names = Object.fromEntries(sched.students.map(s => [s.id, sched.students.length > 1 ? s.name : '']));
-  let h = `${prep}<h1>予定</h1>${noticeHtml()}`;
-  if (change) h += changeDialog(sched.lessons.find(l => l.id === change.id), change.pick, change.note, busy);
-  h += familyLessonList(sched, { names });
+  if (need('sched', 'learning', 'money')) return loading;
+  const multi = kids().length > 1, first = id => { const s = kids().find(k => k.id === id); return multi && s ? s.name.split(' ').pop() + ' ' : ''; };
+  let h = `${prep}<div class="page-head"><h1>ホーム</h1></div>${noticeHtml()}`;
+  const todo = [];
+  const asks = money.plans.filter(l => l.status === 'proposed'), acks = money.plans.filter(l => l.status === 'approved' && l.approvedBy === 'staff' && !l.familyAck);
+  if (asks.length) todo.push(['#money', '授業計画の承認', `${asks.length}件・内容を確かめて承認してください`]);
+  if (acks.length) todo.push(['#money', '承諾の内容の確認', `${acks.length}件・先生が記録した承諾を確かめてください`]);
+  const kari = sched.lessons.filter(l => l.status === 'proposed' && l.confirmBy);
+  if (kari.length) { const by = kari.map(l => l.confirmBy).sort()[0]; todo.push(['#schedule', '仮予定の確認', `${kari.length}件・${md(by)}までに連絡がなければ決定します`]); }
+  const due = money.invoices.filter(v => v.status === 'confirmed');
+  if (due.length) todo.push(['#money', 'お支払い', due.map(v => `${Number(v.month.slice(5))}月分 ${Number(v.total).toLocaleString('ja-JP')}円`).join('・')]);
+  const hw = learning.homework.filter(w => w.status === 'open');
+  if (hw.length) todo.push(['#learning', '宿題', `${hw.length}件・できたら「できた」を押してください`]);
+  h += '<h2>やること</h2>' + (todo.length ? '<div class="rows">' + todo.map(([href, t, n]) => `<a class="todo" href="${href}"><span class="b"><strong>${esc(t)}</strong><small class="muted">${esc(n)}</small></span><span class="go">›</span></a>`).join('') + '</div>' : '<p class="muted small">いま、やることはありません。</p>');
+  const next = sched.lessons.filter(l => l.date >= sched.today && ['proposed', 'decided'].includes(l.status)).slice(0, 3);
+  h += '<h2>次の授業</h2>' + (next.length ? '<div class="rows">' + next.map(l => `<a class="todo" href="#schedule"><span class="b"><strong>${md(l.date)} ${l.start}〜</strong><small class="muted">${esc(first(l.studentId))}${esc(l.subject)}${l.status === 'proposed' ? '・仮予定' : ''}${l.deliveryMode === 'online' ? '・オンライン' : ''}</small></span><span class="go">›</span></a>`).join('') + '</div>' : '<p class="muted small">決まっている授業はありません。</p>');
+  const tests = sched.events.filter(e => e.kind === 'test' && e.date >= sched.today).slice(0, 2);
+  if (tests.length) h += '<h2>テスト</h2><div class="rows">' + tests.map(e => `<div class="ev"><span class="t">${md(e.date)}</span><span class="b" style="color:var(--ink)">${esc(first(e.studentId))}${esc(e.title)}</span><span></span></div>`).join('') + '</div>';
+  const recs = learning.records.slice(0, 3);
+  if (recs.length) h += '<h2>新しい授業の記録</h2><div class="rows">' + recs.map(r => `<a class="todo" href="#learning"><span class="b"><strong>${md(r.date)} ${esc(first(r.studentId))}${esc(r.subject)}</strong><small class="muted">${esc(r.range || r.comment.slice(0, 40))}</small></span><span class="go">›</span></a>`).join('') + '</div>';
   return h;
 }
-function eventsPage() {
-  if (!sched) { load(); return '<p class="muted">読み込んでいます…</p>'; }
-  const names = Object.fromEntries(sched.students.map(s => [s.id, s.name]));
-  return `<h1>予定の共有</h1><p class="sub">テスト・行事・授業ができない日を先生に知らせます。予定を作るときの参考にします。</p>${noticeHtml()}${eventList(sched.events, { names, canDelete: e => e.createdByKind === 'family' })}<h2>予定を共有する</h2>${eventForm(sched.students)}`;
+// 予定: 子どもを選んで一覧と「変更・お休みの連絡」。テスト・行事を知らせるもここ
+function schedulePage() {
+  if (need('sched')) return loading;
+  const names = Object.fromEntries(kids().map(s => [s.id, kids().length > 1 && !kid ? s.name : '']));
+  let h = `<div class="page-head"><h1>予定</h1></div>${kidPicker(true)}${noticeHtml()}`;
+  if (change) h += changeDialog(sched.lessons.find(l => l.id === change.id), change.pick, change.note, busy);
+  h += familyLessonList({ ...sched, lessons: forKid(sched.lessons) }, { names });
+  const allNames = Object.fromEntries(kids().map(s => [s.id, s.name]));
+  h += `<h2>テスト・行事を知らせる</h2><p class="small muted">テスト・行事・授業ができない日を先生に知らせると、予定を作るときの参考にします。</p>${eventList(forKid(sched.events), { names: allNames, canDelete: e => e.createdByKind === 'family' })}
+    <details><summary class="small">知らせる</summary>${eventForm(kid ? kids().filter(s => s.id === kid) : kids())}</details>`;
+  return h;
 }
-function learningPage() {
-  if (!learning) { call('family/learning', {}, store.get()).then(r => { learning = r.ok ? r : { records: [], homework: [], students: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); return '<p class="muted">読み込んでいます…</p>'; }
-  const names = Object.fromEntries(learning.students.map(s => [s.id, learning.students.length > 1 ? s.name : '']));
-  return `<h1>学習</h1>${noticeHtml()}${learningView(learning, { names })}`;
+// 学習: 子どもを選んで「記録と宿題」「成績」
+function learningPage(sub) {
+  if (need('sched')) return loading;
+  const tab = sub === 'grades' ? 'grades' : 'records';
+  let h = `<div class="page-head"><h1>学習</h1></div>${kidPicker(false)}<div class="seg" style="margin-top:6px"><a href="#learning" class="${tab === 'records' ? 'on' : ''}">記録と宿題</a><a href="#learning/grades" class="${tab === 'grades' ? 'on' : ''}">成績</a></div>${noticeHtml()}`;
+  if (tab === 'records') {
+    if (need('learning')) return h + loading;
+    return h + learningView({ ...learning, records: forKid(learning.records), homework: forKid(learning.homework) }, { names: {} });
+  }
+  if (need('grades')) return h + loading;
+  const st = grades.students.find(s => s.id === kid) || grades.students[0];
+  return h + (st ? gradesView(st, { who: 'family', dis: dis() }) : '<p class="muted">まだ成績はありません。</p>');
 }
 function moneyPage() {
-  if (!money) { call('family/money', {}, store.get()).then(r => { money = r.ok ? r : { plans: [], fees: [], invoices: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); return '<p class="muted">読み込んでいます…</p>'; }
+  if (need('money')) return loading;
   const multi = new Set(money.plans.map(l => l.studentId).concat(money.fees.map(f => f.studentId))).size > 1;
-  return `<h1>計画・お支払い</h1>${noticeHtml()}${moneyView(money, { multi, dis: dis() })}`;
-}
-function gradesPage() {
-  if (!grades) { call('family/grades', {}, store.get()).then(r => { grades = r.ok ? r : { students: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); return '<p class="muted">読み込んでいます…</p>'; }
-  const multi = grades.students.length > 1;
-  return `<h1>成績</h1>${noticeHtml()}` + grades.students.map(s => (multi ? `<h2>${esc(s.name)}さん</h2>` : '') + gradesView(s, { who: 'family', dis: dis() })).join('');
+  return `<div class="page-head"><h1>お支払い</h1></div>${noticeHtml()}${moneyView(money, { multi, dis: dis() })}`;
 }
 function accountPage() {
   if (previewToken) return `<h1>アカウント</h1><p class="muted">プレビューでは使えません。</p>`;
@@ -75,16 +139,17 @@ function accountPage() {
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label><label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" required></label>
     <label>もう一度<input type="password" name="confirm" autocomplete="new-password" minlength="12" required></label><button class="primary"${dis()}>変える</button></form><h2>ログアウト</h2><p><button data-action="logout"${dis()}>この端末からログアウト</button></p>`;
 }
-async function load() { const r = await call('family/schedule', {}, store.get()); if (r.ok) sched = r; else if (r.error.code === 'needLogin') { store.set(''); me = null; } else { sched = { students: [], lessons: [], events: [], today: '' }; say(r.error.message, 'error'); } render(); }
 
 function render() {
-  const r = route();
-  nav.innerHTML = me ? [['home', '予定'], ['learning', '学習'], ['grades', '成績'], ['money', '計画・お支払い'], ['events', '予定の共有'], ['account', 'アカウント']].map(([k, l]) => `<a href="#${k}" class="${r.page === k ? 'on' : ''}">${l}</a>`).join('') : '';
+  const r = route(), page = pageOf(r.page.split('/')[0]), sub = r.page.split('/')[1];
+  nav.innerHTML = me ? TABS.map(([k, l]) => `<a href="#${k}" class="${page === k ? 'on' : ''}"${page === k ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg><span>${l}</span></a>`).join('') : '';
+  document.body.classList.toggle('has-tabs', !!me);
+  const acct = document.getElementById('acct'); if (acct) acct.hidden = !me;
   let h;
   if (r.page === 'invite') h = invitePage(r.token);
   else if (r.page === 'reset') h = `<h1>新しいパスワード</h1>${noticeHtml()}${newPasswordForm('reset', 'パスワードを変える')}`;
   else if (!me) h = r.page === 'forgot' ? `<h1>パスワードの再設定</h1>${noticeHtml()}<form class="stack" data-form="forgot"><label>メールアドレス<input type="email" name="email" required></label><button class="primary"${dis()}>再設定のメールを送る</button></form><p><a href="#">ログインに戻る</a></p>` : loginPage();
-  else h = r.page === 'events' ? eventsPage() : r.page === 'learning' ? learningPage() : r.page === 'money' ? moneyPage() : r.page === 'grades' ? gradesPage() : r.page === 'account' ? accountPage() : homePage();
+  else h = page === 'schedule' ? schedulePage() : page === 'learning' ? learningPage(sub || (r.page === 'grades' ? 'grades' : '')) : page === 'money' ? moneyPage() : page === 'account' ? accountPage() : homePage();
   app.className = !me ? 'narrow' : '';
   app.innerHTML = previewBar() + h;
 }
@@ -122,6 +187,7 @@ app.addEventListener('submit', ev => {
 app.addEventListener('click', ev => {
   const b = ev.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
+  if (a === 'kid') { kid = b.dataset.id; try { sessionStorage.setItem(KID_KEY, kid); } catch {} ev.preventDefault(); return render(); }
   if (a === 'change') { change = { id: b.dataset.id, pick: '', note: '' }; return render(); }
   if (a === 'pick') { const n = document.getElementById('change-note'); if (n) change.note = n.value; change.pick = b.dataset.c; return render(); }
   if (a === 'close-change') { change = null; return render(); }
