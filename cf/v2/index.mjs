@@ -11,16 +11,19 @@ import { scheduleRoutes, autoConfirm } from './schedule.mjs';
 import { migrateScheduleRoutes } from './migrate-schedule.mjs';
 import { recordRoutes } from './records.mjs';
 import { migrateRecordsRoutes } from './migrate-records.mjs';
+import { billingRoutes, autoCloseInvoices } from './billing.mjs';
+import { migrateBillingRoutes } from './migrate-billing.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes };
 const MAX_BODY = 200000;
 
-// 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する
+// 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
 export async function runV2Scheduled(env, now = Date.now()) {
   if (!env.DB2) return null;
   const c = { env, db: env.DB2, now, effects: [], actor: null, userAgent: 'scheduled' };
   const result = await autoConfirm(c);
+  result.invoices = await autoCloseInvoices(c);
   if (c.effects.length) await deliverEffects(env, c.db, await recordEffects(c.db, c.effects, c.now));
   return result;
 }

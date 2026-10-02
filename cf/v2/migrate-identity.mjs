@@ -95,7 +95,9 @@ export const migrateRoutes = {
       + (select count(*) from sharedEvents where studentId in (select id from students where legacyId <> ''))
       + (select count(*) from homework where studentId in (select id from students where legacyId <> ''))
       + (select count(*) from handoverNotes where studentId in (select id from students where legacyId <> ''))
-      + (select count(*) from meetings where familyId in (select id from families where legacyId <> '')) n`).first();
+      + (select count(*) from meetings where familyId in (select id from families where legacyId <> ''))
+      + (select count(*) from planLines where studentId in (select id from students where legacyId <> ''))
+      + (select count(*) from invoices where familyId in (select id from families where legacyId <> '')) n`).first();
     if (later.n)
       fail('useAll', '予定を写したあとは、家族・生徒だけを写し直せません。「全部を順に写し直す」を使ってください', 409);
     const mixed = await c.db.prepare("select count(*) n from students s join families f on f.id = s.familyId where s.legacyId = '' and f.legacyId <> ''").first();

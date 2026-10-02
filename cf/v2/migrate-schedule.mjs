@@ -77,8 +77,8 @@ export const migrateScheduleRoutes = {
     if (b.confirm !== true) fail('needConfirm', '確認してから写してください');
     if (!c.env.DB) fail('unavailable', '今の台帳に接続できません', 503);
     if (!(await c.db.prepare("select 1 from students where legacyId <> ''").first())) fail('noStudents', '先に家族・生徒を写してください', 409);
-    if ((await c.db.prepare("select count(*) n from lessonRecords where lessonId in (select id from lessons where legacyId <> '')").first()).n)
-      fail('useAll', '授業記録を写したあとは、予定だけを写し直せません。「全部を順に写し直す」を使ってください', 409);
+    if ((await c.db.prepare("select (select count(*) from lessonRecords where lessonId in (select id from lessons where legacyId <> '')) + (select count(*) from cancellationFees where lessonId in (select id from lessons where legacyId <> '')) + (select count(*) from lessons where legacyId <> '' and invoiceId <> '') n").first()).n)
+      fail('useAll', '授業記録・請求を写したあとは、予定だけを写し直せません。「全部を順に写し直す」を使ってください', 409);
     const p = await schedulePlan(c.env.DB, c.db), now = iso(c.now), db = c.db;
     const stmts = [
       db.prepare("delete from lessonRequests where lessonId in (select id from lessons where legacyId <> '')"),

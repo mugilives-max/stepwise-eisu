@@ -138,7 +138,7 @@ test('free text copied from the current ledger stays until it is changed', async
   assert.equal(kept.record.staffNotes.understanding, 'まあまあ');
 });
 
-test('a record whose lesson is gone gets a done lesson; copying everything again keeps the order of the steps', async () => {
+test('a record whose lesson is gone is not copied; copying everything again keeps the order of the steps', async () => {
   const h = await createV2(); const auth = await h.owner();
   const q = (sql, ...a) => h.db._sqlite.prepare(sql).run(...a);
   q("insert into students (id, name, active, code, rate30) values ('s1', '架空 一郎', 1, 'code-one-xxxxxxxx', 1500)");
@@ -149,15 +149,15 @@ test('a record whose lesson is gone gets a done lesson; copying everything again
   await h.ok('admin/migrate/identity/apply', { auth, confirm: true });
   await h.ok('admin/migrate/schedule/apply', { auth, confirm: true });
   const r = await h.ok('admin/migrate/records/apply', { auth, confirm: true });
-  assert.equal(r.records, 2);
-  assert.match(r.problems.join(), /実施済みの授業を作って写します/);
-  assert.deepEqual({ ...h.rows("select date, start, minutes, subject, status from lessons where legacyId = 'orphan:r2'")[0] }, { date: '2026-08-29', start: '18:00', minutes: 90, subject: '授業', status: 'done' });
+  assert.equal(r.records, 1);
+  assert.match(r.problems.join(), /授業の枠が消えているため写しません/);
+  assert.equal(h.rows("select count(*) n from lessons where legacyId like 'orphan:%'")[0].n, 0);
   assert.equal((await h.call('admin/migrate/schedule/apply', { auth, confirm: true })).error.code, 'useAll', '記録のあとで予定だけを写し直さない');
   assert.equal((await h.call('admin/migrate/identity/apply', { auth, confirm: true })).error.code, 'useAll');
   q("insert into slots (id, date, start, min, status, studentId, done, subject, deliveryMode) values ('b', '2026-10-05', '17:00', 60, 'booked', 's1', '', '英語', 'in_person')");
   const all = await h.ok('admin/migrate/all/apply', { auth, confirm: true });
-  assert.deepEqual([all.identity.students, all.schedule.lessons, all.records.records], [1, 2, 2]);
-  assert.deepEqual(h.rows('select count(*) n from lessons')[0].n, 3, '写し直しても増えない（予定2件と、消えた枠の1件）');
+  assert.deepEqual([all.identity.students, all.schedule.lessons, all.records.records], [1, 2, 1]);
+  assert.equal(h.rows('select count(*) n from lessons')[0].n, 2, '写し直しても増えない');
   assert.equal(h.rows('select count(*) n from sharedEvents')[0].n, 1);
   h.db2._sqlite.prepare("insert into settings (key, value, updatedAt) values ('live', '1', '')").run();
   assert.equal((await h.call('admin/migrate/all/apply', { auth, confirm: true })).error.code, 'live', '切り替えたあとは使えない');

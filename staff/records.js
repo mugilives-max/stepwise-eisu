@@ -1,6 +1,6 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-stage4b';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261002-stage5';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, parts = [];
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];

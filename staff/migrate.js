@@ -1,15 +1,15 @@
 // スタッフの画面: 移行の準備（システム管理者）。今の台帳の家族・生徒が新しい形にどう写るかを見て、写す。
 // 写しても今の仕組みは何も変わらない。何度でも写し直せる。保護者へのメールは切り替えまで送らない。
-let preview = null, schedPreview = null, recPreview = null;
-export function resetMigrate() { preview = null; schedPreview = null; recPreview = null; }
+let preview = null, schedPreview = null, recPreview = null, billPreview = null, compare = null;
+export function resetMigrate() { preview = null; schedPreview = null; recPreview = null; billPreview = null; compare = null; }
 
 export function migratePage(ctx) {
   const { esc } = ctx;
   let h = `<h1>移行の準備</h1><p class="sub">今の仕組みの家族・生徒を、新しい形（家族の下に生徒）へ写します。写しても今の仕組みは変わりません。何度でも写し直せます。切り替えまでは、保護者へのメールは送りません。</p>${ctx.notice()}`;
-  h += `<h2>まとめて写し直す</h2><p class="small muted">一度写したあとで今の仕組みのデータが増えたときは、ここから 1→2→3 を順に写し直します。写した生徒につながる予定・記録・宿題は、新しい仕組みで入れたものも含めて置き換わります（切り替え前だけ使えます）。</p>
+  h += `<h2>まとめて写し直す</h2><p class="small muted">一度写したあとで今の仕組みのデータが増えたときは、ここから 1→2→3→4 を順に写し直します。写した生徒につながる予定・記録・宿題・計画・請求は、新しい仕組みで入れたものも含めて置き換わります（切り替え前だけ使えます）。</p>
     <p><button class="primary" data-action="mig-all"${ctx.dis()}>全部を順に写し直す</button></p>`;
   h += `<h2>1. 家族と生徒</h2><p><button data-action="mig-preview"${ctx.dis()}>${preview ? 'もう一度見る' : 'どう写るかを見る'}</button></p>`;
-  if (!preview) return h + schedulePart(ctx) + recordsPart(ctx);
+  if (!preview) return h + schedulePart(ctx) + recordsPart(ctx) + billingPart(ctx);
   const students = preview.families.reduce((n, f) => n + f.students.length, 0);
   h += `<h2>写すもの</h2><p>${preview.families.length}家族・${students}人${preview.copiedFamilies ? `（いまの新しい台帳には、前に写した ${preview.copiedFamilies}家族があります。写し直すと置き換えます）` : ''}</p>`;
   if (preview.problems.length) h += `<h2>気になる点（${preview.problems.length}件）</h2><ul>${preview.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`;
@@ -17,7 +17,34 @@ export function migratePage(ctx) {
     <div class="small muted">${esc(f.guardianName || '保護者名なし')}・${esc(f.email || 'メールなし')}${f.phone ? '・' + esc(f.phone) : ''}</div>
     <div class="small">${f.students.map(s => `${esc(s.name)}（${esc(s.grade || '学年なし')}・${s.status === 'enrolled' ? '在籍' : s.status === 'paused' ? '休会' : '退会'}・${Number(s.baseRate30 || 0).toLocaleString('ja-JP')}円/30分）`).join('、') || '生徒なし'}</div></div><div></div></div>`).join('') + '</div>';
   h += `<p><button class="primary" data-action="mig-apply"${ctx.dis()}>この内容で新しい台帳に写す</button></p>`;
-  return h + schedulePart(ctx) + recordsPart(ctx);
+  return h + schedulePart(ctx) + recordsPart(ctx) + billingPart(ctx);
+}
+// 4. 計画・キャンセル料・請求（授業記録まで写したあと）と、請求の比べ合わせ
+function billingPart(ctx) {
+  const { esc } = ctx, yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
+  let h = `<h2>4. 授業計画・キャンセル料・請求</h2><p class="small muted">予定まで写したあとで使います。今の仕組みでは消えているキャンセルの授業は、控えから作ります。取り消した請求は写しません。</p>
+    <p><button data-action="mig-b-preview"${ctx.dis()}>${billPreview ? 'もう一度見る' : 'どう写るかを見る'}</button></p>`;
+  if (billPreview) {
+    const b = billPreview;
+    h += `<p>授業計画 ${b.planLines.total}件（承認 ${b.planLines.approved}・承認待ち ${b.planLines.proposed}）、キャンセルの授業 ${b.cancelled}件・お休み ${b.rested}件、キャンセル料 ${b.fees}件、請求 ${b.invoices.total}件（入金済み ${b.invoices.paid}・${esc(b.invoices.months.join('・') || '月なし')}）</p>`;
+    if (b.problems.length) h += `<ul>${b.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`;
+    h += `<p><button class="primary" data-action="mig-b-apply"${ctx.dis()}>計画・請求を新しい台帳に写す</button></p>`;
+  }
+  h += `<h3>請求を比べる</h3><p class="small muted">写した請求（今の仕組みの金額）と、新しい仕組みで計算し直した金額を、家族ごとに並べます。</p>
+    <form class="row" data-form="mig-compare"><input type="month" name="month" value="${esc(compare ? compare.month : '')}" required><button${ctx.dis()}>比べる</button></form>`;
+  if (compare) {
+    h += compare.families.length ? '<div class="list">' + compare.families.map(f => `<div><div><strong>${esc(f.name)}</strong> <span class="tag ${f.same ? 'ok' : 'danger'}">${f.same ? '同じ' : '違う'}</span>
+      <div class="small">今の仕組み ${yen(f.old)}${f.oldFrom === '' ? '（請求なし）' : ''}／新しい計算 ${yen(f.new)}${f.pendingCount ? `・計画の承認がない授業 ${f.pendingCount}件` : ''}</div>
+      ${f.issues.length ? `<ul class="small">${f.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}<div class="small muted">${f.students.map(s => `${esc(s.name)} ${yen(s.total)}（${s.items}件${s.pending ? '・承認待ち ' + s.pending + '件' : ''}）`).join('、')}</div></div><div></div></div>`).join('') + '</div>' : '<p class="muted">この月の請求はありません。</p>';
+  }
+  return h;
+}
+export async function migrateSubmit(ctx, kind, el) {
+  if (kind !== 'mig-compare') return false;
+  const month = new FormData(el).get('month');
+  const r = await ctx.call('admin/migrate/billing/compare', { month });
+  if (r.ok) { compare = r; ctx.say(''); } else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
+  return true;
 }
 // 3. 授業記録・宿題（予定を写したあと）
 function recordsPart(ctx) {
@@ -44,13 +71,18 @@ function schedulePart(ctx) {
 export async function migrateClick(ctx, a) {
   let r;
   if (a === 'mig-all') {
-    if (!confirm('家族・生徒 → 予定 → 授業記録・宿題 の順に、全部を写し直しますか？ 写した生徒につながる予定・記録・宿題は置き換わります。今の仕組みは変わりません。')) return true;
+    if (!confirm('家族・生徒 → 予定 → 授業記録・宿題 → 計画・請求 の順に、全部を写し直しますか？ 写した生徒につながる予定・記録・宿題・計画・請求は置き換わります。今の仕組みは変わりません。')) return true;
     r = await ctx.call('admin/migrate/all/apply', { confirm: true });
     if (r.ok) {
       preview = null; schedPreview = null; recPreview = null; ctx.afterMigrate();
-      const probs = [...r.identity.problems, ...r.schedule.problems, ...r.records.problems];
-      ctx.say(`${r.identity.families}家族・${r.identity.students}人、授業 ${r.schedule.lessons}件、授業記録 ${r.records.records}件・宿題 ${r.records.homework}件を写しました。${probs.length ? '気になる点: ' + probs.join(' / ') : ''}`, 'ok'); return true;
+      const probs = [...r.identity.problems, ...r.schedule.problems, ...r.records.problems, ...r.billing.problems];
+      ctx.say(`${r.identity.families}家族・${r.identity.students}人、授業 ${r.schedule.lessons}件、授業記録 ${r.records.records}件・宿題 ${r.records.homework}件、計画 ${r.billing.planLines}件・請求 ${r.billing.invoices}件を写しました。${probs.length ? '気になる点: ' + probs.join(' / ') : ''}`, 'ok'); return true;
     }
+  } else if (a === 'mig-b-preview') { r = await ctx.call('admin/migrate/billing/preview'); if (r.ok) { billPreview = r; ctx.say(''); return true; } }
+  else if (a === 'mig-b-apply') {
+    if (!confirm('今の仕組みの授業計画・キャンセル料・請求を、新しい台帳に写しますか？ 前に写したものは置き換えます。今の仕組みは変わりません。')) return true;
+    r = await ctx.call('admin/migrate/billing/apply', { confirm: true });
+    if (r.ok) { billPreview = null; ctx.afterMigrate(); ctx.say(`計画 ${r.planLines}件・キャンセル料 ${r.fees}件・請求 ${r.invoices}件を写しました。「請求を比べる」で確かめてください`, 'ok'); return true; }
   } else if (a === 'mig-preview') { r = await ctx.call('admin/migrate/identity/preview'); if (r.ok) { preview = r; ctx.say(''); return true; } }
   else if (a === 'mig-apply') {
     if (!confirm('今の仕組みの家族・生徒を、新しい台帳に写しますか？ 前に写したものは置き換えます。今の仕組みは変わりません。')) return true;

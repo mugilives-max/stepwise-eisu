@@ -8,6 +8,7 @@ import { fail, newId, iso, audit, sha256Hex } from './util.mjs';
 import { requireStaff, rolesOf } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { isLive } from './accounts.mjs';
+import { createCancelFee, dropCancelFee } from './plan-calc.mjs';
 
 const CAL_PREFIX = '【塾】';
 const ACTIVE = ['held', 'proposed', 'decided', 'done'];
@@ -65,13 +66,13 @@ async function calendarEffect(c, kind, lesson, studentName) {
   return marker;
 }
 // 保護者あての短いお知らせ（中身は保護者ページで見る）。切り替え前は held
-async function familyNotice(c, studentId, subject, text) {
+export async function familyNotice(c, studentId, subject, text) {
   const s = await c.db.prepare('select f.email, f.testOnly, f.status from students s join families f on f.id = s.familyId where s.id = ?').bind(studentId).first();
   if (!s || !s.email || s.status !== 'active') return;
   c.effects.push({ kind: 'mail', to: s.email, name: 'ステップワイズ英数教室', subject: '【ステップワイズ】' + subject, body: text + '\n保護者ページでご確認ください。\n\nhttps://www.stepwise-education.jp/family/', testOnly: !!s.testOnly, audience: 'family', held: !(await isLive(c)) });
 }
 // スタッフ（教室管理者）あてのお知らせ
-async function staffNotice(c, subject, text) {
+export async function staffNotice(c, subject, text) {
   const rows = (await c.db.prepare("select email, roles from staff where status = 'active'").all()).results.filter(r => rolesOf(r).includes('manager'));
   for (const r of rows) c.effects.push({ kind: 'mail', to: r.email, name: 'ステップワイズ', subject: '[ステップワイズ] ' + subject, body: text + '\n\nhttps://www.stepwise-education.jp/staff/', audience: 'staff' });
 }
@@ -177,6 +178,7 @@ async function lessonRequest(c, studentIds, who, b) {
     if (l.status === 'decided') await calendarEffect(c, 'delete', l, name);
   }
   await c.db.batch(stmts);
+  if (kind === 'cancel') await createCancelFee(c, l, 'late', iso(c.now)); // 開始前の連絡なので規定額は 1,000円（判断は教室管理者）
   const when = `${l.date.slice(5).replace('-', '/')} ${l.start}〜（${l.subject}）`, from = who.kind === 'family' ? name + 'さんの保護者' : name + 'さん';
   const title = { move: '日時の変更のお願い', rest: 'お休みの連絡', late: '開始を遅らせたい', cancel: 'キャンセル' }[kind];
   await staffNotice(c, `【${title}】${name}さん`, `${from}から${title}が届きました。\n${when}${l.status === 'proposed' ? '（仮予定）' : ''}\n${note ? '内容: ' + note : ''}${kind === 'cancel' ? '\n前日23時を過ぎた連絡です（キャンセル料の対象）。' : ''}`);
@@ -194,6 +196,7 @@ async function withdrawRequest(c, studentIds, b) {
   if (['rest', 'cancel'].includes(r.kind) && l.status === (r.kind === 'rest' ? 'rested' : 'cancelled')) {
     const back = (await c.db.prepare("select decidedAt from lessons where id = ?").bind(l.id).first()).decidedAt ? 'decided' : 'proposed';
     next = await setLesson(c, l, { status: back });
+    if (r.kind === 'cancel') await dropCancelFee(c, l.id);
     if (back === 'decided') next = await setLesson(c, next, { calendarEventId: await calendarEffect(c, 'create', next, fullName(await studentRow(c, l.studentId))) });
   } else if (r.status !== 'open') fail('closed', 'この連絡はもう対応が済んでいます', 409);
   await c.db.prepare("update lessonRequests set status = 'withdrawn', updatedAt = ?, version = version + 1 where id = ?").bind(iso(c.now), r.id).run();
@@ -361,7 +364,10 @@ export const scheduleRoutes = {
     await requireStaff(c, b, 'manager');
     const l = await getLesson(c, b.id); sameVersion(l, b);
     if (l.status !== 'decided') fail('badStatus', '決定した授業だけキャンセルにできます');
+    // キャンセル料の種類: 指定がなければ、今が開始前なら late（1,000円）、開始後なら noshow（授業料）
+    const type = ['late', 'noshow'].includes(b.feeType) ? b.feeType : c.now < startMs(l.date, l.start) ? 'late' : 'noshow';
     const next = await setLesson(c, l, { status: 'cancelled' });
+    await createCancelFee(c, l, type, type === 'late' ? iso(c.now) : '');
     await calendarEffect(c, 'delete', l, '');
     await closeRequests(c, l.id, ['move', 'late', 'cancel', 'rest'], 'staff:' + c.actor.id);
     await audit(c, 'lessonCancel', l.id);
@@ -384,8 +390,9 @@ export const scheduleRoutes = {
     await requireStaff(c, b, 'manager');
     const l = await getLesson(c, b.id); sameVersion(l, b);
     if (l.status === 'done') fail('badStatus', '実施済みの授業は消せません');
+    if ((await c.db.prepare("select 1 from cancellationFees where lessonId = ? and invoiceId <> ''").bind(l.id).first())) fail('invoiced', 'キャンセル料を請求した授業は消せません', 409);
     if (l.status === 'decided') await calendarEffect(c, 'delete', l, '');
-    await c.db.batch([c.db.prepare('delete from lessonRequests where lessonId = ?').bind(l.id), c.db.prepare('delete from lessons where id = ?').bind(l.id)]);
+    await c.db.batch([c.db.prepare('delete from lessonRequests where lessonId = ?').bind(l.id), c.db.prepare('delete from cancellationFees where lessonId = ?').bind(l.id), c.db.prepare('delete from lessons where id = ?').bind(l.id)]);
     await audit(c, 'lessonDelete', l.id, { date: l.date, start: l.start, status: l.status });
     return {};
   },
