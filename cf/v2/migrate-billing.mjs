@@ -12,6 +12,14 @@ const parse = (v, d) => { try { const o = JSON.parse(String(v || '')); return o 
 const date10 = v => { const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(String(v || '')); return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : ''; };
 const time5 = v => { const m = /^(\d{1,2}):(\d{2})/.exec(String(v || '')); return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '00:00'; };
 const STATUS = ['draft', 'proposed', 'approved', 'declined'];
+// 今の仕組みは、入力した1回の授業料を30分あたり（rate30 = 四捨五入(授業料 × 30 ÷ 時間)）に直して持つ。
+// 同じ rate30 になる授業料の中から、入力したらしい金額（100円単位 → 10円単位 → そのまま計算）を選んで戻す。
+// 例: 90分 2,800円 → 933円/30分 → 今の画面では 2,799円。ここでは 2,800円 に戻す
+export function typedFee(rate30, minutes) {
+  const back = f => Math.round(f * 30 / minutes) === rate30, plain = Math.round(rate30 * minutes / 30);
+  const near = []; for (let f = plain - Math.ceil(minutes / 30); f <= plain + Math.ceil(minutes / 30); f++) if (f >= 0 && back(f)) near.push(f);
+  return near.find(f => f % 100 === 0) ?? near.find(f => f % 10 === 0) ?? plain;
+}
 
 export async function billingPlan(old, db2) {
   const all = async (d, sql) => (await d.prepare(sql).all()).results;
@@ -29,8 +37,8 @@ export async function billingPlan(old, db2) {
   for (const p of lines) {
     const s = students[String(p.studentId)];
     if (!s) { problems.push(`授業計画（${p.subject} ${p.startDate}〜）の生徒が新しい台帳にいないため写しません`); continue; }
-    const minutes = Number(p.lessonMin) || 60, raw = Number(p.rate30 || 0) * minutes / 30, fee = Math.round(raw);
-    if (raw !== fee) problems.push(`授業計画（${p.subject} ${p.startDate}〜）の1回の授業料は ${fee}円 として写します（30分あたり ${p.rate30}円 から計算）。違っていたら直してください`);
+    const minutes = Number(p.lessonMin) || 60, fee = typedFee(Number(p.rate30 || 0), minutes);
+    if (fee !== Math.round(Number(p.rate30 || 0) * minutes / 30)) problems.push(`授業計画（${p.subject} ${p.startDate}〜）の1回の授業料は、今の画面の ${Math.round(Number(p.rate30 || 0) * minutes / 30)}円 ではなく ${fee}円 として写します（入力した金額を30分あたりに直して持っていたため）`);
     const status = STATUS.includes(p.status) ? p.status : 'draft', decided = status === 'approved' || status === 'declined';
     const via = String(p.approvedVia || '');
     planLines.push({ id: 'pl_' + p.id, legacyId: String(p.id), studentId: s.id, parentId: p.parentId ? 'pl_' + p.parentId : '', subject: String(p.subject || '').slice(0, 30), kind: String(p.kind || '') || '通常',

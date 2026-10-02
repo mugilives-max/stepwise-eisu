@@ -1,6 +1,6 @@
 // 計画・料金の計算（5段目）。予定（schedule.mjs）と請求（billing.mjs）の両方から使うので、ほかの領域を import しない。
 // - 授業を承認済みの計画の行に割り当てる（assignLines）
-// - 1回の授業料（lessonAmount）。計画の1回の時間と授業の長さが違うときは、時間で割り戻す
+// - 1回の授業料（lessonAmount）。授業の長さが計画の1回の時間と違うときは、計画の1回の授業料 ×（授業の時間 ÷ 計画の1回の時間）。1円未満は切り捨て
 // - キャンセル料の行を作る・消す（createCancelFee / dropCancelFee）
 import { newId, iso } from './util.mjs';
 
@@ -9,13 +9,14 @@ export const validMonth = m => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || ''));
 export const monthEnd = m => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10); };
 export const shiftMonth = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 export const lineCap = l => (l.approvedCount === null || l.approvedCount === undefined ? Number(l.count) : Number(l.approvedCount));
-export const lessonAmount = (line, lesson) => Number(line.minutes) === Number(lesson.minutes) ? Number(line.fee) : Math.round(Number(line.fee) * Number(lesson.minutes) / Number(line.minutes));
-export const baseAmount = (student, minutes) => Math.round(Number(student.baseRate30 || 0) * Number(minutes) / 30);
+export const lessonAmount = (line, lesson) => Number(line.minutes) === Number(lesson.minutes) ? Number(line.fee) : Math.floor(Number(line.fee) * Number(lesson.minutes) / Number(line.minutes));
+export const baseAmount = (student, minutes) => Math.floor(Number(student.baseRate30 || 0) * Number(minutes) / 30);
 const kindOf = k => String(k || '') || '通常';
 export const lineMatches = (line, lesson) => line.studentId === lesson.studentId && line.subject === lesson.subject && kindOf(line.kind) === kindOf(lesson.kind) && line.startDate <= lesson.date && lesson.date <= line.endDate;
 const byTime = (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id);
 
-// 割り当て: 請求済みの授業は請求したときの行のまま。ほかは日付順に、元の行 → 追加の行（開始日順）の順で、空きのある最初の行へ。
+// 割り当て: 請求済みの授業は請求したときの行のまま。ほかは日付順に、空きのある行へ。
+// 行の選び方: 1回の時間が授業と同じ行 → 元の行 → 追加の行（開始日順）。同じ科目に60分と90分の計画があっても、長さの合う方に入る
 // lessons は決定・実施済みの授業。invoicedLine は { lessonId: planLineId }（取消していない請求の内訳から）
 export function assignLines(lines, lessons, invoicedLine = {}) {
   const approved = lines.filter(l => l.status === 'approved' && lineCap(l) > 0)
@@ -27,7 +28,8 @@ export function assignLines(lines, lessons, invoicedLine = {}) {
   }
   for (const ls of sorted) {
     if (ls.id in line) continue;
-    const l = approved.find(x => lineMatches(x, ls) && (used[x.id] || 0) < lineCap(x)) || null;
+    const open = approved.filter(x => lineMatches(x, ls) && (used[x.id] || 0) < lineCap(x));
+    const l = open.find(x => Number(x.minutes) === Number(ls.minutes)) || open[0] || null;
     line[ls.id] = l; if (l) used[l.id] = (used[l.id] || 0) + 1;
   }
   return { line, used };

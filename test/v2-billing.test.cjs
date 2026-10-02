@@ -175,16 +175,33 @@ test('the copy from the current ledger: plans, cancelled lessons with fees, and 
   const pre = await h.ok('admin/migrate/billing/preview', { auth });
   assert.deepEqual([pre.planLines.total, pre.cancelled, pre.fees, pre.invoices.total], [2, 1, 1, 1]);
   await h.ok('admin/migrate/billing/apply', { auth, confirm: true });
-  assert.deepEqual(h.rows('select fee from planLines order by id').map(r => r.fee), [2499, 3000], '1回の授業料は30分あたりの単価から');
+  assert.deepEqual(h.rows('select fee from planLines order by id').map(r => r.fee), [2500, 3000], '30分あたりに直す前の、入力した金額に戻す');
+  assert.match(pre.problems.join(), /2499円 ではなく 2500円/);
   const inv = h.rows('select * from invoices')[0];
   assert.deepEqual([inv.total, inv.status, inv.reportedAt], [6499, 'reported', '2026-10-04T01:00:00Z'], '家族でまとめ、振込の連絡も写す');
   assert.deepEqual(h.rows("select status from lessons where legacyId like 'cx:%'").map(r => r.status), ['cancelled']);
   assert.equal(h.rows('select invoiceId from cancellationFees')[0].invoiceId, inv.id);
   assert.equal(h.rows("select count(*) n from lessons where invoiceId <> ''")[0].n, 2);
   const cmp = await h.ok('admin/migrate/billing/compare', { auth, month: '2026-09' });
-  assert.deepEqual([cmp.families[0].old, cmp.families[0].new, cmp.families[0].same], [6499, 6499, true]);
+  assert.deepEqual([cmp.families[0].old, cmp.families[0].new, cmp.families[0].same], [6499, 6500, false], '今の仕組みは 2,500円の計画を 2,499円で請求していた。比べると1円の違いとして出る');
   assert.equal((await h.call('admin/migrate/schedule/apply', { auth, confirm: true })).error.code, 'useAll');
   const all = await h.ok('admin/migrate/all/apply', { auth, confirm: true });
   assert.equal(all.billing.invoices, 1);
   assert.equal(h.rows('select count(*) n from invoices')[0].n, 1, '写し直しても増えない');
+});
+
+test('a lesson shorter or longer than the plan is charged by the time, rounding down; lessons go to the plan with the same length first', async () => {
+  const { h, auth, kid, plan, line, lesson, done } = await world();
+  const long = await plan(kid.id, { subject: '英語', count: 2, minutes: 90, fee: 5000 });
+  const short = await plan(kid.id, { subject: '英語', count: 1, minutes: 60, fee: 1500, parentId: long.id, comment: '追加' });
+  for (const l of [long, short]) await h.ok('billing/plans/consent', { auth, id: l.id, version: line(l.id).version, consentDate: '2026-09-01', via: '電話' });
+  const a = await lesson(kid.id, '2026-09-05', '17:00', '英語', 60), b = await lesson(kid.id, '2026-09-06', '17:00', '英語', 90), c = await lesson(kid.id, '2026-09-07', '17:00', '英語', 45);
+  h.clock = at('2026-10-02T12:00:00'); for (const l of [a, b, c]) await done(l);
+  const p = (await h.ok('billing/family', { auth, familyId: kid.familyId, month: '2026-09' })).preview;
+  const items = p.students[0].items.map(i => [i.date, i.minutes, i.planLineId === short.id ? '60分の計画' : '90分の計画', i.amount]);
+  assert.deepEqual(items, [['2026-09-05', 60, '60分の計画', 1500], ['2026-09-06', 90, '90分の計画', 5000], ['2026-09-07', 45, '90分の計画', 2500]], '45分は 5,000 × 45 ÷ 90');
+  const { lessonAmount } = await import('../cf/v2/plan-calc.mjs');
+  assert.equal(lessonAmount({ fee: 5000, minutes: 90 }, { minutes: 60 }), 3333, '1円未満は切り捨て');
+  const { typedFee } = await import('../cf/v2/migrate-billing.mjs');
+  assert.deepEqual([typedFee(933, 90), typedFee(833, 90), typedFee(700, 90), typedFee(1667, 90), typedFee(1234, 60)], [2800, 2500, 2100, 5000, 2468]);
 });
