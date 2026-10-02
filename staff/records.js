@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux24';
-import { sheet, rowButton, rowLink, slider, iconBox, miniIcon } from '/staff/ui.js?v=20261003-ux24';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux24';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux26';
+import { sheet, rowButton, rowLink, slider, iconBox, miniIcon } from '/staff/ui.js?v=20261003-ux26';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux26';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
 let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。先に読んでおいた相手の記録も入る。記録の画面を離れたら捨てる

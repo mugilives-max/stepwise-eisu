@@ -2,10 +2,10 @@
 // ログイン・招待・再設定、予定と「変更・お休みの連絡」、テスト・行事を知らせる、記録と宿題・成績、計画の承認とお支払い（family/money.js）、アカウント（右上）。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261003-ux24';
-import { learningView } from '/assets/v2/learning-view.js?v=20261003-ux24';
-import { moneyView } from '/family/money.js?v=20261003-ux24';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261003-ux24';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261003-ux26';
+import { learningView } from '/assets/v2/learning-view.js?v=20261003-ux26';
+import { moneyView } from '/family/money.js?v=20261003-ux26';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261003-ux26';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';
@@ -208,7 +208,13 @@ app.addEventListener('click', ev => {
     if (r) { if (r.error.code === 'needLogin') { store.set(''); me = null; } say(r.error.message, 'error'); }
   });
 });
-window.addEventListener('hashchange', () => { say(''); change = null; render(); });
+// 画面の移り変わり: ふわっと入れ替える（対応しているブラウザだけ。「視差効果を減らす」では付けない）
+window.addEventListener('hashchange', () => {
+  say(''); change = null;
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return render();
+  document.documentElement.dataset.nav = 'tab';
+  document.startViewTransition(() => render()).finished.finally(() => { delete document.documentElement.dataset.nav; });
+});
 (async function boot() {
   const auth = store.get();
   if (auth) { const r = await call('family/me', {}, auth); if (r.ok) me = r.me; else if (r.error.code === 'needLogin') { store.set(''); if (previewToken) say('プレビューの期限が切れました。管理画面から開き直してください', 'error'); } }

@@ -2,9 +2,9 @@
 // ホーム（次の授業・宿題・次のテスト）、予定と「変更・お休みの連絡」・テスト・行事を知らせる、記録と宿題・成績（成績票を送る）。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
 import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261003-ux24';
-import { learningView, checkTag, hwText, hwSubject } from '/assets/v2/learning-view.js?v=20261003-ux24';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261003-ux24';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261003-ux26';
+import { learningView, checkTag, hwText, hwSubject } from '/assets/v2/learning-view.js?v=20261003-ux26';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261003-ux26';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
@@ -98,5 +98,11 @@ app.addEventListener('click', ev => {
     if (r) say(r.error.message, 'error');
   });
 });
-window.addEventListener('hashchange', () => { say(''); change = null; render(); });
+// 画面の移り変わり: ふわっと入れ替える（対応しているブラウザだけ。「視差効果を減らす」では付けない）
+window.addEventListener('hashchange', () => {
+  say(''); change = null;
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return render();
+  document.documentElement.dataset.nav = 'tab';
+  document.startViewTransition(() => render()).finished.finally(() => { delete document.documentElement.dataset.nav; });
+});
 render();

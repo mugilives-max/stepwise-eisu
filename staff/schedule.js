@@ -1,9 +1,11 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux24';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux26';
 
 let month = null, data = null, sel = null, sheet = null, families = null, loadedFor = '';
-let calOpen = false, calTop = 0; // スマホ: カレンダーは2週分（選んだ週が一番上）。calOpen で月全体
+// スマホ（ライフベアの形）: はじめは月全体。日付を押すと、その週が一番上まで滑り上がり、下から一覧が出る（2週分）。同じ日をもう一度押すか取っ手で月全体に戻る
+let calOpen = true, wasOpen = true, calH = null, calTop = null, shownSel = '';
+const phone = () => matchMedia('(max-width: 719px)').matches;
 // sheet: 下から出る画面。{ kind: 'lesson', id, edit } / { kind: 'create' } / { kind: 'off' } / { kind: 'meeting' } / { kind: 'todo' }
 const ymOf = d => d.slice(0, 7);
 const addMonths = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1)); return t.toISOString().slice(0, 7); };
@@ -44,7 +46,7 @@ export function schedulePage(ctx, me) {
   h += ctx.notice();
   h += '<div class="sch">';
   // 月の表
-  h += `<div class="cal-win${calOpen ? ' open' : ''}">`;
+  h += `<div class="cal-win">`;
   h += '<div class="month2">' + ['日', '月', '火', '水', '木', '金', '土'].map((w, i) => `<div class="wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`).join('');
   const start = gridStart(month);
   for (let i = 0; i < 42; i++) {
@@ -58,26 +60,43 @@ export function schedulePage(ctx, me) {
     const chips = Object.entries(by).map(([sid, g]) => `<span class="nm r${g.rank}">${esc(short[sid] || '')}${g.n > 1 ? `<small>×${g.n}</small>` : ''}</span>`);
     const lines = bars.concat(chips), shown = lines.slice(0, 4), more = lines.length - shown.length;
     const wd = new Date(d + 'T00:00:00Z').getUTCDay();
-    h += `<button class="cell${ymOf(d) !== month ? ' out' : ''}${d === sel ? ' sel' : ''}${d === data.today ? ' today' : ''}" data-action="sch-day" data-date="${d}" aria-label="${mdw(d)} 授業${ls.length}件">`
+    h += `<button class="cell${ymOf(d) !== month ? ' out' : ''}${d === sel ? ' sel' + (shownSel && shownSel !== sel ? ' enter' : '') : ''}${d === data.today ? ' today' : ''}" data-action="sch-day" data-date="${d}" aria-label="${mdw(d)} 授業${ls.length}件">`
       + `<span class="num${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}">${Number(d.slice(8))}</span>${shown.join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</button>`;
   }
   h += '</div></div>';
-  h += `<button class="cal-handle" data-action="sch-cal" aria-label="${calOpen ? 'カレンダーをたたむ' : '月全体を見る'}"><span></span></button>`;
-  h += `<div class="sch-day">${dayPanel(ctx, me, manager, nameOf, staffOf)}</div></div>`;
-  alignCal();
+  h += `<button class="cal-handle" data-action="sch-cal" aria-label="${calOpen ? '選んだ日の予定を出す' : '月全体を見る'}"><span></span></button>`;
+  const changed = shownSel && shownSel !== sel; shownSel = sel;
+  const showDay = !calOpen || !phone(), leaving = calOpen && !wasOpen && phone();
+  if (showDay || leaving) h += `<div class="sch-day${changed && showDay && !wasOpen ? ' enter' : ''}${leaving ? ' leaving' : ''}">${dayPanel(ctx, me, manager, nameOf, staffOf)}</div>`;
+  h += '</div>';
+  animCal();
   if (sheet) h += sheetHtml(ctx, me, manager, nameOf, staffOf, held);
   return h;
 }
 
-// スマホ: カレンダーの窓を、選んだ週が一番上に来るように動かす（前の位置からすっと）
-function alignCal() {
+// スマホ: カレンダーの窓の高さと位置を、前の形から新しい形へ 0.38秒で動かす（最初は速く、最後はゆっくり）。一覧は下から出入りする
+let animPending = false;
+function animCal() {
+  if (animPending) return; animPending = true; // 続けて描き直しても、最後に描いた画面で1回だけ動かす
   requestAnimationFrame(() => {
-    const win = document.querySelector('.cal-win'); if (!win || win.classList.contains('open') || getComputedStyle(win).overflowY === 'visible') return;
-    const cell = win.querySelector('.cell.sel') || win.querySelector('.cell.today'), wd = win.querySelector('.wd'); if (!cell) return;
-    const target = cell.offsetTop - (wd ? wd.offsetHeight : 0);
-    win.scrollTop = calTop; win.scrollTo({ top: target, behavior: Math.abs(calTop - target) > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' });
-    calTop = target;
-    win.addEventListener('scroll', () => { calTop = win.scrollTop; }, { passive: true });
+    animPending = false;
+    const win = document.querySelector('.cal-win'); if (!win) return;
+    if (!phone()) { win.style.maxHeight = ''; wasOpen = calOpen; return; }
+    const wd = win.querySelector('.wd'), cell = win.querySelector('.cell.sel') || win.querySelector('.cell.today') || win.querySelector('.cell');
+    const wdH = wd ? wd.offsetHeight : 0, rowH = cell ? cell.offsetHeight : 74, full = win.scrollHeight;
+    const toH = calOpen ? full : wdH + 2 * rowH, toTop = calOpen ? 0 : Math.max(0, (cell ? cell.offsetTop : 0) - wdH);
+    const fromH = calH === null ? toH : calH, fromTop = calTop === null ? toTop : calTop;
+    const day = document.querySelector('.sch-day'), opening = !calOpen && wasOpen;
+    calH = toH; calTop = toTop; wasOpen = calOpen;
+    const done = () => { win.style.maxHeight = calOpen ? 'none' : toH + 'px'; win.scrollTop = toTop; };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || (Math.abs(fromH - toH) < 2 && Math.abs(fromTop - toTop) < 2)) { done(); if (day && day.classList.contains('leaving')) day.remove(); return; }
+    const ms = 380, ease = q => 1 - Math.pow(1 - q, 3), t0 = performance.now();
+    win.style.maxHeight = fromH + 'px'; win.scrollTop = fromTop;
+    const step = now => { const q = Math.min(1, (now - t0) / ms), e = ease(q); win.style.maxHeight = fromH + (toH - fromH) * e + 'px'; win.scrollTop = fromTop + (toTop - fromTop) * e; if (q < 1) requestAnimationFrame(step); else done(); };
+    requestAnimationFrame(step);
+    if (day && opening) day.animate([{ transform: 'translateY(60vh)', opacity: .6 }, { transform: 'none', opacity: 1 }], { duration: ms, easing: 'cubic-bezier(.32, .72, 0, 1)' });
+    if (day && day.classList.contains('leaving')) day.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(60vh)', opacity: 0 }], { duration: 300, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }).onfinish = () => day.remove();
+    win.addEventListener('scroll', () => { if (!calOpen) calTop = win.scrollTop; }, { passive: true });
   });
 }
 // 選んだ日の一覧と、そのあとの6日（1行ずつ。押すと下から詳しい画面）
@@ -218,7 +237,14 @@ export async function scheduleClick(ctx, a, b) {
   const id = b.dataset.id, l = id ? lessonById(id) : null;
   if (a === 'sch-month') { month = addMonths(month, Number(b.dataset.n)); sel = month + '-01'; data = null; sheet = null; return true; }
   if (a === 'sch-today') { const t = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); sel = t; if (ymOf(t) !== month) { month = ymOf(t); data = null; } return true; }
-  if (a === 'sch-day') { sel = b.dataset.date; if (b.classList.contains('day-band')) window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
+  if (a === 'sch-day') {
+    const d = b.dataset.date;
+    if (b.classList.contains('day-band')) { sel = d; window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
+    if (phone() && calOpen) { sel = d; calOpen = false; } // 月全体から日を押した: その週を上へ、一覧を下から
+    else if (phone() && d === sel) calOpen = true; // 選んでいる日をもう一度: 月全体に戻る
+    else sel = d;
+    return true;
+  }
   if (a === 'sch-cal') { calOpen = !calOpen; return true; }
   if (a === 'sch-goto') { sel = b.dataset.date; sheet = b.dataset.id ? { kind: 'lesson', id: b.dataset.id } : null; if (ymOf(sel) !== month) { month = ymOf(sel); data = null; } return true; }
   if (a === 'sch-sheet') { sheet = { kind: b.dataset.k }; return true; }

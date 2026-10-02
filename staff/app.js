@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux24';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux24';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux24';
-import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261003-ux24';
-import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux24';
-import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux24';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux24';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux24';
-import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux24';
-import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux24';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux24';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux26';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux26';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux26';
+import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261003-ux26';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux26';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux26';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux26';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux26';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux26';
+import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux26';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux26';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -214,7 +214,9 @@ function render() {
   else h = r.page === 'account' ? accountPage() : r.page === 'staff' ? staffPage() : (me.roles.includes('manager') || me.roles.includes('teacher')) ? todayPage(ctx, me) : settingsPage(ctx, me);
   app.className = !me || ['invite', 'reset', 'forgot'].includes(r.page) ? 'narrow' : r.page === 'schedule' ? 'wide' : '';
   const was = app.querySelector('.bsheet, .panel.open'), wasLabel = was && was.getAttribute('aria-label'), wasBody = was && (was.querySelector('.panel-body') || was), wasTop = wasBody ? wasBody.scrollTop : 0;
+  const wasLoading = /^\s*読み込んでいます/.test(app.textContent || '');
   app.innerHTML = h;
+  if (wasLoading && !/^\s*読み込んでいます/.test(app.textContent || '')) fadeIn();
   renderBack(r);
   app.querySelectorAll('textarea.grow').forEach(grow);
   const now = app.querySelector('.bsheet, .panel.open');
@@ -301,6 +303,7 @@ window.addEventListener('hashchange', () => {
   // 「今日」「生徒」に戻ってきたら読み直す（記録を書いたあとなど）。同じ生徒の画面のタブを切り替えるときは読み直さない
   const pg = route().page, hash = location.hash || '#home';
   if (lastPage === 'record' && pg !== 'record') autosaveOnLeave(ctx); // 記録の画面を離れた: 書きかけを下書きとして自動で保存
+  const navKind = pg === lastPage ? (hash !== lastHash && pg !== 'record' ? 'fade' : '') : trail.lastIndexOf(hash) >= 0 ? 'pop' : !parentOf(route()) ? 'tab' : 'push';
   if (pg !== lastPage) {
     const i = trail.lastIndexOf(hash);
     if (i >= 0) trail = trail.slice(0, i); // 戻ってきた
@@ -312,7 +315,27 @@ window.addEventListener('hashchange', () => {
   if (pg === 'monthly') resetMonthly();
   if ((pg === 'student' && lastPage !== 'student') || pg === 'students') resetStudents();
   lastPage = pg;
-  if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); leaveRecords(pg); leaveGrades(); leaveBilling(); leavePayroll(); say(''); render(); });
+  if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); leaveRecords(pg); leaveGrades(); leaveBilling(); leavePayroll(); say(''); moveTo(navKind); });
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function moveTo(kind) {
+  if (!kind || !document.startViewTransition || reduced()) { render(); if (kind) fadeIn(); return; }
+  document.documentElement.dataset.nav = kind;
+  const vt = document.startViewTransition(() => render());
+  vt.finished.finally(() => { delete document.documentElement.dataset.nav; });
+}
+// 中身をふわっと出す（読み込みが終わったとき・画面の移り変わりが使えないとき）
+function fadeIn() { if (reduced()) return; app.classList.remove('fade-in'); void app.offsetWidth; app.classList.add('fade-in'); }
+app.addEventListener('animationend', ev => { if (ev.target === app) app.classList.remove('fade-in'); });
+// 下から出る画面・左から出るメニューを閉じるとき: 滑って戻ってから閉じる
+let closingPass = false;
+document.addEventListener('click', ev => {
+  if (closingPass || reduced()) return;
+  const closer = ev.target.closest('.overlay, .panel-overlay.open, .bsheet-head [data-action], .panel.open .panel-head [data-action], .panel.open .panel-foot [data-action]'); if (!closer) return;
+  const box = document.querySelector('.bsheet, .panel.open'); if (!box) return;
+  ev.stopImmediatePropagation(); ev.preventDefault();
+  box.classList.add('closing'); document.querySelectorAll('.overlay, .panel-overlay.open').forEach(o => o.classList.add('closing'));
+  setTimeout(() => { closingPass = true; closer.click(); closingPass = false; }, 210);
+}, true);
 
 (async function boot() {
   lastPage = route().page; // 直接開いた画面も「前の画面」として覚える（記録の画面を離れたときの自動保存のため）
