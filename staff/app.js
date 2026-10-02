@@ -1,9 +1,10 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒（教室管理者）・移行の準備（システム管理者）。授業などは 3 段目以降。それまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage3';
-import { migratePage, migrateClick, resetMigrate } from '/staff/migrate.js?v=20261002-stage3';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage3';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage4';
+import { migratePage, migrateClick, resetMigrate } from '/staff/migrate.js?v=20261002-stage4';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage4';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage4';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -17,6 +18,7 @@ function route() {
   if (h.startsWith('#invite=')) return { page: 'invite', token: decodeURIComponent(h.slice(8)) };
   if (h.startsWith('#reset=')) return { page: 'reset', token: decodeURIComponent(h.slice(7)) };
   if (h.startsWith('#family=')) return { page: 'family', id: decodeURIComponent(h.slice(8)) };
+  if (h.startsWith('#record=')) return { page: 'record', id: decodeURIComponent(h.slice(8)) };
   return { page: h.slice(1) || 'home' };
 }
 const say = (message, kind = '') => { notice = message ? { message, kind } : null; };
@@ -29,8 +31,8 @@ async function run(task) { if (busy) return; busy = true; render(); try { await 
 function renderNav() {
   const r = route().page;
   if (!me) { nav.innerHTML = ''; return; }
-  const items = [['home', 'ホーム'], ...(me.roles.includes('manager') || me.roles.includes('teacher') ? [['schedule', '予定']] : []), ...(me.roles.includes('manager') ? [['families', '家族と生徒']] : []), ...(me.roles.includes('sysadmin') ? [['staff', 'スタッフ'], ['migrate', '移行']] : []), ['account', 'アカウント']];
-  const on = r === 'family' ? 'families' : r;
+  const items = [['home', 'ホーム'], ...(me.roles.includes('manager') || me.roles.includes('teacher') ? [['schedule', '予定'], ['records', '記録']] : []), ...(me.roles.includes('manager') ? [['families', '家族と生徒']] : []), ...(me.roles.includes('sysadmin') ? [['staff', 'スタッフ'], ['migrate', '移行']] : []), ['account', 'アカウント']];
+  const on = r === 'family' ? 'families' : r === 'record' ? 'records' : r;
   nav.innerHTML = items.map(([k, label]) => `<a href="#${k}" class="${on === k ? 'on' : ''}">${label}</a>`).join('');
 }
 
@@ -93,7 +95,7 @@ function staffPage() {
   let h = `<h1>スタッフ</h1><p class="sub">スタッフのアカウントと役割。講師は担当の授業と生徒だけ、教室管理者は運営のすべて、システム管理者は設定とアカウントを扱えます。</p>${noticeHtml()}`;
   if (shownLink) h += `<div class="notice ok"><p>${esc(shownLink.name)} さんに招待のメールを送りました。届かないときは、このリンクを LINE などで渡してください（7日有効・1回だけ使えます）。</p><p class="copy">${esc(shownLink.url)}</p><button data-action="copy-link"${dis()}>リンクをコピー</button></div>`;
   h += '<div class="list">' + staffList.map(s => `<div><div><strong>${esc(s.name)}</strong> <span class="tag ${s.status === 'active' ? '' : s.status === 'invited' ? 'warn' : 'gray'}">${STATUS_LABEL[s.status] || s.status}</span><div class="small muted">${esc(s.email)}</div>
-      <form data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}">${roleChecks('roles', s.roles)}<div class="row" style="margin-top:6px"><button class="small"${dis()}>役割を保存</button></div></form></div>
+      <form data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><label>名前（担当・報酬の明細に出る）<input name="name" maxlength="60" value="${esc(s.name)}"></label>${roleChecks('roles', s.roles)}<div class="row" style="margin-top:6px"><button class="small"${dis()}>名前と役割を保存</button></div></form></div>
       <div class="row">${s.status === 'invited' ? `<button data-action="reinvite" data-id="${esc(s.id)}" data-name="${esc(s.name)}"${dis()}>招待をやり直す</button>` : ''}
       ${s.status === 'stopped' ? `<button data-action="status" data-status="active" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>再開する</button>` : s.id === me.id ? '' : `<button class="danger" data-action="status" data-status="stopped" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>停止する</button>`}</div></div>`).join('') + '</div>';
   h += `<h2>スタッフを招待する</h2><form class="stack" data-form="invite-staff"><label>名前<input name="name" maxlength="60" required></label>
@@ -106,12 +108,13 @@ async function loadStaff() {
   if (!r.ok) { if (r.error.code === 'needLogin') return signedOut(); say(r.error.message, 'error'); staffList = []; } else staffList = r.staff;
   render();
 }
-function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); say('ログインし直してください', 'error'); render(); }
+function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); say('ログインし直してください', 'error'); render(); }
 // 各ページ（families.js・migrate.js）に渡す共通の道具
 const ctx = {
   call: (route, body = {}) => call(route, body, store.get()), esc, render: () => render(), dis: () => dis(), notice: () => noticeHtml(),
   say: (m, k) => say(m, k), handleAuth: r => { if (r && r.error && r.error.code === 'needLogin') { signedOut(); return true; } return false; },
-  afterMigrate: () => { resetFamilies(); resetSchedule(); },
+  afterMigrate: () => { resetFamilies(); resetSchedule(); resetRecords(); },
+  get isManager() { return !!me && me.roles.includes('manager'); },
 };
 
 function render() {
@@ -122,6 +125,8 @@ function render() {
   else if (r.page === 'reset') h = resetPage();
   else if (!me) h = r.page === 'forgot' ? forgotPage() : loginPage();
   else if (r.page === 'schedule' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = schedulePage(ctx, me);
+  else if (r.page === 'records' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = recordsPage(ctx);
+  else if (r.page === 'record' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = recordPage(ctx, r.id);
   else if (r.page === 'families' && me.roles.includes('manager')) h = familiesPage(ctx);
   else if (r.page === 'family' && me.roles.includes('manager')) h = familyDetailPage(ctx, r.id);
   else if (r.page === 'migrate' && me.roles.includes('sysadmin')) h = migratePage(ctx);
@@ -142,8 +147,10 @@ app.addEventListener('submit', ev => {
     const next = kind === 'password' ? v.next : v.password;
     if (next !== v.confirm) { say('2つのパスワードが一致しません', 'error'); return render(); }
   }
+  const submitter = ev.submitter;
+  captureRecordInputs(); // 記録の画面の書きかけを、描き直す前に覚えておく
   run(async () => {
-    if (await familiesSubmit(ctx, kind, el) || await scheduleSubmit(ctx, kind, el)) return;
+    if (await familiesSubmit(ctx, kind, el) || await scheduleSubmit(ctx, kind, el) || await recordsSubmit(ctx, kind, el, { submitter })) return;
     let r;
     if (kind === 'login') { r = await call('staff/login', v); if (r.ok) return signedIn(r); }
     else if (kind === 'forgot') { r = await call('staff/reset/request', v); if (r.ok) return say(r.message, 'ok'); }
@@ -154,8 +161,8 @@ app.addEventListener('submit', ev => {
       r = await call('admin/staff/invite', { name: v.name, email: v.email, roles: checked(el, 'roles') }, store.get());
       if (r.ok) { shownLink = { name: r.staff.name, url: r.inviteUrl }; staffList = null; return say(''); }
     } else if (kind === 'roles') {
-      r = await call('admin/staff/update', { id: el.dataset.id, version: Number(el.dataset.version), roles: checked(el, 'roles') }, store.get());
-      if (r.ok) { staffList = null; return say(r.staff.name + ' さんの役割を保存しました', 'ok'); }
+      r = await call('admin/staff/update', { id: el.dataset.id, version: Number(el.dataset.version), name: v.name, roles: checked(el, 'roles') }, store.get());
+      if (r.ok) { staffList = null; if (me && r.staff.id === me.id) me = { ...me, name: r.staff.name }; resetSchedule(); return say(r.staff.name + ' さんの名前と役割を保存しました', 'ok'); }
     }
     if (!r) return;
     if (r.error && r.error.code === 'needLogin' && me) return signedOut();
@@ -167,8 +174,9 @@ app.addEventListener('click', ev => {
   const a = b.dataset.action;
   if (a === 'copy-link' && shownLink) { navigator.clipboard.writeText(shownLink.url).then(() => { say('リンクをコピーしました', 'ok'); render(); }); return; }
   if (a === 'copy') { navigator.clipboard.writeText(b.dataset.text || '').then(() => { say('コピーしました', 'ok'); render(); }); return; }
+  captureRecordInputs();
   run(async () => {
-    if (await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b)) return;
+    if (await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b)) return;
     let r;
     if (a === 'bootstrap') {
       r = await call('staff/bootstrap', { legacyToken: legacyToken() });

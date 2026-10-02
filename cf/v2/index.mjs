@@ -9,9 +9,11 @@ import { peopleRoutes } from './people.mjs';
 import { migrateRoutes } from './migrate-identity.mjs';
 import { scheduleRoutes, autoConfirm } from './schedule.mjs';
 import { migrateScheduleRoutes } from './migrate-schedule.mjs';
+import { recordRoutes } from './records.mjs';
+import { migrateRecordsRoutes } from './migrate-records.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes };
 const MAX_BODY = 200000;
 
 // 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する

@@ -1,14 +1,15 @@
 // 生徒の画面（作り直し v2）。専用リンク（?k=）で開く。予定と「変更・お休みの連絡」、予定の共有。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
 import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage3';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage4';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage4';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
 const params = new URLSearchParams(location.search);
 if (params.get('k')) { try { localStorage.setItem(KEY, params.get('k')); } catch {} history.replaceState(null, '', location.pathname + location.hash); }
 const k = (() => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } })();
-let sched = null, busy = false, notice = null, change = null;
+let sched = null, busy = false, notice = null, change = null, learning = null;
 const say = (m, kd = '') => { notice = m ? { m, kd } : null; };
 const noticeHtml = () => notice ? `<p class="notice ${notice.kd}" role="${notice.kd === 'error' ? 'alert' : 'status'}">${esc(notice.m)}</p>` : '';
 async function run(task) { if (busy) return; busy = true; render(); try { await task(); } finally { busy = false; render(); } }
@@ -20,9 +21,12 @@ function render() {
   if (!k) { app.innerHTML = '<h1>マイページ</h1><p class="notice error">先生から届いた専用リンクを開いてください。</p>'; return; }
   if (!sched) { load(); app.innerHTML = '<p class="muted">読み込んでいます…</p>'; return; }
   if (sched.error) { app.innerHTML = `<h1>マイページ</h1><p class="notice error">${esc(sched.error)}</p>`; return; }
-  nav.innerHTML = [['home', '予定'], ['events', '予定の共有']].map(([key, l]) => `<a href="#${key}" class="${page === key ? 'on' : ''}">${l}</a>`).join('');
+  nav.innerHTML = [['home', '予定'], ['learning', '学習'], ['events', '予定の共有']].map(([key, l]) => `<a href="#${key}" class="${page === key ? 'on' : ''}">${l}</a>`).join('');
   let h = `${prep}<h1>${esc(sched.me.name)}さん</h1>${noticeHtml()}`;
-  if (page === 'events') {
+  if (page === 'learning') {
+    if (!learning) { call('student/learning', { k }).then(r => { learning = r.ok ? r : { records: [], homework: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); h += '<p class="muted">読み込んでいます…</p>'; }
+    else h += learningView(learning);
+  } else if (page === 'events') {
     h += `<h2>予定の共有</h2><p class="sub">テスト・行事・授業ができない日を先生に知らせます。</p>${eventList(sched.events, { canDelete: e => sched.permissions.events && e.createdByKind === 'student' })}`;
     h += sched.permissions.events ? `<h2>予定を共有する</h2>${eventForm([sched.me])}` : '<p class="small muted">予定の共有は、保護者の方からお願いします。</p>';
   } else {
@@ -49,6 +53,7 @@ app.addEventListener('click', ev => {
     let r;
     if (a === 'send-change') { r = await call('student/lessons/request', { k, lessonId: change.id, kind: change.pick, note: change.note }); if (r.ok) { change = null; sched = null; return say('先生に連絡しました', 'ok'); } }
     else if (a === 'withdraw') { if (!confirm('この連絡を取り下げますか？')) return; r = await call('student/lessons/withdraw', { k, requestId: b.dataset.id }); if (r.ok) { sched = null; return say('連絡を取り下げました', 'ok'); } }
+    else if (a === 'hw-done' || a === 'hw-undo') { r = await call('student/homework/report', { k, id: b.dataset.id, undo: a === 'hw-undo' }); if (r.ok) { learning = null; return say(a === 'hw-done' ? 'できたと先生に知らせました' : '取り消しました', 'ok'); } }
     else if (a === 'del-event') { r = await call('student/events/delete', { k, id: b.dataset.id }); if (r.ok) { sched = null; return say('消しました', 'ok'); } }
     if (r) say(r.error.message, 'error');
   });

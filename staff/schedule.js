@@ -1,6 +1,6 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261002-stage3';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261002-stage4';
 
 let month = null, data = null, sel = null, panel = '', editing = null, families = null, loadedFor = '';
 const ymOf = d => d.slice(0, 7);
@@ -71,6 +71,7 @@ function dayPanel(ctx, me, manager, nameOf, staffOf) {
       <div class="small muted">担当 ${esc(staffOf[l.staffId] || '未定')}${l.note ? '・' + esc(l.note) : ''}${l.meetUrl ? ` ・<a href="${esc(l.meetUrl)}" target="_blank" rel="noopener">Meet</a>` : ''}</div></div>
       <div class="row">${manager && ['held', 'proposed'].includes(l.status) ? `<button class="primary" data-action="sch-decide" data-id="${esc(l.id)}"${ctx.dis()}>決定する</button>` : ''}
       ${l.status === 'decided' && past && (manager || l.staffId === me.id) ? `<button class="primary" data-action="sch-done" data-id="${esc(l.id)}"${ctx.dis()}>実施済みにする</button>` : ''}
+      ${['decided', 'done'].includes(l.status) && past && (manager || l.staffId === me.id) ? `<a href="#record=${encodeURIComponent(l.id)}">記録</a>` : ''}
       ${manager && ['held', 'proposed', 'decided'].includes(l.status) ? `<button data-action="sch-edit" data-id="${esc(l.id)}"${ctx.dis()}>直す</button>` : ''}
       ${manager && ['proposed', 'decided'].includes(l.status) ? `<button data-action="sch-rest" data-id="${esc(l.id)}"${ctx.dis()}>お休みにする</button>` : ''}
       ${manager && l.status === 'decided' ? `<button class="danger" data-action="sch-cancel" data-id="${esc(l.id)}"${ctx.dis()}>キャンセルにする</button>` : ''}
