@@ -18,9 +18,10 @@ import { fileRoutes, handleTransfer, cleanupFiles } from './files.mjs';
 import { payrollRoutes } from './payroll.mjs';
 import { migrateCheckRoutes } from './migrate-check.mjs';
 import { cutoverRoutes } from './cutover.mjs';
+import { previewRoutes, isPreviewToken, READS as PREVIEW_READS } from './preview.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes, ...previewRoutes };
 const MAX_BODY = 200000;
 
 // 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
@@ -55,6 +56,8 @@ export async function handleV2(request, env, ctx, head = {}) {
     body = text ? JSON.parse(text) : {};
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('not object');
   } catch { return reply(400, { ok: false, error: { code: 'badRequest', message: '送った内容を読めませんでした' } }); }
+  // スタッフのプレビューは表示だけ。読むだけの操作のほかは、ここですべて断る（書き込み・メール・ログアウト）
+  if ((isPreviewToken(body.auth) || isPreviewToken(body.k)) && !PREVIEW_READS.has(route)) return reply(403, { ok: false, error: { code: 'preview', message: 'プレビュー中のため、変更はできません（表示だけです）' } });
 
   const c = { env, db: env.DB2, now: Date.now(), effects: [], actor: null, userAgent: request.headers.get('user-agent') || '' };
   try {

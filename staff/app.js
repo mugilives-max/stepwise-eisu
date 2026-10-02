@@ -1,13 +1,13 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage9';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-stage9';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage9';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage9';
-import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-stage9';
-import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-stage9';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-stage9';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage9b';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-stage9b';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage9b';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage9b';
+import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-stage9b';
+import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-stage9b';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-stage9b';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -81,7 +81,7 @@ function resetPage() { return `<h1>新しいパスワード</h1>${noticeHtml()}$
 // ---------- ログインしたあとの画面 ----------
 function homePage() {
   return `<h1>${esc(me.name)} さん</h1><p>${roleTags(me.roles)}</p>${noticeHtml()}
-    <p class="notice">新しい管理画面は作っている途中です。今使えるのは、アカウント・スタッフ・家族と生徒・予定・記録・成績・報酬・計画・請求・移行の準備です。ここで登録・変更した内容は、切り替えまで今の仕組みには反映されません。授業・請求などの毎日の作業は、今までどおり <a href="/kanri/">今の管理画面</a> を使ってください。</p>`;
+    <p class="notice">新しい管理画面は作っている途中です。今使えるのは、アカウント・スタッフ・家族と生徒・予定・記録・成績・報酬・計画・請求・移行の準備です。ここで登録・変更した内容は、切り替えまで今の仕組みには反映されません。授業・請求などの毎日の作業は、今までどおり <a href="/kanri/?stay=1">今の管理画面</a> を使ってください。保護者・生徒からの見え方は「家族と生徒」の各家族の「プレビュー」で確かめられます。</p>`;
 }
 function accountPage() {
   return `<h1>アカウント</h1><p>${esc(me.name)}（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
@@ -185,6 +185,8 @@ app.addEventListener('click', ev => {
   if (a === 'copy') { navigator.clipboard.writeText(b.dataset.text || '').then(() => { say('コピーしました', 'ok'); render(); }); return; }
   // 成績票は、待たずに新しいタブを開いてから読む（あとから開くと止められる）
   if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openGradeFile(ctx, b, win); if (!r.ok) say(r.error.message, 'error'); }); return; }
+  // 保護者ページ・生徒ページのプレビュー: 新しいタブを先に開いてから、プレビューの鍵をもらって移す
+  if (a === 'pv-open') { const win = window.open('', '_blank'); run(async () => { const r = await call('admin/preview/start', { kind: b.dataset.kind, id: b.dataset.id }, store.get()); if (r.ok) { if (win && !win.closed) win.location.href = r.url; else location.href = r.url; } else { if (win) win.close(); say(r.error.message, 'error'); } }); return; }
   if (a === 'pr-print' || a === 'pr-print-mine') { if (!payrollPrint(ctx, a, b, me)) { say('印刷の窓を開けませんでした。ポップアップを許可してください', 'error'); render(); } return; }
   if (a === 'gr-resolve') { const sel = document.querySelector(`[data-resolve-exam="${b.dataset.id}"]`); b.dataset.exam = sel ? sel.value : ''; }
   captureRecordInputs();

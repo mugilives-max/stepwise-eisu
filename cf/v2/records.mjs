@@ -6,7 +6,7 @@
 import { fail, newId, iso, audit } from './util.mjs';
 import { requireStaff, rolesOf } from './staff.mjs';
 import { requireFamily } from './family.mjs';
-import { todayJst, addDays } from './schedule.mjs';
+import { todayJst, addDays, studentByLink } from './schedule.mjs';
 
 const STAFF_NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
 // 選ぶ項目の値（表記がずれないように）。写した記録の自由な文字は、直さない限りそのまま残す
@@ -219,13 +219,7 @@ export const recordRoutes = {
   'student/homework/report': async (c, b) => { const s = await linkStudent(c, b); return reportHomework(c, [s.id], { kind: 'student', id: s.id }, b); },
 };
 
-async function linkStudent(c, b) {
-  const code = String(b.k || '');
-  const s = code && code.length <= 100 ? await c.db.prepare("select * from students where linkCode = ? and status <> 'left'").bind(code).first() : null;
-  if (!s) fail('badLink', '専用リンクが正しくありません。先生から届いたリンクを開き直してください', 401);
-  c.actor = { kind: 'student', id: s.id };
-  return s;
-}
+const linkStudent = studentByLink; // 専用リンク（とプレビュー）は予定と同じ確かめ方
 async function learningOf(c, ids) {
   if (!ids.length) return { records: [], homework: [], today: todayJst(c.now) };
   const q = `(${ids.map(() => '?').join(', ')})`;

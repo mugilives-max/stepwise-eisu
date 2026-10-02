@@ -2,7 +2,7 @@
 // API の疎通確認（health）の cutover.live を見て、切り替えたあとだけ動く。切り替える前は何もしない。
 // - 保護者ページ（/hogosha/、/yoyaku/#family）→ /family/
 // - 生徒のマイページ（/yoyaku/?k=…）→ /student/?k=…（鍵はそのまま。端末に覚えている鍵も使う）
-// - 管理画面（/kanri/）は、1か月ほど読むだけで使うので移さず、上に案内を出す
+// - 管理画面（/kanri/）→ /staff/。ただし /kanri/?stay=1 で開いたときは移さず（1か月ほど読むだけで見返すため）、上に案内を出す
 (function () {
   var API = 'https://stepwise-api.stepwise-edu.workers.dev/';
   function ls(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
@@ -17,6 +17,9 @@
       return;
     }
     if (p.indexOf('/kanri') === 0) {
+      var stay = new URLSearchParams(location.search).get('stay') === '1';
+      try { if (stay) sessionStorage.setItem('sw_kanri_stay', '1'); else stay = sessionStorage.getItem('sw_kanri_stay') === '1'; } catch (e) {}
+      if (!stay) { location.replace('/staff/'); return; }
       var bar = document.createElement('div');
       bar.setAttribute('role', 'status');
       bar.style.cssText = 'position:sticky;top:0;z-index:9999;background:#fff3c4;color:#5a4300;padding:10px 14px;font-size:14px;text-align:center;border-bottom:1px solid #e8d48a';

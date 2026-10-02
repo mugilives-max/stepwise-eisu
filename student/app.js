@@ -1,15 +1,18 @@
 // 生徒の画面（作り直し v2）。専用リンク（?k=）で開く。予定と「変更・お休みの連絡」、学習、成績（成績票を送る）、予定の共有。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
 import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage9';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage9';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage9';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage9b';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage9b';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage9b';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
 const params = new URLSearchParams(location.search);
-if (params.get('k')) { try { localStorage.setItem(KEY, params.get('k')); } catch {} history.replaceState(null, '', location.pathname + location.hash); }
-const k = (() => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } })();
+// スタッフのプレビュー（?k=pv2.…）は、このタブだけで使う（端末に覚えている生徒の鍵には触れない）。書き込みはサーバーが断る
+const PV_KEY = 'sw2_student_preview';
+if (params.get('k')) { const v = params.get('k'); try { v.startsWith('pv2.') ? sessionStorage.setItem(PV_KEY, v) : localStorage.setItem(KEY, v); } catch {} history.replaceState(null, '', location.pathname + location.hash); }
+const k = (() => { try { return sessionStorage.getItem(PV_KEY) || localStorage.getItem(KEY) || ''; } catch { return ''; } })();
+const preview = k.startsWith('pv2.');
 let sched = null, busy = false, notice = null, change = null, learning = null, grades = null;
 const say = (m, kd = '') => { notice = m ? { m, kd } : null; };
 const noticeHtml = () => notice ? `<p class="notice ${notice.kd}" role="${notice.kd === 'error' ? 'alert' : 'status'}">${esc(notice.m)}</p>` : '';
@@ -23,7 +26,7 @@ function render() {
   if (!sched) { load(); app.innerHTML = '<p class="muted">読み込んでいます…</p>'; return; }
   if (sched.error) { app.innerHTML = `<h1>マイページ</h1><p class="notice error">${esc(sched.error)}</p>`; return; }
   nav.innerHTML = [['home', '予定'], ['learning', '学習'], ['grades', '成績'], ['events', '予定の共有']].map(([key, l]) => `<a href="#${key}" class="${page === key ? 'on' : ''}">${l}</a>`).join('');
-  let h = `${prep}<h1>${esc(sched.me.name)}さん</h1>${noticeHtml()}`;
+  let h = `${preview ? `<p class="notice" style="background:#fff3c4;color:#5a4300"><strong>プレビュー中</strong>：${esc(sched.me.name)}さんの生徒ページ（表示だけです。押しても変更はされません。1時間で切れます）</p>` : prep}<h1>${esc(sched.me.name)}さん</h1>${noticeHtml()}`;
   if (page === 'learning') {
     if (!learning) { call('student/learning', { k }).then(r => { learning = r.ok ? r : { records: [], homework: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); h += '<p class="muted">読み込んでいます…</p>'; }
     else h += learningView(learning);

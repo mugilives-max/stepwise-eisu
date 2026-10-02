@@ -1,12 +1,17 @@
 // 保護者の画面（作り直し v2）。ログイン・招待・再設定、子どもの予定と「変更・お休みの連絡」、学習、計画・お支払い（family/money.js）、予定の共有、アカウント。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage9';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage9';
-import { moneyView } from '/family/money.js?v=20261002-stage9';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage9';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage9b';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage9b';
+import { moneyView } from '/family/money.js?v=20261002-stage9b';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-stage9b';
 
-const store = session('sw2_family');
+// スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
+const PV_KEY = 'sw2_family_preview';
+if (location.hash.startsWith('#preview=')) { try { sessionStorage.setItem(PV_KEY, decodeURIComponent(location.hash.slice(9))); } catch {} history.replaceState(null, '', location.pathname + '#home'); }
+const previewToken = (() => { try { return sessionStorage.getItem(PV_KEY) || ''; } catch { return ''; } })();
+const store = previewToken ? { get: () => previewToken, set: () => {} } : session('sw2_family');
+const previewBar = () => previewToken && me ? `<p class="notice" style="background:#fff3c4;color:#5a4300"><strong>プレビュー中</strong>：${esc(me.name)}の保護者ページ（表示だけです。押しても変更はされません。1時間で切れます）</p>` : '';
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 let me = null, busy = false, notice = null, sched = null, change = null, inviteInfo = null, learning = null, money = null, grades = null;
 
@@ -65,6 +70,7 @@ function gradesPage() {
   return `<h1>成績</h1>${noticeHtml()}` + grades.students.map(s => (multi ? `<h2>${esc(s.name)}さん</h2>` : '') + gradesView(s, { who: 'family', dis: dis() })).join('');
 }
 function accountPage() {
+  if (previewToken) return `<h1>アカウント</h1><p class="muted">プレビューでは使えません。</p>`;
   return `<h1>アカウント</h1><p>${esc(me.name)}（${esc(me.email)}）</p>${noticeHtml()}<h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label><label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" required></label>
     <label>もう一度<input type="password" name="confirm" autocomplete="new-password" minlength="12" required></label><button class="primary"${dis()}>変える</button></form><h2>ログアウト</h2><p><button data-action="logout"${dis()}>この端末からログアウト</button></p>`;
@@ -80,7 +86,7 @@ function render() {
   else if (!me) h = r.page === 'forgot' ? `<h1>パスワードの再設定</h1>${noticeHtml()}<form class="stack" data-form="forgot"><label>メールアドレス<input type="email" name="email" required></label><button class="primary"${dis()}>再設定のメールを送る</button></form><p><a href="#">ログインに戻る</a></p>` : loginPage();
   else h = r.page === 'events' ? eventsPage() : r.page === 'learning' ? learningPage() : r.page === 'money' ? moneyPage() : r.page === 'grades' ? gradesPage() : r.page === 'account' ? accountPage() : homePage();
   app.className = !me ? 'narrow' : '';
-  app.innerHTML = h;
+  app.innerHTML = previewBar() + h;
 }
 function signedIn(r) { store.set(r.auth); me = r.me; sched = null; learning = null; money = null; grades = null; say(''); location.hash = '#home'; }
 
@@ -139,6 +145,6 @@ app.addEventListener('click', ev => {
 window.addEventListener('hashchange', () => { say(''); change = null; render(); });
 (async function boot() {
   const auth = store.get();
-  if (auth) { const r = await call('family/me', {}, auth); if (r.ok) me = r.me; else if (r.error.code === 'needLogin') store.set(''); }
+  if (auth) { const r = await call('family/me', {}, auth); if (r.ok) me = r.me; else if (r.error.code === 'needLogin') { store.set(''); if (previewToken) say('プレビューの期限が切れました。管理画面から開き直してください', 'error'); } }
   render();
 })();

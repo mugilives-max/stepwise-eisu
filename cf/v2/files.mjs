@@ -8,6 +8,7 @@ import { fail, newId, newToken, sha256Hex, iso, audit } from './util.mjs';
 import { readSession } from './accounts.mjs';
 import { rolesOf } from './staff.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
+import { isPreviewToken, previewSubject } from './preview.mjs';
 
 export const CATEGORIES = ['scoreSheet', 'invoice', 'receipt', 'payStatement', 'contract', 'other'];
 export const FILE_MAX = 20 * 1024 * 1024;
@@ -46,6 +47,9 @@ export async function canRead(c, f, who) {
 }
 // auth（スタッフ・保護者）か k（生徒の専用リンク）から、だれかを決める
 export async function whoIs(c, b) {
+  // スタッフのプレビュー: 見ている相手（家族・生徒）として開く
+  if (isPreviewToken(b.k)) { const s = await previewSubject(c, b.k, 'student'); if (s) return { kind: 'student', student: s }; fail('badLink', 'プレビューの期限が切れました', 401); }
+  if (isPreviewToken(b.auth)) { const f = await previewSubject(c, b.auth, 'family'); if (f) return { kind: 'family', me: f }; fail('needLogin', 'プレビューの期限が切れました', 401); }
   if (b.k) {
     const s = String(b.k).length <= 100 ? await c.db.prepare("select * from students where linkCode = ? and status <> 'left'").bind(String(b.k)).first() : null;
     if (!s) fail('badLink', '専用リンクが正しくありません。先生から届いたリンクを開き直してください', 401);

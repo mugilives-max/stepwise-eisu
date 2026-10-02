@@ -9,6 +9,7 @@ import { requireStaff, rolesOf } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { isLive } from './accounts.mjs';
 import { createCancelFee, dropCancelFee } from './plan-calc.mjs';
+import { isPreviewToken, previewSubject } from './preview.mjs';
 
 const CAL_PREFIX = '【塾】';
 const ACTIVE = ['held', 'proposed', 'decided', 'done'];
@@ -223,6 +224,8 @@ function range(b, today) {
   return { from, to };
 }
 export async function studentByLink(c, b) {
+  // スタッフのプレビュー（読むだけ。書き込みは index.mjs の入口で断る）
+  if (isPreviewToken(b.k)) { const s = await previewSubject(c, b.k, 'student'); if (!s) fail('badLink', 'プレビューの期限が切れました。管理画面からもう一度開いてください', 401); return s; }
   const code = String(b.k || '');
   const s = code && code.length <= 100 ? await c.db.prepare("select * from students where linkCode = ? and status <> 'left'").bind(code).first() : null;
   if (!s) fail('badLink', '専用リンクが正しくありません。先生から届いたリンクを開き直してください', 401);

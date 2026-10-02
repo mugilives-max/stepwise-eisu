@@ -52,7 +52,7 @@ export function familyDetailPage(ctx, id) {
   if (shown) h += `<div class="notice ok"><p>${esc(shown.text)}</p>${shown.url ? `<p class="copy">${esc(shown.url)}</p><button data-action="copy" data-text="${esc(shown.url)}">リンクをコピー</button>` : ''}</div>`;
   h += `<h2>保護者</h2><form class="stack" data-form="fam-update">${familyInputs(esc, f)}<div class="row"><button class="primary"${ctx.dis()}>保存</button></div></form>
     <p class="small muted">保護者ページ: ${f.hasPassword ? '登録済み（ログインできます）' : '未登録'}</p>
-    <div class="row">${f.email && f.status !== 'stopped' ? `<button data-action="fam-invite"${ctx.dis()}>${f.hasPassword ? '登録のやり直しを案内する' : '保護者ページの招待を送る'}</button>` : ''}
+    <div class="row"><button data-action="pv-open" data-kind="family" data-id="${esc(f.id)}">保護者ページを見る（プレビュー）</button>${f.email && f.status !== 'stopped' ? `<button data-action="fam-invite"${ctx.dis()}>${f.hasPassword ? '登録のやり直しを案内する' : '保護者ページの招待を送る'}</button>` : ''}
       ${f.status === 'stopped' ? `<button data-action="fam-status" data-status="${f.hasPassword ? 'active' : 'invited'}"${ctx.dis()}>再開する</button>` : `<button class="danger" data-action="fam-status" data-status="stopped"${ctx.dis()}>停止する</button>`}</div>`;
   h += `<h2>生徒（${f.students.length}人）</h2><div class="list">` + f.students.map(s => editing === s.id
     ? `<div><form class="stack" data-form="stu-update" data-id="${esc(s.id)}" data-version="${s.version}" style="grid-column:1/-1">${studentInputs(esc, s)}<div class="row"><button class="primary"${ctx.dis()}>保存</button><button type="button" data-action="stu-cancel">やめる</button></div></form></div>`
@@ -60,6 +60,7 @@ export function familyDetailPage(ctx, id) {
       <div class="small muted">${esc(s.grade || '学年なし')}・${esc(s.school || '学校なし')}・${MODE[s.deliveryMode || '']}・基本単価 ${yen(s.baseRate30)}（30分）</div>
       ${s.note ? `<div class="small">${esc(s.note)}</div>` : ''}</div>
       <div class="row"><button data-action="stu-edit" data-id="${esc(s.id)}"${ctx.dis()}>編集</button>
+      <button data-action="pv-open" data-kind="student" data-id="${esc(s.id)}">生徒ページを見る（プレビュー）</button>
       <button data-action="copy" data-text="${esc(s.link)}">専用リンクをコピー</button>
       <button data-action="stu-newlink" data-id="${esc(s.id)}" data-version="${s.version}"${ctx.dis()}>リンクを作り直す</button>
       <button data-action="stu-move-open" data-id="${esc(s.id)}"${ctx.dis()}>別の家族へ移す</button></div>
