@@ -107,7 +107,7 @@ function lessonFields(b, base = {}) {
   out.staffId = String(out.staffId || '');
   return out;
 }
-// 重なりの確かめ。同じ生徒・同じ講師の授業が重なれば断る。休み・授業ができない日は、force がなければ確かめを求める
+// 重なりの確かめ。同じ生徒の授業が重なれば断る。同じ講師は対面2人までなら確かめを求め、オンラインが入るか3人以上なら断る。休み・授業ができない日は、force がなければ確かめを求める
 async function checkConflicts(c, candidates, { force, exceptId = '' } = {}) {
   const dates = [...new Set(candidates.map(x => x.date))];
   const q = `(${dates.map(() => '?').join(', ')})`;
@@ -118,7 +118,13 @@ async function checkConflicts(c, candidates, { force, exceptId = '' } = {}) {
   candidates.forEach((x, i) => {
     const others = lessons.concat(candidates.filter((_, j) => j !== i));
     if (others.some(o => o.studentId === x.studentId && overlap(o, x))) errors.push(`${x.date} ${x.start} は同じ生徒の授業と重なっています`);
-    if (x.staffId && others.some(o => o.staffId === x.staffId && overlap(o, x))) errors.push(`${x.date} ${x.start} は同じ講師の授業と重なっています`);
+    // 同じ講師の授業の重なり: 対面どうしなら2人まで（2人同時の授業。確かめてから）。オンラインが入るなら同時にはできない。報酬は授業ごとのまま
+    const same = x.staffId ? others.filter(o => o.staffId === x.staffId && overlap(o, x)) : [];
+    if (same.length) {
+      if (x.deliveryMode === 'online' || same.some(o => o.deliveryMode === 'online')) errors.push(`${x.date} ${x.start} は同じ講師の授業と重なっています（オンラインの授業は同時にできません）`);
+      else if (same.some((o, k) => same.some((p, m) => m > k && overlap(o, p)))) errors.push(`${x.date} ${x.start} は同じ講師の授業が3つ重なります（同時の授業は2人まで）`);
+      else warnings.push(`${x.date} ${x.start} は同じ講師のほかの授業と同時（2人同時）になります`);
+    }
     const span = o => o.start ? { date: o.date, start: o.start, minutes: toMin(o.end) - toMin(o.start) } : { date: o.date, start: '00:00', minutes: 1440 };
     if (offs.some(o => (!o.staffId || o.staffId === x.staffId) && overlap(span(o), x))) warnings.push(`${x.date} ${x.start} は講師の休みに入っています`);
     if (events.some(e => e.studentId === x.studentId && e.date <= x.date && x.date <= e.dateTo && (!e.start || overlap({ date: x.date, start: e.start, minutes: toMin(e.end) - toMin(e.start) }, x)))) warnings.push(`${x.date} ${x.start} は生徒が「授業ができない」と共有した日です`);
@@ -339,7 +345,7 @@ export const scheduleRoutes = {
     if (!['held', 'proposed', 'decided'].includes(l.status)) fail('badStatus', 'この授業は直せません');
     const n = lessonFields(b, l);
     const moved = n.date !== l.date || n.start !== l.start || n.minutes !== l.minutes;
-    if (moved) await checkConflicts(c, [{ ...n, studentId: l.studentId }], { force: !!b.force, exceptId: l.id });
+    if (moved || n.staffId !== l.staffId || n.deliveryMode !== l.deliveryMode) await checkConflicts(c, [{ ...n, studentId: l.studentId }], { force: !!b.force, exceptId: l.id });
     const patch = { date: n.date, start: n.start, minutes: n.minutes, subject: n.subject, kind: n.kind, deliveryMode: n.deliveryMode, staffId: n.staffId };
     if (b.note !== undefined) patch.note = String(b.note).slice(0, 1000);
     if (moved && l.status === 'decided' && c.now > freeDeadline(l.date) && b.lateStart === true) patch.lateStart = 1;
