@@ -103,6 +103,10 @@ export const recordRoutes = {
     const tests = (await c.db.prepare("select * from sharedEvents where studentId = ? and kind = 'test' and dateTo >= ? order by date limit 3").bind(l.studentId, l.date).all()).results;
     const notes = (await c.db.prepare("select n.*, s.name authorName, (select readAt from handoverReads where noteId = n.id and staffId = ?) readAt from handoverNotes n left join staff s on s.id = n.authorId where n.studentId = ? and n.status = 'open' and (n.toStaffId = '' or n.toStaffId = ? or n.authorId = ?) order by n.createdAt desc limit 20").bind(me.id, l.studentId, me.id, me.id).all()).results;
     const staff = (await c.db.prepare("select id, name, roles from staff where status = 'active'").all()).results;
+    // 同じ講師が同じ時間に教えている授業（2人同時の授業）。記録の画面の上で切り替える
+    const hm = t => { const [a, m] = String(t).split(':').map(Number); return a * 60 + m; };
+    const together = (await c.db.prepare("select l.id, l.start, l.minutes, l.subject, s.familyName, s.givenName, (select status from lessonRecords where lessonId = l.id) recordStatus from lessons l join students s on s.id = l.studentId where l.date = ? and l.staffId = ? and l.status in ('decided', 'done') order by l.start, s.familyName, s.givenName")
+      .bind(l.date, l.staffId).all()).results.filter(x => hm(x.start) < hm(l.start) + l.minutes && hm(x.start) + x.minutes > hm(l.start));
     // 教材の候補: この生徒の記録で使った教材と、宿題の教材（新しい順）
     const materials = [];
     for (const row of (await c.db.prepare("select rangeParts from lessonRecords where studentId = ? order by updatedAt desc limit 50").bind(l.studentId).all()).results)
@@ -119,6 +123,7 @@ export const recordRoutes = {
         && (['open', 'reported'].includes(h.status) || (r && h.checkedRecordId === r.id))).map(h => ({ ...homeworkView(h, lessons), assignedOn: h._after || '', checkedHere: !!(r && h.checkedRecordId === r.id) })),
       previous: prev.results.map(p => ({ date: p.date, start: p.start, subject: p.subject, range: p.range, comment: p.comment, staffNotes: parse(p.staffNotes, {}) })),
       nextSameSubject: lessons.find(x => x.date > l.date && x.subject === l.subject) || null,
+      together: together.length > 1 ? together.map(x => ({ id: x.id, name: fullName(x), familyName: x.familyName, givenName: x.givenName, start: x.start, subject: x.subject, recordStatus: x.recordStatus || '' })) : [],
       tests: tests.map(t => ({ date: t.date, dateTo: t.dateTo, title: t.title })),
       handover: notes.map(n => ({ id: n.id, body: n.body, authorName: n.authorName || '', toStaffId: n.toStaffId, createdAt: n.createdAt, read: !!n.readAt || n.authorId === me.id, mine: n.authorId === me.id })),
       staff: staff.filter(x => rolesOf(x).includes('teacher')).map(x => ({ id: x.id, name: x.name })),

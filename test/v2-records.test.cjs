@@ -194,3 +194,23 @@ test('homework is checked one by one in the next lesson record: done is confirme
   assert.deepEqual(ctxC.checks.map(x => [x.title, x.checkResult, x.checkedHere]), [['ワーク p.10', '', false], ['プリント', 'notDone', false], ['新しい宿題', '', false]]);
   assert.deepEqual((await h.ok('records/lesson', { auth: teacherAuth, lessonId: a.id })).checks, [], '一回目の記録には、その授業で出した宿題もあとの宿題も出ない');
 });
+
+test('lessons the same teacher gives at the same time are listed together so the record page can switch between them', async () => {
+  const { h, auth, kid, teacherAuth, teacher, make } = await world();
+  const fam2 = (await h.ok('admin/families/create', { auth, name: '架空二家', email: 'p2@example.invalid' })).family;
+  const kid2 = (await h.ok('admin/students/create', { auth, familyId: fam2.id, familyName: '架空', givenName: '花子', baseRate30: 1500 })).student;
+  const a = await make('2026-10-02', '09:00');
+  // 予定の画面では同じ講師の重なりは作れないので、別の時間で作ってから時刻だけ動かす（移行で写した2人同時の授業と同じ形）
+  await h.ok('schedule/lessons/create', { auth, studentId: kid2.id, date: '2026-10-02', start: '15:00', minutes: 60, subject: '英語', deliveryMode: 'in_person', staffId: teacher.id, force: true });
+  let b = h.rows("select * from lessons where studentId = ? and date = '2026-10-02'", kid2.id)[0];
+  await h.ok('schedule/lessons/decide', { auth, id: b.id, version: b.version });
+  h.db2._sqlite.prepare("update lessons set start = '09:30' where id = ?").run(b.id); b = h.rows('select * from lessons where id = ?', b.id)[0];
+  await make('2026-10-02', '11:00'); // 9:00〜10:30 とは重ならない
+  const ctxA = await h.ok('records/lesson', { auth: teacherAuth, lessonId: a.id });
+  assert.deepEqual(ctxA.together.map(x => [x.name, x.start]), [['架空 一郎', '09:00'], ['架空 花子', '09:30']]);
+  await h.ok('records/save', { auth: teacherAuth, lessonId: b.id, comment: '下書き' });
+  assert.equal((await h.ok('records/lesson', { auth: teacherAuth, lessonId: a.id })).together[1].recordStatus, 'draft', '相手の記録の状態も出る');
+  const c = await make('2026-10-02', '13:00');
+  assert.deepEqual((await h.ok('records/lesson', { auth: teacherAuth, lessonId: c.id })).together, [], '1人だけのときは出さない');
+  assert.ok(kid);
+});

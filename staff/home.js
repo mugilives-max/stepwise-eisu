@@ -1,5 +1,5 @@
 // スタッフの「今日」（docs/UX_STRUCTURE.md 3）。対応することと、今日・明日の授業。授業のあとは「実施済みにして記録」で記録の画面へ。
-import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux15';
+import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux16';
 
 let today = null;
 export function resetToday() { today = null; }

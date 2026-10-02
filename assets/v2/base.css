@@ -299,3 +299,8 @@ form.rec > textarea { margin: 8px 0; }
 .hamb.dot::after { content: ""; position: absolute; top: 7px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: #1a73e8; border: 2px solid var(--paper); }
 .panel .before { margin: 0; }
 .panel .rec-label span { white-space: normal; }
+/* ---- 記録: 2人同時の授業の切り替え（上の真ん中、Chat/Work のような形） ---- */
+.seg2 { display: flex; width: fit-content; max-width: 100%; margin: 8px auto 0; background: #eef1f4; border-radius: 999px; padding: 3px; gap: 2px; }
+.seg2 button { border: 0; background: none; border-radius: 999px; padding: 6px 16px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.seg2 button.on { background: var(--white); color: var(--ink); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.seg2 .ok { color: var(--ok); }

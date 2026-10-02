@@ -1,10 +1,11 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux15';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux15';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux15';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux16';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux16';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux16';
 
-let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = ''; // panel: 記録の画面で開いているもの（range・hw・next）
+let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
+let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。記録の画面を離れたら捨てる // panel: 記録の画面で開いているもの（range・hw・next）
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
 // 選ぶ項目（表記がずれないように）。サーバーの NOTE_CHOICES（cf/v2/records.mjs）と同じ値
 const CHOICES = {
@@ -16,8 +17,8 @@ const CHOICES = {
 // 宿題の正答率は10%刻みで選ぶ（数字を打たない）
 const ACCURACY = Array.from({ length: 11 }, (_, i) => [String(i * 10), i * 10 + '%']);
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
-export function leaveRecords() { hwOpen = ''; panel = ''; }
-export function resetRecords() { hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; rgRows = null; }
+export function leaveRecords(page) { hwOpen = ''; panel = ''; if (page !== 'record') kept = {}; }
+export function resetRecords() { kept = {}; hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; rgRows = null; }
 // 扱った範囲の1件を文に: 「不定詞 Keywork p.10〜12」
 function pagesText(p) { const s = String(p || '').trim().replace(/^p\.?\s*/i, '').replace(/\s*[-~～ー−]\s*/g, '〜'); return s ? 'p.' + s : ''; }
 
@@ -47,8 +48,12 @@ export function recordsPage(ctx) {
 export function recordPage(ctx, lessonId) {
   const { esc } = ctx;
   if (recFor !== lessonId) {
+    const prev = recFor && rec && rec.lesson ? { rec, hwRows, rgRows } : null;
+    if (prev) kept[recFor] = prev;
     recFor = lessonId; rec = null; hwRows = null; rgRows = null; panel = '';
-    ctx.call('records/lesson', { lessonId }).then(r => {
+    const back = kept[lessonId]; delete kept[lessonId];
+    if (back) { ({ rec, hwRows, rgRows } = back); if (prev && (prev.rec.together || []).length) rec.together = prev.rec.together; } // 切り替えて戻ってきた: 書きかけのまま（並びの記録の状態は新しいほうを使う）
+    else ctx.call('records/lesson', { lessonId }).then(r => {
       if (recFor !== lessonId) return;
       if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); rgRows = rangeRowsFrom(r.record); } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
       ctx.render();
@@ -70,7 +75,8 @@ export function recordPage(ctx, lessonId) {
   const curCheck = x => rec.draftChecks && rec.draftChecks[x.id] !== undefined ? rec.draftChecks[x.id] : x.checkedHere ? x.checkResult : '';
   const unchecked = checks.filter(x => !curCheck(x)).length, unread = rec.handover.filter(x => !x.read).length;
   // 左上の三本線。まだチェックしていない宿題や読んでいない引き継ぎメモがあるときは点を付ける
-  let h = `<div class="page-head rec-head"><button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
+  let h = togetherPart(ctx);
+  h += `<div class="page-head rec-head"><button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
     <div class="t"><h1>${esc(rec.student.name)} ${esc(l.subject)}</h1>${when}</div>${state}</div>${ctx.notice()}`;
   h += `<form class="rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}">`;
   if (!checks.length) h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
@@ -101,6 +107,16 @@ export function recordPage(ctx, lessonId) {
       <div class="pace"><div class="field-label">予定に対して</div>${seg('note.pace', CHOICES.pace, n.pace, esc)}</div></div>`);
   h += '</form>';
   return h + handoverForm(ctx) + (ctx.isManager && rec.record && rec.record.id ? `<details class="more"><summary>記録を無効にする</summary><form class="row" data-form="rec-void"><input name="reason" maxlength="300" placeholder="理由（例: 別の生徒の記録だった）" style="flex:1"><button class="danger"${ctx.dis()}>無効にする</button></form></details>` : '');
+}
+// 2人同時の授業の切り替え（ChatGPT の Chat/Work のような形）。名字が同じなら名前で出す。公開済みは ✓、下書きは ・
+function togetherPart(ctx) {
+  const { esc } = ctx, list = rec.together || [];
+  if (list.length < 2) return '';
+  const sameFamily = new Set(list.map(x => x.familyName)).size < list.length;
+  return `<div class="seg2" role="tablist" aria-label="同じ時間の授業">${list.map(x => {
+    const on = x.id === rec.lesson.id, mark = x.recordStatus === 'published' ? ' <span class="ok">✓</span>' : x.recordStatus === 'draft' || kept[x.id] ? ' <span class="muted">・</span>' : '';
+    return `<button type="button" role="tab" aria-selected="${on}" class="${on ? 'on' : ''}" data-action="rec-switch" data-id="${esc(x.id)}">${esc(sameFamily ? x.givenName || x.name : x.familyName || x.name)}さん${mark}</button>`;
+  }).join('')}</div>`;
 }
 // 1行の要点（押すと開く）
 function row(key, label, value, placeholder) {
@@ -218,6 +234,7 @@ export async function recordsSubmit(ctx, kind, el, ev) {
   return false;
 }
 export async function recordsClick(ctx, a, b) {
+  if (a === 'rec-switch') { if (b.dataset.id !== recFor) location.replace('#record=' + encodeURIComponent(b.dataset.id)); return true; } // 履歴を増やさない（戻るは前の画面へ）
   if (a === 'rec-open') { panel = b.dataset.k; return true; }
   if (a === 'rec-close') { panel = ''; return true; }
   if (a === 'chk-set') { const cur = (rec.draftChecks || {})[b.dataset.id] || ''; rec.draftChecks = { ...(rec.draftChecks || {}), [b.dataset.id]: cur === b.dataset.v ? '' : b.dataset.v }; return true; }
