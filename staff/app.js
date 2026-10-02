@@ -1,10 +1,10 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒（教室管理者）・移行の準備（システム管理者）。授業などは 3 段目以降。それまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage4';
-import { migratePage, migrateClick, resetMigrate } from '/staff/migrate.js?v=20261002-stage4';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage4';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage4';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage4b';
+import { migratePage, migrateClick, resetMigrate } from '/staff/migrate.js?v=20261002-stage4b';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage4b';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage4b';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -95,10 +95,10 @@ function staffPage() {
   let h = `<h1>スタッフ</h1><p class="sub">スタッフのアカウントと役割。講師は担当の授業と生徒だけ、教室管理者は運営のすべて、システム管理者は設定とアカウントを扱えます。</p>${noticeHtml()}`;
   if (shownLink) h += `<div class="notice ok"><p>${esc(shownLink.name)} さんに招待のメールを送りました。届かないときは、このリンクを LINE などで渡してください（7日有効・1回だけ使えます）。</p><p class="copy">${esc(shownLink.url)}</p><button data-action="copy-link"${dis()}>リンクをコピー</button></div>`;
   h += '<div class="list">' + staffList.map(s => `<div><div><strong>${esc(s.name)}</strong> <span class="tag ${s.status === 'active' ? '' : s.status === 'invited' ? 'warn' : 'gray'}">${STATUS_LABEL[s.status] || s.status}</span><div class="small muted">${esc(s.email)}</div>
-      <form data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><label>名前（担当・報酬の明細に出る）<input name="name" maxlength="60" value="${esc(s.name)}"></label>${roleChecks('roles', s.roles)}<div class="row" style="margin-top:6px"><button class="small"${dis()}>名前と役割を保存</button></div></form></div>
+      <form data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" value="${esc(s.familyName || s.name)}"></label><label style="flex:1">名<input name="givenName" maxlength="30" value="${esc(s.givenName || '')}"></label></div><p class="small muted" style="margin:0">名前は担当の表示と報酬の明細に出ます。</p>${roleChecks('roles', s.roles)}<div class="row" style="margin-top:6px"><button class="small"${dis()}>名前と役割を保存</button></div></form></div>
       <div class="row">${s.status === 'invited' ? `<button data-action="reinvite" data-id="${esc(s.id)}" data-name="${esc(s.name)}"${dis()}>招待をやり直す</button>` : ''}
       ${s.status === 'stopped' ? `<button data-action="status" data-status="active" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>再開する</button>` : s.id === me.id ? '' : `<button class="danger" data-action="status" data-status="stopped" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>停止する</button>`}</div></div>`).join('') + '</div>';
-  h += `<h2>スタッフを招待する</h2><form class="stack" data-form="invite-staff"><label>名前<input name="name" maxlength="60" required></label>
+  h += `<h2>スタッフを招待する</h2><form class="stack" data-form="invite-staff"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" required></label><label style="flex:1">名<input name="givenName" maxlength="30"></label></div>
     <label>メールアドレス<input type="email" name="email" required></label><div><div class="small muted">役割</div>${roleChecks('roles', ['teacher'])}</div>
     <button class="primary"${dis()}>招待のメールを送る</button></form>`;
   return h;
@@ -158,10 +158,10 @@ app.addEventListener('submit', ev => {
     else if (kind === 'reset') { r = await call('staff/reset/confirm', { token: route().token, password: v.password }); if (r.ok) return signedIn(r); }
     else if (kind === 'password') { r = await call('staff/password', { current: v.current, next: v.next }, store.get()); if (r.ok) { el.reset(); return say('パスワードを変えました', 'ok'); } }
     else if (kind === 'invite-staff') {
-      r = await call('admin/staff/invite', { name: v.name, email: v.email, roles: checked(el, 'roles') }, store.get());
+      r = await call('admin/staff/invite', { familyName: v.familyName, givenName: v.givenName, email: v.email, roles: checked(el, 'roles') }, store.get());
       if (r.ok) { shownLink = { name: r.staff.name, url: r.inviteUrl }; staffList = null; return say(''); }
     } else if (kind === 'roles') {
-      r = await call('admin/staff/update', { id: el.dataset.id, version: Number(el.dataset.version), name: v.name, roles: checked(el, 'roles') }, store.get());
+      r = await call('admin/staff/update', { id: el.dataset.id, version: Number(el.dataset.version), familyName: v.familyName, givenName: v.givenName, roles: checked(el, 'roles') }, store.get());
       if (r.ok) { staffList = null; if (me && r.staff.id === me.id) me = { ...me, name: r.staff.name }; resetSchedule(); return say(r.staff.name + ' さんの名前と役割を保存しました', 'ok'); }
     }
     if (!r) return;

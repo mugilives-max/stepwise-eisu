@@ -9,6 +9,17 @@ import { requireFamily } from './family.mjs';
 import { todayJst, addDays } from './schedule.mjs';
 
 const STAFF_NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
+// 選ぶ項目の値（表記がずれないように）。写した記録の自由な文字は、直さない限りそのまま残す
+export const NOTE_CHOICES = {
+  understanding: ['5', '4', '3', '2', '1'],
+  pace: ['ahead', 'onTrack', 'behind'],
+  homeworkReview: ['done', 'partial', 'notDone', 'none'],
+};
+function cleanRangeParts(list) {
+  if (list === undefined) return [];
+  if (!Array.isArray(list) || list.length > 10) fail('badRange', '扱った範囲の項目は10件までにしてください');
+  return list.map(p => ({ unit: String(p.unit || '').trim().slice(0, 60), material: String(p.material || '').trim().slice(0, 60), pages: String(p.pages || '').trim().slice(0, 30) })).filter(p => p.unit || p.material || p.pages);
+}
 const fullName = s => [s.familyName, s.givenName].filter(Boolean).join(' ');
 const parse = (v, d) => { try { return JSON.parse(v); } catch { return d; } };
 const isManager = me => rolesOf(me).includes('manager');
@@ -32,7 +43,7 @@ function homeworkView(h, lessons = []) {
   return { id: h.id, recordId: h.recordId, kind: h.kind, title: h.title, material: h.material, dueMode: h.dueMode, dueDate: h.dueDate, dueSubject: h.dueSubject, due, status: h.status, reportedAt: h.reportedAt, reviewNote: h.reviewNote, version: h.version };
 }
 function recordStaffView(r) {
-  return r ? { id: r.id, lessonId: r.lessonId, status: r.status, range: r.range, comment: r.comment, parentMessage: r.parentMessage, staffNotes: parse(r.staffNotes, {}), publishedAt: r.publishedAt, voidReason: r.voidReason, authorId: r.authorId, version: r.version } : null;
+  return r ? { id: r.id, lessonId: r.lessonId, status: r.status, range: r.range, comment: r.comment, parentMessage: r.parentMessage, staffNotes: parse(r.staffNotes, {}), rangeParts: parse(r.rangeParts, []), publishedAt: r.publishedAt, voidReason: r.voidReason, authorId: r.authorId, version: r.version } : null;
 }
 // 宿題に「授業の日」を添える（次の授業までの宿題の期限を決めるため）
 async function homeworkWithAfter(c, rows) {
@@ -67,6 +78,11 @@ export const recordRoutes = {
     const tests = (await c.db.prepare("select * from sharedEvents where studentId = ? and kind = 'test' and dateTo >= ? order by date limit 3").bind(l.studentId, l.date).all()).results;
     const notes = (await c.db.prepare("select n.*, s.name authorName, (select readAt from handoverReads where noteId = n.id and staffId = ?) readAt from handoverNotes n left join staff s on s.id = n.authorId where n.studentId = ? and n.status = 'open' and (n.toStaffId = '' or n.toStaffId = ? or n.authorId = ?) order by n.createdAt desc limit 20").bind(me.id, l.studentId, me.id, me.id).all()).results;
     const staff = (await c.db.prepare("select id, name, roles from staff where status = 'active'").all()).results;
+    // 教材の候補: この生徒の記録で使った教材と、宿題の教材（新しい順）
+    const materials = [];
+    for (const row of (await c.db.prepare("select rangeParts from lessonRecords where studentId = ? order by updatedAt desc limit 50").bind(l.studentId).all()).results)
+      for (const p of parse(row.rangeParts, [])) if (p.material && !materials.includes(p.material)) materials.push(p.material);
+    for (const h of hwRows.slice().reverse()) if (h.material && !materials.includes(h.material)) materials.push(h.material);
     return {
       lesson: { id: l.id, date: l.date, start: l.start, minutes: l.minutes, subject: l.subject, kind: l.kind, status: l.status, staffId: l.staffId, version: l.version },
       student: { id: s.id, name: fullName(s), grade: s.grade },
@@ -78,6 +94,7 @@ export const recordRoutes = {
       tests: tests.map(t => ({ date: t.date, dateTo: t.dateTo, title: t.title })),
       handover: notes.map(n => ({ id: n.id, body: n.body, authorName: n.authorName || '', toStaffId: n.toStaffId, createdAt: n.createdAt, read: !!n.readAt || n.authorId === me.id, mine: n.authorId === me.id })),
       staff: staff.filter(x => rolesOf(x).includes('teacher')).map(x => ({ id: x.id, name: x.name })),
+      materials: materials.slice(0, 30),
       today: todayJst(c.now),
     };
   },
@@ -94,15 +111,22 @@ export const recordRoutes = {
     if (range.length > 500 || comment.length > 2000 || parentMessage.length > 1000) fail('tooLong', '文字数が多すぎます（扱った範囲500・コメント2000・保護者への連絡1000まで）');
     const publish = b.publish === true;
     if (publish && !comment) fail('needComment', '公開するときはコメントを書いてください');
-    const notes = {}; for (const k of STAFF_NOTE_KEYS) if (b.staffNotes && b.staffNotes[k] !== undefined) notes[k] = String(b.staffNotes[k]).slice(0, 1000);
+    const notes = {}, before = old ? parse(old.staffNotes, {}) : {};
+    for (const k of STAFF_NOTE_KEYS) if (b.staffNotes && b.staffNotes[k] !== undefined) {
+      const v = String(b.staffNotes[k]).slice(0, 1000);
+      if (NOTE_CHOICES[k] && v && !NOTE_CHOICES[k].includes(v) && v !== before[k]) fail('badChoice', '選ぶ項目の値を確かめてください（' + k + '）');
+      if (v) notes[k] = v;
+    }
+    if (!String(notes.plannedUnit || '').trim()) delete notes.pace; // 進度は予定があるときだけ
+    const rangeParts = cleanRangeParts(b.rangeParts);
     const hw = cleanHomework(b.homework || []);
     const id = old ? old.id : newId('lr'), now = iso(c.now), stmts = [];
     const status = publish ? 'published' : old ? old.status : 'draft';
     const publishedJson = publish ? JSON.stringify({ range, comment, parentMessage }) : old ? old.publishedJson : '';
-    if (old) stmts.push(c.db.prepare('update lessonRecords set range = ?, comment = ?, parentMessage = ?, staffNotes = ?, status = ?, publishedJson = ?, publishedAt = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')
-      .bind(range, comment, parentMessage, JSON.stringify(notes), status, publishedJson, publish ? now : old.publishedAt, now, id, old.version));
-    else stmts.push(c.db.prepare('insert into lessonRecords (id, lessonId, studentId, authorId, status, range, comment, parentMessage, staffNotes, publishedJson, publishedAt, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, l.id, l.studentId, me.id, status, range, comment, parentMessage, JSON.stringify(notes), publishedJson, publish ? now : '', now, now));
+    if (old) stmts.push(c.db.prepare('update lessonRecords set range = ?, comment = ?, parentMessage = ?, staffNotes = ?, rangeParts = ?, status = ?, publishedJson = ?, publishedAt = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')
+      .bind(range, comment, parentMessage, JSON.stringify(notes), JSON.stringify(rangeParts), status, publishedJson, publish ? now : old.publishedAt, now, id, old.version));
+    else stmts.push(c.db.prepare('insert into lessonRecords (id, lessonId, studentId, authorId, status, range, comment, parentMessage, staffNotes, rangeParts, publishedJson, publishedAt, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, l.id, l.studentId, me.id, status, range, comment, parentMessage, JSON.stringify(notes), JSON.stringify(rangeParts), publishedJson, publish ? now : '', now, now));
     // 宿題: 送られなかった行は取り下げ（できた・確認済みの行は残す）
     const existing = (await c.db.prepare('select * from homework where recordId = ?').bind(id).all()).results;
     const keep = new Set(hw.filter(h => h.id).map(h => h.id));

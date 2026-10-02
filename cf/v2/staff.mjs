@@ -7,7 +7,13 @@ export const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysad
 export const rolesOf = who => String(who.roles || '').split(',').filter(r => ROLES.includes(r));
 
 export function staffView(who) {
-  return { id: who.id, name: who.name, email: who.email, roles: rolesOf(who), status: who.status, contractType: who.contractType, version: who.version };
+  return { id: who.id, name: who.name, familyName: who.familyName || '', givenName: who.givenName || '', email: who.email, roles: rolesOf(who), status: who.status, contractType: who.contractType, version: who.version };
+}
+// 姓と名。name（表示用）は「姓 名」にそろえる
+function nameParts(b, base = {}) {
+  const familyName = String(b.familyName ?? base.familyName ?? '').trim(), givenName = String(b.givenName ?? base.givenName ?? '').trim();
+  if (!familyName || familyName.length > 30 || givenName.length > 30) fail('badName', '姓（必須）と名を30文字以内で入れてください');
+  return { familyName, givenName, name: [familyName, givenName].filter(Boolean).join(' ') };
 }
 
 // ログイン中のスタッフを確かめ、必要な役割を持っているか見る。c.actor に入れる
@@ -56,9 +62,9 @@ export const staffRoutes = {
     if (!validEmail(email)) fail('noEmail', '今の管理画面に先生のメールアドレスが登録されていません', 400);
     let who = await c.db.prepare('select * from staff where email = ?').bind(email).first();
     if (!who) {
-      who = { id: newId('st'), name: '代表', email, roles: ROLES.join(','), status: 'invited', contractType: 'owner' };
-      await c.db.prepare('insert into staff (id, name, email, roles, status, contractType, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(who.id, who.name, who.email, who.roles, who.status, who.contractType, iso(c.now), iso(c.now)).run();
+      who = { id: newId('st'), name: '代表', familyName: '代表', givenName: '', email, roles: ROLES.join(','), status: 'invited', contractType: 'owner' };
+      await c.db.prepare('insert into staff (id, name, familyName, givenName, email, roles, status, contractType, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(who.id, who.name, who.familyName, who.givenName, who.email, who.roles, who.status, who.contractType, iso(c.now), iso(c.now)).run();
     }
     await audit(c, 'bootstrap', who.id, { email });
     return { inviteUrl: await issueChallenge(c, 'staff', 'staffInvite', who, null) };
@@ -72,13 +78,12 @@ export const staffRoutes = {
   },
   'admin/staff/invite': async (c, b) => {
     await requireStaff(c, b, 'sysadmin');
-    const name = String(b.name || '').trim(), email = normEmail(b.email), roles = cleanRoles(b.roles);
-    if (!name || name.length > 60) fail('badName', '名前を60文字以内で入れてください');
+    const { familyName, givenName, name } = nameParts(b), email = normEmail(b.email), roles = cleanRoles(b.roles);
     if (!validEmail(email)) fail('badEmail', 'メールアドレスを確かめてください');
     if (await c.db.prepare('select 1 from staff where email = ?').bind(email).first()) fail('duplicate', 'このメールアドレスのスタッフはすでにいます', 409);
-    const who = { id: newId('st'), name, email, roles, status: 'invited', contractType: b.contractType === 'owner' ? 'owner' : 'contractor', version: 1 };
-    await c.db.prepare('insert into staff (id, name, email, roles, status, contractType, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(who.id, name, email, roles, 'invited', who.contractType, iso(c.now), iso(c.now)).run();
+    const who = { id: newId('st'), name, familyName, givenName, email, roles, status: 'invited', contractType: b.contractType === 'owner' ? 'owner' : 'contractor', version: 1 };
+    await c.db.prepare('insert into staff (id, name, familyName, givenName, email, roles, status, contractType, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(who.id, name, familyName, givenName, email, roles, 'invited', who.contractType, iso(c.now), iso(c.now)).run();
     const inviteUrl = await issueChallenge(c, 'staff', 'staffInvite', who, INVITE_MAIL);
     await audit(c, 'staffInvite', who.id, { roles });
     return { staff: staffView(who), inviteUrl };
@@ -96,17 +101,16 @@ export const staffRoutes = {
     const who = await c.db.prepare('select * from staff where id = ?').bind(String(b.id || '')).first();
     if (!who) fail('notFound', 'スタッフが見つかりません', 404);
     if (Number(b.version) !== Number(who.version)) fail('conflict', 'ほかの操作で変わりました。画面を更新してください', 409);
-    const name = b.name === undefined ? who.name : String(b.name).trim();
-    if (!name || name.length > 60) fail('badName', '名前を60文字以内で入れてください');
+    const { familyName, givenName, name } = b.familyName === undefined && b.givenName === undefined ? { familyName: who.familyName || who.name, givenName: who.givenName || '', name: who.name } : nameParts(b, who);
     const roles = b.roles === undefined ? who.roles : cleanRoles(b.roles);
     const status = b.status === undefined ? who.status : String(b.status);
     // 変えられるのは 利用中 ⇄ 停止 と、招待中 → 停止 だけ。招待中は本人がパスワードを決めて利用中になる
     const allowed = status === who.status || (status === 'stopped') || (status === 'active' && who.status === 'stopped' && who.passHash);
     if (!allowed) fail('badStatus', '状態を確かめてください');
     await keepsSysadmin(c, who.id, roles, status === 'invited' ? 'invited' : status);
-    await c.db.prepare('update staff set name = ?, roles = ?, status = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?').bind(name, roles, status, iso(c.now), who.id, who.version).run();
+    await c.db.prepare('update staff set name = ?, familyName = ?, givenName = ?, roles = ?, status = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?').bind(name, familyName, givenName, roles, status, iso(c.now), who.id, who.version).run();
     if (status === 'stopped') await revokeSessions(c, 'staff', who.id);
     await audit(c, 'staffUpdate', who.id, { roles, status, by: me.id });
-    return { staff: staffView({ ...who, name, roles, status, version: who.version + 1 }) };
+    return { staff: staffView({ ...who, name, familyName, givenName, roles, status, version: who.version + 1 }) };
   },
 };

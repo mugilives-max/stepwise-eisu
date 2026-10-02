@@ -114,3 +114,51 @@ test('the copy from the current ledger keeps records, the published version, pri
   await h.ok('admin/migrate/records/apply', { auth, confirm: true });
   assert.equal(h.rows('select count(*) n from homework')[0].n, 2, '写し直しても増えない');
 });
+
+test('teacher-only fields: understanding, pace and homework are chosen from fixed values; pace needs a planned unit; range parts suggest materials', async () => {
+  const { h, teacherAuth, make } = await world();
+  const l = await make('2026-10-02', '09:00');
+  assert.equal((await h.call('records/save', { auth: teacherAuth, lessonId: l.id, comment: 'x', staffNotes: { understanding: 'よい' } })).error.code, 'badChoice', '理解度は5段階から選ぶ');
+  const parts = [{ unit: '不定詞', material: 'Keywork', pages: '10-12' }, { unit: '', material: '', pages: '' }];
+  const s = await h.ok('records/save', { auth: teacherAuth, lessonId: l.id, range: '不定詞 Keywork p.10〜12', rangeParts: parts, comment: 'x', staffNotes: { understanding: '4', pace: 'behind', homeworkReview: 'partial' } });
+  assert.deepEqual(s.record.staffNotes, { understanding: '4', homeworkReview: 'partial' }, '予定単元がないときは進度を残さない');
+  assert.deepEqual(s.record.rangeParts, [{ unit: '不定詞', material: 'Keywork', pages: '10-12' }], '空の行は捨てる');
+  const s2 = await h.ok('records/save', { auth: teacherAuth, lessonId: l.id, version: s.record.version, range: 'x', rangeParts: parts, comment: 'x', staffNotes: { plannedUnit: '不定詞', pace: 'onTrack' } });
+  assert.equal(s2.record.staffNotes.pace, 'onTrack');
+  const next = await make('2026-10-02', '11:00');
+  assert.deepEqual((await h.ok('records/lesson', { auth: teacherAuth, lessonId: next.id })).materials, ['Keywork'], 'この生徒で使った教材を候補に出す');
+});
+
+test('free text copied from the current ledger stays until it is changed', async () => {
+  const { h, teacherAuth, make } = await world();
+  const l = await make('2026-10-02', '09:00');
+  const s = await h.ok('records/save', { auth: teacherAuth, lessonId: l.id, comment: 'x', staffNotes: { understanding: '4' } });
+  h.db2._sqlite.prepare('update lessonRecords set staffNotes = ? where id = ?').run(JSON.stringify({ understanding: 'まあまあ' }), s.record.id);
+  const kept = await h.ok('records/save', { auth: teacherAuth, lessonId: l.id, version: s.record.version, comment: 'y', staffNotes: { understanding: 'まあまあ' } });
+  assert.equal(kept.record.staffNotes.understanding, 'まあまあ');
+});
+
+test('a record whose lesson is gone gets a done lesson; copying everything again keeps the order of the steps', async () => {
+  const h = await createV2(); const auth = await h.owner();
+  const q = (sql, ...a) => h.db._sqlite.prepare(sql).run(...a);
+  q("insert into students (id, name, active, code, rate30) values ('s1', '架空 一郎', 1, 'code-one-xxxxxxxx', 1500)");
+  q("insert into familyAccounts (id, label, status) values ('A', 'x', 'pending')"); q("insert into familyLinks (id, familyId, studentId, active) values ('l1', 'A', 's1', 1)");
+  q("insert into slots (id, date, start, min, status, studentId, done, subject, deliveryMode) values ('a', '2026-09-20', '17:00', 60, 'booked', 's1', 'true', '数学', 'in_person')");
+  q("insert into lessonRecords (id, studentId, slotId, lessonDate, lessonStart, lessonMin, subject, content, status, reportJson, revision) values ('r1', 's1', 'a', '2026-09-20', '17:00', 60, '数学', 'ある', 'active', '{}', 1), ('r2', 's1', 'gone', '2026-08-29', '18:00', 90, '', '消えた枠', 'active', '{}', 1)");
+  q("insert into events (id, studentId, date, kind, title) values ('e1', 's1', '2026-10-20', 'test', '中間テスト')");
+  await h.ok('admin/migrate/identity/apply', { auth, confirm: true });
+  await h.ok('admin/migrate/schedule/apply', { auth, confirm: true });
+  const r = await h.ok('admin/migrate/records/apply', { auth, confirm: true });
+  assert.equal(r.records, 2);
+  assert.match(r.problems.join(), /実施済みの授業を作って写します/);
+  assert.deepEqual({ ...h.rows("select date, start, minutes, subject, status from lessons where legacyId = 'orphan:r2'")[0] }, { date: '2026-08-29', start: '18:00', minutes: 90, subject: '授業', status: 'done' });
+  assert.equal((await h.call('admin/migrate/schedule/apply', { auth, confirm: true })).error.code, 'useAll', '記録のあとで予定だけを写し直さない');
+  assert.equal((await h.call('admin/migrate/identity/apply', { auth, confirm: true })).error.code, 'useAll');
+  q("insert into slots (id, date, start, min, status, studentId, done, subject, deliveryMode) values ('b', '2026-10-05', '17:00', 60, 'booked', 's1', '', '英語', 'in_person')");
+  const all = await h.ok('admin/migrate/all/apply', { auth, confirm: true });
+  assert.deepEqual([all.identity.students, all.schedule.lessons, all.records.records], [1, 2, 2]);
+  assert.deepEqual(h.rows('select count(*) n from lessons')[0].n, 3, '写し直しても増えない（予定2件と、消えた枠の1件）');
+  assert.equal(h.rows('select count(*) n from sharedEvents')[0].n, 1);
+  h.db2._sqlite.prepare("insert into settings (key, value, updatedAt) values ('live', '1', '')").run();
+  assert.equal((await h.call('admin/migrate/all/apply', { auth, confirm: true })).error.code, 'live', '切り替えたあとは使えない');
+});

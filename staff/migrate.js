@@ -6,6 +6,8 @@ export function resetMigrate() { preview = null; schedPreview = null; recPreview
 export function migratePage(ctx) {
   const { esc } = ctx;
   let h = `<h1>移行の準備</h1><p class="sub">今の仕組みの家族・生徒を、新しい形（家族の下に生徒）へ写します。写しても今の仕組みは変わりません。何度でも写し直せます。切り替えまでは、保護者へのメールは送りません。</p>${ctx.notice()}`;
+  h += `<h2>まとめて写し直す</h2><p class="small muted">一度写したあとで今の仕組みのデータが増えたときは、ここから 1→2→3 を順に写し直します。写した生徒につながる予定・記録・宿題は、新しい仕組みで入れたものも含めて置き換わります（切り替え前だけ使えます）。</p>
+    <p><button class="primary" data-action="mig-all"${ctx.dis()}>全部を順に写し直す</button></p>`;
   h += `<h2>1. 家族と生徒</h2><p><button data-action="mig-preview"${ctx.dis()}>${preview ? 'もう一度見る' : 'どう写るかを見る'}</button></p>`;
   if (!preview) return h + schedulePart(ctx) + recordsPart(ctx);
   const students = preview.families.reduce((n, f) => n + f.students.length, 0);
@@ -41,7 +43,15 @@ function schedulePart(ctx) {
 
 export async function migrateClick(ctx, a) {
   let r;
-  if (a === 'mig-preview') { r = await ctx.call('admin/migrate/identity/preview'); if (r.ok) { preview = r; ctx.say(''); return true; } }
+  if (a === 'mig-all') {
+    if (!confirm('家族・生徒 → 予定 → 授業記録・宿題 の順に、全部を写し直しますか？ 写した生徒につながる予定・記録・宿題は置き換わります。今の仕組みは変わりません。')) return true;
+    r = await ctx.call('admin/migrate/all/apply', { confirm: true });
+    if (r.ok) {
+      preview = null; schedPreview = null; recPreview = null; ctx.afterMigrate();
+      const probs = [...r.identity.problems, ...r.schedule.problems, ...r.records.problems];
+      ctx.say(`${r.identity.families}家族・${r.identity.students}人、授業 ${r.schedule.lessons}件、授業記録 ${r.records.records}件・宿題 ${r.records.homework}件を写しました。${probs.length ? '気になる点: ' + probs.join(' / ') : ''}`, 'ok'); return true;
+    }
+  } else if (a === 'mig-preview') { r = await ctx.call('admin/migrate/identity/preview'); if (r.ok) { preview = r; ctx.say(''); return true; } }
   else if (a === 'mig-apply') {
     if (!confirm('今の仕組みの家族・生徒を、新しい台帳に写しますか？ 前に写したものは置き換えます。今の仕組みは変わりません。')) return true;
     r = await ctx.call('admin/migrate/identity/apply', { confirm: true });

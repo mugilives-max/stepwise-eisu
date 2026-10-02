@@ -102,11 +102,11 @@ test('password reset by mail: same answer for unknown emails, rate limited, one-
 
 test('only a system admin manages staff; roles are checked on the server; the last system admin cannot be removed', async () => {
   const f = await fixture(); const auth = await owner(f);
-  const inv = await f.call('admin/staff/invite', { auth, name: '福地', email: 'teacher@example.invalid', roles: ['teacher'] });
+  const inv = await f.call('admin/staff/invite', { auth, familyName: '架空', givenName: '講師', email: 'teacher@example.invalid', roles: ['teacher'] });
   assert.equal(inv.ok, true, JSON.stringify(inv));
   assert.match(f.mails().at(-1).body, /パスワードを決めてください/);
-  assert.equal((await f.call('admin/staff/invite', { auth, name: '同じ', email: 'TEACHER@example.invalid', roles: ['teacher'] })).error.code, 'duplicate');
-  assert.equal((await f.call('admin/staff/invite', { auth, name: 'x', email: 'x@example.invalid', roles: ['boss'] })).error.code, 'badRoles');
+  assert.equal((await f.call('admin/staff/invite', { auth, familyName: '同じ', email: 'TEACHER@example.invalid', roles: ['teacher'] })).error.code, 'duplicate');
+  assert.equal((await f.call('admin/staff/invite', { auth, familyName: 'x', email: 'x@example.invalid', roles: ['boss'] })).error.code, 'badRoles');
   const t = await f.call('staff/invite/accept', { token: f.linkFrom(f.mails().at(-1)), password: 'teacher password 1' });
   assert.deepEqual(t.me.roles, ['teacher']);
   assert.equal((await f.call('admin/staff/list', { auth: t.auth })).error.code, 'forbidden', '講師はスタッフを管理できない');
@@ -114,6 +114,10 @@ test('only a system admin manages staff; roles are checked on the server; the la
   const me = list.find(s => s.email === 'owner@example.invalid'), teacher = list.find(s => s.email === 'teacher@example.invalid');
   assert.equal((await f.call('admin/staff/update', { auth, id: me.id, version: me.version, roles: ['teacher', 'manager'] })).error.code, 'lastSysadmin');
   assert.equal((await f.call('admin/staff/update', { auth, id: teacher.id, version: teacher.version + 1, roles: ['teacher', 'manager'] })).error.code, 'conflict', '古い画面からの変更は断る');
+  assert.deepEqual([teacher.familyName, teacher.givenName, teacher.name], ['架空', '講師', '架空 講師'], '姓と名を分けて持つ');
+  assert.equal((await f.call('admin/staff/update', { auth, id: me.id, version: me.version, familyName: '', givenName: '太郎' })).error.code, 'badName', '姓は必ず');
+  const renamed = await f.call('admin/staff/update', { auth, id: me.id, version: me.version, familyName: '麦', givenName: '太郎' });
+  assert.equal(renamed.staff.name, '麦 太郎');
   const stop = await f.call('admin/staff/update', { auth, id: teacher.id, version: teacher.version, status: 'stopped' });
   assert.equal(stop.staff.status, 'stopped');
   assert.equal((await f.call('staff/me', { auth: t.auth })).error.code, 'needLogin', '停止したらログインも切れる');

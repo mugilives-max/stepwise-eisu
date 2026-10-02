@@ -32,7 +32,7 @@ async function createV2({ legacyConfig = true } = {}) {
   };
   // 指定した役割のスタッフを招待して、ログインしたトークンを返す
   h.staffWith = async (auth, roles, email) => {
-    await h.ok('admin/staff/invite', { auth, name: roles.join('+'), email, roles });
+    await h.ok('admin/staff/invite', { auth, familyName: roles.join('+'), givenName: '講師', email, roles });
     return (await h.ok('staff/invite/accept', { token: h.linkFrom(h.mails().at(-1)), password: 'staff password 123' })).auth;
   };
   return h;

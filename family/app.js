@@ -1,8 +1,8 @@
 // 保護者の画面（作り直し v2）。ログイン・招待・再設定、子どもの予定と「変更・お休みの連絡」、予定の共有、アカウント。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage4';
-import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage4';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-stage4b';
+import { learningView } from '/assets/v2/learning-view.js?v=20261002-stage4b';
 
 const store = session('sw2_family');
 const app = document.getElementById('app'), nav = document.getElementById('nav');

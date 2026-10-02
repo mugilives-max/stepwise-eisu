@@ -91,6 +91,13 @@ export const migrateRoutes = {
     if (!c.env.DB) fail('unavailable', '今の台帳に接続できません', 503);
     const plan = await identityPlan(c.env.DB);
     // 新しい仕組みで作った生徒が、前に写した家族に入っていたら消せないので止める
+    const later = await c.db.prepare(`select (select count(*) from lessons where studentId in (select id from students where legacyId <> ''))
+      + (select count(*) from sharedEvents where studentId in (select id from students where legacyId <> ''))
+      + (select count(*) from homework where studentId in (select id from students where legacyId <> ''))
+      + (select count(*) from handoverNotes where studentId in (select id from students where legacyId <> ''))
+      + (select count(*) from meetings where familyId in (select id from families where legacyId <> '')) n`).first();
+    if (later.n)
+      fail('useAll', '予定を写したあとは、家族・生徒だけを写し直せません。「全部を順に写し直す」を使ってください', 409);
     const mixed = await c.db.prepare("select count(*) n from students s join families f on f.id = s.familyId where s.legacyId = '' and f.legacyId <> ''").first();
     if (mixed.n) fail('mixed', '写した家族に、新しい仕組みで登録した生徒がいます。先にその生徒をほかの家族へ移してください', 409);
     const now = iso(c.now), db = c.db, stmts = [
