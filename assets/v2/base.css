@@ -254,7 +254,7 @@ textarea:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
 /* ---- 記録を書く画面（1画面）: 1行の要点・前回の宿題の ○△×・細いスライダー・開く画面 ---- */
 form.rec { margin: 6px 0 0; }
 form.rec > textarea { margin: 8px 0; }
-.before { margin: 8px 0 2px; padding: 8px 10px; gap: 3px; }
+.before { margin: 8px 0 2px; padding: 8px 10px; gap: 3px; overflow-wrap: anywhere; min-width: 0; }
 .rec-block { padding: 6px 0 2px; border-bottom: 1px solid var(--line); }
 .rec-label { font-size: 12px; color: var(--muted); }
 .rec-label span { font-size: 11px; white-space: nowrap; }
@@ -287,6 +287,7 @@ form.rec > textarea { margin: 8px 0; }
 @keyframes drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
 .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--line); }
 .panel-body { flex: 1; overflow: auto; padding: 10px 16px; display: grid; gap: 8px; align-content: start; }
+.panel-body > * { min-width: 0; }
 .panel-foot { padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
 .panel-foot button { width: 100%; }
 .panel-body button.link { justify-self: start; text-decoration: none; color: var(--primary); }
@@ -316,11 +317,13 @@ form.rec > textarea { margin: 8px 0; }
 .bar-title { flex: 1; min-width: 0; text-align: center; line-height: 1.25; }
 .bar-title strong { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-title small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-right { flex-shrink: 0; width: 40px; display: grid; place-items: center; }
+.bar-right { flex-shrink: 0; min-width: 40px; display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.bar-right .pub { padding: 6px 14px; border-radius: 999px; border: 0; background: var(--primary); color: var(--white); font-weight: 700; font-size: 14px; }
+.bar-title small b { font-weight: 700; } .bar-title small b.ok { color: var(--ok); } .bar-title small b.warn { color: var(--warn); }
 body.focus .top .brand { display: none; }
 body.focus .top .in { flex-wrap: nowrap; }
 body.focus nav#nav { display: none !important; }
-body.focus main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+body.focus main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .group { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; margin: 10px 0 0; }
 .group > .rec-row:last-child, .group > .rec-line:last-child { border-bottom: 0; }
 .group .rec-row, .group .rec-line { padding: 11px 0; }

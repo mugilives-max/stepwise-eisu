@@ -52,6 +52,8 @@ export async function recordsPlan(old, db2) {
       status, reportedAt: String(t.doneAt || ''), reviewedAt: String(t.reviewedAt || ''), reviewNote: String(t.reviewNote || '').slice(0, 300), createdAt: String(t.createdAt || '') });
   }
   for (const p of preps) {
+    // 今の仕組みはこの表に「授業記録の一時保存」（id が record-draft: で始まる。中身は JSON）も入れている。引き継ぎメモではないので写さない
+    if (String(p.id).startsWith('record-draft:')) continue;
     const sid = students[String(p.studentId)]; if (!sid || !String(p.body || '').trim()) continue;
     notes.push({ id: 'ho_' + p.id, legacyId: String(p.id), studentId: sid, authorId: owner ? owner.id : '', body: `（授業準備 ${p.lessonDate} ${p.subject}）\n` + String(p.body).slice(0, 900), createdAt: String(p.updatedAt || '') });
   }

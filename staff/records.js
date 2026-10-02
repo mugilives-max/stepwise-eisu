@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux19';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux19';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux19';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux21';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux21';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux21';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
 let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。先に読んでおいた相手の記録も入る。記録の画面を離れたら捨てる
@@ -20,8 +20,8 @@ const CHOICES = {
 // 宿題の正答率は10%刻みで選ぶ（数字を打たない）
 const ACCURACY = Array.from({ length: 11 }, (_, i) => [String(i * 10), i * 10 + '%']);
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
-export function leaveRecords(page) { hwOpen = ''; panel = ''; if (page !== 'record') { kept = {}; swapFrom = swapTo = ''; } }
-export function resetRecords() { kept = {}; hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; rgRows = null; }
+export function leaveRecords(page) { hwOpen = ''; panel = ''; if (page !== 'record') { kept = {}; swapFrom = swapTo = ''; } } // 書きかけの保存は autosaveOnLeave（app.js が先に呼ぶ）
+export function resetRecords() { kept = {}; clearLocalDrafts(); hwOpen = ''; pending = null; reported = null; rec = null; recFor = ''; hwRows = null; rgRows = null; }
 // 扱った範囲の1件を文に: 「不定詞 Keywork p.10〜12」
 function pagesText(p) { const s = String(p || '').trim().replace(/^p\.?\s*/i, '').replace(/\s*[-~～ー−]\s*/g, '〜'); return s ? 'p.' + s : ''; }
 
@@ -52,13 +52,18 @@ export function recordPage(ctx, lessonId) {
   const { esc } = ctx;
   if (recFor !== lessonId) {
     const prev = recFor && rec && rec.lesson ? { rec, hwRows, rgRows, touched: true } : null;
-    if (prev) kept[recFor] = prev;
+    if (prev) { kept[recFor] = prev; saveLocal(prev); }
     recFor = lessonId; rec = null; hwRows = null; rgRows = null; panel = '';
     const back = kept[lessonId]; delete kept[lessonId];
     if (back) { ({ rec, hwRows, rgRows } = back); if (prev && (prev.rec.together || []).length) rec.together = prev.rec.together; } // 切り替えて戻ってきた: 書きかけのまま（並びの記録の状態は新しいほうを使う）
     else ctx.call('records/lesson', { lessonId }).then(r => {
       if (recFor !== lessonId) return;
-      if (r.ok) { rec = r; hwRows = r.homework.map(x => ({ ...x })); rgRows = rangeRowsFrom(r.record); prefetch(ctx, r); } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
+      if (r.ok) {
+        rec = r; hwRows = r.homework.map(x => ({ ...x })); rgRows = rangeRowsFrom(r.record); rec.baseline = keyOf({ rec, hwRows, rgRows });
+        const st = { rec, hwRows, rgRows };
+        if (restoreLocal(st)) { ({ hwRows, rgRows } = st); ctx.say('前に書きかけていた内容を戻しました（この端末に自動で残していたもの）', 'ok'); }
+        prefetch(ctx, r);
+      } else { rec = { error: r.error.message }; ctx.handleAuth(r); }
       ctx.render();
     });
   }
@@ -81,9 +86,10 @@ export function recordPage(ctx, lessonId) {
   const curCheck = x => rec.draftChecks && rec.draftChecks[x.id] !== undefined ? rec.draftChecks[x.id] : x.checkedHere ? x.checkResult : '';
   const unchecked = checks.filter(x => !curCheck(x)).length, unread = rec.handover.filter(x => !x.read).length;
   // 上の帯: 戻る・名前と日時・三本線（まだチェックしていない宿題や読んでいない引き継ぎメモがあるときは点）
-  bar = { title, sub, right: `<button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>` };
+  const stateText = r.status === 'published' ? '公開済み' : r.status === 'draft' ? '下書き' : '';
+  bar = { title, sub: sub + (stateText ? `・<b class="${r.status === 'published' ? 'ok' : 'warn'}">${stateText}</b>` : ''), right: `<button type="submit" form="rec-form" name="publish" value="1" class="pub"${ctx.dis()}>公開</button><button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>` };
   let h = togetherPart(ctx) + ctx.notice();
-  h += `<form class="rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}"><div class="group">`;
+  h += `<form class="rec" id="rec-form" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}"><div class="group">`;
   if (!checks.length) h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
   // 今日の授業
   const range = (rgRows || []).map(rangeLine).filter(Boolean).join('、');
@@ -97,7 +103,7 @@ export function recordPage(ctx, lessonId) {
   const nextBits = [n.nextFocus, r.parentMessage ? '保護者へ: ' + r.parentMessage : '', n.memo ? 'メモあり' : ''].filter(Boolean);
   h += row('next', '次回へ', nextBits.length ? esc(nextBits.join('・')) : '', '次回やること・保護者へ・メモ');
   h += `<datalist id="rec-materials">${(rec.materials || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
-    </div><div class="savebar">${state}<span style="flex:1"></span><button type="submit" name="publish" value="0"${ctx.dis()}>下書き</button><button class="primary" type="submit" name="publish" value="1"${ctx.dis()}>保存して公開</button></div>`;
+    </div><p class="small muted" style="margin:8px 2px 0">書いた内容は自動で保存されます（画面を離れると下書きに）。生徒・保護者に見せるときは右上の「公開」。</p>`;
   // 開く画面（いつもフォームの中に置く）
   h += panelHtml('range', '扱った範囲', `${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button>`);
   h += panelHtml('hw', '宿題と前回のこと', beforePart(ctx)
@@ -119,7 +125,7 @@ export function recordPage(ctx, lessonId) {
 function prefetch(ctx, r) {
   for (const x of r.together || []) {
     if (x.id === r.lesson.id || kept[x.id]) continue;
-    ctx.call('records/lesson', { lessonId: x.id }).then(o => { if (o.ok && !kept[x.id] && recFor !== x.id) kept[x.id] = { rec: o, hwRows: o.homework.map(y => ({ ...y })), rgRows: rangeRowsFrom(o.record) }; });
+    ctx.call('records/lesson', { lessonId: x.id }).then(o => { if (!o.ok || kept[x.id] || recFor === x.id) return; const st = { rec: o, hwRows: o.homework.map(y => ({ ...y })), rgRows: rangeRowsFrom(o.record) }; o.baseline = keyOf(st); if (restoreLocal(st)) st.touched = true; kept[x.id] = st; });
   }
 }
 // 丸い背景を、前の人から今の人へ滑らせ、中身を滑る向きに少しずらして出す。描き直しが続いても、最後に描いたあとで1回だけ動かす
@@ -210,6 +216,64 @@ function handoverForm(ctx) {
   return `<details class="more"><summary>引き継ぎメモを書く</summary><form class="stack" data-form="ho-add"><label>次の担当・代講への伝言<textarea name="body" maxlength="1000" rows="3" placeholder="例: 分数の約分でつまずきやすい。前回は通分まで確認済み"></textarea></label>
     <label>だれに<select name="toStaffId"><option value="">この生徒を担当する全員</option>${rec.staff.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label><button${ctx.dis()}>残す</button></form></details>`;
 }
+// 保存する中身（records/save に送るもの）を、覚えている状態から作る。ボタン・自動保存で共通
+function bodyOf(st, publish = false) {
+  const R = st.rec, saved = R.record || { comment: '', parentMessage: '', staffNotes: {} }, d = R.draftInputs;
+  const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = String((d ? d.staffNotes[k] : (saved.staffNotes || {})[k]) || '');
+  if (!staffNotes.plannedUnit.trim()) staffNotes.pace = ''; // 予定がないときは進度を書かない
+  const rows = st.rgRows || [];
+  return { lessonId: R.lesson.id, version: R.record && R.record.id ? R.record.version : undefined, range: rows.map(rangeLine).filter(Boolean).join('、'), rangeParts: rows.filter(rangeLine).map(x => ({ unit: (x.text || '').trim(), material: (x.material || '').trim(), pages: '' })),
+    comment: d ? d.comment : saved.comment || '', parentMessage: d ? d.parentMessage : saved.parentMessage || '', staffNotes,
+    homework: (st.hwRows || []).filter(x => (x.title || '').trim() || (x.material || '').trim()).map(x => ({ id: x.id || '', kind: x.kind || 'homework', title: (x.title || '').trim() || x.material, material: (x.title || '').trim() ? x.material : '', dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject || R.lesson.subject })),
+    homeworkChecks: (R.checks || []).map(x => ({ id: x.id, result: R.draftChecks && R.draftChecks[x.id] !== undefined ? R.draftChecks[x.id] : x.checkedHere ? x.checkResult : '' })), publish };
+}
+// 変わったかどうか（「やってきたか」はチェックから決まるので比べない）
+const keyOf = st => { const b = bodyOf(st); delete b.version; b.staffNotes = { ...b.staffNotes, homeworkReview: '' }; return JSON.stringify(b); };
+const dirty = st => !!(st && st.rec && st.rec.lesson && st.rec.baseline !== undefined && keyOf(st) !== st.rec.baseline);
+// この端末に書きかけを残す（閉じても、次に開いたら戻る）。サーバーに保存できたら消す
+const LKEY = id => 'sw2_recdraft:' + id;
+function saveLocal(st) {
+  try {
+    if (!dirty(st)) return localStorage.removeItem(LKEY(st.rec.lesson.id));
+    localStorage.setItem(LKEY(st.rec.lesson.id), JSON.stringify({ v: st.rec.record ? st.rec.record.version : 0, at: Date.now(), draftInputs: st.rec.draftInputs, draftChecks: st.rec.draftChecks, draftHo: st.rec.draftHo, hwRows: st.hwRows, rgRows: st.rgRows }));
+  } catch {}
+}
+const clearLocal = id => { try { localStorage.removeItem(LKEY(id)); } catch {} };
+export function clearLocalDrafts() { try { Object.keys(localStorage).filter(k => k.startsWith('sw2_recdraft:')).forEach(k => localStorage.removeItem(k)); } catch {} }
+// 読み込んだ記録に、この端末に残っていた書きかけを戻す（サーバーの記録がそのあと変わっていなければ）
+function restoreLocal(st) {
+  try {
+    const raw = localStorage.getItem(LKEY(st.rec.lesson.id)); if (!raw) return false;
+    const l = JSON.parse(raw);
+    if (l.v !== (st.rec.record ? st.rec.record.version : 0) || Date.now() - l.at > 30 * 86400e3) { clearLocal(st.rec.lesson.id); return false; }
+    Object.assign(st.rec, { draftInputs: l.draftInputs, draftChecks: l.draftChecks, draftHo: l.draftHo }); st.hwRows = l.hwRows || st.hwRows; st.rgRows = l.rgRows || st.rgRows;
+    return dirty(st);
+  } catch { return false; }
+}
+// 書いている間に呼ぶ（app.js が少し待ってから）。今の画面の書きかけを、この端末に残す
+export function autosaveRecord() {
+  if (!rec || !rec.lesson || !document.querySelector('form[data-form="rec-save"]')) return;
+  captureRecordInputs(); saveLocal({ rec, hwRows, rgRows });
+}
+// 記録の画面を離れるとき: 書きかけがあれば、サーバーに下書きとして自動で保存する（2人同時で切り替えて書いた分も）
+export function autosaveOnLeave(ctx) {
+  if (rec && rec.lesson && document.querySelector('form[data-form="rec-save"]')) captureRecordInputs();
+  const list = [rec && rec.lesson ? { rec, hwRows, rgRows } : null, ...Object.values(kept)].filter(dirty);
+  list.forEach(saveLocal);
+  rec = null; recFor = ''; hwRows = rgRows = null; kept = {}; panel = ''; // 次に開くときは読み直す
+  if (!list.length) return;
+  (async () => {
+    let ok = 0, ng = '';
+    for (const st of list) {
+      const r = await ctx.call('records/save', bodyOf(st, false));
+      if (r.ok) { ok++; clearLocal(st.rec.lesson.id); if (st.rec.draftHo && (st.rec.draftInputs || {}).staffNotes && st.rec.draftInputs.staffNotes.memo.trim()) await ctx.call('handover/add', { studentId: st.rec.student.id, body: st.rec.draftInputs.staffNotes.memo.trim() }); }
+      else ng = r.error.message;
+    }
+    pending = null;
+    ctx.say(ng ? `書きかけを自動で保存できませんでした（${ng}）。この端末には残っているので、記録を開くと戻ります` : `書きかけを下書きとして自動で保存しました${ok > 1 ? `（${ok}人分）` : ''}。まだ公開していません`, ng ? 'error' : 'ok');
+    ctx.render();
+  })();
+}
 // 宿題の入力欄の今の値を読む（描き直す前に）
 function readHomework() {
   if (rgRows) document.querySelectorAll('[data-rg]').forEach(row => { const i = Number(row.dataset.rg); if (rgRows[i]) row.querySelectorAll('[data-rgf]').forEach(f => { rgRows[i][f.dataset.rgf] = f.value; }); });
@@ -241,10 +305,10 @@ export async function recordsSubmit(ctx, kind, el, ev) {
   }
   if (kind === 'rec-save') {
     const v = Object.fromEntries(new FormData(el).entries()), publish = ev && ev.submitter && ev.submitter.value === '1';
-    const staffNotes = {}; for (const k of NOTE_KEYS) staffNotes[k] = v['note.' + k] || '';
-    if (!staffNotes.plannedUnit.trim()) staffNotes.pace = ''; // 予定がないときは進度を書かない
-    const r = await ctx.call('records/save', { lessonId: rec.lesson.id, version: el.dataset.version ? Number(el.dataset.version) : undefined, range: rgRows.map(rangeLine).filter(Boolean).join('、'), rangeParts: rgRows.filter(rangeLine).map(x => ({ unit: (x.text || '').trim(), material: (x.material || '').trim(), pages: '' })), comment: v.comment, parentMessage: v.parentMessage, staffNotes, homework: hwRows.filter(x => (x.title || '').trim() || (x.material || '').trim()).map(x => ({ id: x.id || '', kind: x.kind || 'homework', title: (x.title || '').trim() || x.material, material: (x.title || '').trim() ? x.material : '', dueMode: x.dueMode || 'nextLesson', dueDate: x.dueDate, dueSubject: x.dueSubject || rec.lesson.subject })), homeworkChecks: (rec.checks || []).map(x => ({ id: x.id, result: v['chk.' + x.id] || '' })), publish });
+    const body = bodyOf({ rec, hwRows, rgRows }, publish), staffNotes = body.staffNotes;
+    const r = await ctx.call('records/save', body);
     if (r.ok) {
+      clearLocal(rec.lesson.id);
       // 「次の担当にも知らせる」: メモを引き継ぎメモとしても残す
       let ho = '';
       if (v.hoSend === '1' && staffNotes.memo.trim()) { const hr = await ctx.call('handover/add', { studentId: rec.student.id, body: staffNotes.memo.trim() }); ho = hr.ok ? '。メモを引き継ぎメモとしても残しました' : '。引き継ぎメモは残せませんでした（' + hr.error.message + '）'; }
@@ -276,7 +340,7 @@ export async function recordsClick(ctx, a, b) {
     const reason = (document.getElementById('rec-void-reason') || {}).value || '';
     if (!confirm('この記録を無効にしますか？ 生徒・保護者のページから消え、未完了の宿題も取り下げます。')) return true;
     const r = await ctx.call('records/void', { id: rec.record.id, version: rec.record.version, reason });
-    if (r.ok) { recFor = ''; pending = null; panel = ''; ctx.say('記録を無効にしました', 'ok'); } else ctx.say(r.error.message, 'error');
+    if (r.ok) { clearLocal(rec.lesson.id); recFor = ''; pending = null; panel = ''; ctx.say('記録を無効にしました', 'ok'); } else ctx.say(r.error.message, 'error');
     return true;
   }
   if (a === 'rec-close') { panel = ''; return true; }

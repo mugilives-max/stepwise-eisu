@@ -101,6 +101,7 @@ test('the copy from the current ledger keeps records, the published version, pri
   q("insert into lessonPrivateNotes (recordId, teacherNote) values ('r1', '先生だけのメモ')");
   q("insert into tasks (id, studentId, type, title, due, sourceRecordId, dueMode, doneAt, reviewedAt) values ('t1', 's1', '宿題', 'ワーク', '', 'r1', 'nextLesson', '2026-09-22', '2026-09-23'), ('t2', 's1', '持ち物', '辞書', '2026-10-01', '', 'date', '', '')");
   q("insert into lessonPreparations (id, slotId, studentId, body, lessonDate, subject) values ('p1', 'a', 's1', '約分から確認する', '2026-09-20', '数学')");
+  q("insert into lessonPreparations (id, slotId, studentId, body, lessonDate, subject) values ('record-draft:p1', 'a', 's1', '{\"form\":{\"content\":\"書きかけ\"},\"baseRevision\":0}', '2026-09-20', '数学')"); // 記録の一時保存は引き継ぎメモに写さない
   await h.ok('admin/migrate/identity/apply', { auth, confirm: true });
   assert.equal((await h.call('admin/migrate/records/apply', { auth, confirm: true })).error.code, 'noLessons');
   await h.ok('admin/migrate/schedule/apply', { auth, confirm: true });

@@ -52,7 +52,7 @@ export async function checkRows(old, db2) {
   const orphan = recs.filter(r => !slotIds.has(String(r.slotId))).length;
   add('授業記録', '授業記録', recs.length, (await one(db2, "select count(*) n from lessonRecords where legacyId <> ''")).n, orphan ? `授業の枠が消えている記録 ${orphan}件は写さない（本人の判断）` : '', true);
   add('授業記録', '宿題・持ち物', (await one(old, "select count(*) n from tasks where studentId in (select id from students)")).n, (await one(db2, "select count(*) n from homework where legacyId <> ''")).n);
-  add('授業記録', '引き継ぎメモ（授業準備のメモ）', (await one(old, "select count(*) n from lessonPreparations where trim(body) <> ''")).n, (await one(db2, "select count(*) n from handoverNotes where legacyId <> ''")).n);
+  add('授業記録', '引き継ぎメモ（授業準備のメモ）', (await one(old, "select count(*) n from lessonPreparations where trim(body) <> '' and id not like 'record-draft:%'")).n, (await one(db2, "select count(*) n from handoverNotes where legacyId <> ''")).n);
 
   // 計画・キャンセル料・請求
   const lines = await all(old, 'select * from planLines');

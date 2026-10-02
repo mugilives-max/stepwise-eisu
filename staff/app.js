@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux19';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux19';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux19';
-import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs } from '/staff/records.js?v=20261003-ux19';
-import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux19';
-import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux19';
-import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux19';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux19';
-import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux19';
-import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux19';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux19';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux21';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux21';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux21';
+import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261003-ux21';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux21';
+import { studentsPage, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux21';
+import { todayPage, todayClick, resetToday } from '/staff/home.js?v=20261003-ux21';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux21';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux21';
+import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux21';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux21';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -220,7 +220,13 @@ function render() {
   const now = app.querySelector('.bsheet, .panel.open');
   if (now && wasLabel === now.getAttribute('aria-label')) { now.classList.add('still'); (now.querySelector('.panel-body') || now).scrollTop = wasTop; }
   if (now && notice && notice.kind === 'error') now.querySelector('.bsheet-body, .panel-body').insertAdjacentHTML('afterbegin', noticeHtml()); // 下から出る画面の中でも見えるように
+  if (r.page === 'record') soonAutosave();
 }
+// 記録の書きかけを、この端末に少し待ってから残す（書くたび・押すたび）
+let autosaveTimer = 0;
+const soonAutosave = () => { clearTimeout(autosaveTimer); autosaveTimer = setTimeout(() => { if (route().page === 'record') autosaveRecord(); }, 400); };
+addEventListener('pagehide', () => { if (route().page === 'record') autosaveRecord(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && route().page === 'record') autosaveRecord(); });
 
 // ---------- 操作 ----------
 const form = el => Object.fromEntries(new FormData(el).entries());
@@ -290,10 +296,11 @@ document.addEventListener('click', ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { const x = app.querySelector('.bsheet-head button.icon, .panel.open .panel-head button.icon'); if (x) x.click(); } });
 app.addEventListener('change', ev => { if (ev.target.dataset && ev.target.dataset.slider) sliderInput(ev.target); }); // 押しただけのときは change だけ来ることがある
-app.addEventListener('input', ev => { if (ev.target.classList && ev.target.classList.contains('grow')) grow(ev.target); if (ev.target.dataset && ev.target.dataset.slider) return sliderInput(ev.target); const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
+app.addEventListener('input', ev => { if (route().page === 'record') soonAutosave(); if (ev.target.classList && ev.target.classList.contains('grow')) grow(ev.target); if (ev.target.dataset && ev.target.dataset.slider) return sliderInput(ev.target); const n = ev.target.dataset && ev.target.dataset.input; if (n && !studentsInput(ctx, n, ev.target)) familiesInput(ctx, n, ev.target); });
 window.addEventListener('hashchange', () => {
   // 「今日」「生徒」に戻ってきたら読み直す（記録を書いたあとなど）。同じ生徒の画面のタブを切り替えるときは読み直さない
   const pg = route().page, hash = location.hash || '#home';
+  if (lastPage === 'record' && pg !== 'record') autosaveOnLeave(ctx); // 記録の画面を離れた: 書きかけを下書きとして自動で保存
   if (pg !== lastPage) {
     const i = trail.lastIndexOf(hash);
     if (i >= 0) trail = trail.slice(0, i); // 戻ってきた
@@ -308,6 +315,7 @@ window.addEventListener('hashchange', () => {
   if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); leaveRecords(pg); leaveGrades(); leaveBilling(); leavePayroll(); say(''); render(); });
 
 (async function boot() {
+  lastPage = route().page; // 直接開いた画面も「前の画面」として覚える（記録の画面を離れたときの自動保存のため）
   const auth = store.get();
   if (auth) { const r = await call('staff/me', {}, auth); if (r.ok) me = r.me; else if (r.error.code === 'needLogin') store.set(''); }
   if (!me) { const s = await call('staff/bootstrap/status'); bootstrap = s.ok ? s : null; }
