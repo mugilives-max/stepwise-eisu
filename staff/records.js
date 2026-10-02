@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux12';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux12';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux12';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux13';
+import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux13';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux13';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '';
 const NOTE_KEYS = ['plannedUnit', 'understanding', 'pace', 'homeworkReview', 'homeworkAccuracy', 'nextFocus', 'memo'];
@@ -13,6 +13,8 @@ const CHOICES = {
   homeworkReview: [['done', 'やってきた'], ['partial', '一部だけ'], ['notDone', 'やってこなかった'], ['none', '宿題なし']],
 };
 // 宿題ごとのチェック（前回までの宿題）。値はサーバーの CHECK_RESULTS（cf/v2/records.mjs）と同じ
+// 宿題の正答率は10%刻みで選ぶ（数字を打たない）
+const ACCURACY = Array.from({ length: 11 }, (_, i) => [String(i * 10), i * 10 + '%']);
 const CHECKS = [['', 'まだ'], ['done', 'やってきた'], ['partial', '一部'], ['notDone', 'やってこなかった']];
 export const choiceLabel = (k, v) => { const c = (CHOICES[k] || []).find(x => x[0] === v); return c ? c[1] : v; };
 export function leaveRecords() { hwOpen = ''; }
@@ -64,7 +66,7 @@ export function recordPage(ctx, lessonId) {
   const checks = rec.checks || [];
   h += `<form class="stack rec" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}">`;
   // 1. 前回の宿題: 宿題ごとのチェックと正答率（宿題がないときは出さない。前の値は残す）
-  if (checks.length) h += `<h2>前回の宿題</h2>${checksPart(ctx)}<label class="inline">正答率<input name="note.homeworkAccuracy" inputmode="decimal" maxlength="10" value="${esc(n.homeworkAccuracy || '')}" placeholder="任意">%</label>`;
+  if (checks.length) h += `<h2>前回の宿題</h2>${checksPart(ctx)}${slider(esc, { name: 'note.homeworkAccuracy', label: '正答率', value: String(n.homeworkAccuracy || '').replace(/\s*%$/, ''), options: ACCURACY })}`;
   else h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
   // 2. 今日の授業
   h += `<h2>今日の授業</h2><div><div class="field-label">扱った範囲</div>${rangeRows(ctx)}<button type="button" class="link small" data-action="rg-add"${rgRows && rgRows.length >= 10 ? ' disabled' : ''}>＋ 範囲を足す</button></div>
