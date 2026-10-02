@@ -1,8 +1,8 @@
 // スタッフの画面: 授業記録（4段目）。記録待ち・宿題の確認待ち・記録を書く画面・引き継ぎメモ。
 // 講師は自分の担当の授業と担当の生徒だけ。教室管理者はすべて。
-import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux21';
-import { sheet, rowButton, rowLink, slider } from '/staff/ui.js?v=20261003-ux21';
-import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux21';
+import { mdw, endOf } from '/assets/v2/schedule-view.js?v=20261003-ux22';
+import { sheet, rowButton, rowLink, slider, iconBox, miniIcon } from '/staff/ui.js?v=20261003-ux22';
+import { hwText } from '/assets/v2/learning-view.js?v=20261003-ux22';
 
 let pending = null, reported = null, rec = null, recFor = '', hwRows = null, rgRows = null, hwOpen = '', panel = '';
 let kept = {}; // 2人同時の授業で切り替えたとき、書きかけをとっておく（授業ごと）。先に読んでおいた相手の記録も入る。記録の画面を離れたら捨てる
@@ -88,20 +88,26 @@ export function recordPage(ctx, lessonId) {
   // 上の帯: 戻る・名前と日時・三本線（まだチェックしていない宿題や読んでいない引き継ぎメモがあるときは点）
   const stateText = r.status === 'published' ? '公開済み' : r.status === 'draft' ? '下書き' : '';
   bar = { title, sub: sub + (stateText ? `・<b class="${r.status === 'published' ? 'ok' : 'warn'}">${stateText}</b>` : ''), right: `<button type="submit" form="rec-form" name="publish" value="1" class="pub"${ctx.dis()}>公開</button><button type="button" class="hamb${unchecked || unread ? ' dot' : ''}" data-action="rec-open" data-k="hw" aria-label="宿題と前回のことを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>` };
-  let h = togetherPart(ctx) + ctx.notice();
+  const segHtml = togetherPart(ctx);
+  if (segHtml) bar = { ...bar, center: segHtml };
+  let h = (segHtml ? `<div class="rec-sub">${esc(l.subject)}・${bar.sub}</div>` : '') + ctx.notice();
   h += `<form class="rec" id="rec-form" data-form="rec-save" data-version="${rec.record && rec.record.id ? rec.record.version : ''}"><div class="group">`;
   if (!checks.length) h += `<input type="hidden" name="note.homeworkAccuracy" value="${esc(n.homeworkAccuracy || '')}"><input type="hidden" name="note.homeworkReview" value="${esc(n.homeworkReview || '')}">`;
   // 今日の授業
   const range = (rgRows || []).map(rangeLine).filter(Boolean).join('、');
-  h += row('range', '範囲', range ? esc(range) : '', '教材とページ');
-  h += slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.map(([v]) => [v, v]).reverse(), compact: true });
-  h += `<label class="rec-line rec-text"><span class="k">コメント</span><textarea class="grow" name="comment" maxlength="2000" rows="2" placeholder="授業の様子（公開するときは必須）">${esc(r.comment)}</textarea></label>`;
+  h += row('range', '範囲', range ? esc(range) : '', '範囲（教材とページ）');
+  h += slider(esc, { name: 'note.understanding', label: '理解度', value: n.understanding, options: CHOICES.understanding.map(([v]) => [v, v]).reverse(), compact: true, icon: 'understanding' });
+  h += `<label class="rec-line rec-text">${iconBox('comment', 'コメント')}<textarea class="grow" name="comment" maxlength="2000" rows="2" placeholder="授業の様子（公開するときは必須）">${esc(r.comment)}</textarea></label>`;
   // 今日出す宿題・次回へ（押すと開く）
   const hw = hwRows.filter(x => hwText(x).trim());
-  const hwSum = [checks.length ? `前回 ${checks.length - unchecked}/${checks.length}` : '', hw.length ? `今日 ${esc(hwText(hw[0]))}${hw.length > 1 ? ` ほか${hw.length - 1}件` : ''}` : ''].filter(Boolean).join('・');
-  h += row('hw', '宿題', hwSum, checks.length ? `前回の宿題 ${checks.length}件をチェック` : `出すときは押す（次の${l.subject} ${due}まで）`);
-  const nextBits = [n.nextFocus, r.parentMessage ? '保護者へ: ' + r.parentMessage : '', n.memo ? 'メモあり' : ''].filter(Boolean);
-  h += row('next', '次回へ', nextBits.length ? esc(nextBits.join('・')) : '', '次回やること・保護者へ・メモ');
+  // 宿題: 前回の宿題は ○△× と、まだ見ていない数。今日出す宿題は鉛筆と件数（文で読まなくてよいように）
+  const cnt = v => checks.filter(x => curCheck(x) === v).length;
+  const hwSum = (checks.length ? `<span class="mk done">○${cnt('done')}</span><span class="mk partial">△${cnt('partial')}</span><span class="mk notDone">×${cnt('notDone')}</span>${unchecked ? `<span class="mk todo">未${unchecked}</span>` : ''}` : '')
+    + (hw.length ? `<span class="mk today">${miniIcon('pencil', true, '今日の宿題')}${hw.length}</span>` : checks.length ? '' : '');
+  h += row('hw', '宿題', hwSum, `出す宿題（次の${esc(l.subject)} ${due}まで）`);
+  // 次回へ: 次回やること・保護者への連絡・メモ を、書いてあれば色つきのアイコンで
+  const anyNext = n.nextFocus || r.parentMessage || n.memo;
+  h += row('next', '次回へ', anyNext ? `${miniIcon('next', !!n.nextFocus, '次回やること')}${miniIcon('parent', !!r.parentMessage, '保護者への連絡')}${miniIcon('memo', !!n.memo, 'メモ')}<span class="nx">${esc(n.nextFocus || r.parentMessage || n.memo)}</span>` : '', '次回やること・保護者へ・メモ');
   h += `<datalist id="rec-materials">${(rec.materials || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
     </div><p class="small muted" style="margin:8px 2px 0">書いた内容は自動で保存されます（画面を離れると下書きに）。生徒・保護者に見せるときは右上の「公開」。</p>`;
   // 開く画面（いつもフォームの中に置く）
@@ -156,7 +162,7 @@ function togetherPart(ctx) {
 }
 // 1行の要点（押すと開く）
 function row(key, label, value, placeholder) {
-  return `<button type="button" class="rec-row" data-action="rec-open" data-k="${key}"><span class="k">${label}</span><span class="v${value ? '' : ' ph'}">${value || placeholder}</span><span class="go">›</span></button>`;
+  return `<button type="button" class="rec-row" data-action="rec-open" data-k="${key}">${iconBox(key === 'hw' ? 'homework' : key, label)}<span class="v${value ? '' : ' ph'}">${value || placeholder}</span><span class="go">›</span></button>`;
 }
 // 開く画面（下から、宿題は左から）。閉じているときも中の入力欄はフォームに残る
 function panelHtml(key, title, body, side = 'bottom') {

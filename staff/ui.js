@@ -7,14 +7,28 @@ export const rowLink = (href, title, note, side = '') => `<a class="todo" href="
 export const rowButton = (esc, action, data, title, note) => `<button type="button" class="todo" data-action="${action}"${Object.entries(data).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('')}><span class="b"><strong>${title}</strong><small class="muted">${note}</small></span><span class="go">›</span></button>`;
 // 段階のあるスライダー（離散スライダー）。options は [値, 表示] を小さい順に。まだ選んでいないときは薄く出し、触ると決まる
 // 値は hidden の name に入る（フォームで送る）。前の記録の自由な値は「前: …」と出して、動かすまで残す
-export function slider(esc, { name, label, value, options, compact }) {
+// 行の頭の色つきアイコン（iPhone の設定の形）。文字の見出しの代わり
+export const ICON = {
+  range: '<path d="M4 6c2.5-1.2 5.3-1.2 8 .8 2.7-2 5.5-2 8-.8v12c-2.5-1.2-5.3-1.2-8 .8-2.7-2-5.5-2-8-.8z"/><path d="M12 6.8v12"/>',
+  understanding: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.7.6 1 1.4 1 2.3v.3h4.6v-.3c0-.9.3-1.7 1-2.3A5.5 5.5 0 0 0 12 3.5z"/>',
+  comment: '<path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>',
+  homework: '<rect x="5.5" y="4.5" width="13" height="16" rx="2"/><path d="M9 4.5h6v2.5H9zM9 13l2 2 4-4"/>',
+  next: '<path d="M6 21V4.5h10.5l-2 3.8 2 3.7H6"/>',
+  accuracy: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/>',
+  pencil: '<path d="M5 19l1-4 9.5-9.5a2.1 2.1 0 0 1 3 3L9 18z"/><path d="M14 7l3 3"/>',
+  parent: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="17" cy="10" r="2.2"/><path d="M15.5 14.6c2.2.1 4 1.4 4.5 4"/>',
+  memo: '<path d="M6 4h9l3 3v13H6z"/><path d="M9 11h6M9 15h4"/>',
+};
+export const iconBox = (k, label) => `<span class="ibox i-${k}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg></span>`;
+export const miniIcon = (k, on, label) => `<span class="mini-i${on ? ' on' : ''}" title="${label}" aria-label="${label}${on ? 'あり' : 'なし'}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg></span>`;
+export function slider(esc, { name, label, value, options, compact, icon }) {
   const i = options.findIndex(o => o[0] === value), set = i >= 0, legacy = value && !set;
   const t = set ? i / (options.length - 1) : 0;
   const shown = set ? options[i][1] : legacy ? '前: ' + value : compact ? '—' : 'まだ選んでいません';
   const box = `<div class="slider${compact ? ' sm' : ''}${set ? '' : ' unset'}" style="--t:${t}"><div class="slider-track"><span class="fill"></span>${options.map((o, k) => `<i class="${set && k <= i ? 'on' : ''}" style="--k:${k / (options.length - 1)}"></i>`).join('')}</div>
     <input type="range" min="0" max="${options.length - 1}" step="1" value="${set ? i : 0}" data-slider='${esc(JSON.stringify(options))}' aria-label="${esc(label)}" aria-valuetext="${esc(shown)}"></div>`;
   // 小さい版: 1行に「ラベル・スライダー・値」
-  if (compact) return `<div class="slider-wrap rec-line"><span class="k">${esc(label)}</span>${box}<strong class="slider-value">${esc(shown)}</strong><input type="hidden" name="${esc(name)}" value="${esc(value || '')}"></div>`;
+  if (compact) return `<div class="slider-wrap rec-line">${icon ? iconBox(icon, esc(label)) : `<span class="k">${esc(label)}</span>`}${box}<strong class="slider-value">${esc(shown)}</strong><input type="hidden" name="${esc(name)}" value="${esc(value || '')}"></div>`;
   return `<div class="slider-wrap"><div class="field-label slider-head"><span>${esc(label)}</span><strong class="slider-value">${esc(shown)}</strong></div>
     <div class="slider${set ? '' : ' unset'}" style="--t:${t}"><div class="slider-track"><span class="fill"></span>${options.map((o, k) => `<i class="${set && k <= i ? 'on' : ''}" style="--k:${k / (options.length - 1)}"></i>`).join('')}</div>
     <input type="range" min="0" max="${options.length - 1}" step="1" value="${set ? i : 0}" data-slider='${esc(JSON.stringify(options))}' aria-label="${esc(label)}" aria-valuetext="${esc(shown)}"></div>

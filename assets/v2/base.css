@@ -334,3 +334,21 @@ body.focus main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); background: var(--white); border-top: 1px solid var(--line); }
 .savebar .primary { padding-left: 18px; padding-right: 18px; }
 @media (min-width: 720px) { .savebar { left: 50%; transform: translateX(-50%); width: min(860px, 100%); border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }
+/* ---- 記録: 行の頭の色つきアイコン・宿題の印・2人同時の切り替えを上の帯に ---- */
+.ibox { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+.ibox svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.i-range { background: #2f6fde; } .i-understanding { background: #e0a100; } .i-comment { background: #2e9b5f; } .i-homework { background: #7b4fd6; } .i-next { background: #138a8a; } .i-accuracy { background: #d0533c; }
+.group .rec-row, .group .rec-line { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; }
+.group .rec-text { grid-template-columns: 28px minmax(0, 1fr); }
+.rec-row .v .mk { display: inline-flex; align-items: center; gap: 2px; margin-right: 10px; font-weight: 700; font-size: 15px; }
+.mk.done { color: var(--ok); } .mk.partial { color: var(--warn); } .mk.notDone { color: var(--danger); } .mk.todo { color: var(--muted); font-weight: 400; font-size: 13px; } .mk.today { color: #7b4fd6; }
+.mini-i { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; vertical-align: middle; color: #c3ccd5; }
+.mini-i svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mini-i.on { color: #138a8a; }
+.mk.today .mini-i { color: #7b4fd6; width: 18px; margin-right: 1px; }
+.rec-row .v .nx { margin-left: 4px; color: var(--ink); }
+.bar-seg { display: flex; justify-content: center; }
+.bar-seg .seg2 { margin: 0; }
+.bar-seg .seg2 button { padding: 5px 12px; font-size: 13.5px; max-width: 40vw; }
+.rec-sub { text-align: center; font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.rec-sub b.ok { color: var(--ok); } .rec-sub b.warn { color: var(--warn); }
