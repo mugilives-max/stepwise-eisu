@@ -423,14 +423,15 @@ export const billingRoutes = {
   },
 
   // ---- 保護者 ----
-  // 計画・キャンセル料・請求（家族の子どもぶん）。下書きの計画は見せない
+  // 計画・キャンセル料・請求（家族の子どもぶん）。下書きの計画は見せない。承認待ちの計画は期間が過ぎても出す
   'family/money': async (c, b) => {
     const me = await requireFamily(c, b);
     const students = (await c.db.prepare('select * from students where familyId = ? order by createdAt').bind(me.id).all()).results, ids = students.map(s => s.id);
     const names = Object.fromEntries(students.map(s => [s.id, fullName(s)]));
     if (!ids.length) return { plans: [], fees: [], invoices: [] };
     const q = `(${ids.map(() => '?').join(', ')})`, since = addDays(todayJst(c.now), -92);
-    const lines = (await c.db.prepare(`select * from planLines where studentId in ${q} and status <> 'draft' and endDate >= ? order by startDate, subject`).bind(...ids, since).all()).results;
+    // 承認待ちは期間が過ぎても出し続ける（承認できるように）。ほかは終わってから3か月まで
+    const lines = (await c.db.prepare(`select * from planLines where studentId in ${q} and (status = 'proposed' or (status <> 'draft' and endDate >= ?)) order by startDate, subject`).bind(...ids, since).all()).results;
     const plans = [];
     for (const l of lines) plans.push(lineView(l, { studentName: names[l.studentId], minCount: l.status === 'proposed' ? await minCountFor(c, l) : 0 }));
     const fees = (await staffFees(c, `f.studentId in ${q} and f.decision <> 'pending' and (f.invoiceId = '' or l.date >= ?)`, ...ids, since)).map(f => ({ ...feeView(f), studentName: names[f.studentId] }));

@@ -223,3 +223,16 @@ test('staff can send a reminder for plans still waiting for approval, once a day
   const month = await h.ok('billing/month', { auth, month: '2026-09' });
   assert.equal(month.families[0].proposedPlans, 1);
 });
+
+test('a plan still waiting for approval stays on the family page after its period, so it can be approved', async () => {
+  const { h, auth, kid, parent, plan } = await world();
+  const old = await plan(kid.id, { startDate: '2026-05-01', endDate: '2026-05-31' });
+  const done = await plan(kid.id, { subject: '英語', startDate: '2026-05-01', endDate: '2026-05-31' });
+  await h.ok('billing/plans/send', { auth, familyId: kid.familyId });
+  const cur = h.rows('select * from planLines where id = ?', done.id)[0];
+  await h.ok('billing/plans/consent', { auth, id: done.id, version: cur.version, consentDate: '2026-05-01', via: 'LINE' });
+  const shown = (await h.ok('family/money', { auth: parent })).plans;
+  assert.deepEqual(shown.map(l => [l.subject, l.status]), [['数学', 'proposed']], '5月の承認待ちは10月でも出る。承認済みの5月は出ない');
+  const v = h.rows('select * from planLines where id = ?', old.id)[0];
+  await h.ok('family/plans/decide', { auth: parent, id: old.id, version: v.version, approvedCount: 4 });
+});

@@ -207,3 +207,14 @@ test('explicit valid start and end dates are mandatory for both drafts and propo
  rejected(save(h,{lineId:r.line.id,expectedRevision:r.line.revision,startDate:'',propose:true}));
  assert.deepEqual(json(h.rows('planLines')),before,'invalid edit must preserve stored dates');
 });
+
+test('a proposal whose period has ended stays on the parent page until it is answered; approved lines of past months do not', () => {
+  const h = createSchedulingHarness();
+  const sent = ok(save(h, { propose: true })).line;
+  ok(save(h, { subject: '数学', propose: true }));
+  const math = lines(h).find(l => l.subject === '数学');
+  ok(h.admin('planLineApproveTeacher', { studentId: 'test-a', lineId: math.id, expectedRevision: math.revision, consentDate: '2026-09-01', via: 'LINE', memo: '' }));
+  const shown = json(h.context().parentPlanLines_('test-a', '2026-10-02'));
+  assert.deepEqual(shown.map(l => [l.subject, l.status]), [['英語', 'proposed']], '10月になっても9月の承認待ちは出る。承認済みの9月は出ない');
+  assert.equal(shown[0].id, sent.id);
+});

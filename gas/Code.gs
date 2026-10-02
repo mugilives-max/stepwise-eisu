@@ -616,18 +616,20 @@ function planRows_() {
 /* 旧 planComments(月ごとのコメント)は行へ移行済み。行のコメントは planLines.comment */
 function planComment_(studentId, ym) { if (!ss_().getSheetByName('planComments')) return ''; var r = readRows_('planComments').filter(function (x) { return String(x.studentId) === String(studentId) && planYm_(x.ym) === String(ym); })[0]; return r ? String(r.comment || '') : ''; }
 function planMonthInfo_(studentId, ym) { return billingMonthInfo_(studentId, ym); }
-// 生徒・保護者に見せる案内の行: 案内中・承認済みで、終了日が今月1日以降のもの(開始日の新しい順)
+// 生徒に見せる案内の行: 案内中・承認済みで、終了日が今月1日以降のもの(開始日の新しい順)
 // Student responses are an explicit learning-only projection. Never expose financial or consent fields.
 function studentPlanLines_(studentId, today) {
-  return parentPlanLines_(studentId, today).map(function (l) {
+  var from = String(today || todayStr_()).slice(0, 7) + '-01';
+  return parentPlanLines_(studentId, today).filter(function (l) { return l.endDate >= from; }).map(function (l) {
     var out = {};
     ['id','subject','kind','count','approvedCount','startDate','endDate','period','month','lessonMin','comment','status','parentId','addon','outline'].forEach(function (key) { out[key] = l[key]; });
     return out;
   });
 }
+// 保護者に見せる案内の行。承認待ちの案内は、期間が過ぎても承認できるように出し続ける（月が替わると前月の案内が見えなくなっていた）。承認済みは今月以降だけ
 function parentPlanLines_(studentId, today) {
   var from = String(today || todayStr_()).slice(0, 7) + '-01';
-  return planLinesFor_(String(studentId)).filter(function (l) { return (l.status === 'proposed' || l.status === 'approved') && l.endDate >= from; }).sort(planLineSort_).map(planLineView_);
+  return planLinesFor_(String(studentId)).filter(function (l) { return l.status === 'proposed' || (l.status === 'approved' && l.endDate >= from); }).sort(planLineSort_).map(planLineView_);
 }
 
 function nextYm_(ym) { var p = ym.split('-'); var d = new Date(+p[0], +p[1], 1); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }

@@ -20,7 +20,7 @@ test('student state lists proposed and approved lines whose period reaches this 
   assert.deepEqual(state.plan, { '英語': 4, '数学': 3 }); assert.equal(state.planStatus, 'proposed');
   assert.deepEqual(json(h.context().studentState_('synthetic-link-b').planLines), []);
   const c = h.context(); const parent = json(c.parentDataForStudent_(c.findStudent_('test-a')));
-  assert.deepEqual(parent.data.planLines.map(l => l.subject), ['数学', '英語']);
+  assert.deepEqual(parent.data.planLines.map(l => l.subject + ':' + l.startDate), ['数学:2026-09-22', '英語:2026-09-01', '英語:2026-08-01'], '保護者には、期間の過ぎた承認待ち（8月）も出す。生徒には出さない');
 });
 
 const {studentReady,state,line}=require('./helpers/operations-ui-harness.cjs');
