@@ -1,8 +1,9 @@
 // スタッフの「生徒」（docs/UX_STRUCTURE.md 3）。#students（家族ごとの一覧）と #student=<id>/<タブ>（1人の生徒の画面）。
 // タブ: 概要・予定・記録と宿題・成績・計画と請求・基本情報。講師は担当の生徒だけで、計画と請求・基本情報は出ない。
-import { hwSubject } from '/assets/v2/learning-view.js?v=20261003-ux29';
-import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux29';
-import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261003-ux29';
+import { hwSubject } from '/assets/v2/learning-view.js?v=20261003-ux30';
+import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux30';
+import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261003-ux30';
+import { ICON } from '/staff/ui.js?v=20261003-ux30';
 
 let list = null, query = '', hub = null, hubFor = '';
 export function resetStudents() { list = null; hub = null; hubFor = ''; }
@@ -13,22 +14,33 @@ const INV = { confirmed: ['お支払い待ち', 'warn'], reported: ['振込の�
 const PLAN = { draft: ['下書き', 'gray'], proposed: ['承認待ち', 'warn'], approved: ['承認', 'ok'], declined: ['見送り', 'gray'] };
 
 // ---------- 一覧 ----------
+// 上の帯に「生徒」と人数。右の丸い「＋」で家族の登録・一覧へ。家族ごとに白い枠、行の頭に名字の1文字の丸、記録待ち・連絡は小さな印と数
+const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+const PERSON = '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>', PLUS = '<path d="M12 5v14M5 12h14"/>', SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>';
+const AV = ['#2f6fde', '#2e9b5f', '#7b4fd6', '#d0533c', '#138a8a', '#c98a00', '#5b6672'];
+const avColor = t => AV[[...String(t)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 9973, 7) % AV.length];
+const initial = name => (String(name).replace(/^[【\[（(「『\s]+/, '') || '?').slice(0, 1); // 【テスト】などの括弧は飛ばす
+export const studentsBar = () => list && list.families ? { title: '生徒', sub: `${list.families.reduce((n, f) => n + f.students.filter(s => s.status !== 'left').length, 0)}人`, right: list.manager ? `<a class="ibtn" href="#families" aria-label="家族を登録する・家族の一覧"><svg viewBox="0 0 24 24" aria-hidden="true">${PLUS}</svg></a>` : '' } : null;
 export function studentsPage(ctx) {
   const { esc } = ctx;
   if (!list) { list = { loading: true }; ctx.call('students/list').then(r => { list = r.ok ? r : { families: [], error: r.error.message }; if (!r.ok) ctx.handleAuth(r); ctx.render(); }); }
-  let h = `<div class="page-head"><h1>生徒</h1></div>${ctx.notice()}`;
-  if (list.loading) return h + '<p class="muted">読み込んでいます…</p>';
-  h += `<input type="search" data-input="stu-query" value="${esc(query)}" placeholder="名前・ふりがなで探す" style="margin:4px 0 8px">`;
+  let h = ctx.notice();
+  if (list.loading) return h + '<p class="muted" style="margin-top:20px">読み込んでいます…</p>';
+  h += `<label class="search"><svg viewBox="0 0 24 24" aria-hidden="true">${SEARCH}</svg><input type="search" data-input="stu-query" value="${esc(query)}" placeholder="名前・ふりがなで探す" aria-label="生徒を探す"></label>`;
   const q = query.trim();
   const match = s => !q || s.name.includes(q) || s.kana.includes(q);
+  let any = false;
   for (const f of list.families) {
-    const ss = f.students.filter(match); if (!ss.length) continue;
-    if (f.name) h += `<h2>${esc(f.name)}${list.manager ? ` <a class="small" href="#family=${encodeURIComponent(f.id)}" style="font-weight:400">家族の連絡先・招待</a>` : ''}</h2>`;
-    h += '<div class="rows">' + ss.map(s => `<a class="todo${s.status === 'left' ? ' left' : ''}" href="#student=${encodeURIComponent(s.id)}"><span class="b"><strong>${esc(s.name)}</strong>
-      <small class="muted">${[esc(s.grade || ''), s.status === 'paused' ? '休会' : s.status === 'left' ? '退会' : '', s.testOnly ? 'テスト' : '', s.next ? '次 ' + md(s.next.slice(0, 10)) + ' ' + esc(s.next.slice(11)) : ''].filter(Boolean).join('・')}</small></span>
-      <span class="tags">${s.requests ? `<span class="tag warn">連絡 ${s.requests}</span>` : ''}${s.pendingRecords ? `<span class="tag warn">記録待ち ${s.pendingRecords}</span>` : ''}</span><span class="go">›</span></a>`).join('') + '</div>';
+    const ss = f.students.filter(match); if (!ss.length) continue; any = true;
+    h += `<div class="fam-head"><span>${esc(f.name || '')}</span>${list.manager && f.id ? `<a class="mini-btn" href="#family=${encodeURIComponent(f.id)}" aria-label="${esc(f.name || '家族')}の連絡先・招待"><svg viewBox="0 0 24 24" aria-hidden="true">${PERSON}</svg></a>` : ''}</div>`;
+    h += '<div class="group">' + ss.map(s => {
+      const sub = [esc(s.grade || ''), s.status === 'paused' ? '休会' : s.status === 'left' ? '退会' : '', s.testOnly ? 'テスト' : '', s.next ? '次 ' + md(s.next.slice(0, 10)) + ' ' + esc(s.next.slice(11)) : ''].filter(Boolean).join('・');
+      const badges = (s.requests ? `<span class="pill red" title="連絡">${svg('mail')}${s.requests}</span>` : '') + (s.pendingRecords ? `<span class="pill warn" title="記録待ち">${svg('pencil')}${s.pendingRecords}</span>` : '');
+      return `<a class="srow${s.status === 'left' ? ' left' : ''}" href="#student=${encodeURIComponent(s.id)}"><span class="av" style="background:${avColor(s.name)}" aria-hidden="true">${esc(initial(s.name))}</span>
+        <span class="b"><strong>${esc(s.name)}</strong><small class="muted">${sub}</small></span><span class="badges">${badges}</span><span class="go">›</span></a>`;
+    }).join('') + '</div>';
   }
-  if (list.manager) h += '<p class="small" style="margin-top:14px"><a href="#families">家族を登録する・家族の一覧</a></p>';
+  if (!any) h += '<p class="muted small" style="margin-top:14px">見つかりませんでした。</p>';
   return h;
 }
 export function studentsInput(ctx, name, el) {

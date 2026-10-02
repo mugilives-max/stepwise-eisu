@@ -443,3 +443,24 @@ body.has-bar .top .in { flex-wrap: nowrap; min-height: 52px; }
 .ibtn.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
 .ibtn.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* ---- 生徒の一覧: 探す欄・家族ごとの白い枠・名字の丸・小さな印 ---- */
+.search { position: relative; display: block; margin: 10px 0 4px; }
+.search svg { position: absolute; left: 11px; top: 50%; width: 18px; height: 18px; margin-top: -9px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.search input { padding-left: 36px; border-radius: 12px; background: #eef1f4; border-color: transparent; }
+.fam-head { display: flex; align-items: center; justify-content: space-between; margin: 16px 4px 6px; font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.mini-btn { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #eef1f4; color: var(--muted); }
+.mini-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.srow { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+.group > .srow:last-child { border-bottom: 0; }
+.srow.left { opacity: .55; }
+.srow .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; }
+.srow .b { display: grid; min-width: 0; }
+.srow .b strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .b small { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .badges { display: flex; gap: 4px; }
+.srow .go { color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px 2px 6px; }
+.pill svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.red { background: var(--danger-soft); color: var(--danger); }
+.bar-right .ibtn { width: 36px; height: 36px; }

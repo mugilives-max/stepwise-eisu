@@ -1,6 +1,6 @@
 // 作り直し（v2）の「学習」の部品（保護者・生徒で共通）。公開した授業記録と宿題。
 import { esc } from '/assets/v2/api.js';
-import { mdw } from '/assets/v2/schedule-view.js?v=20261003-ux29';
+import { mdw } from '/assets/v2/schedule-view.js?v=20261003-ux30';
 
 const HW_STATUS = { open: ['warn', '未完了'], reported: ['', 'できたと報告（先生の確認待ち）'], confirmed: ['ok', '先生が確認'] };
 // 宿題の1行: 「教材 範囲」（例: Keywork p.10-12）。科目は授業の科目、期限は次のその科目の授業（docs/REQUIREMENTS.md 宿題）
