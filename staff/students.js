@@ -1,7 +1,8 @@
 // スタッフの「生徒」（docs/UX_STRUCTURE.md 3）。#students（家族ごとの一覧）と #student=<id>/<タブ>（1人の生徒の画面）。
 // タブ: 概要・予定・記録と宿題・成績・計画と請求・基本情報。講師は担当の生徒だけで、計画と請求・基本情報は出ない。
-import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261002-ux9';
-import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261002-ux9';
+import { hwSubject } from '/assets/v2/learning-view.js?v=20261002-ux10';
+import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261002-ux10';
+import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261002-ux10';
 
 let list = null, query = '', hub = null, hubFor = '';
 export function resetStudents() { list = null; hub = null; hubFor = ''; }
@@ -76,8 +77,8 @@ function summary(ctx, x) {
 }
 function homeworkList(esc, hw) {
   if (!hw.length) return '<p class="muted small">未完了の宿題はありません。</p>';
-  return '<div class="rows">' + hw.map(w => `<div class="ev"><span class="t">${w.kind === 'item' ? '持ち物' : '宿題'}</span><span class="b" style="color:var(--ink)">${esc(w.title)}${w.material ? '<small class="muted">（' + esc(w.material) + '）</small>' : ''}
-    <small class="muted">${w.dueMode === 'date' ? md(w.dueDate) + 'まで' : w.dueMode === 'nextLesson' ? '次の' + esc(w.dueSubject || '授業') + 'まで' : ''}</small></span><span>${w.status === 'reported' ? '<span class="tag warn">できたと報告</span>' : ''}</span></div>`).join('') + '</div>';
+  return '<div class="rows">' + hw.map(w => `<div class="ev"><span class="t">${esc(hwSubject(w) || '宿題')}</span><span class="b" style="color:var(--ink)">${esc([w.material, w.title].filter(Boolean).join(' '))}
+    <small class="muted">${w.due ? md(w.due) + 'まで' : w.dueMode === 'date' ? md(w.dueDate) + 'まで' : w.dueMode === 'nextLesson' ? '次の' + esc(w.dueSubject || '授業') + 'まで' : ''}</small></span><span>${w.status === 'reported' ? '<span class="tag warn">できたと報告</span>' : ''}</span></div>`).join('') + '</div>';
 }
 function planList(esc, plans) {
   if (!plans.length) return '<p class="muted small">計画はありません。<a href="#plans">計画を作る</a></p>';

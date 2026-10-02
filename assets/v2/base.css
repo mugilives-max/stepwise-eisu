@@ -214,3 +214,5 @@ details.more[open] > summary { margin-bottom: 6px; }
 .chk input[value="partial"]:checked + span { color: var(--warn); }
 .chk input[value="notDone"]:checked + span { color: var(--danger); }
 .chk input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: -2px; }
+/* ---- 記録: 宿題の行（教材・範囲・外す） ---- */
+.hwrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; margin: 6px 0; }

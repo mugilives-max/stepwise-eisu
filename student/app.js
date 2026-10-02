@@ -2,9 +2,9 @@
 // ホーム（次の授業・宿題・次のテスト）、予定と「変更・お休みの連絡」・テスト・行事を知らせる、記録と宿題・成績（成績票を送る）。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
 import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-ux9';
-import { learningView, checkTag } from '/assets/v2/learning-view.js?v=20261002-ux9';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-ux9';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261002-ux10';
+import { learningView, checkTag, hwText, hwSubject } from '/assets/v2/learning-view.js?v=20261002-ux10';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261002-ux10';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
@@ -63,7 +63,7 @@ function render() {
     if (needLearning()) h += loadingHtml;
     else {
       const hw = learning.homework.filter(w => w.status !== 'confirmed');
-      h += hw.length ? '<div class="rows">' + hw.map(w => `<div class="ev"><span class="t">${w.dueMode === 'date' && w.due ? md(w.due) : w.due ? md(w.due) : ''}</span><span class="b" style="color:var(--ink)"><strong>${esc(w.title)}</strong>${w.material ? '<small class="muted">（' + esc(w.material) + '）</small>' : ''}${checkTag(w) ? '<small>' + checkTag(w) + '</small>' : ''}${w.reviewNote && w.status === 'open' ? `<small class="muted">先生から: ${esc(w.reviewNote)}</small>` : ''}</span>
+      h += hw.length ? '<div class="rows">' + hw.map(w => `<div class="ev"><span class="t">${w.dueMode === 'date' && w.due ? md(w.due) : w.due ? md(w.due) : ''}</span><span class="b" style="color:var(--ink)"><strong>${esc(hwText(w))}</strong>${hwSubject(w) ? '<small class="muted">' + esc(hwSubject(w)) + '</small>' : ''}${checkTag(w) ? '<small>' + checkTag(w) + '</small>' : ''}${w.reviewNote && w.status === 'open' ? `<small class="muted">先生から: ${esc(w.reviewNote)}</small>` : ''}</span>
         <span>${w.status === 'open' ? `<button class="small-btn primary" data-action="hw-done" data-id="${esc(w.id)}">できた</button>` : `<button class="small-btn" data-action="hw-undo" data-id="${esc(w.id)}">取り消す</button>`}</span></div>`).join('') + '</div>' : '<p class="muted small">今やる宿題はありません。</p>';
     }
     const test = sched.events.filter(e => e.kind === 'test' && e.date >= sched.today)[0];
