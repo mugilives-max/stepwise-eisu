@@ -420,3 +420,26 @@ button:active:not(:disabled), a.btn:active { transform: scale(.97); }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   #app { view-transition-name: none; }
 }
+/* ---- 今日: 上の帯に「今日」、対応することと授業は白い枠。行の右に丸いボタン ---- */
+body.has-bar .top .brand { display: none; }
+body.has-bar .top .in { flex-wrap: nowrap; min-height: 52px; }
+.sec-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; margin: 18px 2px 6px; }
+.sec-title .count { font-size: 12px; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 0 8px; font-weight: 700; line-height: 1.6; }
+.sec-title .count.gray { background: #eef1f4; color: var(--muted); }
+.group a.rec-row { text-decoration: none; }
+.rec-row .lbl { font-weight: 700; display: block; }
+.rec-row .v small { display: block; font-size: 12px; }
+.rec-row .cnt { font-weight: 700; font-size: 17px; color: var(--warn); padding-right: 2px; }
+.lrow { display: grid; grid-template-columns: 3.6em minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.group > .lrow:last-child { border-bottom: 0; }
+.lrow .t { font-weight: 700; font-size: 15px; line-height: 1.2; }
+.lrow .t small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.lrow .b { min-width: 0; text-decoration: none; color: var(--ink); display: grid; gap: 2px; }
+.lrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ibtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); background: var(--white); color: var(--ink); text-decoration: none; flex-shrink: 0; }
+.ibtn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ibtn.primary { background: var(--primary); border-color: var(--primary); color: var(--white); }
+.ibtn.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.ibtn.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

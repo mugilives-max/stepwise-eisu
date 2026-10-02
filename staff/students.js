@@ -1,8 +1,8 @@
 // スタッフの「生徒」（docs/UX_STRUCTURE.md 3）。#students（家族ごとの一覧）と #student=<id>/<タブ>（1人の生徒の画面）。
 // タブ: 概要・予定・記録と宿題・成績・計画と請求・基本情報。講師は担当の生徒だけで、計画と請求・基本情報は出ない。
-import { hwSubject } from '/assets/v2/learning-view.js?v=20261003-ux28';
-import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux28';
-import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261003-ux28';
+import { hwSubject } from '/assets/v2/learning-view.js?v=20261003-ux29';
+import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux29';
+import { examCard, gradeCharts } from '/assets/v2/grades-view.js?v=20261003-ux29';
 
 let list = null, query = '', hub = null, hubFor = '';
 export function resetStudents() { list = null; hub = null; hubFor = ''; }

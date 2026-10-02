@@ -18,6 +18,12 @@ export const ICON = {
   pencil: '<path d="M5 19l1-4 9.5-9.5a2.1 2.1 0 0 1 3 3L9 18z"/><path d="M14 7l3 3"/>',
   parent: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="17" cy="10" r="2.2"/><path d="M15.5 14.6c2.2.1 4 1.4 4.5 4"/>',
   memo: '<path d="M6 4h9l3 3v13H6z"/><path d="M9 11h6M9 15h4"/>',
+  mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>',
+  file: '<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5V8h4M9.5 12.5h5M9.5 16h5"/>',
+  yen: '<path d="M7 4l5 7 5-7M12 11v9M8 13h8M8 16.5h8"/>',
+  plan: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4M9 14.5l2 2 4-4"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  video: '<rect x="3.5" y="6.5" width="12" height="11" rx="2"/><path d="M15.5 10.5l5-3v9l-5-3"/>',
 };
 export const iconBox = (k, label) => `<span class="ibox i-${k}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg></span>`;
 export const miniIcon = (k, on, label) => `<span class="mini-i${on ? ' on' : ''}" title="${label}" aria-label="${label}${on ? 'あり' : 'なし'}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg></span>`;
