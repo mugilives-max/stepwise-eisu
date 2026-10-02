@@ -1,5 +1,6 @@
 // 講師の報酬（7段目）。migrations-v2/0011_payroll.sql、docs/REQUIREMENTS.md 5-1
 // - 数える: 実施済みの担当授業（代講は実際に担当した講師）、担当した面談（日が過ぎて取りやめでないもの）。準備・交通費は数えない
+// - 時間で払う: 2人同時の授業は、講師が働いた時間（重なりは1回）だけ数える。生徒が1人でも2人でも報酬は同じ（2026-10-03 本人）
 // - 時給: 講師ごと（staffRates。変えた月から）。面談は別の時給。行ごとに「分 × 時給 ÷ 60」の1円未満を切り捨て
 // - 月末締め・翌月25日払い。教室管理者が確かめて確定する。確定した明細は変えず、直すときは取り消して確定し直す（理由を残す）
 // - 源泉徴収: 講師ごとに する・しない（staff.withholding）。するときは 10.21%（100万円を超える分は 20.42%）
@@ -15,6 +16,7 @@ const md = d => d.slice(5).replace('-', '/');
 export const payOnFor = month => shiftMonth(month, 1) + '-25';
 export const withholdingFor = gross => gross <= 0 ? 0 : gross <= 1000000 ? Math.floor(gross * 0.1021) : Math.floor((gross - 1000000) * 0.2042) + 102100;
 const itemAmount = (minutes, rate) => Math.floor(minutes * rate / 60);
+const toMin = hm => { const [h, m] = String(hm).split(':').map(Number); return h * 60 + m; };
 
 // その月に使う時給（startsOn がその月以前で、いちばん新しいもの）
 function rateFor(rates, month) {
@@ -35,11 +37,16 @@ export async function payPreview(c, staffId, month, { ignorePayrollId = '' } = {
   const meetings = (await c.db.prepare(`select * from meetings where staffId = ? and date <= ? and date < ? and status <> 'cancelled' and ${open} order by date, start`).bind(staffId, end, today, ignorePayrollId || '-').all()).results;
   const adjusts = (await c.db.prepare(`select * from payrollAdjustments where staffId = ? and month = ? and ${open} order by createdAt`).bind(staffId, month, ignorePayrollId || '-').all()).results;
   const issues = [], items = [];
+  const covered = {}; // 日ごとに、もう数えた授業の終わり（2人同時の授業は、重なる時間を二重に数えない）
   for (const l of lessons) {
     if (l.status === 'decided') { if (l.date <= today) issues.push(`${md(l.date)} ${l.subject}（${fullName(l)}さん）が実施済みになっていません`); continue; }
     const r = rateFor(rates, l.date.slice(0, 7));
     if (!r || !r.lessonHourly) { issues.push(`${l.date.slice(0, 7)} の授業の時給が決まっていません`); continue; }
-    items.push({ kind: 'lesson', lessonId: l.id, date: l.date, start: l.start, minutes: l.minutes, label: `${l.subject}（${fullName(l)}さん）`, rate: r.lessonHourly, amount: itemAmount(l.minutes, r.lessonHourly), carried: l.date < month + '-01' });
+    // 開始の早い順に並んでいるので、前の授業と重なるのは「今の開始」から「それまでの終わり」まで
+    const s0 = toMin(l.start), e0 = s0 + l.minutes, paid = Math.max(0, e0 - Math.max(s0, covered[l.date] || 0));
+    covered[l.date] = Math.max(covered[l.date] || 0, e0);
+    const note = paid === l.minutes ? '' : paid ? `（同時の授業と重なる${l.minutes - paid}分を除く）` : '（同時の授業の時間に含む）';
+    items.push({ kind: 'lesson', lessonId: l.id, date: l.date, start: l.start, minutes: paid, label: `${l.subject}（${fullName(l)}さん）${note}`, rate: r.lessonHourly, amount: itemAmount(paid, r.lessonHourly), carried: l.date < month + '-01' });
   }
   for (const m of meetings) {
     const r = rateFor(rates, m.date.slice(0, 7));

@@ -90,3 +90,24 @@ test('confirming fixes the statement; corrections void it with a reason; instruc
   const oct = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-10' })).preview;
   assert.deepEqual(oct.items.map(i => [i.date, i.carried]), [['2026-09-30', true]]);
 });
+
+test('two lessons at once are paid by the time worked, not per student', async () => {
+  const { h, auth, fam, t, lesson, done } = await world();
+  const kid2 = (await h.ok('admin/students/create', { auth, familyId: fam.id, familyName: '架空', givenName: '花子', baseRate30: 1500 })).student;
+  const a = await lesson('2026-09-08', '17:00', t.id, 60);
+  // 2人目: 17:30〜18:30（同じ講師・対面の2人同時）
+  const keep = h.clock; h.clock = at('2026-09-01T09:00:00');
+  await h.ok('schedule/lessons/create', { auth, studentId: kid2.id, date: '2026-09-08', start: '17:30', minutes: 60, subject: '英語', deliveryMode: 'in_person', staffId: t.id, force: true });
+  const b = h.rows('select * from lessons where studentId = ?', kid2.id)[0];
+  await h.ok('schedule/lessons/decide', { auth, id: b.id, version: b.version }); h.clock = keep;
+  const c = await lesson('2026-09-15', '17:00', t.id, 60);
+  h.clock = at('2026-10-02T12:00:00');
+  await done(a); await done(b.id); await done(c);
+  await h.ok('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 2000, meetingHourly: 1500 });
+  const v = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-09' })).preview;
+  assert.deepEqual(v.items.map(i => [i.date, i.minutes, i.amount]), [['2026-09-08', 60, 2000], ['2026-09-08', 30, 1000], ['2026-09-15', 60, 2000]], '重なる30分は1回だけ');
+  assert.match(v.items[1].label, /重なる30分を除く/);
+  assert.deepEqual([v.lessonMinutes, v.gross], [150, 5000]);
+  await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09', expectedNet: v.net });
+  assert.equal(h.rows("select count(*) n from lessons where payrollId <> ''")[0].n, 3, '同時の授業も明細に入る（もう一度数えない）');
+});
