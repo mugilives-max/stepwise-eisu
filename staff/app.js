@@ -1,12 +1,13 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
-// 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。切り替えまでは今の管理画面（/kanri/）を使う。
+// 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage6c';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-stage6c';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage6c';
-import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage6c';
-import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-stage6c';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-stage6c';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261002-stage7';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261002-stage7';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261002-stage7';
+import { recordsPage, recordPage, recordsSubmit, recordsClick, resetRecords, captureRecordInputs } from '/staff/records.js?v=20261002-stage7';
+import { plansPage, billingPage, billingSubmit, billingClick, resetBilling } from '/staff/billing.js?v=20261002-stage7';
+import { payrollPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll } from '/staff/payroll.js?v=20261002-stage7';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, openGradeFile } from '/staff/grades.js?v=20261002-stage7';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -34,7 +35,7 @@ async function run(task) { if (busy) return; busy = true; render(); try { await 
 function renderNav() {
   const r = route().page;
   if (!me) { nav.innerHTML = ''; return; }
-  const items = [['home', 'ホーム'], ...(me.roles.includes('manager') || me.roles.includes('teacher') ? [['schedule', '予定'], ['records', '記録'], ['grades', '成績']] : []), ...(me.roles.includes('manager') ? [['families', '家族と生徒'], ['plans', '計画'], ['billing', '請求']] : []), ...(me.roles.includes('sysadmin') ? [['staff', 'スタッフ'], ['migrate', '移行']] : []), ['account', 'アカウント']];
+  const items = [['home', 'ホーム'], ...(me.roles.includes('manager') || me.roles.includes('teacher') ? [['schedule', '予定'], ['records', '記録'], ['grades', '成績'], ['payroll', '報酬']] : []), ...(me.roles.includes('manager') ? [['families', '家族と生徒'], ['plans', '計画'], ['billing', '請求']] : []), ...(me.roles.includes('sysadmin') ? [['staff', 'スタッフ'], ['migrate', '移行']] : []), ['account', 'アカウント']];
   const on = r === 'family' ? 'families' : r === 'record' ? 'records' : r === 'gradesOf' ? 'grades' : r;
   nav.innerHTML = items.map(([k, label]) => `<a href="#${k}" class="${on === k ? 'on' : ''}">${label}</a>`).join('');
 }
@@ -80,7 +81,7 @@ function resetPage() { return `<h1>新しいパスワード</h1>${noticeHtml()}$
 // ---------- ログインしたあとの画面 ----------
 function homePage() {
   return `<h1>${esc(me.name)} さん</h1><p>${roleTags(me.roles)}</p>${noticeHtml()}
-    <p class="notice">新しい管理画面は作っている途中です。今使えるのは、アカウント・スタッフ・家族と生徒・予定・記録・成績・計画・請求・移行の準備です。ここで登録・変更した内容は、切り替えまで今の仕組みには反映されません。授業・請求などの毎日の作業は、今までどおり <a href="/kanri/">今の管理画面</a> を使ってください。</p>`;
+    <p class="notice">新しい管理画面は作っている途中です。今使えるのは、アカウント・スタッフ・家族と生徒・予定・記録・成績・報酬・計画・請求・移行の準備です。ここで登録・変更した内容は、切り替えまで今の仕組みには反映されません。授業・請求などの毎日の作業は、今までどおり <a href="/kanri/">今の管理画面</a> を使ってください。</p>`;
 }
 function accountPage() {
   return `<h1>アカウント</h1><p>${esc(me.name)}（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
@@ -111,7 +112,7 @@ async function loadStaff() {
   if (!r.ok) { if (r.error.code === 'needLogin') return signedOut(); say(r.error.message, 'error'); staffList = []; } else staffList = r.staff;
   render();
 }
-function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); say('ログインし直してください', 'error'); render(); }
+function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); say('ログインし直してください', 'error'); render(); }
 // 各ページ（families.js・migrate.js）に渡す共通の道具
 const ctx = {
   call: (route, body = {}) => call(route, body, store.get()), esc, render: () => render(), dis: () => dis(), notice: () => noticeHtml(),
@@ -131,6 +132,7 @@ function render() {
   else if (r.page === 'records' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = recordsPage(ctx);
   else if (r.page === 'record' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = recordPage(ctx, r.id);
   else if (r.page === 'grades' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = gradesOverviewPage(ctx);
+  else if (r.page === 'payroll' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = payrollPage(ctx, me);
   else if (r.page === 'gradesOf' && (me.roles.includes('manager') || me.roles.includes('teacher'))) h = gradesStudentPage(ctx, r.id);
   else if (r.page === 'families' && me.roles.includes('manager')) h = familiesPage(ctx);
   else if (r.page === 'family' && me.roles.includes('manager')) h = familyDetailPage(ctx, r.id);
@@ -157,7 +159,7 @@ app.addEventListener('submit', ev => {
   const submitter = ev.submitter;
   captureRecordInputs(); // 記録の画面の書きかけを、描き直す前に覚えておく
   run(async () => {
-    if (await familiesSubmit(ctx, kind, el) || await scheduleSubmit(ctx, kind, el) || await recordsSubmit(ctx, kind, el, { submitter }) || await billingSubmit(ctx, kind, el) || await gradesSubmit(ctx, kind, el) || await migrateSubmit(ctx, kind, el)) return;
+    if (await familiesSubmit(ctx, kind, el) || await scheduleSubmit(ctx, kind, el) || await recordsSubmit(ctx, kind, el, { submitter }) || await billingSubmit(ctx, kind, el) || await gradesSubmit(ctx, kind, el) || await payrollSubmit(ctx, kind, el) || await migrateSubmit(ctx, kind, el)) return;
     let r;
     if (kind === 'login') { r = await call('staff/login', v); if (r.ok) return signedIn(r); }
     else if (kind === 'forgot') { r = await call('staff/reset/request', v); if (r.ok) return say(r.message, 'ok'); }
@@ -183,10 +185,11 @@ app.addEventListener('click', ev => {
   if (a === 'copy') { navigator.clipboard.writeText(b.dataset.text || '').then(() => { say('コピーしました', 'ok'); render(); }); return; }
   // 成績票は、待たずに新しいタブを開いてから読む（あとから開くと止められる）
   if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openGradeFile(ctx, b, win); if (!r.ok) say(r.error.message, 'error'); }); return; }
+  if (a === 'pr-print' || a === 'pr-print-mine') { if (!payrollPrint(ctx, a, b, me)) { say('印刷の窓を開けませんでした。ポップアップを許可してください', 'error'); render(); } return; }
   if (a === 'gr-resolve') { const sel = document.querySelector(`[data-resolve-exam="${b.dataset.id}"]`); b.dataset.exam = sel ? sel.value : ''; }
   captureRecordInputs();
   run(async () => {
-    if (await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b) || await billingClick(ctx, a, b) || await gradesClick(ctx, a, b)) return;
+    if (await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b) || await billingClick(ctx, a, b) || await gradesClick(ctx, a, b) || await payrollClick(ctx, a, b)) return;
     let r;
     if (a === 'bootstrap') {
       r = await call('staff/bootstrap', { legacyToken: legacyToken() });
