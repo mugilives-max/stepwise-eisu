@@ -1,12 +1,15 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux30';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261003-ux31';
+import { nowLocal } from '/assets/v2/cancel-rate.js?v=20261003-ux31';
 
 let month = null, data = null, sel = null, sheet = null, families = null, loadedFor = '';
 // スマホ（ライフベアの形）: はじめは月全体。日付を押すと、その週が一番上まで滑り上がり、下から一覧が出る（2週分）。同じ日をもう一度押すか取っ手で月全体に戻る
 let calOpen = true, wasOpen = true, calH = null, calTop = null, shownSel = '';
 const phone = () => matchMedia('(max-width: 719px)').matches;
-// sheet: 下から出る画面。{ kind: 'lesson', id, edit } / { kind: 'create' } / { kind: 'off' } / { kind: 'meeting' } / { kind: 'todo' }
+// 新しい決まりの取消料（規約案 第4〜7条）の授業か。授業の日が cancelRuleFrom 以降
+const rateRule = l => !!(data && data.cancelRuleFrom && l.date >= data.cancelRuleFrom);
+// sheet: 下から出る画面。{ kind: 'lesson', id, edit, cancel, tardy } / { kind: 'create' } / { kind: 'off' } / { kind: 'meeting' } / { kind: 'todo' }
 const ymOf = d => d.slice(0, 7);
 const addMonths = (ym, n) => { const [y, m] = ym.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1)); return t.toISOString().slice(0, 7); };
 const gridStart = ym => { const first = new Date(ym + '-01T00:00:00Z'); return new Date(first - first.getUTCDay() * 86400e3).toISOString().slice(0, 10); };
@@ -196,9 +199,11 @@ function sheetHtml(ctx, me, manager, nameOf, staffOf, held) {
     const past = l.date <= data.today, mine = manager || l.staffId === me.id;
     title = `${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}`;
     body = `<div class="stack" style="margin:0"><div><strong style="font-size:17px">${esc(nameOf[l.studentId] || '')}</strong> ${esc(l.subject)}${l.kind !== '通常' ? '（' + esc(l.kind) + '）' : ''}</div>
-      <div>${statusTag(l)}${requestTags(l)}${l.lateStart ? '<span class="tag gray">当日の時間変更</span>' : ''}</div>
+      <div>${statusTag(l)}${requestTags(l)}${l.lateStart ? '<span class="tag gray">当日の時間変更</span>' : ''}${l.lostMinutes ? `<span class="tag warn">遅刻 ${l.lostMinutes}分</span>` : ''}</div>
       <div class="small muted">担当 ${esc(staffOf[l.staffId] || '未定')}・${l.deliveryMode === 'online' ? 'オンライン' : '対面'}${l.meetUrl ? `・<a href="${esc(l.meetUrl)}" target="_blank" rel="noopener">Meet を開く</a>` : ''}${l.note ? '<br>メモ：' + esc(l.note) : ''}</div>`;
     if (sheet.edit) body += editForm(ctx, l);
+    else if (sheet.cancel) body += cancelForm(ctx, l);
+    else if (sheet.tardy) body += tardyForm(ctx, l);
     else {
       const main = [], sub = [], danger = [];
       if (manager && ['held', 'proposed'].includes(l.status)) main.push(`<button class="primary" data-action="sch-decide" data-id="${esc(l.id)}"${ctx.dis()}>決定する</button>`);
@@ -206,6 +211,7 @@ function sheetHtml(ctx, me, manager, nameOf, staffOf, held) {
       if (['decided', 'done'].includes(l.status) && past && mine) main.push(`<a class="btn" href="#record=${encodeURIComponent(l.id)}">記録を書く</a>`);
       if (manager && ['held', 'proposed', 'decided'].includes(l.status)) sub.push(`<button data-action="sch-edit" data-id="${esc(l.id)}"${ctx.dis()}>日時・内容を直す</button>`);
       if (manager && ['proposed', 'decided'].includes(l.status)) sub.push(`<button data-action="sch-rest" data-id="${esc(l.id)}"${ctx.dis()}>お休みにする</button>`);
+      if (['decided', 'done'].includes(l.status) && mine && rateRule(l) && Date.now() >= Date.parse(l.date + 'T' + l.start + ':00+09:00')) sub.push(`<button data-action="sch-tardy" data-id="${esc(l.id)}"${ctx.dis()}>${l.lostMinutes ? '遅刻を直す' : '遅刻を記録'}</button>`);
       if (manager && l.status === 'decided') danger.push(`<button class="danger" data-action="sch-cancel" data-id="${esc(l.id)}"${ctx.dis()}>キャンセルにする</button>`);
       if (manager && l.status !== 'done') danger.push(`<button class="danger" data-action="sch-delete" data-id="${esc(l.id)}"${ctx.dis()}>削除（入力ミス）</button>`);
       body += (main.length ? `<div class="row">${main.join('')}</div>` : '') + (sub.length ? `<div class="row">${sub.join('')}</div>` : '')
@@ -219,7 +225,7 @@ function sheetHtml(ctx, me, manager, nameOf, staffOf, held) {
     title = '対応すること';
     body = (data.openRequests.length ? `<h2 style="margin-top:0">生徒・保護者からの連絡（${data.openRequests.length}件）</h2><div class="list">` + data.openRequests.map(r => `<div><div><span class="tag ${r.kind === 'cancel' ? 'danger' : 'warn'}">${REQUEST[r.kind]}</span> <strong>${esc(r.studentName)}</strong> ${mdw(r.date)} ${r.start} ${esc(r.subject)}
       <div class="small">${esc(r.note || '')}<span class="muted">（${r.fromKind === 'family' ? '保護者' : r.fromKind === 'student' ? '生徒' : 'スタッフ'}・${esc(r.receivedAt.slice(5, 16).replace('T', ' '))}）</span></div>
-      <div class="small muted">${r.kind === 'move' ? '授業を開いて「日時・内容を直す」で日時を変えると、済みになります。' : r.kind === 'late' ? '応じるときは「日時・内容を直す」で開始時刻を変えてください（料金は変わりません）。' : r.kind === 'cancel' ? 'キャンセル料は「請求」で決めます。' : ''}</div></div>
+      <div class="small muted">${r.kind === 'move' ? '授業を開いて「日時・内容を直す」で日時を変えると、済みになります。' : r.kind === 'late' ? (rateRule(r) ? '応じるときは「日時・内容を直す」で開始時刻を変え、「生徒の申し出で開始を遅らせる」に印を付けてください（遅らせた分の取消料）。応じないときは「済みにする」。' : '応じるときは「日時・内容を直す」で開始時刻を変えてください（料金は変わりません）。') : r.kind === 'cancel' ? (rateRule(r) ? 'キャンセル料は連絡の時刻で自動に計算しました（「請求」で確かめられます）。' : 'キャンセル料は「請求」で決めます。') : ''}</div></div>
       <div class="row"><button data-action="sch-goto" data-date="${r.date}" data-id="${esc(r.lessonId || '')}">授業を開く</button><button data-action="sch-resolve" data-id="${esc(r.id)}"${ctx.dis()}>済みにする</button></div></div>`).join('') + '</div>' : '')
       + (Object.keys(held).length ? `<h2>未送信の仮予定</h2><div class="list">` + Object.entries(held).map(([sid, n]) => `<div><div><strong>${esc(nameOf[sid] || '')}</strong> ${n}件</div><div><button class="primary" data-action="sch-send" data-sid="${esc(sid)}"${ctx.dis()}>予定表を送る</button></div></div>`).join('') + '</div>' : '');
   }
@@ -250,8 +256,27 @@ function editForm(ctx, l) {
       <label style="flex:1">形式<select name="deliveryMode"><option value="in_person"${l.deliveryMode === 'in_person' ? ' selected' : ''}>対面</option><option value="online"${l.deliveryMode === 'online' ? ' selected' : ''}>オンライン</option></select></label></div>
     <label>担当<select name="staffId">${staffOptions(ctx, l.staffId)}</select></label>
     <label>メモ（スタッフだけ）<input name="note" maxlength="1000" value="${ctx.esc(l.note || '')}"></label>
-    ${l.status === 'decided' && after ? '<label class="checks"><label><input type="checkbox" name="lateStart"> 当日の開始時刻の変更として記録する（生徒の申し出・料金は変えない）</label></label>' : ''}
+    ${l.status === 'decided' && after ? (rateRule(l)
+      ? `<label class="checks"><label><input type="checkbox" name="lateStart"> 生徒の申し出で開始を遅らせる（遅らせた分の取消料がかかります）</label></label>
+        <label>申し出を受けた時刻（空なら「開始を遅らせたい」の連絡の時刻、なければ今）<input type="datetime-local" name="receivedAt"></label>`
+      : '<label class="checks"><label><input type="checkbox" name="lateStart"> 当日の開始時刻の変更として記録する（生徒の申し出・料金は変えない）</label></label>') : ''}
     <div class="row"><button class="primary"${ctx.dis()}>保存</button><button type="button" data-action="sch-edit-cancel">やめる</button></div></form>`;
+}
+// キャンセル（新しい決まり）: 連絡を受けた時刻で取消料が決まる。LINE などで受けた時刻を入れる
+function cancelForm(ctx, l) {
+  return `<form class="stack" data-form="sch-cancel" data-id="${ctx.esc(l.id)}" data-version="${l.version}" style="margin:8px 0 0">
+    <p class="small" style="margin:0">キャンセル料は、連絡を受けた時刻で決まります（前日23時〜開始3時間前は25%、そこから開始時刻の100%まで上がります）。前日23時までの連絡なら「お休みにする」を使ってください。</p>
+    <label>連絡を受けた時刻<input type="datetime-local" name="receivedAt" value="${nowLocal()}"></label>
+    <label class="checks"><label><input type="checkbox" name="noNotice"> 連絡がなかった（無断欠席。100%）</label></label>
+    <div class="row"><button class="danger"${ctx.dis()}>キャンセルにする</button><button type="button" data-action="sch-edit-cancel">やめる</button></div></form>`;
+}
+// 遅刻（新しい決まり）: 予定の時刻に終わる。遅れた分は授業料に入れず、遅れるという連絡を受けた時刻の率で取消料
+function tardyForm(ctx, l) {
+  return `<form class="stack" data-form="sch-tardy" data-id="${ctx.esc(l.id)}" data-version="${l.version}" style="margin:8px 0 0">
+    <p class="small" style="margin:0">授業は予定の時刻（${endOf(l.start, l.minutes)}）に終わります。遅れた分は授業料に入れず、取消料になります。0分にすると取り消せます。</p>
+    <label>遅れた分数<input type="number" name="lateMinutes" min="0" max="${l.minutes - 1}" step="1" value="${l.lostMinutes || ''}" required inputmode="numeric"></label>
+    <label>遅れるという連絡を受けた時刻（連絡がなければ空）<input type="datetime-local" name="receivedAt"></label>
+    <div class="row"><button class="primary"${ctx.dis()}>記録する</button><button type="button" data-action="sch-edit-cancel">やめる</button></div></form>`;
 }
 function offForm(ctx, me, manager) {
   return `<form class="stack" data-form="sch-off" style="margin:0">${manager ? `<label>だれの休み<select name="staffId"><option value="">教室全体</option>${data.staff.map(s => `<option value="${ctx.esc(s.id)}"${s.id === me.id ? ' selected' : ''}>${ctx.esc(s.name)}</option>`).join('')}</select></label>` : ''}
@@ -266,6 +291,7 @@ function meetingForm(ctx) {
     <div class="row"><button class="primary"${ctx.dis()}>登録する</button></div></form>`;
 }
 
+const yen = n => Number(n).toLocaleString('ja-JP') + '円';
 const lessonById = id => (data && data.lessons ? data.lessons.find(l => l.id === id) : null); // ほかの画面のボタン（data-id つき）でも落ちないように
 const values = el => Object.fromEntries(new FormData(el).entries());
 async function after(ctx, r, okMessage) {
@@ -285,10 +311,21 @@ export async function scheduleSubmit(ctx, kind, el) {
     return true;
   }
   if (kind === 'sch-update') {
-    const body = { id: el.dataset.id, version: Number(el.dataset.version), date: v.date, start: v.start, minutes: Number(v.minutes), subject: v.subject, kind: v.kind, deliveryMode: v.deliveryMode, staffId: v.staffId, note: v.note, lateStart: v.lateStart === 'on' };
+    const body = { id: el.dataset.id, version: Number(el.dataset.version), date: v.date, start: v.start, minutes: Number(v.minutes), subject: v.subject, kind: v.kind, deliveryMode: v.deliveryMode, staffId: v.staffId, note: v.note, lateStart: v.lateStart === 'on', receivedAt: v.receivedAt || '' };
     let r = await ctx.call('schedule/lessons/update', body);
-    if ((await after(ctx, r, '保存しました')) === 'force') { r = await ctx.call('schedule/lessons/update', { ...body, force: true }); await after(ctx, r, '保存しました'); }
+    const saved = x => x.ok && x.fee ? `保存しました（開始を遅らせた分の取消料 ${yen(x.fee.amount)}）` : '保存しました';
+    if ((await after(ctx, r, saved(r))) === 'force') { r = await ctx.call('schedule/lessons/update', { ...body, force: true }); await after(ctx, r, saved(r)); }
     if (r.ok) { sel = v.date; sheet = null; }
+    return true;
+  }
+  if (kind === 'sch-cancel') {
+    const r = await ctx.call('schedule/lessons/cancel', { id: el.dataset.id, version: Number(el.dataset.version), receivedAt: v.receivedAt || '', noNotice: v.noNotice === 'on' });
+    await after(ctx, r, r.ok && r.fee ? `キャンセルにしました（キャンセル料 ${yen(r.fee.amount)}）` : 'キャンセルにしました');
+    return true;
+  }
+  if (kind === 'sch-tardy') {
+    const r = await ctx.call('schedule/lessons/tardy', { id: el.dataset.id, version: Number(el.dataset.version), lateMinutes: Number(v.lateMinutes || 0), receivedAt: v.receivedAt || '' });
+    await after(ctx, r, r.ok ? (r.fee ? `遅刻を記録しました（取消料 ${yen(r.fee.amount)}）` : '遅刻の記録を取り消しました') : '');
     return true;
   }
   if (kind === 'sch-off') { const r = await ctx.call('schedule/unavailability/add', v); await after(ctx, r, '休みを登録しました'); if (r.ok) sheet = null; return true; }
@@ -314,6 +351,8 @@ export async function scheduleClick(ctx, a, b) {
   if (a === 'sch-open') { sheet = { kind: 'lesson', id }; return true; }
   if (a === 'sch-close') { sheet = null; return true; }
   if (a === 'sch-edit') { sheet = { kind: 'lesson', id, edit: true }; return true; }
+  if (a === 'sch-tardy') { sheet = { kind: 'lesson', id, tardy: true }; return true; }
+  if (a === 'sch-cancel' && l && rateRule(l)) { sheet = { kind: 'lesson', id, cancel: true }; return true; } // 新しい決まり: 連絡を受けた時刻を入れる画面
   if (a === 'sch-edit-cancel') { sheet = sheet && sheet.id ? { kind: 'lesson', id: sheet.id } : null; return true; }
   const simple = { 'sch-decide': ['schedule/lessons/decide', '決定しました'], 'sch-done': ['schedule/lessons/done', '実施済みにしました'], 'sch-rest': ['schedule/lessons/rest', 'お休みにしました'], 'sch-cancel': ['schedule/lessons/cancel', 'キャンセルにしました'], 'sch-delete': ['schedule/lessons/delete', '削除しました'] };
   if (simple[a] && l) {

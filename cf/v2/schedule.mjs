@@ -8,7 +8,8 @@ import { fail, newId, iso, audit, sha256Hex } from './util.mjs';
 import { requireStaff, rolesOf } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { isLive } from './accounts.mjs';
-import { createCancelFee, dropCancelFee } from './plan-calc.mjs';
+import { createCancelFee, dropCancelFee, usesRate, setRateFee, lessonFee, parseParts, cancelRuleFrom } from './plan-calc.mjs';
+import { ratePct } from '../../assets/v2/cancel-rate.js';
 import { isPreviewToken, previewSubject } from './preview.mjs';
 
 const CAL_PREFIX = '【塾】';
@@ -41,8 +42,21 @@ export function confirmByFor(dates, today, requested) {
 const fullName = s => [s.familyName, s.givenName].filter(Boolean).join(' ');
 function lessonView(l, extra = {}) {
   return { id: l.id, studentId: l.studentId, staffId: l.staffId, date: l.date, start: l.start, minutes: l.minutes, subject: l.subject, kind: l.kind, deliveryMode: l.deliveryMode,
-    status: l.status, confirmBy: l.confirmBy, meetUrl: l.meetUrl, lateStart: !!l.lateStart, version: l.version, ...extra };
+    status: l.status, confirmBy: l.confirmBy, meetUrl: l.meetUrl, lateStart: !!l.lateStart, lostMinutes: Number(l.lostMinutes || 0), version: l.version, ...extra };
 }
+// 連絡を受けた時刻（新しい決まりの取消料）。b.noNotice = 連絡なし（''）。b.receivedAt は ISO か 'YYYY-MM-DDTHH:MM'（日本時間）。空なら fallback（ふつうは今）
+function noticeAt(c, b, fallback) {
+  if (b.noNotice === true) return '';
+  const raw = String(b.receivedAt || '');
+  if (!raw) return fallback === undefined ? iso(c.now) : fallback;
+  const ms = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw) ? Date.parse(raw + ':00+09:00') : Date.parse(raw);
+  if (isNaN(ms)) fail('badTime', '連絡を受けた時刻を確かめてください');
+  if (ms > c.now + 60e3) fail('futureTime', '連絡を受けた時刻が、今より先になっています');
+  return iso(ms);
+}
+// 保護者へのお知らせに添える取消料の説明
+const hm = t => new Date(Date.parse(t) + 9 * 3600e3).toISOString().slice(11, 16);
+const feeText = (fee, what) => !fee ? '' : `\n${what}は ${fee.amount.toLocaleString('ja-JP')}円です（${fee.parts.map(p => p.receivedAt ? `${hm(p.receivedAt)} にご連絡、率 ${ratePct(p.rate)}%` : 'ご連絡がなかったため率 100%').join('・')}）。`;
 const requestView = r => ({ id: r.id, lessonId: r.lessonId, kind: r.kind, note: r.note, fromKind: r.fromKind, receivedAt: r.receivedAt, status: r.status });
 const eventView = e => ({ id: e.id, studentId: e.studentId, kind: e.kind, date: e.date, dateTo: e.dateTo, start: e.start, end: e.end, title: e.title, createdByKind: e.createdByKind, version: e.version });
 
@@ -185,12 +199,14 @@ async function lessonRequest(c, studentIds, who, b) {
     if (l.status === 'decided') await calendarEffect(c, 'delete', l, name);
   }
   await c.db.batch(stmts);
-  if (kind === 'cancel') await createCancelFee(c, l, 'late', iso(c.now)); // 開始前の連絡なので規定額は 1,000円（判断は教室管理者）
+  // 取消料: 新しい決まりは連絡を受けた今の時刻で自動に計算。今までの決まりは開始前の連絡なので規定額 1,000円（判断は教室管理者）
+  let fee = null;
+  if (kind === 'cancel') { if (await usesRate(c.db, l)) fee = await setRateFee(c, l, 'cancel', Number(l.minutes), iso(c.now)); else await createCancelFee(c, l, 'late', iso(c.now)); }
   const when = `${l.date.slice(5).replace('-', '/')} ${l.start}〜（${l.subject}）`, from = who.kind === 'family' ? name + 'さんの保護者' : name + 'さん';
   const title = { move: '日時の変更のお願い', rest: 'お休みの連絡', late: '開始を遅らせたい', cancel: 'キャンセル' }[kind];
-  await staffNotice(c, `【${title}】${name}さん`, `${from}から${title}が届きました。\n${when}${l.status === 'proposed' ? '（仮予定）' : ''}\n${note ? '内容: ' + note : ''}${kind === 'cancel' ? '\n前日23時を過ぎた連絡です（キャンセル料の対象）。' : ''}`);
+  await staffNotice(c, `【${title}】${name}さん`, `${from}から${title}が届きました。\n${when}${l.status === 'proposed' ? '（仮予定）' : ''}\n${note ? '内容: ' + note : ''}${kind === 'cancel' ? (fee ? `\n前日23時を過ぎた連絡です（キャンセル料 ${fee.amount.toLocaleString('ja-JP')}円）。` : '\n前日23時を過ぎた連絡です（キャンセル料の対象）。') : ''}`);
   await audit(c, 'lessonRequest:' + kind, l.id, { request: id });
-  return { lesson: lessonView(next), request: { id, kind, status: kind === 'rest' ? 'done' : 'open' } };
+  return { lesson: lessonView(next), request: { id, kind, status: kind === 'rest' ? 'done' : 'open' }, ...(fee ? { fee: { amount: fee.amount } } : {}) };
 }
 // 取り下げ: 開始前なら、日時の変更・開始を遅らせたいのお願いを取り下げられる。お休み・キャンセルは授業を決定に戻す
 async function withdrawRequest(c, studentIds, b) {
@@ -219,8 +235,11 @@ async function familyScheduleOf(c, studentIds, from, to) {
   const events = (await c.db.prepare(`select * from sharedEvents where studentId in ${q} and dateTo >= ? and date <= ? order by date`).bind(...studentIds, from, to).all()).results;
   const ids = lessons.map(l => l.id);
   const requests = ids.length ? (await c.db.prepare(`select * from lessonRequests where lessonId in (${ids.map(() => '?').join(', ')}) and status <> 'withdrawn' order by receivedAt`).bind(...ids).all()).results : [];
+  // 新しい決まりの授業で、開始を遅らせる・キャンセルを選べるものには、取消料の計算に使う1回の授業料を添える（画面で今の金額を出す）
+  const quote = {};
+  for (const l of lessons) if (choicesFor(l, c.now).includes('cancel') && await usesRate(c.db, l)) quote[l.id] = await lessonFee(c.db, l);
   return {
-    lessons: lessons.map(l => { const v = lessonView(l, { choices: choicesFor(l, c.now), requests: requests.filter(r => r.lessonId === l.id).map(requestView) }); delete v.staffId; return v; }),
+    lessons: lessons.map(l => { const v = lessonView(l, { choices: choicesFor(l, c.now), requests: requests.filter(r => r.lessonId === l.id).map(requestView), ...(l.id in quote ? { feeBase: quote[l.id] } : {}) }); delete v.staffId; return v; }),
     events: events.map(eventView),
   };
 }
@@ -289,7 +308,7 @@ export const scheduleRoutes = {
       meetings: meetings.map(m => ({ id: m.id, familyId: m.familyId, studentId: m.studentId, staffId: m.staffId, date: m.date, start: m.start, minutes: m.minutes, deliveryMode: m.deliveryMode, title: m.title, meetUrl: m.meetUrl, status: m.status, version: m.version })),
       students: students.filter(s => s.status !== 'left').map(s => ({ id: s.id, name: fullName(s), familyId: s.familyId, deliveryMode: s.deliveryMode })),
       staff: staff.map(s => ({ id: s.id, name: s.name, teacher: rolesOf(s).includes('teacher') })),
-      kinds: kinds.length ? kinds : ['通常'], live: await isLive(c),
+      kinds: kinds.length ? kinds : ['通常'], live: await isLive(c), cancelRuleFrom: await cancelRuleFrom(c.db),
     };
   },
   // 仮予定を作る。hold=true は予定表にまとめてあとで送る（生徒・保護者に見せない）
@@ -348,15 +367,27 @@ export const scheduleRoutes = {
     if (moved || n.staffId !== l.staffId || n.deliveryMode !== l.deliveryMode) await checkConflicts(c, [{ ...n, studentId: l.studentId }], { force: !!b.force, exceptId: l.id });
     const patch = { date: n.date, start: n.start, minutes: n.minutes, subject: n.subject, kind: n.kind, deliveryMode: n.deliveryMode, staffId: n.staffId };
     if (b.note !== undefined) patch.note = String(b.note).slice(0, 1000);
-    if (moved && l.status === 'decided' && c.now > freeDeadline(l.date) && b.lateStart === true) patch.lateStart = 1;
+    const late = moved && l.status === 'decided' && c.now > freeDeadline(l.date) && b.lateStart === true;
+    if (late) patch.lateStart = 1;
+    // 新しい決まり: 生徒の申し出で開始を遅らせた（塾が承諾した）ら、遅らせた分の取消料（規約案 第6条）。連絡の時刻は、指定がなければ「開始を遅らせたい」の連絡の時刻、なければ今
+    let delay = null;
+    if (late && n.date === l.date && await usesRate(c.db, l)) {
+      const cur = await c.db.prepare('select * from cancellationFees where lessonId = ?').bind(l.id).first();
+      const prev = cur ? parseParts(cur).find(p => p.reason === 'delay') : null;
+      const orig = prev && prev.start ? { ...l, start: prev.start, minutes: prev.of } : l;
+      const ask = await c.db.prepare("select receivedAt from lessonRequests where lessonId = ? and kind = 'late' and status <> 'withdrawn' order by receivedAt desc").bind(l.id).first();
+      const mins = Math.max(0, toMin(n.start) - toMin(orig.start));
+      delay = { orig, mins, at: noticeAt(c, b, prev ? prev.receivedAt : ask ? ask.receivedAt : iso(c.now)) };
+    }
     let next = await setLesson(c, l, patch);
+    if (delay) delay.fee = await setRateFee(c, delay.orig, 'delay', delay.mins, delay.at);
     if (l.status === 'decided' && (moved || n.subject !== l.subject || n.deliveryMode !== l.deliveryMode)) next = await setLesson(c, next, { calendarEventId: await calendarEffect(c, 'patch', next, fullName(await studentRow(c, l.studentId))) });
     if (moved) {
       await closeRequests(c, l.id, ['move', 'late'], 'staff:' + c.actor.id);
-      if (l.status !== 'held') await familyNotice(c, l.studentId, '授業の日時を変更しました', `授業の日時を変更しました。\n変更前: ${l.date} ${l.start}（${l.minutes}分）\n変更後: ${n.date} ${n.start}（${n.minutes}分）`);
+      if (l.status !== 'held') await familyNotice(c, l.studentId, '授業の日時を変更しました', `授業の日時を変更しました。\n変更前: ${l.date} ${l.start}（${l.minutes}分）\n変更後: ${n.date} ${n.start}（${n.minutes}分）${delay ? feeText(delay.fee, '開始を遅らせた分の取消料') : ''}`);
     }
-    await audit(c, 'lessonUpdate', l.id, { moved, lateStart: !!patch.lateStart });
-    return { lesson: lessonView(next) };
+    await audit(c, 'lessonUpdate', l.id, { moved, lateStart: !!patch.lateStart, ...(delay ? { delayMinutes: delay.mins } : {}) });
+    return { lesson: lessonView(next), ...(delay && delay.fee ? { fee: { amount: delay.fee.amount } } : {}) };
   },
   // 先生が記録するお休み・キャンセル（LINE などで連絡を受けたとき）。生徒・保護者からの連絡も、ここで済みにする
   'schedule/lessons/rest': async (c, b) => {
@@ -373,18 +404,27 @@ export const scheduleRoutes = {
     await requireStaff(c, b, 'manager');
     const l = await getLesson(c, b.id); sameVersion(l, b);
     if (l.status !== 'decided') fail('badStatus', '決定した授業だけキャンセルにできます');
-    // キャンセル料の種類: 指定がなければ、今が開始前なら late（1,000円）、開始後なら noshow（授業料）
-    const type = ['late', 'noshow'].includes(b.feeType) ? b.feeType : c.now < startMs(l.date, l.start) ? 'late' : 'noshow';
-    const next = await setLesson(c, l, { status: 'cancelled' });
-    await createCancelFee(c, l, type, type === 'late' ? iso(c.now) : '');
+    let fee = null, next;
+    if (await usesRate(c.db, l)) {
+      // 新しい決まり: 連絡を受けた時刻（b.receivedAt。連絡なしは b.noNotice）の率で自動に計算（規約案 第4・5条）
+      const at = noticeAt(c, b);
+      if (at && Date.parse(at) <= freeDeadline(l.date)) fail('useRest', '前日23時までの連絡なので、「お休みにする」を使ってください');
+      next = await setLesson(c, l, { status: 'cancelled' });
+      fee = await setRateFee(c, l, 'cancel', Number(l.minutes), at);
+    } else {
+      // 今までの決まり: 指定がなければ、今が開始前なら late（1,000円）、開始後なら noshow（授業料）
+      const type = ['late', 'noshow'].includes(b.feeType) ? b.feeType : c.now < startMs(l.date, l.start) ? 'late' : 'noshow';
+      next = await setLesson(c, l, { status: 'cancelled' });
+      await createCancelFee(c, l, type, type === 'late' ? iso(c.now) : '');
+    }
     // 保護者へのお知らせ（切り替え前は送らずに残す）
     const st = await c.db.prepare('select familyName, givenName from students where id = ?').bind(l.studentId).first();
     const wd = '日月火水木金土'[new Date(l.date + 'T00:00:00Z').getUTCDay()];
-    await familyNotice(c, l.studentId, '授業をキャンセルしました', `${st ? [st.familyName, st.givenName].filter(Boolean).join(' ') + 'さんの' : ''}${Number(l.date.slice(5, 7))}/${Number(l.date.slice(8))}(${wd}) ${l.start}〜 ${l.subject}の授業をキャンセルしました。`);
+    await familyNotice(c, l.studentId, '授業をキャンセルしました', `${st ? [st.familyName, st.givenName].filter(Boolean).join(' ') + 'さんの' : ''}${Number(l.date.slice(5, 7))}/${Number(l.date.slice(8))}(${wd}) ${l.start}〜 ${l.subject}の授業をキャンセルしました。${feeText(fee, 'キャンセル料')}`);
     await calendarEffect(c, 'delete', l, '');
     await closeRequests(c, l.id, ['move', 'late', 'cancel', 'rest'], 'staff:' + c.actor.id);
-    await audit(c, 'lessonCancel', l.id);
-    return { lesson: lessonView(next) };
+    await audit(c, 'lessonCancel', l.id, fee ? { amount: fee.amount } : {});
+    return { lesson: lessonView(next), ...(fee ? { fee: { amount: fee.amount } } : {}) };
   },
   // 実施済み（教室管理者か、担当の講師）
   'schedule/lessons/done': async (c, b) => {
@@ -397,6 +437,24 @@ export const scheduleRoutes = {
     await closeRequests(c, l.id, ['late'], 'staff:' + c.actor.id);
     await audit(c, 'lessonDone', l.id);
     return { lesson: lessonView(next) };
+  },
+  // 遅刻（新しい決まりの授業だけ。規約案 第7条）。授業は予定の時刻に終わり、遅れた分は授業料に入れず、連絡を受けた時刻の率で取消料にする。
+  // lateMinutes = 0 で取り消し。教室管理者か、担当の講師
+  'schedule/lessons/tardy': async (c, b) => {
+    const me = await requireStaff(c, b, 'manager', 'teacher');
+    const l = await getLesson(c, b.id); sameVersion(l, b);
+    if (!rolesOf(me).includes('manager') && l.staffId !== me.id) fail('forbidden', '担当の授業だけ記録できます', 403);
+    if (!['decided', 'done'].includes(l.status)) fail('badStatus', '決定・実施済みの授業だけ遅刻を記録できます');
+    if (!(await usesRate(c.db, l))) fail('oldRule', 'この授業は今までの決まりなので、遅刻の取消料はかかりません');
+    if (c.now < startMs(l.date, l.start)) fail('notStarted', '授業が始まってから記録してください');
+    if (l.invoiceId) fail('invoiced', '請求に入った授業は直せません', 409);
+    const mins = Number(b.lateMinutes);
+    if (!Number.isInteger(mins) || mins < 0 || mins >= Number(l.minutes)) fail('badMinutes', `遅れた分数は0〜${Number(l.minutes) - 1}分にしてください（来なかったときはキャンセルにします）`);
+    const at = mins ? noticeAt(c, b, '') : '';
+    const fee = await setRateFee(c, l, 'tardy', mins, at);
+    const next = await setLesson(c, l, { lostMinutes: mins });
+    await audit(c, 'lessonTardy', l.id, { minutes: mins, ...(fee ? { amount: fee.amount } : {}) });
+    return { lesson: lessonView(next), fee: fee ? { amount: fee.amount } : null };
   },
   // 入力ミスの削除（記録を残さない）。実施済みは消せない
   'schedule/lessons/delete': async (c, b) => {

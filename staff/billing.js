@@ -1,6 +1,7 @@
 // スタッフの画面: 授業計画（#plans）と請求（#billing、キャンセル料を含む）。5段目。教室管理者だけ。設定の「授業の種類と標準料金」（#kinds）も。
 // 計画は月ごとに生徒の行を並べる。請求は月ごとに家族の行を並べ、開くと内訳。
-import { sheet, rowButton } from '/staff/ui.js?v=20261003-ux30';
+import { sheet, rowButton } from '/staff/ui.js?v=20261003-ux31';
+import { partText } from '/assets/v2/cancel-rate.js?v=20261003-ux31';
 // 下から出る画面: lineOpen（計画の行）・editing（直す）・consentFor（承諾を記録）・addFor（足す）・openFamily（請求の内訳）・feeOpen（キャンセル料）
 let plans = null, planMonth = '', editing = '', consentFor = '', addFor = '', kindOpen = null, lineOpen = '', feeOpen = '';
 let bill = null, billMonth = '', openFamily = '', detail = null, fees = null;
@@ -205,10 +206,10 @@ function feesPart(ctx) {
   if (!fees.fees.length) return h + '<p class="small muted">請求前のキャンセル料はありません。</p>';
   const title = f => `${esc(f.studentName)} ${md(f.date)} ${esc(f.start)} ${esc(f.subject)}`;
   h += '<div class="rows">' + open.map(f => rowButton(esc, 'fee-open', { id: f.id }, `${title(f)} <span class="tag danger">${f.reliefStatus === 'pending' ? '減額・免除の申請' : '判断待ち'}</span>`, `${FEE_TYPE[f.type]}・規定額 ${yen(f.standardAmount)}`)).join('')
-    + rest.map(f => `<div class="todo"><span class="b"><strong>${title(f)}</strong><small class="muted">${f.decision === 'charge' ? '規定どおり' : f.decision === 'waive' ? '免除' : '減額'} ${yen(f.amount)}${f.note ? '・' + esc(f.note) : ''}${f.reliefStatus ? '・申請への回答済み' : ''}（請求前）</small></span></div>`).join('') + '</div>';
+    + rest.map(f => `<div class="todo"><span class="b"><strong>${title(f)}</strong><small class="muted">${f.rule === 'rate' && f.decision === 'charge' ? '自動' : f.decision === 'charge' ? '規定どおり' : f.decision === 'waive' ? '免除' : '減額'} ${yen(f.amount)}${f.note ? '・' + esc(f.note) : ''}${f.reliefStatus ? '・申請への回答済み' : ''}（請求前）${(f.parts || []).length ? '<br>' + f.parts.map(p => esc(partText(p, f.date))).join('<br>') : ''}</small></span></div>`).join('') + '</div>';
   const f = feeOpen && open.find(x => x.id === feeOpen);
   if (f) {
-    let body = `<div class="small">${FEE_TYPE[f.type]}・規定額 ${yen(f.standardAmount)}${f.receivedAt ? `<br><span class="muted">連絡 ${esc(f.receivedAt.slice(5, 16).replace('T', ' '))}</span>` : ''}</div>`;
+    let body = `<div class="small">${f.rule === 'rate' ? '自動の計算 ' + yen(f.standardAmount) + '<br>' + f.parts.map(p => esc(partText(p, f.date))).join('<br>') : FEE_TYPE[f.type] + '・規定額 ' + yen(f.standardAmount)}${f.receivedAt ? `<br><span class="muted">連絡 ${esc(f.receivedAt.slice(5, 16).replace('T', ' '))}</span>` : ''}</div>`;
     body += f.reliefStatus === 'pending'
       ? `<p class="small">いまの金額 ${yen(f.amount)}<br><strong>減額・免除の申請</strong>: ${esc(f.reliefReason)}</p><form class="stack" data-form="fee-relief" data-id="${esc(f.id)}" data-version="${f.version}"><div class="row"><select name="result" style="flex:1"><option value="unchanged">そのまま</option><option value="reduced">減額する</option><option value="waived">免除する</option></select><input type="number" name="amount" min="0" placeholder="減額後の金額" style="flex:1"></div>
         <label>回答（保護者に見えます）<input name="response" maxlength="300" required></label><button class="primary"${ctx.dis()}>回答する</button></form>`

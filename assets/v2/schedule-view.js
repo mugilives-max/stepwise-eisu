@@ -1,5 +1,6 @@
 // 作り直し（v2）の予定の部品。スタッフ・保護者・生徒の画面で共通に使う（言葉と色をそろえる）。
 import { esc } from '/assets/v2/api.js';
+import { cancelRate, cancelAmount, ratePct } from '/assets/v2/cancel-rate.js?v=20261003-ux31';
 
 export const STATUS = {
   held: ['gray', '未送信'], proposed: ['warn', '仮予定'], decided: ['', '決定'], done: ['ok', '実施済み'], rested: ['gray', 'お休み'], cancelled: ['danger', 'キャンセル'],
@@ -11,6 +12,17 @@ export const CHOICE = {
   late: ['開始を遅らせたい', '先生に相談', '先生の都合がつくときだけ応じます。応じた場合も料金は予定どおりで、追加はありません。', '何分ほど遅らせたいか（必須）'],
   cancel: ['キャンセルする', '1,000円', '前日23時を過ぎているため、キャンセル料（1回1,000円）がかかります。授業の開始後は授業料相当額です。急病などの事情があれば理由に書いてください。先生が確認し、減額・免除することがあります。', '理由（必須）'],
 };
+// 新しい決まりの授業（feeBase がある）: 今この時点で連絡した場合の金額を出す（規約案 第4〜6条）
+const yen = n => Number(n).toLocaleString('ja-JP') + '円';
+function rateChoice(l, c) {
+  const rate = cancelRate(l.date, l.start, Date.now());
+  if (c === 'cancel') { const amount = cancelAmount(l.feeBase, l.minutes, l.minutes, rate);
+    return [CHOICE.cancel[0], yen(amount), `今キャンセルすると、キャンセル料は ${yen(amount)}（授業料の ${ratePct(rate)}%）です。キャンセル料は、連絡を受けた時刻で決まります（前日23時〜開始3時間前は25%、そこから開始時刻の100%まで上がります）。急な病気で受診した・電車の運休や15分以上の遅れなどで、分かってから30分以内のご連絡なら、資料を添えて免除を申請できます。`, CHOICE.cancel[3]]; }
+  if (c === 'late') { const half = Math.min(30, l.minutes - 1), amount = cancelAmount(l.feeBase, l.minutes, half, rate);
+    return [CHOICE.late[0], '先生に相談', `先生の都合がつくときだけ応じます。応じた場合は、遅らせた分の取消料がかかります（今の連絡で${half}分遅らせると ${yen(amount)}）。応じられない場合は、元の時刻に来られなければ、今の時刻でのキャンセルまたは遅刻として扱います。`, CHOICE.late[3]]; }
+  return CHOICE[c];
+}
+const choiceOf = (l, c) => l.feeBase !== undefined && (c === 'cancel' || c === 'late') ? rateChoice(l, c) : CHOICE[c];
 export const EVENT_KIND = { test: 'テスト', event: '行事', unavailable: '授業ができない日' };
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
 export const mdw = d => { const t = new Date(d + 'T00:00:00Z'); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate() + '(' + WD[t.getUTCDay()] + ')'; };
@@ -40,11 +52,11 @@ export function changeDialog(l, pick, note, busy) {
   let h = `<div class="sheet" role="dialog" aria-label="変更・お休みの連絡"><p><strong>${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}</strong> ${esc(l.subject)}${l.status === 'proposed' ? '（仮予定）' : ''}</p>`;
   if (!(l.choices || []).length) h += '<p>授業が始まっているため、ここからは連絡できません。先生に直接お知らせください。</p>';
   else {
-    h += '<p>どうしますか？</p><div class="row">' + l.choices.map(c => `<button type="button" class="${pick === c ? 'primary' : ''}" aria-pressed="${pick === c}" data-action="pick" data-c="${c}">${CHOICE[c][0]}（${CHOICE[c][1]}）</button>`).join('') + '</div>';
+    h += '<p>どうしますか？</p><div class="row">' + l.choices.map(c => `<button type="button" class="${pick === c ? 'primary' : ''}" aria-pressed="${pick === c}" data-action="pick" data-c="${c}">${choiceOf(l, c)[0]}（${choiceOf(l, c)[1]}）</button>`).join('') + '</div>';
     if (pick) {
       const offerRest = pick === 'rest' && l.status === 'proposed';
-      h += `<p class="small muted">${offerRest ? 'この仮予定をお休みにします。料金はかかりません。' : CHOICE[pick][2]}</p>`;
-      if (!offerRest) h += `<input id="change-note" maxlength="500" value="${esc(note || '')}" placeholder="${CHOICE[pick][3]}">`;
+      h += `<p class="small muted">${offerRest ? 'この仮予定をお休みにします。料金はかかりません。' : choiceOf(l, pick)[2]}</p>`;
+      if (!offerRest) h += `<input id="change-note" maxlength="500" value="${esc(note || '')}" placeholder="${choiceOf(l, pick)[3]}">`;
     }
   }
   h += `<div class="row" style="margin-top:10px">${pick ? `<button class="${pick === 'cancel' ? 'danger' : 'primary'}" data-action="send-change"${busy ? ' disabled' : ''}>${busy ? '送っています…' : '連絡する'}</button>` : ''}<button data-action="close-change">やめる</button></div></div>`;

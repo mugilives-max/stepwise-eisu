@@ -2,14 +2,18 @@
 // - 授業を承認済みの計画の行に割り当てる（assignLines）
 // - 1回の授業料（lessonAmount）。授業の長さが計画の1回の時間と違うときは、計画の1回の授業料 ×（授業の時間 ÷ 計画の1回の時間）。1円未満は切り捨て
 // - キャンセル料の行を作る・消す（createCancelFee / dropCancelFee）
-import { newId, iso } from './util.mjs';
+// - 新しい決まりの取消料（規約案 第4〜7条）: キャンセル・開始を遅らせる・遅刻を、連絡を受けた時刻の率で自動に計算する（setRateFee）。
+//   授業の日が settings の cancelRuleFrom 以降の授業だけ。式は assets/v2/cancel-rate.js（画面と同じもの）
+import { newId, iso, fail } from './util.mjs';
+import { cancelRate, cancelAmount, RATE_FULL } from '../../assets/v2/cancel-rate.js';
 
 export const LATE_FEE = 1000; // 前日23時を過ぎて、開始前の連絡（規約案 第5条）
 export const validMonth = m => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || ''));
 export const monthEnd = m => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10); };
 export const shiftMonth = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 export const lineCap = l => (l.approvedCount === null || l.approvedCount === undefined ? Number(l.count) : Number(l.approvedCount));
-export const lessonAmount = (line, lesson) => Number(line.minutes) === Number(lesson.minutes) ? Number(line.fee) : Math.floor(Number(line.fee) * Number(lesson.minutes) / Number(line.minutes));
+// 遅刻で行わなかった分（lostMinutes）は授業料に入れない
+export const lessonAmount = (line, lesson) => { const m = Number(lesson.minutes) - Number(lesson.lostMinutes || 0); return Number(line.minutes) === m ? Number(line.fee) : Math.floor(Number(line.fee) * m / Number(line.minutes)); };
 export const baseAmount = (student, minutes) => Math.floor(Number(student.baseRate30 || 0) * Number(minutes) / 30);
 const kindOf = k => String(k || '') || '通常';
 export const lineMatches = (line, lesson) => line.studentId === lesson.studentId && line.subject === lesson.subject && kindOf(line.kind) === kindOf(lesson.kind) && line.startDate <= lesson.date && lesson.date <= line.endDate;
@@ -51,12 +55,46 @@ export function estimateFor(lines, student, lesson) {
   return l ? lessonAmount(l, lesson) : baseAmount(student, lesson.minutes);
 }
 
-// キャンセル料の規定額。開始前の連絡は 1,000円、開始後・連絡なしはその授業の授業料
-export async function standardCancelFee(db, lesson, type) {
-  if (type === 'late') return LATE_FEE;
+// その授業の1回の授業料（予定の長さで。承認済みの計画 → 承認待ちの計画 → 生徒の基本単価）
+export async function lessonFee(db, lesson) {
   const lines = (await db.prepare("select * from planLines where studentId = ? and status in ('approved', 'proposed')").bind(lesson.studentId).all()).results;
   const s = await db.prepare('select baseRate30 from students where id = ?').bind(lesson.studentId).first();
-  return estimateFor(lines.sort((a, b) => (a.status === 'approved' ? 0 : 1) - (b.status === 'approved' ? 0 : 1)), s || {}, lesson);
+  return estimateFor(lines.sort((a, b) => (a.status === 'approved' ? 0 : 1) - (b.status === 'approved' ? 0 : 1)), s || {}, { ...lesson, lostMinutes: 0 });
+}
+// 今までの決まりのキャンセル料の規定額。開始前の連絡は 1,000円、開始後・連絡なしはその授業の授業料
+export async function standardCancelFee(db, lesson, type) {
+  if (type === 'late') return LATE_FEE;
+  return lessonFee(db, lesson);
+}
+
+// ---- 新しい決まりの取消料 ----
+export async function cancelRuleFrom(db) { const r = await db.prepare("select value from settings where key = 'cancelRuleFrom'").first(); return r ? String(r.value || '') : ''; }
+export async function usesRate(db, lesson) { const from = await cancelRuleFrom(db); return /^\d{4}-\d{2}-\d{2}$/.test(from) && lesson.date >= from; }
+export const PART_LABEL = { cancel: 'キャンセル', delay: '開始を遅らせた分', tardy: '遅刻' };
+export const parseParts = f => { try { const v = JSON.parse(f.parts || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+// 取消の内訳を1つ作る。lesson は予定どおりの授業（開始を遅らせたときは、遅らせる前の開始時刻と長さ）
+export function makePart(lesson, baseFee, reason, minutes, receivedAt) {
+  const rate = cancelRate(lesson.date, lesson.start, receivedAt ? Date.parse(receivedAt) : null);
+  return { reason, minutes, of: Number(lesson.minutes), start: lesson.start, receivedAt: receivedAt || '', rate, amount: cancelAmount(baseFee, Number(lesson.minutes), minutes, rate) };
+}
+// 取消料の行を書く（同じ reason の内訳は置き換える。minutes が 0 なら消す）。自動で decision = 'charge'。
+// 請求に入ったもの・減額や免除を答えたものは変えられない
+export async function setRateFee(c, lesson, reason, minutes, receivedAt) {
+  const cur = await c.db.prepare('select * from cancellationFees where lessonId = ?').bind(lesson.id).first();
+  if (cur && cur.invoiceId) fail('invoiced', '請求に入った取消料は変えられません。先に請求を取り消してください', 409);
+  if (cur && ['reduced', 'waived'].includes(cur.reliefStatus)) fail('reliefDone', '減額・免除に回答した取消料は変えられません', 409);
+  const baseFee = cur && cur.rule === 'rate' ? cur.baseFee : await lessonFee(c.db, lesson);
+  const parts = (cur && cur.rule === 'rate' ? parseParts(cur) : []).filter(p => p.reason !== reason);
+  if (minutes > 0) parts.push(makePart(lesson, baseFee, reason, minutes, receivedAt));
+  const now = iso(c.now);
+  if (!parts.length) { if (cur) await c.db.prepare('delete from cancellationFees where id = ?').bind(cur.id).run(); return null; }
+  const amount = parts.reduce((n, p) => n + p.amount, 0), type = parts.some(p => p.rate < RATE_FULL) ? 'late' : 'noshow';
+  const first = parts.map(p => p.receivedAt).filter(Boolean).sort()[0] || '';
+  if (cur) await c.db.prepare("update cancellationFees set type = ?, receivedAt = ?, standardAmount = ?, amount = ?, decision = 'charge', note = '', decidedAt = ?, decidedBy = 'system:auto', rule = 'rate', baseFee = ?, plannedMinutes = ?, parts = ?, updatedAt = ?, version = version + 1 where id = ?")
+    .bind(type, first, amount, amount, now, baseFee, cur.rule === 'rate' ? cur.plannedMinutes : Number(lesson.minutes), JSON.stringify(parts), now, cur.id).run();
+  else await c.db.prepare("insert into cancellationFees (id, lessonId, studentId, type, receivedAt, standardAmount, amount, decision, decidedAt, decidedBy, rule, baseFee, plannedMinutes, parts, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, 'charge', ?, 'system:auto', 'rate', ?, ?, ?, ?, ?)")
+    .bind(newId('cf'), lesson.id, lesson.studentId, type, first, amount, amount, now, baseFee, Number(lesson.minutes), JSON.stringify(parts), now, now).run();
+  return { amount, parts };
 }
 // キャンセルにしたときに、判断待ちのキャンセル料を作る（前のものがあれば置き換える。請求済みは触らない）
 export async function createCancelFee(c, lesson, type, receivedAt) {

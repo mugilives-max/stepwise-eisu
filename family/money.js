@@ -1,5 +1,6 @@
 // 保護者の画面: 計画・お支払い（5段目）。授業計画の承認、キャンセル料、月ごとの請求と振込の連絡。
 import { esc } from '/assets/v2/api.js';
+import { partText } from '/assets/v2/cancel-rate.js?v=20261003-ux31';
 
 const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
 const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
@@ -37,9 +38,9 @@ export function moneyView(data, { multi, dis }) {
   }).join('') + '</div>' : '<p class="muted">まだ請求はありません。</p>';
   // キャンセル料
   if (data.fees.length) {
-    h += '<h2>キャンセル料</h2><p class="small muted">前日23時を過ぎてからのキャンセルにかかります。急な病気などのときは、減額・免除を申請できます。</p><div class="list">';
+    h += '<h2>キャンセル料・取消料</h2><p class="small muted">前日23時を過ぎてからのキャンセル・開始を遅らせた分・遅刻にかかります。金額は連絡を受けた時刻で決まります。やむを得ない事情のときは、減額・免除を申請できます。</p><div class="list">';
     h += data.fees.map(f => `<div><div>${multi ? esc(f.studentName) + 'さん ' : ''}${md(f.date)} ${esc(f.start)} ${esc(f.subject)} <strong>${yen(f.amount)}</strong>${f.invoiceId ? ' <span class="tag gray">請求済み</span>' : ''}
-      ${f.note ? `<div class="small muted">${esc(f.note)}</div>` : ''}${f.reliefStatus === 'pending' ? '<div class="small">減額・免除の申請を受け付けました。先生からの回答をお待ちください。</div>' : f.reliefStatus ? `<div class="small">申請への回答: ${esc(f.reliefResponse)}</div>` : ''}
+      ${(f.parts || []).length ? `<div class="small muted">${f.parts.map(p => esc(partText(p, f.date))).join('<br>')}</div>` : ''}${f.note ? `<div class="small muted">${esc(f.note)}</div>` : ''}${f.reliefStatus === 'pending' ? '<div class="small">減額・免除の申請を受け付けました。先生からの回答をお待ちください。</div>' : f.reliefStatus ? `<div class="small">申請への回答: ${esc(f.reliefResponse)}</div>` : ''}
       ${!f.reliefStatus && !f.invoiceId && f.amount > 0 ? `<details><summary class="small">減額・免除を申請する</summary><form class="stack" data-form="fee-relief" data-id="${esc(f.id)}" data-version="${f.version}"><textarea name="reason" maxlength="1000" rows="2" placeholder="事情を書いてください（例: 急に熱が出たため）" required></textarea><button${dis}>申請する</button></form></details>` : ''}</div><div></div></div>`).join('');
     h += '</div>';
   }

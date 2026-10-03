@@ -9,7 +9,7 @@ import { requireStaff } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { isLive } from './accounts.mjs';
 import { todayJst, addDays, familyNotice, staffNotice } from './schedule.mjs';
-import { validMonth, monthEnd, shiftMonth, lineCap, lessonAmount, lineMatches, studentBilling, estimateFor, assignLines } from './plan-calc.mjs';
+import { validMonth, monthEnd, shiftMonth, lineCap, lessonAmount, lineMatches, studentBilling, estimateFor, assignLines, parseParts, PART_LABEL } from './plan-calc.mjs';
 
 const validDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) && !isNaN(Date.parse(d + 'T00:00:00Z'));
 const fullName = s => [s.familyName, s.givenName].filter(Boolean).join(' ');
@@ -25,7 +25,12 @@ export function lineView(l, extra = {}) {
     approvedVia: l.approvedVia, consentDate: l.consentDate, approvalNote: l.approvalNote, familyAck: l.familyAck, familyAckAt: l.familyAckAt, familyAckNote: l.familyAckNote, remindedAt: l.remindedAt || '', version: l.version, ...extra };
 }
 const feeView = f => ({ id: f.id, lessonId: f.lessonId, studentId: f.studentId, type: f.type, receivedAt: f.receivedAt, standardAmount: f.standardAmount, amount: f.amount, decision: f.decision, note: f.note,
-  reliefStatus: f.reliefStatus, reliefReason: f.reliefReason, reliefResponse: f.reliefResponse, invoiceId: f.invoiceId, date: f.date, start: f.start, minutes: f.minutes, subject: f.subject, version: f.version });
+  reliefStatus: f.reliefStatus, reliefReason: f.reliefReason, reliefResponse: f.reliefResponse, invoiceId: f.invoiceId, date: f.date, start: f.start, minutes: f.minutes, subject: f.subject, version: f.version,
+  rule: f.rule || '', baseFee: f.baseFee || 0, parts: parseParts(f) });
+// 請求の内訳の名前。新しい決まりは内訳（キャンセル・開始を遅らせた分・遅刻）と分数を出す
+const feeLabel = f => { const parts = f.rule === 'rate' ? parseParts(f) : [];
+  const base = parts.length && !parts.some(p => p.reason === 'cancel') ? '取消料（' + parts.map(p => `${PART_LABEL[p.reason] || p.reason} ${p.minutes}分`).join('・') + '）' : 'キャンセル料';
+  return base + (f.decision === 'adjust' || f.reliefStatus === 'reduced' ? '（減額）' : ''); };
 const invoiceView = v => ({ id: v.id, familyId: v.familyId, month: v.month, status: v.status, total: v.total, confirmedAt: v.confirmedAt, confirmedBy: v.confirmedBy === 'system:auto' ? 'auto' : v.confirmedBy === 'legacy' ? 'legacy' : 'staff',
   reportedAt: v.reportedAt, paidOn: v.paidOn, paidMethod: v.paidMethod, voidedAt: v.voidedAt, voidReason: v.voidReason, version: v.version });
 const itemView = i => ({ id: i.id, studentId: i.studentId, kind: i.kind, lessonId: i.lessonId, date: i.date, start: i.start, minutes: i.minutes, subject: i.subject, lessonKind: i.lessonKind, label: i.label, amount: i.amount });
@@ -101,7 +106,7 @@ export async function monthPreview(c, familyId, month, { ignoreInvoiceId = '' } 
       if (f.decision === 'pending') { out.issues.push(`${row.name}さん ${md(f.date)} ${f.subject} のキャンセル料が判断待ちです`); continue; }
       if (f.reliefStatus === 'pending') { out.issues.push(`${row.name}さん ${md(f.date)} ${f.subject} のキャンセル料に減額・免除の申請があります`); continue; }
       if (f.amount > 0) row.items.push({ kind: 'cancelFee', feeId: f.id, lessonId: f.lessonId, date: f.date, start: f.start, minutes: 0, subject: f.subject, lessonKind: '', planLineId: '', amount: f.amount,
-        label: 'キャンセル料' + (f.decision === 'adjust' || f.reliefStatus === 'reduced' ? '（減額）' : ''), carried: f.date < from });
+        label: feeLabel(f), carried: f.date < from });
     }
     row.items.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
     row.total = row.items.reduce((n, i) => n + i.amount, 0);

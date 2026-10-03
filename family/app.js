@@ -2,10 +2,10 @@
 // ログイン・招待・再設定、予定と「変更・お休みの連絡」、テスト・行事を知らせる、記録と宿題・成績、計画の承認とお支払い（family/money.js）、アカウント（右上）。
 // 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261003-ux30';
-import { learningView } from '/assets/v2/learning-view.js?v=20261003-ux30';
-import { moneyView } from '/family/money.js?v=20261003-ux30';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261003-ux30';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261003-ux31';
+import { learningView } from '/assets/v2/learning-view.js?v=20261003-ux31';
+import { moneyView } from '/family/money.js?v=20261003-ux31';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261003-ux31';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';
@@ -198,7 +198,7 @@ app.addEventListener('click', ev => {
     let r;
     if (a === 'send-change') {
       r = await call('family/lessons/request', { lessonId: change.id, kind: change.pick, note: change.note }, store.get());
-      if (r.ok) { change = null; sched = null; return say({ move: '日時の変更をお願いしました', rest: 'お休みにしました', late: '先生に連絡しました', cancel: 'キャンセルの連絡を受け付けました' }[r.request ? r.request.kind : 'move'], 'ok'); }
+      if (r.ok) { change = null; sched = null; return say({ move: '日時の変更をお願いしました', rest: 'お休みにしました', late: '先生に連絡しました', cancel: 'キャンセルの連絡を受け付けました' + (r.fee ? `（キャンセル料 ${Number(r.fee.amount).toLocaleString('ja-JP')}円）` : '') }[r.request ? r.request.kind : 'move'], 'ok'); }
     } else if (a === 'withdraw') { if (!confirm('この連絡を取り下げますか？')) return; r = await call('family/lessons/withdraw', { requestId: b.dataset.id }, store.get()); if (r.ok) { sched = null; return say('連絡を取り下げました', 'ok'); } }
     else if (a === 'hw-done' || a === 'hw-undo') { r = await call('family/homework/report', { id: b.dataset.id, undo: a === 'hw-undo' }, store.get()); if (r.ok) { learning = null; return say(a === 'hw-done' ? 'できたと先生に知らせました' : '取り消しました', 'ok'); } }
     else if (a === 'plan-ack') { r = await call('family/plans/ack', { id: b.dataset.id, version: Number(b.dataset.version), ack: 'confirmed' }, store.get()); if (r.ok) { money = null; return say('確認しました', 'ok'); } }
