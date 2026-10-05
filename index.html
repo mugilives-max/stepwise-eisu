@@ -1,831 +1,728 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ステップワイズ英数教室・個別指導部</title>
-    <meta
-      name="description"
-      content="中1・中2の英語・数学の苦手克服を中心に、基礎理解と自学習慣を育てるオンライン個別指導。無料体験授業を受付中です。"
-    />
-    <link rel="stylesheet" href="./styles.css?v=20260921-novideo" />
-  </head>
-  <body>
-    <header class="site-header">
-      <a class="brand" href="#top" aria-label="ステップワイズ英数教室・個別指導部 トップへ">
-        <img class="brand-logo" src="./assets/stepwise-logo.png" alt="ステップワイズ" />
-        <span>
-          <span class="brand-name">ステップワイズ個別指導</span>
-          <span class="brand-sub">英数教室・個別指導部</span>
-        </span>
-      </a>
-      <nav class="nav" aria-label="ページ内メニュー">
-        <a href="#problem">お悩み</a>
-        <a href="#solution">解決策</a>
-        <a href="#price">料金</a>
-        <a href="#trial">体験授業</a>
-        <a href="#contact">お問い合わせ</a>
-      </nav>
-    </header>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ステップワイズ 個別指導｜越谷市の個別指導塾（ホームページ準備中）</title>
+<meta name="description" content="埼玉県越谷市の個別指導塾「ステップワイズ 個別指導」。目先の点数のための暗記ではなく、前の単元まで戻って理解をつなげ、高校で伸びる土台をつくります。講師1人に生徒2人まで、90分4,500円（税込）。ホームページは準備中です。無料体験授業を受け付けています。">
+<meta name="theme-color" content="#16233f">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ステップワイズ 個別指導">
+<meta property="og:title" content="ステップワイズ 個別指導｜ホームページ準備中">
+<meta property="og:description" content="暗記で積むより、つなげて積む。越谷市の個別指導塾です。無料体験授業を受け付けています。">
+<meta property="og:image" content="https://www.stepwise-education.jp/og.png">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800&family=JetBrains+Mono:wght@500&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"EducationalOrganization","name":"ステップワイズ 個別指導","alternateName":"STEPWISE","description":"埼玉県越谷市の個別指導塾。小学生・中学生・高校生対象、講師1人に生徒2人までの個別指導。","address":{"@type":"PostalAddress","addressRegion":"埼玉県","addressLocality":"越谷市","addressCountry":"JP"}}
+</script>
+<style>
+/* ---------- tokens: the brand palette (stepwise-brand/logo-kit/README.txt) ---------- */
+:root{
+  --navy:#16233f; --navy-2:#1d2c4e; --navy-3:#0f1930;
+  --white:#fff; --paper:#f5f7fa; --line:#dde3ec;
+  --ink:#16233f; --ink-2:#5f6d86; --on-navy-2:#93a2bb;
+  --s1:#2e9fc0; --s2:#6f90cf; --s3:#ab78cf; --s4:#f55ec9;
+  --yellow:#f8ce41; --ball:#edc43f;
+  --cyan:#35c4f0; --magenta:#f05fc8;
+  --jp:'Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',system-ui,sans-serif;
+  --en:'Inter','Noto Sans JP',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --ease:cubic-bezier(.2,.7,.2,1);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--white);color:var(--ink);font-family:var(--jp);font-size:16px;line-height:1.9;font-feature-settings:"palt";overflow-x:hidden}
+h1,h2,h3,p,dl,dd,ol,ul{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+img,video,svg{display:block;max-width:100%}
+.wrap{width:100%;max-width:70rem;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left),clamp(16px,4vw,40px))}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:.7em}
+.eyebrow::before{content:"";width:22px;height:2px;background:currentColor;opacity:.6}
+.navy .eyebrow{color:var(--on-navy-2)}
 
-    <main id="top">
-      <section class="hero">
-        <div class="hero-copy">
-          <h1>「分かったつもり」で終わらせない。<br />自分で考え、学べる力を育てる。</h1>
-          <p class="lead">
-            本質理解×自学設計で、学力の岩盤を育てるオンライン個別指導
-          </p>
-          <ul class="hero-trust" aria-label="信頼要素">
-            <li>筑波大学卒</li>
-            <li>経験豊富な講師が指導</li>
-            <li>オンライン個別指導</li>
-          </ul>
-          <div class="cta-row">
-            <a class="button primary" href="https://forms.gle/FeFnTTy2EWrpfGkZ6" target="_blank" rel="noopener">今すぐ無料60分体験を申し込む</a>
-            <a class="button secondary" href="https://forms.gle/FeFnTTy2EWrpfGkZ6" target="_blank" rel="noopener">お問い合わせ・相談する</a>
-          </div>
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.6em;min-height:52px;padding:.7em 1.6em;border-radius:999px;font-weight:700;font-size:1rem;text-decoration:none;white-space:nowrap;transition:transform .25s var(--ease),box-shadow .25s var(--ease),background-color .25s}
+.btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.btn-apply{background:var(--yellow);color:var(--navy);box-shadow:0 10px 30px -12px rgba(248,206,65,.7)}
+.btn-apply:hover{transform:translateY(-2px);box-shadow:0 16px 34px -12px rgba(248,206,65,.85)}
+.btn-apply svg{transition:transform .25s var(--ease)}
+.btn-apply:hover svg{transform:translateX(4px)}
+.btn-ghost{color:#fff;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35)}
+.btn-ghost:hover{background:rgba(255,255,255,.08)}
+.btn-ghost .tri{width:0;height:0;border-left:9px solid currentColor;border-top:6px solid transparent;border-bottom:6px solid transparent}
+
+/* ---------- header ---------- */
+.site-head{position:fixed;inset:0 0 auto;z-index:50;padding-top:env(safe-area-inset-top);transition:background-color .35s,box-shadow .35s,color .35s;color:#fff}
+.site-head .wrap{display:flex;align-items:center;gap:16px;height:64px}
+.site-head .brand{display:flex;align-items:center;gap:12px;text-decoration:none;min-width:0}
+.site-head .brand svg{width:138px;height:auto;flex:none}
+.site-head .brand span{font-size:.8rem;font-weight:700;opacity:.75;white-space:nowrap}
+.site-head .btn{margin-left:auto;min-height:40px;padding:.4em 1.1em;font-size:.88rem}
+.site-head.is-light{background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);color:var(--navy);box-shadow:0 1px 0 var(--line)}
+@media (max-width:600px){.site-head .brand span{display:none}.site-head .brand svg{width:118px}.site-head .btn .long{display:none}}
+
+/* ---------- hero ---------- */
+.navy{background:var(--navy);color:#fff}
+.hero{position:relative;min-height:100svh;display:grid;align-items:center;overflow:hidden;
+  background:radial-gradient(110% 80% at 50% 38%,var(--navy-2) 0%,var(--navy) 55%,var(--navy-3) 100%)}
+.grid-bg{position:absolute;inset:-80px;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px),
+    linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px,160px 160px,160px 160px;
+  -webkit-mask-image:radial-gradient(75% 70% at 50% 45%,#000 30%,transparent 100%);mask-image:radial-gradient(75% 70% at 50% 45%,#000 30%,transparent 100%);
+  animation:grid-drift 24s linear infinite}
+@keyframes grid-drift{to{transform:translate(160px,160px)}}
+.hero .wrap{position:relative;padding-block:calc(96px + env(safe-area-inset-top)) 96px;display:grid;justify-items:center;text-align:center}
+.status-pill{display:inline-flex;align-items:center;gap:.65em;padding:.45em 1.1em .45em .9em;border-radius:999px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);font-size:.85rem;font-weight:700;letter-spacing:.04em}
+.status-pill i{width:8px;height:8px;border-radius:50%;background:var(--s3);box-shadow:0 0 0 0 rgba(171,120,207,.7);animation:pulse 1.8s ease-out infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(171,120,207,0)}100%{box-shadow:0 0 0 0 rgba(171,120,207,0)}}
+.status-pill small{font-family:var(--mono);font-weight:500;font-size:.72rem;color:var(--on-navy-2);letter-spacing:.14em}
+.logo-wrap{width:100%;display:grid;justify-items:center}
+.hero-logo{width:min(100%,780px);height:auto;margin:clamp(28px,5vw,48px) 0 clamp(20px,4vw,36px);overflow:visible}
+.tagline{font-weight:900;font-size:clamp(1.65rem,4.6vw,2.9rem);line-height:1.4;letter-spacing:.01em}
+.tagline .q{color:var(--ball)}
+.lead{margin-top:1.1em;color:#d5dbe6;font-size:clamp(.95rem,2.2vw,1.05rem);max-width:36em}
+.hero-cta{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 16px;margin-top:2rem}
+.scroll-cue{position:absolute;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);display:grid;justify-items:center;gap:6px;font-family:var(--mono);font-size:.68rem;letter-spacing:.2em;color:var(--on-navy-2);text-decoration:none}
+.scroll-cue span{width:1.5px;height:34px;background:linear-gradient(var(--on-navy-2),transparent);transform-origin:top;animation:cue 2s var(--ease) infinite}
+@keyframes cue{0%{transform:scaleY(0)}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+/* hero entrance (starts when the loader leaves) */
+.hero .in{opacity:0;transform:translateY(18px)}
+.is-ready .hero .in{opacity:1;transform:none;transition:opacity .8s var(--ease),transform .8s var(--ease);transition-delay:calc(var(--d,0) * 1s)}
+
+/* ---------- ticker ---------- */
+.ticker{background:var(--paper);border-block:1px solid var(--line);overflow:hidden;white-space:nowrap;padding-block:14px}
+.ticker .track{display:inline-flex;animation:tick 38s linear infinite}
+.ticker span{display:inline-flex;align-items:center;gap:1.1em;padding-right:1.1em;font-family:var(--mono);font-size:.82rem;letter-spacing:.16em;color:var(--ink-2)}
+.ticker b{font-family:var(--jp);font-weight:700;letter-spacing:.08em;color:var(--ink)}
+.ticker i{display:inline-block;width:7px;height:7px;border-radius:2px}
+@keyframes tick{to{transform:translateX(-50%)}}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:72px}
+.sec{padding-block:clamp(72px,11vw,128px)}
+.sec-head{display:grid;gap:14px;max-width:44rem}
+.sec-head h2{font-size:clamp(1.55rem,4vw,2.35rem);font-weight:900;line-height:1.45}
+.sec-head p{color:var(--ink-2)}
+.navy .sec-head p{color:#c8d0dd}
+
+/* reveal: text rises from behind a mask, like the movie */
+.rise{display:block;overflow:hidden;padding-bottom:.08em}
+.rise>span{display:block;transform:translateY(105%);transition:transform .9s var(--ease)}
+.on .rise>span,.rise.on>span{transform:none}
+.fade{opacity:0;transform:translateY(24px);transition:opacity .8s var(--ease),transform .8s var(--ease);transition-delay:calc(var(--d,0) * 1s)}
+.fade.on{opacity:1;transform:none}
+
+/* ---------- progress (stairs) ---------- */
+.stairs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:end;margin-top:clamp(36px,6vw,56px)}
+.stair{position:relative;background:var(--paper);border-radius:12px;padding:18px 18px 20px;display:grid;gap:6px;align-content:start;min-height:calc(150px + var(--k) * 34px)}
+.stair::before{content:"";position:absolute;inset:0 0 auto;height:6px;border-radius:12px 12px 0 0;background:var(--c);transform:scaleX(0);transform-origin:left;transition:transform .9s var(--ease);transition-delay:calc(.15s + var(--k) * .15s)}
+.stair.on::before{transform:none}
+.stair .no{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;color:var(--ink-2)}
+.stair b{font-size:1.08rem;line-height:1.5}
+.stair .state{display:inline-flex;align-items:center;gap:.45em;margin-top:4px;font-size:.85rem;font-weight:700;width:max-content;padding:.2em .8em;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
+.stair .state svg{width:14px;height:14px}
+.stair p{font-size:.85rem;color:var(--ink-2);line-height:1.7}
+.stair.now{background:var(--navy);color:#fff}
+.stair.now .no,.stair.now p{color:var(--on-navy-2)}
+.stair.now .state{background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.bar{height:6px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:62%;border-radius:inherit;
+  background:repeating-linear-gradient(-45deg,var(--s3) 0 8px,#c294e0 8px 16px);background-size:22.6px 100%;animation:barber 1s linear infinite}
+@keyframes barber{to{background-position:22.6px 0}}
+.dots::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.6s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+/* narrow screens: one column, each step a little further right, the colour bar on the left */
+@media (max-width:860px){
+  .stairs{grid-template-columns:minmax(0,1fr);gap:10px;align-items:stretch}
+  .stair{min-height:0;margin-left:calc(var(--k) * min(7%, 28px));padding:16px 18px 16px 24px}
+  .stair::before{inset:0 auto 0 0;width:6px;height:auto;border-radius:12px 0 0 12px;transform:scaleY(0);transform-origin:top}
+  .stair.on::before{transform:none}
+}
+
+/* ---------- concept ---------- */
+.concept{background:var(--paper)}
+.concept-top{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(28px,5vw,64px);align-items:center}
+.figure{position:relative;background:var(--navy);border-radius:16px;overflow:hidden;aspect-ratio:4/3}
+.figure .grid-bg{inset:0;animation:none;-webkit-mask-image:none;mask-image:none}
+.figure svg{position:absolute;inset:0;width:100%;height:100%}
+.figure .lbl{font-family:var(--mono);font-size:13px;letter-spacing:.12em}
+.figure .aha{font-family:var(--jp);font-weight:900}
+.points{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:clamp(40px,6vw,64px)}
+.point{background:#fff;border-radius:14px;padding:26px 24px 28px;display:grid;gap:10px;align-content:start;box-shadow:0 1px 0 var(--line),0 18px 40px -30px rgba(22,35,63,.35)}
+.point .n{display:flex;align-items:flex-end;gap:5px;height:34px}
+.point .n i{width:9px;border-radius:2px;background:var(--line)}
+.point .n i:nth-child(1){height:30%}.point .n i:nth-child(2){height:55%}.point .n i:nth-child(3){height:80%}
+.point .n i.lit{background:var(--c)}
+.point .n em{font-style:normal;font-family:var(--mono);font-size:.75rem;letter-spacing:.14em;color:var(--ink-2);margin-left:8px}
+.point h3{font-size:1.2rem;font-weight:900;line-height:1.5}
+.point p{color:var(--ink-2);font-size:.93rem;line-height:1.85}
+@media (max-width:860px){.concept-top{grid-template-columns:minmax(0,1fr)}.points{grid-template-columns:minmax(0,1fr)}}
+
+/* concept figure: bricks */
+.figure .cap{font-family:var(--jp);font-weight:700;font-size:15px}
+.figure .note{font-family:var(--jp);font-size:11.5px}
+#fig .b{opacity:0;transform-box:fill-box;transform-origin:50% 100%;transform:translateY(-14px)}
+#fig .drop{opacity:0}
+#fig .link{opacity:0}
+#fig .tower{transform-origin:100px 262px}
+#fig.play .b{animation:brick .4s var(--ease) forwards;animation-delay:calc(.25s + var(--i) * .07s)}
+#fig.play .drop{transform-box:fill-box;transform-origin:50% 100%;animation:drop 5.6s cubic-bezier(.5,0,.5,1) 1.8s infinite}
+#fig.play .tower{animation:sway 5.6s ease-in-out 1.8s infinite}
+#fig.play .link{animation:link 5.6s ease 1.8s infinite}
+#fig.still .b,#fig.still .drop{opacity:1;transform:none}
+@keyframes brick{to{opacity:1;transform:none}}
+@keyframes drop{0%{opacity:0;transform:translateY(-110px)}6%{opacity:1}16%{transform:translateY(0) scaleY(1)}19%{transform:scale(1.08,.82)}23%{transform:none}86%{opacity:1;transform:none}94%,100%{opacity:0;transform:none}}
+@keyframes sway{0%,16%{transform:rotate(0)}21%{transform:rotate(3.2deg)}27%{transform:rotate(-2.6deg)}33%{transform:rotate(2deg)}40%{transform:rotate(-1.4deg)}48%{transform:rotate(.9deg)}57%{transform:rotate(-.5deg)}66%,100%{transform:rotate(0)}}
+@keyframes link{0%,16%{opacity:0}22%{opacity:1}60%{opacity:.6}86%{opacity:.6}94%,100%{opacity:0}}
+
+/* ---------- movie ---------- */
+.movie{position:relative;overflow:hidden}
+.movie .grid-bg{animation-duration:40s}
+.movie .wrap{position:relative}
+.player{position:relative;margin-top:clamp(32px,5vw,48px);border-radius:16px;overflow:hidden;background:#0b1220;aspect-ratio:16/9;box-shadow:0 40px 80px -40px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.08)}
+.player video{width:100%;height:100%;object-fit:cover;background:#0b1220}
+.player .play{position:absolute;inset:0;display:grid;place-items:center;border:0;padding:0;background:linear-gradient(transparent 55%,rgba(11,18,32,.65));cursor:pointer;color:#fff;font:inherit}
+.player .play .disc{width:clamp(64px,10vw,92px);aspect-ratio:1;border-radius:50%;background:var(--white);display:grid;place-items:center;box-shadow:0 0 0 0 rgba(255,255,255,.35);animation:ring 2.4s ease-out infinite;transition:transform .3s var(--ease)}
+.player .play:hover .disc{transform:scale(1.07)}
+.player .play .disc::after{content:"";margin-left:12%;border-left:clamp(18px,2.6vw,24px) solid var(--navy);border-top:clamp(11px,1.6vw,15px) solid transparent;border-bottom:clamp(11px,1.6vw,15px) solid transparent}
+.player .play:focus-visible .disc{outline:3px solid var(--yellow);outline-offset:4px}
+.player .play .cap{position:absolute;left:clamp(16px,3vw,28px);bottom:clamp(14px,2.6vw,24px);text-align:left;display:grid;line-height:1.5}
+.player .play .cap b{font-size:clamp(1rem,2.4vw,1.3rem)}
+.player .play .cap small{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;color:#c8d0dd}
+.player.playing .play{display:none}
+@media (max-width:600px){.player .play .cap{display:none}}
+@media (max-width:600px){.player .play .cap{display:none}}
+@keyframes ring{70%{box-shadow:0 0 0 22px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+
+/* ---------- info ---------- */
+.info-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 clamp(28px,5vw,64px);margin-top:clamp(32px,5vw,48px)}
+.info-grid dl{display:contents}
+.row{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:16px;padding:20px 0;border-top:1px solid var(--line)}
+.row dt{font-size:.85rem;font-weight:700;color:var(--ink-2);padding-top:.15em;display:flex;gap:.6em;align-items:flex-start}
+.row dt::before{content:"";flex:none;width:8px;height:8px;border-radius:2px;margin-top:.55em;background:var(--c,var(--s1))}
+.row dd{font-weight:500}
+.row dd small{display:block;color:var(--ink-2);font-size:.85rem;font-weight:400;line-height:1.7;margin-top:2px}
+.row dd .big{font-size:1.35rem;font-weight:900;font-family:var(--en);letter-spacing:.01em}
+@media (max-width:760px){.info-grid{grid-template-columns:minmax(0,1fr)}.row{grid-template-columns:minmax(0,1fr);gap:4px}}
+
+/* ---------- apply ---------- */
+.apply{position:relative;overflow:hidden;text-align:center}
+.apply .wrap{position:relative;display:grid;justify-items:center;gap:18px}
+.apply .badge{display:inline-flex;align-items:center;gap:.5em;background:var(--yellow);color:var(--navy);font-weight:900;padding:.35em 1.1em;border-radius:999px;font-size:.95rem}
+.apply h2{font-size:clamp(1.6rem,4.4vw,2.5rem);font-weight:900;line-height:1.45}
+.apply p{color:#c8d0dd;max-width:34em}
+.apply .btn{margin-top:8px;min-height:60px;font-size:1.08rem;padding-inline:2em}
+.apply small{color:var(--on-navy-2);font-size:.8rem}
+.apply .steps-deco{position:absolute;right:max(16px,6vw);bottom:0;display:flex;gap:10px;align-items:flex-end;opacity:.16;pointer-events:none}
+.apply .steps-deco i{width:clamp(26px,4vw,48px);border-radius:6px 6px 0 0;background:var(--c);height:calc(var(--k) * clamp(36px,6vw,70px))}
+@media (max-width:600px){.apply .steps-deco{opacity:.1}}
+
+/* ---------- footer ---------- */
+.foot{background:var(--navy-3);color:var(--on-navy-2);font-size:.82rem;padding-block:40px calc(40px + env(safe-area-inset-bottom))}
+.foot .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:center;justify-content:space-between}
+.foot svg{width:150px;height:auto;color:#fff}
+.foot p{line-height:1.8}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .rise>span,.fade,.hero .in{transform:none!important;opacity:1!important}
+  .stair::before{transform:none}
+}
+</style>
+</head>
+<body>
+<div id="sw-loader" role="status" aria-label="読み込み中" data-once="session" data-max="6000">
+  <svg class="swl-art" viewBox="-110 -40 1164 330" overflow="visible" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="swl-wg" gradientUnits="userSpaceOnUse" x1="299" y1="0" x2="912" y2="0">
+        <stop offset="0" stop-color="#f3f5f7"/><stop offset=".55" stop-color="#e8eaed"/><stop offset="1" stop-color="#c4c8cd"/>
+      </linearGradient>
+      <clipPath id="swl-subclip"><rect x="280" y="190" width="700" height="60"/></clipPath>
+    </defs>
+    <g id="swl-shake"><g id="swl-cam">
+      <rect id="swl-line" x="-50" y="170" width="1044" height="1.6" fill="#fff" fill-opacity=".22"/>
+      <g id="swl-dust" fill="#fff" fill-opacity=".6"><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/></g>
+      <rect class="swl-bar" x="25" y="141.5" width="51" height="28.5" rx="6" fill="#2e9fc0"/><rect class="swl-bar" x="84" y="113" width="51" height="57" rx="6" fill="#6f90cf"/><rect class="swl-bar" x="143" y="84.5" width="51" height="85.5" rx="6" fill="#ab78cf"/><rect class="swl-bar" x="202" y="56" width="51" height="114" rx="6" fill="#f55ec9"/>
+      <circle id="swl-ring" cx="227.5" cy="38.3" r="0" fill="none" stroke="#edc43f" stroke-opacity="0"/>
+      <g id="swl-ghosts" fill="#edc43f"><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/><circle r="0"/></g>
+      <g id="swl-ball">
+        <circle cx="227.5" cy="38.3" r="16" fill="#edc43f"/>
+        <path d="M217.04 35.30A10.88 10.88 0 0 1 224.14 27.95" fill="none" stroke="#f6e3a1" stroke-width="2.6" stroke-linecap="round"/>
+      </g>
+      <g id="swl-word" fill="url(#swl-wg)"><path d="M334.64 171.25Q323.95 171.25 316.02 167.98Q308.09 164.71 303.67 158.24Q299.25 151.77 299 142.17H317.28Q317.61 146.56 319.84 149.51Q322.07 152.46 325.84 153.94Q329.61 155.41 334.42 155.41Q339.1 155.41 342.55 154.07Q346 152.73 347.89 150.31Q349.79 147.9 349.79 144.73Q349.79 141.84 348.08 139.88Q346.37 137.92 343.06 136.5Q339.74 135.07 334.91 133.95L325.36 131.62Q314.12 128.93 307.73 123.08Q301.34 117.24 301.34 107.53Q301.34 99.52 305.68 93.51Q310.01 87.5 317.56 84.16Q325.11 80.82 334.8 80.82Q344.7 80.82 352.03 84.19Q359.37 87.57 363.45 93.57Q367.53 99.57 367.66 107.43H349.45Q348.97 102.28 345.11 99.44Q341.26 96.61 334.66 96.61Q330.21 96.61 327.09 97.86Q323.97 99.11 322.36 101.31Q320.75 103.51 320.75 106.32Q320.75 109.39 322.61 111.44Q324.47 113.5 327.61 114.81Q330.75 116.13 334.51 117.01L342.35 118.9Q348.14 120.2 353 122.39Q357.85 124.58 361.41 127.72Q364.97 130.86 366.91 135.1Q368.84 139.34 368.84 144.8Q368.84 152.9 364.77 158.85Q360.7 164.8 353.05 168.03Q345.41 171.25 334.64 171.25Z"/><path d="M377.77 97.58V82H450.28V97.58H423.49V170H404.61V97.58Z"/><path d="M462.07 170V82H521.64V97.58H480.96V117.91H518.5V133.2H480.96V154.42H521.71V170Z"/><path d="M535.54 170V82H570.39Q580.38 82 587.45 85.82Q594.53 89.64 598.28 96.39Q602.04 103.14 602.04 111.93Q602.04 120.75 598.23 127.43Q594.42 134.11 587.23 137.88Q580.04 141.64 569.91 141.64H547.77V126.51H566.77Q572.09 126.51 575.59 124.66Q579.09 122.8 580.81 119.52Q582.54 116.23 582.54 111.93Q582.54 107.55 580.81 104.31Q579.09 101.06 575.58 99.27Q572.07 97.48 566.72 97.48H554.42V170Z"/><path d="M632.79 170 609.2 82H629.9L639.65 123.96Q640.91 129.56 641.95 135.95Q642.99 142.34 643.99 148.76Q644.99 155.18 645.96 161.02H642.56Q643.66 155.18 644.71 148.76Q645.77 142.34 646.92 135.95Q648.07 129.56 649.41 123.96L659.74 82H679.23L689.51 123.96Q690.87 129.56 692.01 135.95Q693.15 142.34 694.23 148.76Q695.31 155.18 696.41 161.02H692.9Q693.93 155.18 694.91 148.76Q695.89 142.34 696.97 135.95Q698.05 129.56 699.26 123.96L709.02 82H729.76L706.13 170H684.63L673.38 126.31Q671.44 118.55 670.1 109.51Q668.75 100.47 667.1 91.15H671.82Q669.95 100.29 668.8 109.22Q667.65 118.15 665.58 126.31L654.31 170Z"/><path d="M759 82V170H740.12V82Z"/><path d="M806.93 171.25Q796.24 171.25 788.31 167.98Q780.38 164.71 775.96 158.24Q771.53 151.77 771.29 142.17H789.57Q789.9 146.56 792.13 149.51Q794.36 152.46 798.13 153.94Q801.9 155.41 806.71 155.41Q811.39 155.41 814.84 154.07Q818.29 152.73 820.18 150.31Q822.08 147.9 822.08 144.73Q822.08 141.84 820.37 139.88Q818.66 137.92 815.35 136.5Q812.03 135.07 807.2 133.95L797.64 131.62Q786.4 128.93 780.02 123.08Q773.63 117.24 773.63 107.53Q773.63 99.52 777.96 93.51Q782.3 87.5 789.85 84.16Q797.4 80.82 807.09 80.82Q816.99 80.82 824.32 84.19Q831.66 87.57 835.74 93.57Q839.82 99.57 839.95 107.43H821.74Q821.26 102.28 817.4 99.44Q813.55 96.61 806.95 96.61Q802.49 96.61 799.38 97.86Q796.26 99.11 794.65 101.31Q793.04 103.51 793.04 106.32Q793.04 109.39 794.9 111.44Q796.76 113.5 799.9 114.81Q803.04 116.13 806.8 117.01L814.64 118.9Q820.43 120.2 825.29 122.39Q830.14 124.58 833.7 127.72Q837.26 130.86 839.2 135.1Q841.13 139.34 841.13 144.8Q841.13 152.9 837.06 158.85Q832.99 164.8 825.34 168.03Q817.69 171.25 806.93 171.25Z"/><path d="M853.39 170V82H912.96V97.58H872.28V117.91H909.82V133.2H872.28V154.42H913.03V170Z"/></g>
+      <g clip-path="url(#swl-subclip)"><g id="swl-sub"><path fill="#f1f3f6" d="M324.1 209.85Q323.89 210.15 323.52 210.78Q323.14 211.42 322.92 211.96Q322.23 213.54 321.2 215.51Q320.16 217.47 318.87 219.45Q317.58 221.43 316.12 223.11Q314.24 225.27 311.97 227.33Q309.69 229.39 307.18 231.13Q304.66 232.87 302.04 234.11L298.55 230.47Q301.28 229.44 303.84 227.85Q306.41 226.26 308.6 224.41Q310.8 222.56 312.37 220.81Q313.5 219.54 314.49 218.08Q315.49 216.63 316.27 215.19Q317.04 213.75 317.41 212.56Q317.07 212.56 316.19 212.56Q315.31 212.56 314.14 212.56Q312.97 212.56 311.7 212.56Q310.43 212.56 309.27 212.56Q308.1 212.56 307.22 212.56Q306.34 212.56 305.97 212.56Q305.28 212.56 304.49 212.6Q303.7 212.65 303.03 212.71Q302.35 212.76 301.98 212.79V207.99Q302.45 208.04 303.21 208.1Q303.96 208.16 304.72 208.19Q305.48 208.23 305.97 208.23Q306.42 208.23 307.35 208.23Q308.29 208.23 309.5 208.23Q310.72 208.23 312.02 208.23Q313.32 208.23 314.51 208.23Q315.7 208.23 316.59 208.23Q317.48 208.23 317.86 208.23Q318.97 208.23 319.91 208.11Q320.84 207.98 321.35 207.81ZM316.56 220.32Q317.88 221.38 319.35 222.76Q320.83 224.14 322.28 225.62Q323.72 227.11 324.96 228.48Q326.2 229.84 327.03 230.85L323.19 234.19Q321.96 232.45 320.36 230.6Q318.76 228.75 316.99 226.91Q315.22 225.07 313.39 223.44ZM336.49 206.86Q337.31 206.97 338.29 207.03Q339.26 207.1 340.09 207.1Q340.73 207.1 342.1 207.1Q343.47 207.1 345.19 207.1Q346.91 207.1 348.63 207.1Q350.35 207.1 351.69 207.1Q353.04 207.1 353.63 207.1Q354.49 207.1 355.44 207.04Q356.39 206.98 357.26 206.86V211.21Q356.39 211.14 355.45 211.11Q354.52 211.08 353.63 211.08Q353.04 211.08 351.7 211.08Q350.36 211.08 348.64 211.08Q346.92 211.08 345.2 211.08Q343.48 211.08 342.11 211.08Q340.74 211.08 340.1 211.08Q339.24 211.08 338.25 211.11Q337.27 211.14 336.49 211.21ZM332.56 215.47Q333.31 215.56 334.16 215.62Q335.02 215.68 335.8 215.68Q336.25 215.68 337.56 215.68Q338.87 215.68 340.73 215.68Q342.59 215.68 344.72 215.68Q346.86 215.68 348.99 215.68Q351.13 215.68 352.98 215.68Q354.84 215.68 356.14 215.68Q357.45 215.68 357.86 215.68Q358.4 215.68 359.34 215.63Q360.28 215.58 360.95 215.47V219.86Q360.32 219.8 359.45 219.78Q358.58 219.76 357.86 219.76Q357.45 219.76 356.14 219.76Q354.84 219.76 352.98 219.76Q351.13 219.76 348.99 219.76Q346.86 219.76 344.72 219.76Q342.59 219.76 340.73 219.76Q338.87 219.76 337.56 219.76Q336.25 219.76 335.8 219.76Q335.05 219.76 334.15 219.79Q333.26 219.82 332.56 219.88ZM349.81 217.81Q349.81 221.11 349.24 223.71Q348.67 226.32 347.59 228.41Q347 229.57 345.98 230.78Q344.96 231.98 343.65 233.06Q342.34 234.13 340.83 234.89L336.87 232.03Q338.65 231.33 340.31 230Q341.97 228.68 342.98 227.2Q344.26 225.27 344.69 222.91Q345.12 220.55 345.13 217.84ZM380.42 212.69Q380.67 213.21 381.05 214.21Q381.43 215.22 381.86 216.34Q382.29 217.47 382.64 218.48Q382.99 219.48 383.18 220.07L379.15 221.47Q379 220.85 378.67 219.87Q378.33 218.89 377.93 217.79Q377.52 216.69 377.12 215.67Q376.72 214.66 376.41 214ZM392.85 215.14Q392.57 215.95 392.39 216.52Q392.2 217.1 392.06 217.61Q391.41 220.16 390.3 222.7Q389.18 225.24 387.45 227.47Q385.1 230.49 382.12 232.6Q379.14 234.71 376.18 235.85L372.64 232.23Q374.49 231.72 376.55 230.73Q378.6 229.74 380.52 228.32Q382.43 226.91 383.82 225.17Q384.96 223.73 385.86 221.86Q386.77 219.98 387.35 217.86Q387.94 215.73 388.12 213.62ZM372.59 214.46Q372.92 215.11 373.35 216.11Q373.78 217.12 374.22 218.24Q374.67 219.37 375.08 220.41Q375.48 221.45 375.72 222.16L371.61 223.69Q371.41 223.02 371.02 221.94Q370.63 220.86 370.17 219.67Q369.71 218.49 369.28 217.48Q368.85 216.47 368.54 215.92ZM424.19 207.98Q424.19 208.79 424.76 209.36Q425.32 209.93 426.13 209.93Q426.94 209.93 427.51 209.36Q428.08 208.79 428.08 207.98Q428.08 207.18 427.51 206.61Q426.94 206.03 426.13 206.03Q425.32 206.03 424.76 206.61Q424.19 207.18 424.19 207.98ZM422.1 207.98Q422.1 206.87 422.65 205.96Q423.2 205.05 424.11 204.5Q425.02 203.95 426.13 203.95Q427.24 203.95 428.16 204.5Q429.07 205.05 429.62 205.96Q430.17 206.87 430.17 207.98Q430.17 209.09 429.62 210Q429.07 210.91 428.16 211.46Q427.24 212.01 426.13 212.01Q425.02 212.01 424.11 211.46Q423.2 210.91 422.65 210Q422.1 209.09 422.1 207.98ZM426.19 210.65Q425.96 211.12 425.78 211.78Q425.6 212.43 425.45 212.98Q425.16 214.22 424.73 215.76Q424.31 217.3 423.69 218.95Q423.08 220.61 422.26 222.23Q421.43 223.85 420.38 225.27Q418.86 227.27 416.85 229.03Q414.84 230.79 412.34 232.19Q409.84 233.6 406.83 234.57L403.16 230.54Q406.52 229.74 408.96 228.55Q411.4 227.37 413.2 225.85Q415 224.34 416.37 222.64Q417.49 221.22 418.29 219.56Q419.09 217.9 419.6 216.23Q420.12 214.56 420.33 213.12Q419.83 213.12 418.66 213.12Q417.48 213.12 415.93 213.12Q414.37 213.12 412.66 213.12Q410.96 213.12 409.37 213.12Q407.78 213.12 406.52 213.12Q405.26 213.12 404.63 213.12Q403.47 213.12 402.38 213.16Q401.29 213.2 400.62 213.26V208.5Q401.14 208.56 401.86 208.63Q402.58 208.69 403.34 208.73Q404.1 208.78 404.64 208.78Q405.17 208.78 406.18 208.78Q407.19 208.78 408.49 208.78Q409.8 208.78 411.24 208.78Q412.68 208.78 414.1 208.78Q415.52 208.78 416.77 208.78Q418.02 208.78 418.93 208.78Q419.84 208.78 420.24 208.78Q420.74 208.78 421.47 208.73Q422.21 208.69 422.87 208.52ZM461.21 210.11Q461.12 210.36 460.99 210.81Q460.85 211.26 460.75 211.71Q460.65 212.15 460.59 212.38Q460.29 214.13 459.86 216.27Q459.44 218.41 458.68 220.63Q457.92 222.85 456.59 224.9Q454.5 228.2 451.18 230.66Q447.86 233.12 443.81 234.55L440.05 230.71Q442.32 230.15 444.66 229.04Q447.01 227.94 449.06 226.31Q451.12 224.69 452.43 222.6Q453.3 221.22 453.92 219.57Q454.54 217.92 454.94 216.11Q455.33 214.3 455.5 212.48Q455.05 212.48 454.08 212.48Q453.11 212.48 451.8 212.48Q450.48 212.48 449 212.48Q447.52 212.48 446.03 212.48Q444.55 212.48 443.22 212.48Q441.89 212.48 440.87 212.48Q439.84 212.48 439.34 212.48Q439.34 212.8 439.34 213.34Q439.34 213.87 439.34 214.52Q439.34 215.18 439.34 215.84Q439.34 216.5 439.34 217.09Q439.34 217.69 439.34 218.11Q439.34 218.47 439.35 219.27Q439.37 220.08 439.46 220.87H434.5Q434.57 220.08 434.62 219.42Q434.67 218.77 434.67 218.11Q434.67 217.59 434.67 216.66Q434.67 215.72 434.67 214.63Q434.67 213.53 434.67 212.55Q434.67 211.56 434.67 210.98Q434.67 210.3 434.63 209.57Q434.59 208.84 434.52 208.17Q435.33 208.2 436.4 208.25Q437.47 208.29 438.64 208.29Q438.92 208.29 439.81 208.29Q440.71 208.29 442 208.29Q443.28 208.29 444.8 208.29Q446.31 208.29 447.83 208.29Q449.36 208.29 450.75 208.29Q452.15 208.29 453.19 208.29Q454.23 208.29 454.75 208.29Q455.61 208.29 456.44 208.23Q457.27 208.17 457.95 208.05ZM466.6 219.6Q471.13 218.42 474.82 216.85Q478.51 215.27 481.32 213.55Q483.06 212.48 484.83 211.08Q486.59 209.69 488.16 208.2Q489.73 206.71 490.81 205.38L494.45 208.84Q492.92 210.37 491.08 211.91Q489.25 213.46 487.26 214.87Q485.27 216.27 483.29 217.48Q481.38 218.6 479.01 219.77Q476.64 220.95 474 222Q471.36 223.04 468.7 223.85ZM480.61 215.73 485.41 214.6V229.77Q485.41 230.52 485.44 231.39Q485.47 232.26 485.53 233.02Q485.59 233.77 485.7 234.19H480.37Q480.43 233.77 480.49 233.02Q480.55 232.26 480.58 231.39Q480.61 230.52 480.61 229.77ZM524.1 204.67Q524.53 205.29 525.05 206.15Q525.57 207.01 526.04 207.86Q526.5 208.7 526.77 209.28L524.06 210.44Q523.54 209.4 522.82 208.09Q522.1 206.78 521.42 205.76ZM528.34 203.49Q528.79 204.12 529.3 204.97Q529.81 205.82 530.29 206.65Q530.78 207.47 531.06 208.07L528.38 209.22Q527.86 208.16 527.11 206.84Q526.37 205.52 525.68 204.58ZM525.63 210.67Q525.42 210.96 525.05 211.6Q524.67 212.24 524.45 212.78Q523.75 214.36 522.72 216.33Q521.69 218.29 520.4 220.27Q519.1 222.24 517.65 223.93Q515.77 226.08 513.49 228.15Q511.22 230.21 508.7 231.95Q506.19 233.69 503.57 234.93L500.08 231.29Q502.8 230.26 505.37 228.66Q507.94 227.07 510.13 225.22Q512.32 223.37 513.9 221.63Q515.02 220.36 516.02 218.9Q517.02 217.45 517.79 216Q518.57 214.56 518.93 213.37Q518.59 213.37 517.71 213.37Q516.83 213.37 515.67 213.37Q514.5 213.37 513.23 213.37Q511.96 213.37 510.79 213.37Q509.62 213.37 508.74 213.37Q507.86 213.37 507.5 213.37Q506.81 213.37 506.02 213.42Q505.23 213.47 504.55 213.52Q503.88 213.58 503.51 213.61V208.8Q503.98 208.86 504.73 208.92Q505.48 208.98 506.25 209.01Q507.01 209.05 507.5 209.05Q507.94 209.05 508.88 209.05Q509.81 209.05 511.03 209.05Q512.24 209.05 513.54 209.05Q514.84 209.05 516.03 209.05Q517.22 209.05 518.12 209.05Q519.01 209.05 519.38 209.05Q520.5 209.05 521.43 208.92Q522.37 208.8 522.88 208.63ZM518.09 221.14Q519.4 222.19 520.88 223.58Q522.36 224.96 523.8 226.44Q525.25 227.93 526.49 229.29Q527.72 230.66 528.55 231.67L524.71 235.01Q523.48 233.27 521.88 231.42Q520.29 229.57 518.52 227.73Q516.74 225.89 514.92 224.26Z"/><path fill="#93a2bb" d="M556.36 205.97H576.46V235.32H573.01V209.13H559.67V235.6H556.36ZM560.69 213.48H572.15V216.14H560.69ZM558.09 230.46H574.72V233.61H558.09ZM564.9 209.92H567.73V220.72H564.9ZM564.34 221.82V225.84H568.41V221.82ZM561.71 219.29H571.17V228.36H561.71ZM552.37 204.28 555.69 205.28Q554.72 208.18 553.37 211.08Q552.02 213.99 550.41 216.57Q548.81 219.16 547.06 221.14Q546.92 220.7 546.62 219.96Q546.32 219.22 545.96 218.47Q545.6 217.72 545.3 217.26Q546.74 215.66 548.07 213.57Q549.39 211.48 550.49 209.1Q551.6 206.72 552.37 204.28ZM549.6 213.24 553.01 209.83 553.04 209.87V235.67H549.6ZM598.1 208.25H601.6V227.21H598.1ZM606.14 204.83H609.72V231.16Q609.72 232.82 609.33 233.67Q608.93 234.52 607.95 234.97Q606.96 235.4 605.34 235.53Q603.71 235.67 601.39 235.66Q601.31 235.15 601.1 234.47Q600.89 233.8 600.64 233.11Q600.39 232.43 600.1 231.94Q601.81 231.99 603.27 232Q604.73 232.02 605.24 232Q605.71 231.99 605.92 231.81Q606.14 231.62 606.14 231.15ZM586 220.31H593.81V223.47H586ZM592.23 220.31H595.58Q595.58 220.31 595.56 220.56Q595.55 220.81 595.55 221.13Q595.55 221.45 595.53 221.67Q595.37 225.78 595.17 228.35Q594.96 230.92 594.67 232.29Q594.39 233.65 593.91 234.23Q593.43 234.85 592.85 235.09Q592.27 235.33 591.48 235.43Q590.81 235.53 589.7 235.54Q588.59 235.56 587.37 235.5Q587.34 234.78 587.08 233.89Q586.82 233 586.4 232.36Q587.53 232.47 588.48 232.49Q589.44 232.51 589.88 232.51Q590.29 232.51 590.54 232.44Q590.8 232.37 591.03 232.11Q591.33 231.76 591.55 230.57Q591.77 229.39 591.93 227.04Q592.09 224.7 592.23 220.86ZM584.82 208.92V214.07H591.81V208.92ZM581.54 205.73H595.29V217.29H581.54ZM585.05 216.27H588.59Q588.46 218.93 588.14 221.65Q587.83 224.37 587.14 226.93Q586.46 229.49 585.21 231.72Q583.95 233.95 581.94 235.67Q581.54 235 580.83 234.25Q580.13 233.5 579.48 233.07Q581.28 231.6 582.35 229.65Q583.42 227.71 583.97 225.47Q584.52 223.23 584.73 220.88Q584.94 218.52 585.05 216.27ZM626.97 204.21H630.57V213.49Q630.57 214.41 631 214.65Q631.44 214.9 632.96 214.9Q633.25 214.9 633.86 214.9Q634.47 214.9 635.25 214.9Q636.04 214.9 636.84 214.9Q637.64 214.9 638.3 214.9Q638.96 214.9 639.32 214.9Q640.19 214.9 640.62 214.62Q641.06 214.34 641.25 213.48Q641.44 212.62 641.54 210.91Q642.12 211.32 643.11 211.69Q644.09 212.06 644.82 212.22Q644.61 214.56 644.09 215.86Q643.56 217.16 642.5 217.66Q641.44 218.16 639.57 218.16Q639.28 218.16 638.58 218.16Q637.88 218.16 636.98 218.16Q636.09 218.16 635.2 218.16Q634.31 218.16 633.61 218.16Q632.91 218.16 632.64 218.16Q630.4 218.16 629.16 217.75Q627.92 217.35 627.45 216.32Q626.97 215.3 626.97 213.51ZM640.1 205.77 642.8 208.4Q640.95 209.15 638.71 209.8Q636.48 210.46 634.14 210.99Q631.8 211.53 629.61 211.94Q629.48 211.37 629.15 210.58Q628.82 209.79 628.53 209.25Q630.59 208.81 632.73 208.25Q634.88 207.7 636.8 207.05Q638.73 206.4 640.1 205.77ZM626.92 220.35H643.23V235.46H639.64V223.34H630.34V235.61H626.92ZM628.73 225.8H640.87V228.63H628.73ZM628.59 231.22H640.89V234.12H628.59ZM613.12 221.55Q614.67 221.2 616.65 220.71Q618.63 220.22 620.83 219.65Q623.02 219.07 625.2 218.47L625.64 221.8Q622.64 222.66 619.57 223.5Q616.5 224.35 614.02 225.02ZM613.61 210.64H625.11V214H613.61ZM617.96 204.16H621.51V231.66Q621.51 233.01 621.21 233.76Q620.91 234.51 620.1 234.94Q619.31 235.34 618.11 235.47Q616.91 235.59 615.14 235.58Q615.06 234.89 614.76 233.93Q614.45 232.97 614.13 232.26Q615.15 232.3 616.07 232.31Q616.99 232.32 617.31 232.31Q617.67 232.29 617.81 232.15Q617.96 232.02 617.96 231.67ZM647.48 226.24H678.25V229.01H647.48ZM656.11 207.02H678.19V209.48H656.11ZM667.44 224.28H670.93V232.11Q670.93 233.36 670.61 234.07Q670.3 234.78 669.32 235.14Q668.37 235.48 667.01 235.56Q665.64 235.63 663.69 235.62Q663.59 234.91 663.25 234.04Q662.91 233.18 662.56 232.51Q663.45 232.55 664.32 232.57Q665.19 232.59 665.84 232.57Q666.5 232.56 666.75 232.56Q667.15 232.55 667.3 232.43Q667.44 232.32 667.44 232.03ZM653.21 230.48 655.67 228.45Q656.5 228.97 657.41 229.64Q658.32 230.31 659.14 230.98Q659.96 231.66 660.45 232.26L657.81 234.49Q657.36 233.9 656.59 233.18Q655.83 232.46 654.93 231.75Q654.04 231.04 653.21 230.48ZM648.47 206.58 650.82 204.61Q651.68 205.18 652.59 205.91Q653.5 206.64 654.28 207.39Q655.07 208.14 655.52 208.79L653.03 210.98Q652.59 210.33 651.84 209.54Q651.09 208.75 650.2 207.98Q649.32 207.21 648.47 206.58ZM660.07 204.72 663.02 204.13Q663.57 204.85 664.09 205.78Q664.61 206.7 664.83 207.43L661.73 208.1Q661.53 207.41 661.06 206.46Q660.59 205.5 660.07 204.72ZM662.13 215.14V216.31H671.93V215.14ZM662.13 217.93V219.12H671.93V217.93ZM662.13 212.4V213.53H671.93V212.4ZM658.78 210.72H675.42V220.79H658.78ZM654.96 212.64V220.38H651.68V215.41H647.61V212.64ZM665.24 208.01 668.82 208.27Q668.45 209.21 668.11 210.05Q667.77 210.88 667.5 211.51L664.63 211.12Q664.84 210.38 665 209.52Q665.17 208.66 665.24 208.01ZM671.17 204.09 674.58 204.68Q673.98 205.64 673.38 206.46Q672.79 207.29 672.28 207.92L669.42 207.32Q669.88 206.59 670.38 205.69Q670.88 204.78 671.17 204.09ZM654.96 219.17Q655.84 220.57 657.44 221.24Q659.03 221.9 661.23 221.97Q662.46 222 664.15 222.02Q665.85 222.04 667.79 222.03Q669.74 222.01 671.71 221.97Q673.69 221.93 675.49 221.86Q677.3 221.79 678.68 221.71Q678.44 222.19 678.17 223.03Q677.89 223.87 677.77 224.5Q676.18 224.56 674 224.6Q671.81 224.65 669.45 224.66Q667.09 224.68 664.95 224.66Q662.8 224.65 661.25 224.59Q658.67 224.5 656.85 223.82Q655.03 223.14 653.76 221.56Q652.56 222.39 651.29 223.21Q650.01 224.03 648.62 224.91L647.35 222.01Q648.53 221.45 649.9 220.7Q651.27 219.96 652.54 219.17Z"/></g></g>
+    </g></g>
+  </svg>
+</div>
+<style>
+html.swl-lock{overflow:hidden}
+#sw-loader{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;
+  background:radial-gradient(120% 90% at 50% 46%,#1d2c4e 0%,#16233f 55%,#0f1930 100%);
+  animation:swl-failsafe .3s ease 4s forwards;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#sw-loader[hidden]{display:none}
+#sw-loader .swl-art{width:min(94vw,760px);height:auto;overflow:visible;display:block}
+#sw-loader.swl-exit{transform:translateY(-100%);transition:transform .7s cubic-bezier(.87,0,.13,1)}
+#sw-loader.swl-exit .swl-art{transform:translateY(-6vh);transition:transform .7s cubic-bezier(.7,0,.3,1)}
+#sw-loader.swl-fade{opacity:0;transition:opacity .35s ease}
+@keyframes swl-failsafe{to{opacity:0;visibility:hidden}}
+</style>
+<script>
+(function () {
+  'use strict';
+  var root = document.getElementById('sw-loader');
+  if (!root) return;
+  var KEY = 'sw-loader-seen';
+  var once = root.getAttribute('data-once') || 'session';
+  try { if (once === 'session' && sessionStorage.getItem(KEY)) { root.parentNode.removeChild(root); return; } } catch (e) {}
+  root.style.animation = 'none';                       // JS is alive: the CSS failsafe is no longer needed
+  var html = document.documentElement;
+
+  /* ---------- geometry (logo units; same numbers as the logo files) ---------- */
+  var BASE = 170, BW = 51, BARS = [[25.0, 28.5], [84.0, 57.0], [143.0, 85.5], [202.0, 114.0]], R = 6;
+  var DOT = [227.5, 38.3, 16.0];
+  var WORD_N = 8;
+
+  /* ---------- timing (seconds). 0.25 s = one beat, as in the intro video ---------- */
+  var LANDS = [0.35, 0.6, 0.85, 1.1];                   // block landings
+  var INTRO = 1.35, CYCLE = 1.0;                         // stepping wave while the page loads
+  var FLY = 0.55, HOLD = 0.85;                           // ball flight, hold on the finished logo
+
+  /* ---------- easing (ported from the video) ---------- */
+  function clamp(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function lerp(a, b, u) { return a + (b - a) * u; }
+  function prog(t, a, b) { return clamp((t - a) / (b - a)); }
+  function inOutCubic(u) { return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; }
+  function outCubic(u) { return 1 - Math.pow(1 - u, 3); }
+  function outExpo(u) { return u >= 1 ? 1 : 1 - Math.pow(2, -10 * u); }
+  function wobble(s, f, d) { return s < 0 ? 0 : Math.exp(-d * s) * Math.cos(2 * Math.PI * f * s); }
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  /* ---------- elements ---------- */
+  function $(id) { return document.getElementById(id); }
+  var cam = $('swl-cam'), shake = $('swl-shake'), line = $('swl-line'), ring = $('swl-ring'), ball = $('swl-ball');
+  var bars = root.querySelectorAll('.swl-bar'), dust = $('swl-dust').children, ghosts = $('swl-ghosts').children;
+  var letters = $('swl-word').children, sub = $('swl-sub');
+  var DUST = [];
+  for (var i = 0; i < 4; i++) { var rnd = mulberry32(101 + i); for (var d = 0; d < 7; d++) DUST.push({ b: i, dir: d % 2 ? 1 : -1, sp: 24 + rnd() * 42, up: 6 + rnd() * 18 }); }
+
+  function show(el, on) { el.style.visibility = on ? 'visible' : 'hidden'; }
+  function setBar(i, lift, sq) {
+    var h = BARS[i][1] * (1 - sq), w = BW * (1 + sq * 0.5), x = BARS[i][0] + (BW - w) / 2;
+    var b = bars[i]; b.setAttribute('x', x.toFixed(2)); b.setAttribute('y', (BASE - h + lift).toFixed(2));
+    b.setAttribute('width', w.toFixed(2)); b.setAttribute('height', h.toFixed(2));
+  }
+
+  /* ---------- state ---------- */
+  var T0 = 0, loadedAt = null, F = null, exiting = false, raf = 0, opts = { speed: 1 };
+  var reduce = false;
+  try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+  function finishTime() {
+    if (loadedAt === null) return null;
+    if (loadedAt <= INTRO) return INTRO;
+    return INTRO + Math.ceil((loadedAt - INTRO) / CYCLE - 1e-6) * CYCLE;   // let the current wave finish
+  }
+
+  // most recent hop start for block i at time t (stepping wave while loading)
+  function hopStart(i, t) {
+    if (t < INTRO) return null;
+    var k = Math.floor((t - INTRO) / CYCLE);
+    if (F !== null) k = Math.min(k, Math.round((F - INTRO) / CYCLE) - 1);
+    for (var kk = k; kk >= Math.max(0, k - 1); kk--) { var s = INTRO + kk * CYCLE + i * 0.25; if (s <= t) return s; }
+    return null;
+  }
+
+  /* ---------- one frame: everything is a function of t ---------- */
+  function renderAt(t) {
+    var LAND = F === null ? Infinity : F + FLY;
+    // camera: close on the steps, pull out to the full logo when the ball flies
+    var z, fx, fy;
+    var zi = lerp(2.4, 1.8, inOutCubic(prog(t, 0, INTRO)));
+    if (F === null || t < F) { z = zi; fx = 139; fy = 108; }
+    else { var c = inOutCubic(prog(t, F, F + 0.8)); z = lerp(1.8, 1, c); fx = lerp(139, 472, c); fy = lerp(108, 125, c); }
+    cam.setAttribute('transform', 'translate(472 125) scale(' + z.toFixed(4) + ') translate(' + (-fx).toFixed(2) + ' ' + (-fy).toFixed(2) + ')');
+    // camera shake on every landing
+    var sx = 0, sy = 0, hits = LANDS.concat(isFinite(LAND) ? [LAND] : []);
+    for (var h = 0; h < hits.length; h++) { var u = t - hits[h]; if (u >= 0 && u < 0.3) { var a = Math.exp(-u * 18) * 3; sx += a * Math.sin(u * 83); sy += a * Math.cos(u * 97); } }
+    shake.setAttribute('transform', 'translate(' + sx.toFixed(2) + ' ' + sy.toFixed(2) + ')');
+    // baseline draws in
+    line.setAttribute('width', (1044 * outCubic(prog(t, 0, 0.35))).toFixed(1));
+    // blocks: fall (gravity), land with a squash, then hop in a wave while loading
+    for (var i = 0; i < 4; i++) {
+      var tb = LANDS[i];
+      if (t < tb - 0.25) { show(bars[i], false); continue; }
+      show(bars[i], true);
+      var uf = prog(t, tb - 0.25, tb), lift = -520 * (1 - uf * uf), sq = t >= tb ? 0.2 * wobble(t - tb, 3.2, 9) : 0;
+      var hs = hopStart(i, t);
+      if (hs !== null) { var e = t - hs; if (e < 0.2) lift += -14 * Math.sin(Math.PI * e / 0.2); else sq += 0.1 * wobble(e - 0.2, 3.2, 9); }
+      if (i === 3 && t >= LAND) sq += 0.07 * wobble(t - LAND, 3.5, 9);
+      setBar(i, lift, sq);
+    }
+    // dust puffs on the drops
+    for (var k = 0; k < DUST.length; k++) {
+      var p = DUST[k], tl = LANDS[p.b], el = dust[k];
+      if (t < tl || t >= tl + 0.4) { el.setAttribute('r', '0'); continue; }
+      var s = prog(t, tl, tl + 0.4), bx = BARS[p.b][0] + BW / 2;
+      el.setAttribute('cx', (bx + p.dir * (BW / 2 + p.sp * outCubic(s))).toFixed(2));
+      el.setAttribute('cy', (BASE - p.up * Math.sin(Math.PI * s) - 2.5).toFixed(2));
+      el.setAttribute('r', (3 * (1 - s)).toFixed(2));
+    }
+    // the ball: a half-parabola onto the top step
+    if (F === null || t < F) { show(ball, false); for (var g = 0; g < ghosts.length; g++) ghosts[g].setAttribute('r', '0'); }
+    else {
+      var ub = prog(t, F, LAND), X0 = -230, Y0 = -150;
+      var bxp = lerp(X0, DOT[0], ub), byp = lerp(Y0, DOT[1], ub * ub);
+      var bs = t >= LAND ? 0.28 * wobble(t - LAND, 3.5, 9) : 0;
+      show(ball, true);
+      // scale around the ball's bottom so the squash sits on the step
+      var bot = DOT[1] + DOT[2];
+      ball.setAttribute('transform', 'translate(' + (bxp - DOT[0]).toFixed(2) + ' ' + (byp - DOT[1]).toFixed(2) + ') translate(' + DOT[0] + ' ' + bot + ') scale(' + (1 + bs * 0.6).toFixed(3) + ' ' + (1 - bs).toFixed(3) + ') translate(' + (-DOT[0]) + ' ' + (-bot) + ')');
+      for (var j = 0; j < ghosts.length; j++) {
+        var uu = ub - (j + 1) * 0.06, gh = ghosts[j];
+        if (ub >= 1 || uu <= 0) { gh.setAttribute('r', '0'); continue; }
+        gh.setAttribute('cx', lerp(X0, DOT[0], uu).toFixed(2)); gh.setAttribute('cy', lerp(Y0, DOT[1], uu * uu).toFixed(2));
+        gh.setAttribute('r', (DOT[2] * 0.8 * (1 - (j + 1) / 7)).toFixed(2)); gh.setAttribute('fill-opacity', (0.22 * (1 - (j + 1) / 6)).toFixed(3));
+      }
+    }
+    // landing ring
+    var rg = prog(t, LAND, LAND + 0.6);
+    if (t >= LAND && rg < 1) { ring.setAttribute('r', (18 + 160 * outCubic(rg)).toFixed(2)); ring.setAttribute('stroke-width', (5 * (1 - rg) + 0.6).toFixed(2)); ring.setAttribute('stroke-opacity', (0.9 * (1 - rg)).toFixed(3)); }
+    else ring.setAttribute('stroke-opacity', '0');
+    // wordmark: hard cut-in, letters snap together
+    var on = t >= LAND;
+    for (var w = 0; w < WORD_N; w++) {
+      show(letters[w], on);
+      if (on) letters[w].setAttribute('transform', 'translate(' + (w * lerp(16, 0, outExpo(prog(t, LAND, LAND + 0.7)))).toFixed(2) + ' 0)');
+    }
+    // the Japanese name rises from behind the line
+    var subOn = t >= LAND + 0.25;
+    show(sub, subOn);
+    if (subOn) sub.setAttribute('transform', 'translate(0 ' + (48 * (1 - outExpo(prog(t, LAND + 0.25, LAND + 0.7)))).toFixed(2) + ')');
+    return t >= LAND + HOLD;
+  }
+
+  function finalFrame() { F = 0; loadedAt = 0; renderAt(1e6); }
+
+  /* ---------- run ---------- */
+  function exit() {
+    if (exiting) return; exiting = true;
+    cancelAnimationFrame(raf);
+    try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+    var fade = reduce || opts.fade;
+    root.classList.add(fade ? 'swl-fade' : 'swl-exit');
+    var finished = false;
+    function end() {
+      if (finished) return; finished = true;
+      html.classList.remove('swl-lock');
+      if (opts.keep) root.hidden = true; else if (root.parentNode) root.parentNode.removeChild(root);
+      try { document.dispatchEvent(new CustomEvent('stepwise:loader-done')); } catch (e) {}
+    }
+    root.addEventListener('transitionend', function (ev) { if (ev.target === root) end(); });
+    setTimeout(end, 1000);
+  }
+
+  function tick(now) {
+    if (!T0) T0 = now;
+    var t = (now - T0) / 1000 * opts.speed;
+    if (F === null && loadedAt !== null) F = finishTime();
+    if (renderAt(t)) { exit(); return; }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function markLoaded() {
+    if (loadedAt !== null) return;
+    loadedAt = T0 ? (performance.now() - T0) / 1000 * opts.speed : 0;
+    if (reduce) setTimeout(exit, 250);
+  }
+
+  var KEEP = root.getAttribute('data-keep') === '1';
+  function start(o) {
+    opts = o || { speed: 1 };
+    if (KEEP) opts.keep = true;
+    T0 = 0; loadedAt = null; F = null; exiting = false;
+    root.hidden = false; root.classList.remove('swl-exit', 'swl-fade');
+    html.classList.add('swl-lock');
+    if (reduce) { finalFrame(); loadedAt = null; F = null; }
+    else { renderAt(0); raf = requestAnimationFrame(tick); }
+  }
+
+  root.addEventListener('click', function () { if (!exiting) exit(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !exiting && !root.hidden) exit(); });
+
+  window.StepwiseLoader = {
+    done: markLoaded,
+    skip: exit,
+    // for checking frames: _frame(t, loadedAt) draws the instant t (seconds) without running the clock
+    _frame: function (t, la) { cancelAnimationFrame(raf); root.hidden = false; root.classList.remove('swl-exit', 'swl-fade'); loadedAt = la; F = finishTime(); renderAt(t); },
+    // for previews: replay({ loadDelay: ms, reduce: bool, keep: true })
+    replay: function (o) {
+      o = o || {};
+      cancelAnimationFrame(raf);
+      reduce = !!o.reduce;
+      start({ speed: 1, keep: o.keep !== false, fade: false });
+      if (o.loadDelay != null) setTimeout(markLoaded, o.loadDelay);
+    }
+  };
+
+  if (root.getAttribute('data-preview') === '1') { root.hidden = true; return; }   // preview pages start it by hand
+  start({ speed: 1 });
+  if (document.readyState === 'complete') markLoaded();
+  else window.addEventListener('load', markLoaded);
+  setTimeout(markLoaded, +(root.getAttribute('data-max') || 6000));
+})();
+</script>
+
+<header class="site-head" id="head">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="ステップワイズ 個別指導 トップへ"><svg viewBox="15 13 907 167"  aria-hidden="true" focusable="false"><rect x="25" y="141.5" width="51" height="28.5" rx="6" fill="#2e9fc0"/><rect x="84" y="113" width="51" height="57" rx="6" fill="#6f90cf"/><rect x="143" y="84.5" width="51" height="85.5" rx="6" fill="#ab78cf"/><rect x="202" y="56" width="51" height="114" rx="6" fill="#f55ec9"/><circle cx="227.5" cy="38.3" r="16" fill="#edc43f"/><path fill="currentColor" d="M334.64 171.25Q323.95 171.25 316.02 167.98Q308.09 164.71 303.67 158.24Q299.25 151.77 299 142.17H317.28Q317.61 146.56 319.84 149.51Q322.07 152.46 325.84 153.94Q329.61 155.41 334.42 155.41Q339.1 155.41 342.55 154.07Q346 152.73 347.89 150.31Q349.79 147.9 349.79 144.73Q349.79 141.84 348.08 139.88Q346.37 137.92 343.06 136.5Q339.74 135.07 334.91 133.95L325.36 131.62Q314.12 128.93 307.73 123.08Q301.34 117.24 301.34 107.53Q301.34 99.52 305.68 93.51Q310.01 87.5 317.56 84.16Q325.11 80.82 334.8 80.82Q344.7 80.82 352.03 84.19Q359.37 87.57 363.45 93.57Q367.53 99.57 367.66 107.43H349.45Q348.97 102.28 345.11 99.44Q341.26 96.61 334.66 96.61Q330.21 96.61 327.09 97.86Q323.97 99.11 322.36 101.31Q320.75 103.51 320.75 106.32Q320.75 109.39 322.61 111.44Q324.47 113.5 327.61 114.81Q330.75 116.13 334.51 117.01L342.35 118.9Q348.14 120.2 353 122.39Q357.85 124.58 361.41 127.72Q364.97 130.86 366.91 135.1Q368.84 139.34 368.84 144.8Q368.84 152.9 364.77 158.85Q360.7 164.8 353.05 168.03Q345.41 171.25 334.64 171.25ZM377.77 97.58V82H450.28V97.58H423.49V170H404.61V97.58ZM462.07 170V82H521.64V97.58H480.96V117.91H518.5V133.2H480.96V154.42H521.71V170ZM535.54 170V82H570.39Q580.38 82 587.45 85.82Q594.53 89.64 598.28 96.39Q602.04 103.14 602.04 111.93Q602.04 120.75 598.23 127.43Q594.42 134.11 587.23 137.88Q580.04 141.64 569.91 141.64H547.77V126.51H566.77Q572.09 126.51 575.59 124.66Q579.09 122.8 580.81 119.52Q582.54 116.23 582.54 111.93Q582.54 107.55 580.81 104.31Q579.09 101.06 575.58 99.27Q572.07 97.48 566.72 97.48H554.42V170ZM632.79 170 609.2 82H629.9L639.65 123.96Q640.91 129.56 641.95 135.95Q642.99 142.34 643.99 148.76Q644.99 155.18 645.96 161.02H642.56Q643.66 155.18 644.71 148.76Q645.77 142.34 646.92 135.95Q648.07 129.56 649.41 123.96L659.74 82H679.23L689.51 123.96Q690.87 129.56 692.01 135.95Q693.15 142.34 694.23 148.76Q695.31 155.18 696.41 161.02H692.9Q693.93 155.18 694.91 148.76Q695.89 142.34 696.97 135.95Q698.05 129.56 699.26 123.96L709.02 82H729.76L706.13 170H684.63L673.38 126.31Q671.44 118.55 670.1 109.51Q668.75 100.47 667.1 91.15H671.82Q669.95 100.29 668.8 109.22Q667.65 118.15 665.58 126.31L654.31 170ZM759 82V170H740.12V82ZM806.93 171.25Q796.24 171.25 788.31 167.98Q780.38 164.71 775.96 158.24Q771.53 151.77 771.29 142.17H789.57Q789.9 146.56 792.13 149.51Q794.36 152.46 798.13 153.94Q801.9 155.41 806.71 155.41Q811.39 155.41 814.84 154.07Q818.29 152.73 820.18 150.31Q822.08 147.9 822.08 144.73Q822.08 141.84 820.37 139.88Q818.66 137.92 815.35 136.5Q812.03 135.07 807.2 133.95L797.64 131.62Q786.4 128.93 780.02 123.08Q773.63 117.24 773.63 107.53Q773.63 99.52 777.96 93.51Q782.3 87.5 789.85 84.16Q797.4 80.82 807.09 80.82Q816.99 80.82 824.32 84.19Q831.66 87.57 835.74 93.57Q839.82 99.57 839.95 107.43H821.74Q821.26 102.28 817.4 99.44Q813.55 96.61 806.95 96.61Q802.49 96.61 799.38 97.86Q796.26 99.11 794.65 101.31Q793.04 103.51 793.04 106.32Q793.04 109.39 794.9 111.44Q796.76 113.5 799.9 114.81Q803.04 116.13 806.8 117.01L814.64 118.9Q820.43 120.2 825.29 122.39Q830.14 124.58 833.7 127.72Q837.26 130.86 839.2 135.1Q841.13 139.34 841.13 144.8Q841.13 152.9 837.06 158.85Q832.99 164.8 825.34 168.03Q817.69 171.25 806.93 171.25ZM853.39 170V82H912.96V97.58H872.28V117.91H909.82V133.2H872.28V154.42H913.03V170Z"/></svg><span>ステップワイズ 個別指導</span></a>
+    <a class="btn btn-apply" href="https://forms.gle/vNRLBy6KRPhJovHK7" target="_blank" rel="noopener"><span>無料体験<span class="long">を申し込む</span></span></a>
+  </div>
+</header>
+
+<main id="top">
+    <section class="hero navy" aria-labelledby="h1">
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="wrap">
+      <p class="status-pill in" style="--d:.05"><i aria-hidden="true"></i>ホームページ 準備中<small>COMING SOON</small></p>
+      <h1 id="h1" class="sr">ステップワイズ 個別指導</h1>
+      <div class="in logo-wrap" style="--d:.15"><svg id="hero-logo" class="hero-logo" viewBox="-10 -70 950 320" role="img" aria-label="STEPWISE ステップワイズ 個別指導"><defs><linearGradient id="hl-wg" gradientUnits="userSpaceOnUse" x1="299" y1="0" x2="912" y2="0"><stop offset="0" stop-color="#f3f5f7"/><stop offset=".55" stop-color="#e8eaed"/><stop offset="1" stop-color="#c4c8cd"/></linearGradient></defs><rect x="-10" y="170" width="950" height="1.6" fill="#fff" fill-opacity=".22"/><rect class="hb" x="25" y="141.5" width="51" height="28.5" rx="6" fill="#2e9fc0"/><rect class="hb" x="84" y="113" width="51" height="57" rx="6" fill="#6f90cf"/><rect class="hb" x="143" y="84.5" width="51" height="85.5" rx="6" fill="#ab78cf"/><rect class="hb" x="202" y="56" width="51" height="114" rx="6" fill="#f55ec9"/><circle id="hb-ring" cx="227.5" cy="38.3" r="18" fill="none" stroke="#edc43f" stroke-opacity="0"/><g id="hb-ball"><circle cx="227.5" cy="38.3" r="16" fill="#edc43f"/><path d="M217.04 35.30A10.88 10.88 0 0 1 224.14 27.95" fill="none" stroke="#f6e3a1" stroke-width="2.6" stroke-linecap="round"/></g><path fill="url(#hl-wg)" d="M334.64 171.25Q323.95 171.25 316.02 167.98Q308.09 164.71 303.67 158.24Q299.25 151.77 299 142.17H317.28Q317.61 146.56 319.84 149.51Q322.07 152.46 325.84 153.94Q329.61 155.41 334.42 155.41Q339.1 155.41 342.55 154.07Q346 152.73 347.89 150.31Q349.79 147.9 349.79 144.73Q349.79 141.84 348.08 139.88Q346.37 137.92 343.06 136.5Q339.74 135.07 334.91 133.95L325.36 131.62Q314.12 128.93 307.73 123.08Q301.34 117.24 301.34 107.53Q301.34 99.52 305.68 93.51Q310.01 87.5 317.56 84.16Q325.11 80.82 334.8 80.82Q344.7 80.82 352.03 84.19Q359.37 87.57 363.45 93.57Q367.53 99.57 367.66 107.43H349.45Q348.97 102.28 345.11 99.44Q341.26 96.61 334.66 96.61Q330.21 96.61 327.09 97.86Q323.97 99.11 322.36 101.31Q320.75 103.51 320.75 106.32Q320.75 109.39 322.61 111.44Q324.47 113.5 327.61 114.81Q330.75 116.13 334.51 117.01L342.35 118.9Q348.14 120.2 353 122.39Q357.85 124.58 361.41 127.72Q364.97 130.86 366.91 135.1Q368.84 139.34 368.84 144.8Q368.84 152.9 364.77 158.85Q360.7 164.8 353.05 168.03Q345.41 171.25 334.64 171.25ZM377.77 97.58V82H450.28V97.58H423.49V170H404.61V97.58ZM462.07 170V82H521.64V97.58H480.96V117.91H518.5V133.2H480.96V154.42H521.71V170ZM535.54 170V82H570.39Q580.38 82 587.45 85.82Q594.53 89.64 598.28 96.39Q602.04 103.14 602.04 111.93Q602.04 120.75 598.23 127.43Q594.42 134.11 587.23 137.88Q580.04 141.64 569.91 141.64H547.77V126.51H566.77Q572.09 126.51 575.59 124.66Q579.09 122.8 580.81 119.52Q582.54 116.23 582.54 111.93Q582.54 107.55 580.81 104.31Q579.09 101.06 575.58 99.27Q572.07 97.48 566.72 97.48H554.42V170ZM632.79 170 609.2 82H629.9L639.65 123.96Q640.91 129.56 641.95 135.95Q642.99 142.34 643.99 148.76Q644.99 155.18 645.96 161.02H642.56Q643.66 155.18 644.71 148.76Q645.77 142.34 646.92 135.95Q648.07 129.56 649.41 123.96L659.74 82H679.23L689.51 123.96Q690.87 129.56 692.01 135.95Q693.15 142.34 694.23 148.76Q695.31 155.18 696.41 161.02H692.9Q693.93 155.18 694.91 148.76Q695.89 142.34 696.97 135.95Q698.05 129.56 699.26 123.96L709.02 82H729.76L706.13 170H684.63L673.38 126.31Q671.44 118.55 670.1 109.51Q668.75 100.47 667.1 91.15H671.82Q669.95 100.29 668.8 109.22Q667.65 118.15 665.58 126.31L654.31 170ZM759 82V170H740.12V82ZM806.93 171.25Q796.24 171.25 788.31 167.98Q780.38 164.71 775.96 158.24Q771.53 151.77 771.29 142.17H789.57Q789.9 146.56 792.13 149.51Q794.36 152.46 798.13 153.94Q801.9 155.41 806.71 155.41Q811.39 155.41 814.84 154.07Q818.29 152.73 820.18 150.31Q822.08 147.9 822.08 144.73Q822.08 141.84 820.37 139.88Q818.66 137.92 815.35 136.5Q812.03 135.07 807.2 133.95L797.64 131.62Q786.4 128.93 780.02 123.08Q773.63 117.24 773.63 107.53Q773.63 99.52 777.96 93.51Q782.3 87.5 789.85 84.16Q797.4 80.82 807.09 80.82Q816.99 80.82 824.32 84.19Q831.66 87.57 835.74 93.57Q839.82 99.57 839.95 107.43H821.74Q821.26 102.28 817.4 99.44Q813.55 96.61 806.95 96.61Q802.49 96.61 799.38 97.86Q796.26 99.11 794.65 101.31Q793.04 103.51 793.04 106.32Q793.04 109.39 794.9 111.44Q796.76 113.5 799.9 114.81Q803.04 116.13 806.8 117.01L814.64 118.9Q820.43 120.2 825.29 122.39Q830.14 124.58 833.7 127.72Q837.26 130.86 839.2 135.1Q841.13 139.34 841.13 144.8Q841.13 152.9 837.06 158.85Q832.99 164.8 825.34 168.03Q817.69 171.25 806.93 171.25ZM853.39 170V82H912.96V97.58H872.28V117.91H909.82V133.2H872.28V154.42H913.03V170Z"/><path fill="#f1f3f6" d="M324.1 209.85Q323.89 210.15 323.52 210.78Q323.14 211.42 322.92 211.96Q322.23 213.54 321.2 215.51Q320.16 217.47 318.87 219.45Q317.58 221.43 316.12 223.11Q314.24 225.27 311.97 227.33Q309.69 229.39 307.18 231.13Q304.66 232.87 302.04 234.11L298.55 230.47Q301.28 229.44 303.84 227.85Q306.41 226.26 308.6 224.41Q310.8 222.56 312.37 220.81Q313.5 219.54 314.49 218.08Q315.49 216.63 316.27 215.19Q317.04 213.75 317.41 212.56Q317.07 212.56 316.19 212.56Q315.31 212.56 314.14 212.56Q312.97 212.56 311.7 212.56Q310.43 212.56 309.27 212.56Q308.1 212.56 307.22 212.56Q306.34 212.56 305.97 212.56Q305.28 212.56 304.49 212.6Q303.7 212.65 303.03 212.71Q302.35 212.76 301.98 212.79V207.99Q302.45 208.04 303.21 208.1Q303.96 208.16 304.72 208.19Q305.48 208.23 305.97 208.23Q306.42 208.23 307.35 208.23Q308.29 208.23 309.5 208.23Q310.72 208.23 312.02 208.23Q313.32 208.23 314.51 208.23Q315.7 208.23 316.59 208.23Q317.48 208.23 317.86 208.23Q318.97 208.23 319.91 208.11Q320.84 207.98 321.35 207.81ZM316.56 220.32Q317.88 221.38 319.35 222.76Q320.83 224.14 322.28 225.62Q323.72 227.11 324.96 228.48Q326.2 229.84 327.03 230.85L323.19 234.19Q321.96 232.45 320.36 230.6Q318.76 228.75 316.99 226.91Q315.22 225.07 313.39 223.44ZM336.49 206.86Q337.31 206.97 338.29 207.03Q339.26 207.1 340.09 207.1Q340.73 207.1 342.1 207.1Q343.47 207.1 345.19 207.1Q346.91 207.1 348.63 207.1Q350.35 207.1 351.69 207.1Q353.04 207.1 353.63 207.1Q354.49 207.1 355.44 207.04Q356.39 206.98 357.26 206.86V211.21Q356.39 211.14 355.45 211.11Q354.52 211.08 353.63 211.08Q353.04 211.08 351.7 211.08Q350.36 211.08 348.64 211.08Q346.92 211.08 345.2 211.08Q343.48 211.08 342.11 211.08Q340.74 211.08 340.1 211.08Q339.24 211.08 338.25 211.11Q337.27 211.14 336.49 211.21ZM332.56 215.47Q333.31 215.56 334.16 215.62Q335.02 215.68 335.8 215.68Q336.25 215.68 337.56 215.68Q338.87 215.68 340.73 215.68Q342.59 215.68 344.72 215.68Q346.86 215.68 348.99 215.68Q351.13 215.68 352.98 215.68Q354.84 215.68 356.14 215.68Q357.45 215.68 357.86 215.68Q358.4 215.68 359.34 215.63Q360.28 215.58 360.95 215.47V219.86Q360.32 219.8 359.45 219.78Q358.58 219.76 357.86 219.76Q357.45 219.76 356.14 219.76Q354.84 219.76 352.98 219.76Q351.13 219.76 348.99 219.76Q346.86 219.76 344.72 219.76Q342.59 219.76 340.73 219.76Q338.87 219.76 337.56 219.76Q336.25 219.76 335.8 219.76Q335.05 219.76 334.15 219.79Q333.26 219.82 332.56 219.88ZM349.81 217.81Q349.81 221.11 349.24 223.71Q348.67 226.32 347.59 228.41Q347 229.57 345.98 230.78Q344.96 231.98 343.65 233.06Q342.34 234.13 340.83 234.89L336.87 232.03Q338.65 231.33 340.31 230Q341.97 228.68 342.98 227.2Q344.26 225.27 344.69 222.91Q345.12 220.55 345.13 217.84ZM380.42 212.69Q380.67 213.21 381.05 214.21Q381.43 215.22 381.86 216.34Q382.29 217.47 382.64 218.48Q382.99 219.48 383.18 220.07L379.15 221.47Q379 220.85 378.67 219.87Q378.33 218.89 377.93 217.79Q377.52 216.69 377.12 215.67Q376.72 214.66 376.41 214ZM392.85 215.14Q392.57 215.95 392.39 216.52Q392.2 217.1 392.06 217.61Q391.41 220.16 390.3 222.7Q389.18 225.24 387.45 227.47Q385.1 230.49 382.12 232.6Q379.14 234.71 376.18 235.85L372.64 232.23Q374.49 231.72 376.55 230.73Q378.6 229.74 380.52 228.32Q382.43 226.91 383.82 225.17Q384.96 223.73 385.86 221.86Q386.77 219.98 387.35 217.86Q387.94 215.73 388.12 213.62ZM372.59 214.46Q372.92 215.11 373.35 216.11Q373.78 217.12 374.22 218.24Q374.67 219.37 375.08 220.41Q375.48 221.45 375.72 222.16L371.61 223.69Q371.41 223.02 371.02 221.94Q370.63 220.86 370.17 219.67Q369.71 218.49 369.28 217.48Q368.85 216.47 368.54 215.92ZM424.19 207.98Q424.19 208.79 424.76 209.36Q425.32 209.93 426.13 209.93Q426.94 209.93 427.51 209.36Q428.08 208.79 428.08 207.98Q428.08 207.18 427.51 206.61Q426.94 206.03 426.13 206.03Q425.32 206.03 424.76 206.61Q424.19 207.18 424.19 207.98ZM422.1 207.98Q422.1 206.87 422.65 205.96Q423.2 205.05 424.11 204.5Q425.02 203.95 426.13 203.95Q427.24 203.95 428.16 204.5Q429.07 205.05 429.62 205.96Q430.17 206.87 430.17 207.98Q430.17 209.09 429.62 210Q429.07 210.91 428.16 211.46Q427.24 212.01 426.13 212.01Q425.02 212.01 424.11 211.46Q423.2 210.91 422.65 210Q422.1 209.09 422.1 207.98ZM426.19 210.65Q425.96 211.12 425.78 211.78Q425.6 212.43 425.45 212.98Q425.16 214.22 424.73 215.76Q424.31 217.3 423.69 218.95Q423.08 220.61 422.26 222.23Q421.43 223.85 420.38 225.27Q418.86 227.27 416.85 229.03Q414.84 230.79 412.34 232.19Q409.84 233.6 406.83 234.57L403.16 230.54Q406.52 229.74 408.96 228.55Q411.4 227.37 413.2 225.85Q415 224.34 416.37 222.64Q417.49 221.22 418.29 219.56Q419.09 217.9 419.6 216.23Q420.12 214.56 420.33 213.12Q419.83 213.12 418.66 213.12Q417.48 213.12 415.93 213.12Q414.37 213.12 412.66 213.12Q410.96 213.12 409.37 213.12Q407.78 213.12 406.52 213.12Q405.26 213.12 404.63 213.12Q403.47 213.12 402.38 213.16Q401.29 213.2 400.62 213.26V208.5Q401.14 208.56 401.86 208.63Q402.58 208.69 403.34 208.73Q404.1 208.78 404.64 208.78Q405.17 208.78 406.18 208.78Q407.19 208.78 408.49 208.78Q409.8 208.78 411.24 208.78Q412.68 208.78 414.1 208.78Q415.52 208.78 416.77 208.78Q418.02 208.78 418.93 208.78Q419.84 208.78 420.24 208.78Q420.74 208.78 421.47 208.73Q422.21 208.69 422.87 208.52ZM461.21 210.11Q461.12 210.36 460.99 210.81Q460.85 211.26 460.75 211.71Q460.65 212.15 460.59 212.38Q460.29 214.13 459.86 216.27Q459.44 218.41 458.68 220.63Q457.92 222.85 456.59 224.9Q454.5 228.2 451.18 230.66Q447.86 233.12 443.81 234.55L440.05 230.71Q442.32 230.15 444.66 229.04Q447.01 227.94 449.06 226.31Q451.12 224.69 452.43 222.6Q453.3 221.22 453.92 219.57Q454.54 217.92 454.94 216.11Q455.33 214.3 455.5 212.48Q455.05 212.48 454.08 212.48Q453.11 212.48 451.8 212.48Q450.48 212.48 449 212.48Q447.52 212.48 446.03 212.48Q444.55 212.48 443.22 212.48Q441.89 212.48 440.87 212.48Q439.84 212.48 439.34 212.48Q439.34 212.8 439.34 213.34Q439.34 213.87 439.34 214.52Q439.34 215.18 439.34 215.84Q439.34 216.5 439.34 217.09Q439.34 217.69 439.34 218.11Q439.34 218.47 439.35 219.27Q439.37 220.08 439.46 220.87H434.5Q434.57 220.08 434.62 219.42Q434.67 218.77 434.67 218.11Q434.67 217.59 434.67 216.66Q434.67 215.72 434.67 214.63Q434.67 213.53 434.67 212.55Q434.67 211.56 434.67 210.98Q434.67 210.3 434.63 209.57Q434.59 208.84 434.52 208.17Q435.33 208.2 436.4 208.25Q437.47 208.29 438.64 208.29Q438.92 208.29 439.81 208.29Q440.71 208.29 442 208.29Q443.28 208.29 444.8 208.29Q446.31 208.29 447.83 208.29Q449.36 208.29 450.75 208.29Q452.15 208.29 453.19 208.29Q454.23 208.29 454.75 208.29Q455.61 208.29 456.44 208.23Q457.27 208.17 457.95 208.05ZM466.6 219.6Q471.13 218.42 474.82 216.85Q478.51 215.27 481.32 213.55Q483.06 212.48 484.83 211.08Q486.59 209.69 488.16 208.2Q489.73 206.71 490.81 205.38L494.45 208.84Q492.92 210.37 491.08 211.91Q489.25 213.46 487.26 214.87Q485.27 216.27 483.29 217.48Q481.38 218.6 479.01 219.77Q476.64 220.95 474 222Q471.36 223.04 468.7 223.85ZM480.61 215.73 485.41 214.6V229.77Q485.41 230.52 485.44 231.39Q485.47 232.26 485.53 233.02Q485.59 233.77 485.7 234.19H480.37Q480.43 233.77 480.49 233.02Q480.55 232.26 480.58 231.39Q480.61 230.52 480.61 229.77ZM524.1 204.67Q524.53 205.29 525.05 206.15Q525.57 207.01 526.04 207.86Q526.5 208.7 526.77 209.28L524.06 210.44Q523.54 209.4 522.82 208.09Q522.1 206.78 521.42 205.76ZM528.34 203.49Q528.79 204.12 529.3 204.97Q529.81 205.82 530.29 206.65Q530.78 207.47 531.06 208.07L528.38 209.22Q527.86 208.16 527.11 206.84Q526.37 205.52 525.68 204.58ZM525.63 210.67Q525.42 210.96 525.05 211.6Q524.67 212.24 524.45 212.78Q523.75 214.36 522.72 216.33Q521.69 218.29 520.4 220.27Q519.1 222.24 517.65 223.93Q515.77 226.08 513.49 228.15Q511.22 230.21 508.7 231.95Q506.19 233.69 503.57 234.93L500.08 231.29Q502.8 230.26 505.37 228.66Q507.94 227.07 510.13 225.22Q512.32 223.37 513.9 221.63Q515.02 220.36 516.02 218.9Q517.02 217.45 517.79 216Q518.57 214.56 518.93 213.37Q518.59 213.37 517.71 213.37Q516.83 213.37 515.67 213.37Q514.5 213.37 513.23 213.37Q511.96 213.37 510.79 213.37Q509.62 213.37 508.74 213.37Q507.86 213.37 507.5 213.37Q506.81 213.37 506.02 213.42Q505.23 213.47 504.55 213.52Q503.88 213.58 503.51 213.61V208.8Q503.98 208.86 504.73 208.92Q505.48 208.98 506.25 209.01Q507.01 209.05 507.5 209.05Q507.94 209.05 508.88 209.05Q509.81 209.05 511.03 209.05Q512.24 209.05 513.54 209.05Q514.84 209.05 516.03 209.05Q517.22 209.05 518.12 209.05Q519.01 209.05 519.38 209.05Q520.5 209.05 521.43 208.92Q522.37 208.8 522.88 208.63ZM518.09 221.14Q519.4 222.19 520.88 223.58Q522.36 224.96 523.8 226.44Q525.25 227.93 526.49 229.29Q527.72 230.66 528.55 231.67L524.71 235.01Q523.48 233.27 521.88 231.42Q520.29 229.57 518.52 227.73Q516.74 225.89 514.92 224.26Z"/><path fill="#93a2bb" d="M556.36 205.97H576.46V235.32H573.01V209.13H559.67V235.6H556.36ZM560.69 213.48H572.15V216.14H560.69ZM558.09 230.46H574.72V233.61H558.09ZM564.9 209.92H567.73V220.72H564.9ZM564.34 221.82V225.84H568.41V221.82ZM561.71 219.29H571.17V228.36H561.71ZM552.37 204.28 555.69 205.28Q554.72 208.18 553.37 211.08Q552.02 213.99 550.41 216.57Q548.81 219.16 547.06 221.14Q546.92 220.7 546.62 219.96Q546.32 219.22 545.96 218.47Q545.6 217.72 545.3 217.26Q546.74 215.66 548.07 213.57Q549.39 211.48 550.49 209.1Q551.6 206.72 552.37 204.28ZM549.6 213.24 553.01 209.83 553.04 209.87V235.67H549.6ZM598.1 208.25H601.6V227.21H598.1ZM606.14 204.83H609.72V231.16Q609.72 232.82 609.33 233.67Q608.93 234.52 607.95 234.97Q606.96 235.4 605.34 235.53Q603.71 235.67 601.39 235.66Q601.31 235.15 601.1 234.47Q600.89 233.8 600.64 233.11Q600.39 232.43 600.1 231.94Q601.81 231.99 603.27 232Q604.73 232.02 605.24 232Q605.71 231.99 605.92 231.81Q606.14 231.62 606.14 231.15ZM586 220.31H593.81V223.47H586ZM592.23 220.31H595.58Q595.58 220.31 595.56 220.56Q595.55 220.81 595.55 221.13Q595.55 221.45 595.53 221.67Q595.37 225.78 595.17 228.35Q594.96 230.92 594.67 232.29Q594.39 233.65 593.91 234.23Q593.43 234.85 592.85 235.09Q592.27 235.33 591.48 235.43Q590.81 235.53 589.7 235.54Q588.59 235.56 587.37 235.5Q587.34 234.78 587.08 233.89Q586.82 233 586.4 232.36Q587.53 232.47 588.48 232.49Q589.44 232.51 589.88 232.51Q590.29 232.51 590.54 232.44Q590.8 232.37 591.03 232.11Q591.33 231.76 591.55 230.57Q591.77 229.39 591.93 227.04Q592.09 224.7 592.23 220.86ZM584.82 208.92V214.07H591.81V208.92ZM581.54 205.73H595.29V217.29H581.54ZM585.05 216.27H588.59Q588.46 218.93 588.14 221.65Q587.83 224.37 587.14 226.93Q586.46 229.49 585.21 231.72Q583.95 233.95 581.94 235.67Q581.54 235 580.83 234.25Q580.13 233.5 579.48 233.07Q581.28 231.6 582.35 229.65Q583.42 227.71 583.97 225.47Q584.52 223.23 584.73 220.88Q584.94 218.52 585.05 216.27ZM626.97 204.21H630.57V213.49Q630.57 214.41 631 214.65Q631.44 214.9 632.96 214.9Q633.25 214.9 633.86 214.9Q634.47 214.9 635.25 214.9Q636.04 214.9 636.84 214.9Q637.64 214.9 638.3 214.9Q638.96 214.9 639.32 214.9Q640.19 214.9 640.62 214.62Q641.06 214.34 641.25 213.48Q641.44 212.62 641.54 210.91Q642.12 211.32 643.11 211.69Q644.09 212.06 644.82 212.22Q644.61 214.56 644.09 215.86Q643.56 217.16 642.5 217.66Q641.44 218.16 639.57 218.16Q639.28 218.16 638.58 218.16Q637.88 218.16 636.98 218.16Q636.09 218.16 635.2 218.16Q634.31 218.16 633.61 218.16Q632.91 218.16 632.64 218.16Q630.4 218.16 629.16 217.75Q627.92 217.35 627.45 216.32Q626.97 215.3 626.97 213.51ZM640.1 205.77 642.8 208.4Q640.95 209.15 638.71 209.8Q636.48 210.46 634.14 210.99Q631.8 211.53 629.61 211.94Q629.48 211.37 629.15 210.58Q628.82 209.79 628.53 209.25Q630.59 208.81 632.73 208.25Q634.88 207.7 636.8 207.05Q638.73 206.4 640.1 205.77ZM626.92 220.35H643.23V235.46H639.64V223.34H630.34V235.61H626.92ZM628.73 225.8H640.87V228.63H628.73ZM628.59 231.22H640.89V234.12H628.59ZM613.12 221.55Q614.67 221.2 616.65 220.71Q618.63 220.22 620.83 219.65Q623.02 219.07 625.2 218.47L625.64 221.8Q622.64 222.66 619.57 223.5Q616.5 224.35 614.02 225.02ZM613.61 210.64H625.11V214H613.61ZM617.96 204.16H621.51V231.66Q621.51 233.01 621.21 233.76Q620.91 234.51 620.1 234.94Q619.31 235.34 618.11 235.47Q616.91 235.59 615.14 235.58Q615.06 234.89 614.76 233.93Q614.45 232.97 614.13 232.26Q615.15 232.3 616.07 232.31Q616.99 232.32 617.31 232.31Q617.67 232.29 617.81 232.15Q617.96 232.02 617.96 231.67ZM647.48 226.24H678.25V229.01H647.48ZM656.11 207.02H678.19V209.48H656.11ZM667.44 224.28H670.93V232.11Q670.93 233.36 670.61 234.07Q670.3 234.78 669.32 235.14Q668.37 235.48 667.01 235.56Q665.64 235.63 663.69 235.62Q663.59 234.91 663.25 234.04Q662.91 233.18 662.56 232.51Q663.45 232.55 664.32 232.57Q665.19 232.59 665.84 232.57Q666.5 232.56 666.75 232.56Q667.15 232.55 667.3 232.43Q667.44 232.32 667.44 232.03ZM653.21 230.48 655.67 228.45Q656.5 228.97 657.41 229.64Q658.32 230.31 659.14 230.98Q659.96 231.66 660.45 232.26L657.81 234.49Q657.36 233.9 656.59 233.18Q655.83 232.46 654.93 231.75Q654.04 231.04 653.21 230.48ZM648.47 206.58 650.82 204.61Q651.68 205.18 652.59 205.91Q653.5 206.64 654.28 207.39Q655.07 208.14 655.52 208.79L653.03 210.98Q652.59 210.33 651.84 209.54Q651.09 208.75 650.2 207.98Q649.32 207.21 648.47 206.58ZM660.07 204.72 663.02 204.13Q663.57 204.85 664.09 205.78Q664.61 206.7 664.83 207.43L661.73 208.1Q661.53 207.41 661.06 206.46Q660.59 205.5 660.07 204.72ZM662.13 215.14V216.31H671.93V215.14ZM662.13 217.93V219.12H671.93V217.93ZM662.13 212.4V213.53H671.93V212.4ZM658.78 210.72H675.42V220.79H658.78ZM654.96 212.64V220.38H651.68V215.41H647.61V212.64ZM665.24 208.01 668.82 208.27Q668.45 209.21 668.11 210.05Q667.77 210.88 667.5 211.51L664.63 211.12Q664.84 210.38 665 209.52Q665.17 208.66 665.24 208.01ZM671.17 204.09 674.58 204.68Q673.98 205.64 673.38 206.46Q672.79 207.29 672.28 207.92L669.42 207.32Q669.88 206.59 670.38 205.69Q670.88 204.78 671.17 204.09ZM654.96 219.17Q655.84 220.57 657.44 221.24Q659.03 221.9 661.23 221.97Q662.46 222 664.15 222.02Q665.85 222.04 667.79 222.03Q669.74 222.01 671.71 221.97Q673.69 221.93 675.49 221.86Q677.3 221.79 678.68 221.71Q678.44 222.19 678.17 223.03Q677.89 223.87 677.77 224.5Q676.18 224.56 674 224.6Q671.81 224.65 669.45 224.66Q667.09 224.68 664.95 224.66Q662.8 224.65 661.25 224.59Q658.67 224.5 656.85 223.82Q655.03 223.14 653.76 221.56Q652.56 222.39 651.29 223.21Q650.01 224.03 648.62 224.91L647.35 222.01Q648.53 221.45 649.9 220.7Q651.27 219.96 652.54 219.17Z"/></svg></div>
+      <p class="tagline in" style="--d:.35"><span class="q">「分かったつもり」</span>で、<br>終わらせない。</p>
+      <p class="lead in" style="--d:.5">埼玉県越谷市の個別指導塾です。ホームページは、いま新しく作り直しています。<br>教室では通常どおり授業を行っていて、無料体験授業も受け付けています。</p>
+      <div class="hero-cta in" style="--d:.65">
+        <a class="btn btn-apply" href="https://forms.gle/vNRLBy6KRPhJovHK7" target="_blank" rel="noopener">無料体験授業を申し込む<svg width="20" height="12" viewBox="0 0 20 12" aria-hidden="true"><path d="M0 6h17M12.5 1.5 17.5 6l-5 4.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a class="btn btn-ghost" href="#movie"><span class="tri" aria-hidden="true"></span>コンセプトムービーを見る</a>
+      </div>
+    </div>
+    <a class="scroll-cue" href="#progress" aria-label="下へ">SCROLL<span></span></a>
+  </section>
+
+  <div class="ticker" aria-hidden="true"><div class="track"><span><i style="background:#2e9fc0"></i>NOW PREPARING<b>ホームページ準備中</b></span><span><i style="background:#6f90cf"></i>STEP BY STEP<b>一段ずつ、つくっています</b></span><span><i style="background:#ab78cf"></i>TRIAL LESSON<b>無料体験授業 受付中</b></span><span><i style="background:#f55ec9"></i>KOSHIGAYA<b>越谷市の個別指導塾</b></span><span><i style="background:#2e9fc0"></i>NOW PREPARING<b>ホームページ準備中</b></span><span><i style="background:#6f90cf"></i>STEP BY STEP<b>一段ずつ、つくっています</b></span><span><i style="background:#ab78cf"></i>TRIAL LESSON<b>無料体験授業 受付中</b></span><span><i style="background:#f55ec9"></i>KOSHIGAYA<b>越谷市の個別指導塾</b></span><span><i style="background:#2e9fc0"></i>NOW PREPARING<b>ホームページ準備中</b></span><span><i style="background:#6f90cf"></i>STEP BY STEP<b>一段ずつ、つくっています</b></span><span><i style="background:#ab78cf"></i>TRIAL LESSON<b>無料体験授業 受付中</b></span><span><i style="background:#f55ec9"></i>KOSHIGAYA<b>越谷市の個別指導塾</b></span><span><i style="background:#2e9fc0"></i>NOW PREPARING<b>ホームページ準備中</b></span><span><i style="background:#6f90cf"></i>STEP BY STEP<b>一段ずつ、つくっています</b></span><span><i style="background:#ab78cf"></i>TRIAL LESSON<b>無料体験授業 受付中</b></span><span><i style="background:#f55ec9"></i>KOSHIGAYA<b>越谷市の個別指導塾</b></span></div></div>
+
+    <section class="sec" id="progress" aria-labelledby="h-progress">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow fade">Now Preparing</p>
+        <h2 id="h-progress" class="reveal"><span class="rise"><span>一段ずつ、準備しています。</span></span></h2>
+        <p class="fade" style="--d:.15">授業はもう始まっています。ホームページと教室の入口を、新しい名前「ステップワイズ 個別指導」に合わせて整えているところです。</p>
+      </div>
+      <ol class="stairs">
+        <li class="stair fade" style="--c:var(--s1);--k:0;--d:0">
+          <span class="no">STEP 01</span><b>授業</b>
+          <span class="state"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="#2e9fc0"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" stroke="#fff" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>行っています</span>
+          <p>小学生から高校生まで、教室で個別指導をしています。</p>
+        </li>
+        <li class="stair fade" style="--c:var(--s2);--k:1;--d:.1">
+          <span class="no">STEP 02</span><b>無料体験授業</b>
+          <span class="state"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="#2e9fc0"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" stroke="#fff" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>受付中</span>
+          <p>1回90分。費用はかかりません。</p>
+        </li>
+        <li class="stair now fade" style="--c:var(--s3);--k:2;--d:.2">
+          <span class="no">STEP 03 — NOW</span><b>ホームページ</b>
+          <span class="state"><span class="dots">作っています</span></span>
+          <div class="bar" role="img" aria-label="作成中"><i></i></div>
+        </li>
+        <li class="stair fade" style="--c:var(--s4);--k:3;--d:.3">
+          <span class="no">STEP 04 — NEXT</span><b>教室の看板</b>
+          <span class="state">新しくなります</span>
+          <p>入口の看板とガラス扉を、新しいロゴに替えます。</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+    <section class="sec concept" id="concept" aria-labelledby="h-concept">
+    <div class="wrap">
+      <div class="concept-top">
+        <div class="sec-head">
+          <p class="eyebrow fade">Concept</p>
+          <h2 id="h-concept" class="reveal"><span class="rise"><span>暗記で積むより、</span></span><span class="rise"><span>つなげて積む。</span></span></h2>
+          <p class="fade" style="--d:.15">定期テストや目先の模試の点数を追うと、勉強はどうしても暗記中心になりがちです。短いあいだは点数が伸びても、覚えることが増えるほど勉強は重くなり、高校に進んだころに伸び悩んでしまいます。</p>
+          <p class="fade" style="--d:.25">ステップワイズは、必要なら前の単元まで戻って、じっくり理解し直すところから始めます。理解がつながっていれば、新しいことはその上に一つ足すだけ。そうやって知識のつながりを増やし、あとから伸びる土台をつくります。</p>
         </div>
-      </section>
-
-      <section class="section intro" id="problem">
-        <div class="section-heading">
-          <p class="eyebrow">Problem</p>
-          <h2>こんなお悩みはありませんか</h2>
+        <div class="figure fade" style="--d:.2" id="fig" role="img" aria-label="比べた図。左は、暗記でレンガを1列に積んだ細い塔で、新しいレンガを載せるとぐらつく。右は、大きなレンガの山で、新しいレンガを1つ上に足すと安定して収まる。">
+          <div class="grid-bg" aria-hidden="true"></div>
+          <svg viewBox="0 0 400 300" aria-hidden="true"><path d="M200 22V284" stroke="#fff" stroke-opacity=".12" stroke-dasharray="3 5"/><path d="M24 262H176M224 262H384" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/><g class="tower"><rect class="b" style="--i:0" x="80" y="246" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.55"/><rect class="b" style="--i:1" x="82.5" y="229" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.59"/><rect class="b" style="--i:2" x="78" y="212" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.63"/><rect class="b" style="--i:3" x="83" y="195" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.67"/><rect class="b" style="--i:4" x="77" y="178" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.71"/><rect class="b" style="--i:5" x="81.5" y="161" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.75"/><rect class="b" style="--i:6" x="77.5" y="144" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.79"/><rect class="b" style="--i:7" x="83.5" y="127" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.83"/><rect class="b" style="--i:8" x="79" y="110" width="40" height="15" rx="2.5" fill="#5f6d86" fill-opacity="0.87"/><rect class="drop" x="82" y="93" width="40" height="15" rx="2.5" fill="#f8ce41"/></g><rect class="b" style="--i:0" x="216" y="246" width="32" height="15" rx="2.5" fill="#2e9fc0"/><rect class="b" style="--i:1" x="250" y="246" width="32" height="15" rx="2.5" fill="#2e9fc0"/><rect class="b" style="--i:2" x="284" y="246" width="32" height="15" rx="2.5" fill="#2e9fc0"/><rect class="b" style="--i:3" x="318" y="246" width="32" height="15" rx="2.5" fill="#2e9fc0"/><rect class="b" style="--i:4" x="352" y="246" width="32" height="15" rx="2.5" fill="#2e9fc0"/><rect class="b" style="--i:5" x="233" y="229" width="32" height="15" rx="2.5" fill="#6f90cf"/><rect class="b" style="--i:6" x="267" y="229" width="32" height="15" rx="2.5" fill="#6f90cf"/><rect class="b" style="--i:7" x="301" y="229" width="32" height="15" rx="2.5" fill="#6f90cf"/><rect class="b" style="--i:8" x="335" y="229" width="32" height="15" rx="2.5" fill="#6f90cf"/><rect class="b" style="--i:9" x="250" y="212" width="32" height="15" rx="2.5" fill="#ab78cf"/><rect class="b" style="--i:10" x="284" y="212" width="32" height="15" rx="2.5" fill="#ab78cf"/><rect class="b" style="--i:11" x="318" y="212" width="32" height="15" rx="2.5" fill="#ab78cf"/><rect class="b" style="--i:12" x="267" y="195" width="32" height="15" rx="2.5" fill="#f55ec9"/><rect class="b" style="--i:13" x="301" y="195" width="32" height="15" rx="2.5" fill="#f55ec9"/><path class="link" d="M300 193L283 201M300 193L317 201" stroke="#f8ce41" stroke-width="2" stroke-linecap="round"/><rect class="drop drop-r" x="284" y="178" width="32" height="15" rx="2.5" fill="#f8ce41"/><text class="lbl" x="100" y="40" text-anchor="middle" fill="#93a2bb">IN SERIES</text><text class="cap" x="100" y="62" text-anchor="middle" fill="#fff">暗記で、直列に積む</text><text class="lbl" x="300" y="40" text-anchor="middle" fill="#93a2bb">ON A FOUNDATION</text><text class="cap" x="300" y="62" text-anchor="middle" fill="#fff">土台の上に、一つ足す</text><text class="note" x="100" y="286" text-anchor="middle" fill="#93a2bb">高くなるほど、ぐらつく</text><text class="note" x="300" y="286" text-anchor="middle" fill="#93a2bb">つながるほど、安定する</text></svg>
         </div>
-        <ul class="problem-checklist">
-          <li>授業中は分かるのに、<strong>テストや宿題では解けない</strong></li>
-          <li>解説を見ても、<strong>どこが分からないのか分からなくて、何をすればいいのか分からない</strong></li>
-          <li>簡単な問題は解けるのに、<strong>文章題や応用問題になると手が止まる</strong></li>
-          <li>家で勉強する習慣が身に付いていないから、<strong>塾だよりになってしまう</strong></li>
-          <li>その場のテスト対策で点数は伸びたけど、詳しいことは理解できず、<strong>苦手科目のままになっている</strong></li>
-          <li>高校進学後に、自分で勉強して授業についていけるのか不安。<strong>合格後も活きるような学力を身に着けたい</strong></li>
-          <li>丁寧な個別指導はいいけど、<strong>授業回数が増えて教育費の負担に限界を感じる</strong></li>
-        </ul>
-        <div class="problem-arrow" aria-hidden="true"></div>
-        <p class="problem-bridge">
-          こうした悩みには、<strong>本質理解と自学設計</strong>が効果的です。
-        </p>
-      </section>
+      </div>
+      <div class="points">
+        <article class="point fade" style="--c:var(--s1);--d:0">
+          <div class="n" aria-hidden="true"><i class="lit"></i><i></i><i></i><em>01</em></div>
+          <h3>前の単元まで、戻る</h3>
+          <p>手が止まる場面や間違え方から、どこで理解が抜けたのかを見つけます。今の単元にこだわらず、必要なところまで戻って理解し直します。</p>
+        </article>
+        <article class="point fade" style="--c:var(--s2);--d:.1">
+          <div class="n" aria-hidden="true"><i class="lit"></i><i class="lit"></i><i></i><em>02</em></div>
+          <h3>理解を、つなげる</h3>
+          <p>公式や手順の丸暗記ではなく、「なぜそうなるのか」まで。単元同士のつながりが見えると、新しいことは前の知識の上に足すだけになります。</p>
+        </article>
+        <article class="point fade" style="--c:var(--s3);--d:.2">
+          <div class="n" aria-hidden="true"><i class="lit"></i><i class="lit"></i><i class="lit"></i><em>03</em></div>
+          <h3>高校で伸びる、土台をつくる</h3>
+          <p>覚える量に頼らないので、学年が上がっても勉強が重くなりにくい。高校に進んでからも、自分で積み上げていける力を育てます。</p>
+        </article>
+      </div>
+    </div>
+  </section>
 
-      <section class="section cause" id="cause">
-        <div class="section-heading cause-heading">
-          <p class="eyebrow">Cause</p>
-          <h2>本当はできる子が勉強が「苦手」になってしまう最大の理由</h2>
-        </div>
+    <section class="sec movie navy" id="movie" aria-labelledby="h-movie">
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow fade">Concept Movie</p>
+        <h2 id="h-movie" class="reveal"><span class="rise"><span>つなげて、わかる。</span></span></h2>
+        <p class="fade" style="--d:.15">覚えるだけの知識は、積むほどぐらつきます。はじめての言葉も、知っている言葉と文でつなげれば、わかる。つながった知識は、次を予測する力になります。ステップワイズの考え方を29秒で。</p>
+      </div>
+      <div class="player fade" style="--d:.2" id="player">
+        <video id="cm" preload="none" playsinline poster="media/stepwise-concept-poster.jpg" aria-label="コンセプトムービー「つなげて、わかる。」">
+          <source src="media/stepwise-concept.mp4" type="video/mp4">
+        </video>
+        <button class="play" type="button" id="playBtn" aria-label="コンセプトムービーを再生（音が出ます）">
+          <span class="disc" aria-hidden="true"></span>
+          <span class="cap"><b>つなげて、わかる。</b><small>CONCEPT MOVIE · 0:29 · SOUND ON</small></span>
+        </button>
+      </div>
+    </div>
+  </section>
 
-        <div class="cause-story">
-          <div class="cause-myth">
-            <img class="cause-question-image" src="./assets/cause-question.png" alt="勉強が苦手になってしまう理由を考えている生徒のイメージ" />
-            <div class="myth-questions">
-              <p>勉強量が足りないから？</p>
-              <p>本人のやる気がないから？</p>
-            </div>
-          </div>
+    <section class="sec" id="info" aria-labelledby="h-info">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow fade">Information</p>
+        <h2 id="h-info" class="reveal"><span class="rise"><span>教室のご案内</span></span></h2>
+      </div>
+      <div class="info-grid">
+        <dl>
+          <div class="row fade" style="--c:var(--s1)"><dt>対象</dt><dd>小学生・中学生・高校生<small>小学生・中学生は全教科。高校生は英語・数学・物理・化学・地理。</small></dd></div>
+          <div class="row fade" style="--c:var(--s2)"><dt>授業の形</dt><dd>講師1人に、生徒は2人まで<small>質問しやすく、つまずいたところでその場で立ち止まれます。</small></dd></div>
+          <div class="row fade" style="--c:var(--s3)"><dt>授業料</dt><dd><span class="big">90分 4,500円</span>（税込）<small>入会金・教材費はかかりません。</small></dd></div>
+        </dl>
+        <dl>
+          <div class="row fade" style="--c:var(--s4)"><dt>授業時間</dt><dd>平日 18:00〜21:00／土日 9:00〜21:00<small>火曜定休。土日は空き状況によります。</small></dd></div>
+          <div class="row fade" style="--c:var(--s1)"><dt>教室</dt><dd>埼玉県越谷市<small>場所は Google マップでご確認いただけます。</small></dd></div>
+          <div class="row fade" style="--c:var(--s2)"><dt>塾長</dt><dd>筑波大学大学院 在籍<small>英検準1級。個別指導塾で4年間の指導経験。</small></dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
 
-          <div class="cause-arrows" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+    <section class="sec apply navy" id="apply" aria-labelledby="h-apply">
+    <div class="steps-deco" aria-hidden="true"><i style="--c:var(--s1);--k:1"></i><i style="--c:var(--s2);--k:2"></i><i style="--c:var(--s3);--k:3"></i><i style="--c:var(--s4);--k:4"></i></div>
+    <div class="wrap">
+      <span class="badge fade">無料体験授業 受付中</span>
+      <h2 id="h-apply" class="reveal"><span class="rise"><span>まずは一度、</span></span><span class="rise"><span>授業を体験してみませんか。</span></span></h2>
+      <p class="fade" style="--d:.15">1回90分、費用はかかりません。お申し込みから3日以内に、塾長からメールでご連絡します。体験のあとに、無理に入会をお勧めすることはありません。</p>
+      <a class="btn btn-apply fade" style="--d:.25" href="https://forms.gle/vNRLBy6KRPhJovHK7" target="_blank" rel="noopener">申し込みフォームを開く<svg width="20" height="12" viewBox="0 0 20 12" aria-hidden="true"><path d="M0 6h17M12.5 1.5 17.5 6l-5 4.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <small class="fade" style="--d:.3">Google フォームが開きます。質問だけでもどうぞ。</small>
+    </div>
+  </section>
+</main>
 
-          <div class="cause-core">
-            <h3>苦手の正体は、<strong>「分かったつもり」の積み重ね</strong>です。</h3>
-            <p>
-              実は、成績が伸びない原因は「勉強量」ではありません。
-            </p>
-            <p>
-              勉強しているのに伸びない。
-              授業も受けているのに解けない。
-              その原因は、やる気や努力不足ではなく、
-              「分かったつもり」で進んでしまっていることにあります。
-            </p>
-          </div>
+<footer class="foot">
+  <div class="wrap">
+    <svg viewBox="15 13 907 167"  aria-hidden="true" focusable="false"><rect x="25" y="141.5" width="51" height="28.5" rx="6" fill="#2e9fc0"/><rect x="84" y="113" width="51" height="57" rx="6" fill="#6f90cf"/><rect x="143" y="84.5" width="51" height="85.5" rx="6" fill="#ab78cf"/><rect x="202" y="56" width="51" height="114" rx="6" fill="#f55ec9"/><circle cx="227.5" cy="38.3" r="16" fill="#edc43f"/><path fill="currentColor" d="M334.64 171.25Q323.95 171.25 316.02 167.98Q308.09 164.71 303.67 158.24Q299.25 151.77 299 142.17H317.28Q317.61 146.56 319.84 149.51Q322.07 152.46 325.84 153.94Q329.61 155.41 334.42 155.41Q339.1 155.41 342.55 154.07Q346 152.73 347.89 150.31Q349.79 147.9 349.79 144.73Q349.79 141.84 348.08 139.88Q346.37 137.92 343.06 136.5Q339.74 135.07 334.91 133.95L325.36 131.62Q314.12 128.93 307.73 123.08Q301.34 117.24 301.34 107.53Q301.34 99.52 305.68 93.51Q310.01 87.5 317.56 84.16Q325.11 80.82 334.8 80.82Q344.7 80.82 352.03 84.19Q359.37 87.57 363.45 93.57Q367.53 99.57 367.66 107.43H349.45Q348.97 102.28 345.11 99.44Q341.26 96.61 334.66 96.61Q330.21 96.61 327.09 97.86Q323.97 99.11 322.36 101.31Q320.75 103.51 320.75 106.32Q320.75 109.39 322.61 111.44Q324.47 113.5 327.61 114.81Q330.75 116.13 334.51 117.01L342.35 118.9Q348.14 120.2 353 122.39Q357.85 124.58 361.41 127.72Q364.97 130.86 366.91 135.1Q368.84 139.34 368.84 144.8Q368.84 152.9 364.77 158.85Q360.7 164.8 353.05 168.03Q345.41 171.25 334.64 171.25ZM377.77 97.58V82H450.28V97.58H423.49V170H404.61V97.58ZM462.07 170V82H521.64V97.58H480.96V117.91H518.5V133.2H480.96V154.42H521.71V170ZM535.54 170V82H570.39Q580.38 82 587.45 85.82Q594.53 89.64 598.28 96.39Q602.04 103.14 602.04 111.93Q602.04 120.75 598.23 127.43Q594.42 134.11 587.23 137.88Q580.04 141.64 569.91 141.64H547.77V126.51H566.77Q572.09 126.51 575.59 124.66Q579.09 122.8 580.81 119.52Q582.54 116.23 582.54 111.93Q582.54 107.55 580.81 104.31Q579.09 101.06 575.58 99.27Q572.07 97.48 566.72 97.48H554.42V170ZM632.79 170 609.2 82H629.9L639.65 123.96Q640.91 129.56 641.95 135.95Q642.99 142.34 643.99 148.76Q644.99 155.18 645.96 161.02H642.56Q643.66 155.18 644.71 148.76Q645.77 142.34 646.92 135.95Q648.07 129.56 649.41 123.96L659.74 82H679.23L689.51 123.96Q690.87 129.56 692.01 135.95Q693.15 142.34 694.23 148.76Q695.31 155.18 696.41 161.02H692.9Q693.93 155.18 694.91 148.76Q695.89 142.34 696.97 135.95Q698.05 129.56 699.26 123.96L709.02 82H729.76L706.13 170H684.63L673.38 126.31Q671.44 118.55 670.1 109.51Q668.75 100.47 667.1 91.15H671.82Q669.95 100.29 668.8 109.22Q667.65 118.15 665.58 126.31L654.31 170ZM759 82V170H740.12V82ZM806.93 171.25Q796.24 171.25 788.31 167.98Q780.38 164.71 775.96 158.24Q771.53 151.77 771.29 142.17H789.57Q789.9 146.56 792.13 149.51Q794.36 152.46 798.13 153.94Q801.9 155.41 806.71 155.41Q811.39 155.41 814.84 154.07Q818.29 152.73 820.18 150.31Q822.08 147.9 822.08 144.73Q822.08 141.84 820.37 139.88Q818.66 137.92 815.35 136.5Q812.03 135.07 807.2 133.95L797.64 131.62Q786.4 128.93 780.02 123.08Q773.63 117.24 773.63 107.53Q773.63 99.52 777.96 93.51Q782.3 87.5 789.85 84.16Q797.4 80.82 807.09 80.82Q816.99 80.82 824.32 84.19Q831.66 87.57 835.74 93.57Q839.82 99.57 839.95 107.43H821.74Q821.26 102.28 817.4 99.44Q813.55 96.61 806.95 96.61Q802.49 96.61 799.38 97.86Q796.26 99.11 794.65 101.31Q793.04 103.51 793.04 106.32Q793.04 109.39 794.9 111.44Q796.76 113.5 799.9 114.81Q803.04 116.13 806.8 117.01L814.64 118.9Q820.43 120.2 825.29 122.39Q830.14 124.58 833.7 127.72Q837.26 130.86 839.2 135.1Q841.13 139.34 841.13 144.8Q841.13 152.9 837.06 158.85Q832.99 164.8 825.34 168.03Q817.69 171.25 806.93 171.25ZM853.39 170V82H912.96V97.58H872.28V117.91H909.82V133.2H872.28V154.42H913.03V170Z"/></svg>
+    <p>ステップワイズ 個別指導（埼玉県越谷市）<br>このホームページは準備中です。内容は順に増やしていきます。</p>
+    <p>© <span id="yr">2026</span> STEPWISE</p>
+  </div>
+</footer>
 
-          <div class="pretend-understanding">
-            <h3>「分かったつもり」とは？</h3>
-            <p>
-              答えを出すことはできても、
-              なぜその解き方を使うのか、なぜその公式が成り立つのかを説明できない状態です。
-              問題の見た目や覚えた手順で解こうとしていると、単元同士のつながりが見えにくくなり、
-              学年が上がるごとに勉強が苦しくなってしまいます。
-              そうならないためには、<strong>なぜその考え方を使うのかを自分の言葉で説明できる状態</strong>になる必要があります。
-            </p>
-            <div class="pattern-blocks" aria-label="分かったつもりの例">
-              <div>この問題はこの解き方</div>
-              <div>この形ならこの公式</div>
-              <div>似た問題だから同じ手順</div>
-            </div>
-            <div class="pattern-arrow" aria-hidden="true">↓</div>
-            <div class="pattern-result">分かったつもり</div>
-          </div>
+<script>
+(function () {
+  'use strict';
+  var html = document.documentElement, reduce = false;
+  try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+  document.getElementById('yr').textContent = new Date().getFullYear();
 
-          <div class="cause-myth cause-assumption">
-            <img class="cause-question-image" src="./assets/cause-question.png" alt="分かったつもりのサインについて考えている生徒のイメージ" />
-            <div class="myth-questions">
-              <p>でも定期テストは点数が良いけど</p>
-              <p>簡単な問題は解けるから基礎は大丈夫</p>
-            </div>
-          </div>
+  /* ---- start the hero entrance when the loader has left (or right away without it) ---- */
+  var heroStarted = false;
+  function ready() { if (heroStarted) return; heroStarted = true; html.classList.add('is-ready'); startLogo(); }
+  if (document.getElementById('sw-loader')) {
+    document.addEventListener('stepwise:loader-done', ready);
+    setTimeout(ready, 9000);                       // the loader always closes by then
+  } else ready();
 
-          <p class="cause-check-lead"><img src="./assets/icon-warning.png" alt="" aria-hidden="true" />そう思っている方ほど要注意です。次の項目に2つ以上当てはまる方は、「分かったつもり」が積み重なっているサインです。</p>
-          <ul class="problem-checklist cause-checklist">
-            <li><strong>問題をパターンで覚えている</strong></li>
-            <li><strong>少し聞き方が変わると解けない</strong></li>
-            <li><strong>新しい単元を理解するのに時間がかかる</strong></li>
-            <li><strong>前の単元の分からない部分を曖昧なまま進めている</strong></li>
-            <li><strong>教えてもらった形以外の問題が解けない</strong></li>
-            <li><strong>すぐに手が止まってしまう</strong></li>
-            <li><strong>「なぜそうなるのか」を説明できない</strong></li>
-          </ul>
+  /* ---- header turns light after the hero ---- */
+  var head = document.getElementById('head'), hero = document.querySelector('.hero');
+  function onScroll() { head.classList.toggle('is-light', hero.getBoundingClientRect().bottom < 72); }
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-          <div class="cause-transition">
-            <h3>では、なぜ「分かったつもり」が問題なのでしょうか？</h3>
-            <p>
-              「分かったつもり」の状態を放置すると、学年が上がるごとに、
-              暗記でカバーした知識が増えていきます。
-              その結果、単元ごとのつながりを理解することが難しくなり、
-              また暗記でカバーに頼ってしまいます。
-              そして、勉強量は増えているのに成果が出にくい状態になってしまうのです。
-            </p>
-          </div>
+  /* ---- reveal on scroll ---- */
+  var targets = document.querySelectorAll('.fade, .reveal, .stair, #fig');
+  if ('IntersectionObserver' in window && !reduce) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('on');
+        e.target.querySelectorAll('.rise').forEach(function (r, i) { r.firstElementChild.style.transitionDelay = (i * 0.12) + 's'; });
+        if (e.target.id === 'fig') playFigure();
+        io.unobserve(e.target);
+      });
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+    targets.forEach(function (t) { io.observe(t); });
+  } else { targets.forEach(function (t) { t.classList.add('on'); }); playFigure(true); }
 
-          <div class="grade-burden">
-            <p class="grade-burden-title">学年が上がるほど、</p>
-            <div class="grade-burden-diagram" aria-label="学年が上がるほど起きる学習負担の図解">
-              <div class="burden-stack">
-                <div>覚える量が増える</div>
-                <div>理解のつながりがなくなる</div>
-                <div>整理できなくなる</div>
-              </div>
-              <div class="burden-equals" aria-hidden="true">=</div>
-              <div class="burden-result">
-                <span>勉強時間が増えているのに、</span>
-                <strong>成果が出ない状態</strong>
-              </div>
-            </div>
-          </div>
+  /* ---- hero logo: the steps hop in a wave, the ball bounces on the top step ---- */
+  var BARS = [[25.0, 28.5], [84.0, 57.0], [143.0, 85.5], [202.0, 114.0]], BASE = 170, BW = 51, DOT = [227.5, 38.3, 16.0];
+  function startLogo() {
+    var svg = document.getElementById('hero-logo'); if (!svg || reduce) return;
+    var bars = svg.querySelectorAll('.hb'), ball = svg.querySelector('#hb-ball'), ring = svg.querySelector('#hb-ring');
+    var PERIOD = 5.2, t0 = null, visible = true;
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; }).observe(svg);
+    function wob(s, f, d) { return s < 0 ? 0 : Math.exp(-d * s) * Math.cos(2 * Math.PI * f * s); }
+    function frame(now) {
+      requestAnimationFrame(frame);
+      if (!visible) { t0 = null; return; }
+      if (t0 === null) t0 = now - 1800;
+      var t = ((now - t0) / 1000) % PERIOD;
+      for (var i = 0; i < 4; i++) {
+        var s = t - (1.0 + i * 0.2), lift = 0, sq = 0;
+        if (s >= 0 && s < 0.22) lift = -16 * Math.sin(Math.PI * s / 0.22);
+        else if (s >= 0.22) sq = 0.12 * wob(s - 0.22, 3.2, 9);
+        var h = BARS[i][1] * (1 - sq), w = BW * (1 + sq * 0.5);
+        bars[i].setAttribute('x', (BARS[i][0] + (BW - w) / 2).toFixed(2)); bars[i].setAttribute('width', w.toFixed(2));
+        bars[i].setAttribute('y', (BASE - h + lift).toFixed(2)); bars[i].setAttribute('height', h.toFixed(2));
+      }
+      // the ball rides the top step's hop, then takes a big bounce of its own
+      var tb = 1.6, u = (t - tb) / 0.62, by = 0, bsx = 1, bsy = 1;
+      var s3 = t - 1.6;
+      if (s3 >= 0 && s3 < 0.22) by = -16 * Math.sin(Math.PI * s3 / 0.22);
+      if (u > 0 && u < 1) by = -78 * Math.sin(Math.PI * u);
+      var land = t - (tb + 0.62);
+      if (land >= 0) { var q = 0.26 * wob(land, 3.5, 9); bsx = 1 + q * 0.6; bsy = 1 - q; }
+      var bot = DOT[1] + DOT[2];
+      ball.setAttribute('transform', 'translate(0 ' + by.toFixed(2) + ') translate(' + DOT[0] + ' ' + bot + ') scale(' + bsx.toFixed(3) + ' ' + bsy.toFixed(3) + ') translate(' + (-DOT[0]) + ' ' + (-bot) + ')');
+      var rg = land / 0.7;
+      if (rg >= 0 && rg < 1) { ring.setAttribute('r', (18 + 120 * (1 - Math.pow(1 - rg, 3))).toFixed(1)); ring.setAttribute('stroke-opacity', (0.8 * (1 - rg)).toFixed(3)); ring.setAttribute('stroke-width', (4 * (1 - rg) + .6).toFixed(2)); }
+      else ring.setAttribute('stroke-opacity', '0');
+    }
+    requestAnimationFrame(frame);
+  }
 
-          <div class="negative-spiral-heading">
-            <h3>苦手な子が陥りがちな負のスパイラル</h3>
-          </div>
+  /* ---- concept figure: horizontal dots, vertical dots, then the parabola ---- */
+  var figDone = false;
+  function playFigure(still) {
+    if (figDone) return; figDone = true;
+    var fig = document.getElementById('fig'); if (!fig) return;
+    if (still || reduce) { fig.classList.add('still'); return; }
+    fig.classList.add('play');
+  }
 
-          <div class="cause-loop-intro">
-            <p class="therefore">そして…</p>
-            <p>
-              苦手な子が陥りがちなのが苦手のスパイラルです。
-              暗記で乗り切ると、単元同士のつながりがさらに見えにくくなり、
-              学年が上がるごとにまるですべてを丸暗記しないといけないような状況になってしまいます。
-            </p>
-          </div>
-
-          <div class="cause-loop" aria-label="分かったつもりが積み重なる悪循環">
-            <div class="loop-center">悪循環</div>
-            <div class="loop-item loop-1">暗記に頼る</div>
-            <div class="loop-item loop-2">本質的な理解が不足</div>
-            <div class="loop-item loop-3">単元同士のつながりが見えない</div>
-            <div class="loop-item loop-4">学年が上がり難易度が上昇</div>
-            <span class="loop-arrow arrow-1" aria-hidden="true">→</span>
-            <span class="loop-arrow arrow-2" aria-hidden="true">→</span>
-            <span class="loop-arrow arrow-3" aria-hidden="true">→</span>
-            <span class="loop-arrow arrow-4" aria-hidden="true">→</span>
-          </div>
-
-        </div>
-
-        <div class="bedrock-box">
-          <h3>✓ 苦手を抜け出すためには</h3>
-          <p>
-            まずは、どこで「分かったつもり」になっているのかを見つけること。
-            そして必要なところまで戻り、「なぜそうなるのか」まで理解し直すこと。
-            単元同士のつながりを理解しながら知識の土台を固めることで、
-            暗記に頼る苦手科目のスパイラルから抜け出せます。
-            これこそが、すべての問題を考える上で重要な基礎、<strong>本質理解</strong>です。
-          </p>
-        </div>
-
-        <div class="solution-core">
-          <h3>本質理解とは</h3>
-          <p>
-            本質理解とは、どんな問題にも共通する<strong>考え方の土台</strong>です。
-            他の単元とのつながりを意識して「なぜそうなるのか」まで理解し、
-            最小限の知識で様々な課題を解決できる状態のことです。
-            そのため、基礎はただ易しい問題を解けることではありません。
-          </p>
-        </div>
-
-        <div class="solution-contrast">
-          <h3 class="contrast-title weak-title">分かったつもりの学習</h3>
-          <h3 class="contrast-title strong-title">本質理解の学習</h3>
-          <div class="contrast-row">
-            <p>この問題はこの解き方</p>
-            <p>なぜその式を使うのか</p>
-          </div>
-          <div class="contrast-row">
-            <p>この形ならこの公式</p>
-            <p>どうして成り立つのか</p>
-          </div>
-          <div class="contrast-row">
-            <p>問題の見た目で判断する</p>
-            <p>他の単元とつながりはないか</p>
-          </div>
-        </div>
-
-        <div class="solution-understanding">
-          <h3>本質理解を身に付けると</h3>
-          <p>
-            本質理解を身に付けると、少ない知識で多くの問題に対応できるようになります。
-            新しい単元は“追加”ではなく“つながる”ものだからです。
-            前に学んだ知識と結びつけて理解できるようになると、毎回ゼロから暗記する必要がなくなり、
-            学年が上がったり高校に進学したりしても崩れにくくなります。
-            一方で、定期テストでは点数が取れていても、つながりを意識せずに学習していると、
-            学年が上がったときに行き詰まってしまうことがあります。
-          </p>
-          <div class="understanding-diagram">
-            <div class="understanding-source">本質理解</div>
-            <div class="understanding-arrow" aria-hidden="true">→</div>
-            <div class="understanding-results">
-              <div>初めて見る問題でも考えられる</div>
-              <div>暗記に頼らなくてよくなる</div>
-              <div>学年が上がっても崩れにくい</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="cause-heading cause-subheading">
-          <h2>「わかったつもり学習」の結果</h2>
-        </div>
-
-        <div class="self-study-question">
-          <h3>こんな指導していませんか？</h3>
-          <div class="self-study-scene">
-            <img src="./assets/self-study-pressure.png" alt="" aria-hidden="true" />
-            <div class="self-study-voice">
-              <p>もっと家で勉強しなさい</p>
-              <p>やる気を出しなさい</p>
-            </div>
-          </div>
-          <p class="self-study-note">
-            自分で勉強していない様子を見ると、ついこういったことを言いたくなってしまいます。
-            しかし、このようなことを言っても根本的な解決には至らず、お子様も保護者の方も、どちらも疲弊してしまいます。
-            なぜなら、原因の本質はやる気以外の別のことにあるからです。
-          </p>
-        </div>
-
-        <div class="self-study-reason">
-          <h3>自習できない子が感じていること</h3>
-          <p>
-            実は、勉強をするときに、本質理解が足りていない状態だと、
-            そもそも何も考えられず、ただただ時間を消費するだけで勉強がつまらなくなってしまいます。
-          </p>
-          <div class="self-study-stuck-scene" aria-hidden="true">
-            <img src="./assets/self-study-stuck-girl.png" alt="" />
-            <div class="self-study-reason-blocks">
-              <p>何を考えればいいか分からない</p>
-              <p>勉強がつまらない</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="self-study-result-block self-study-result-card">
-          <h3>その状態が続くと、、、</h3>
-          <p class="self-study-result-lead">
-            「分かったつもり」のまま進むと、一人で考えて進めることが難しくなり、学習が塾や授業回数に依存しやすくなります。
-          </p>
-          <ul>
-            <li>
-              <img src="./assets/self-study-result-confused.png" alt="" aria-hidden="true" />
-              <span>塾でしか勉強できない</span>
-            </li>
-            <li>
-              <img src="./assets/self-study-result-teacher.png" alt="" aria-hidden="true" />
-              <span>授業回数が増える</span>
-            </li>
-            <li>
-              <img src="./assets/self-study-result-cost.png" alt="" aria-hidden="true" />
-              <span>時間と費用が増える</span>
-            </li>
-            <li>
-              <img src="./assets/self-study-result-home.png" alt="" aria-hidden="true" />
-              <span>塾をやめると勉強が止まる</span>
-            </li>
-          </ul>
-        </div>
-
-        <div class="self-study-needed-block">
-          <h3>この状態を改善するには</h3>
-          <p>
-            この状態を改善するには、まずしっかりと本質理解を習得し、
-            そのあと自分で演習をするという順番が大切になります。
-          </p>
-          <div class="needed-diagram needed-diagram-ng" aria-label="うまくいかない学習の流れ">
-            <div>本質理解の不足</div>
-            <span aria-hidden="true">→</span>
-            <div>自分で演習不可</div>
-          </div>
-          <div class="needed-diagram" aria-label="必要な学習の流れ">
-            <div>本質理解の習得</div>
-            <span aria-hidden="true">→</span>
-            <div>自分で演習</div>
-          </div>
-        </div>
-
-        <div class="efficiency-block">
-          <h3>学習効率を向上する仕組み</h3>
-          <p>
-            本質理解によって考える道筋が見えると、同じ問題でも解くまでの時間が短くなります。
-            例えば、1時間かかっていた学習が20分で進むようになれば、
-            授業回数に頼りすぎず、自分で学習を進めやすくなり、費用対効果も高まります。
-          </p>
-          <div class="time-diagram" aria-label="学習時間が短くなる図解">
-            <div class="time-bar long"><span>1時間</span></div>
-            <span class="time-arrow" aria-hidden="true">→</span>
-            <div class="time-bar short"><span>20分</span></div>
-          </div>
-          <div class="efficiency-diagram" aria-label="本質理解と自学設計で得られる効果">
-            <div class="efficiency-inputs">
-              <div>本質理解</div>
-              <span aria-hidden="true">＋</span>
-              <div>自学設計</div>
-            </div>
-            <span class="efficiency-arrow" aria-hidden="true">→</span>
-            <div class="efficiency-results">
-              <div>授業回数に頼らなくなる</div>
-              <div>自分で学習が進む</div>
-              <div>費用対効果が上がる</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section solution" id="solution">
-        <div class="section-heading solution-heading">
-          <p class="eyebrow">Solution</p>
-          <h2>重要なのは、本質から理解すること</h2>
-        </div>
-
-        <div class="solution-story">
-          <div class="solution-key-message">
-            <div class="solution-main-message">
-              <h3>「分かったつもり」を、本質理解に変える指導です</h3>
-              <p>
-                私の指導では、ただ問題の解き方を教えるのではなく、
-                「なぜそう考えるのか」「どこを見て判断するのか」まで確認します。
-                パターン暗記ではなく、自分で考えて解ける状態を目指します。
-              </p>
-            </div>
-          </div>
-
-          <div class="teaching-method">
-            <article>
-              <span>01</span>
-              <h3>つまずきの根っこを見つける</h3>
-              <p>
-                手が止まる場面や間違え方を見ながら、どこで理解が抜けているのかを確認します。
-                今の単元だけでなく、必要に応じて前の単元まで戻ります。
-              </p>
-            </article>
-            <article>
-              <span>02</span>
-              <h3>本質理解をつくる</h3>
-              <p>
-                基礎とは、簡単な問題のことではありません。
-                どんな問題にも共通する「考え方の土台」です。
-                公式や解き方を丸暗記するのではなく、なぜその式を使うのか、どう判断するのかまで理解します。
-              </p>
-            </article>
-            <article>
-              <span>03</span>
-              <h3>自分で使えるように練習する</h3>
-              <p>
-                授業で理解した考え方を、宿題や演習で実際に使ってもらいます。
-                次の授業で、どこまで自力でできたか、どこでつまずいたかを確認し、足りない理解を補います。
-              </p>
-            </article>
-          </div>
-
-          <div class="cause-role-grid solution-role-grid">
-            <article>
-              <h3>授業と自学の役割</h3>
-              <p>
-                私の指導では、授業で本質理解を身につけ、
-                自学でそれを使う練習をする、という役割分担をしています。
-                授業ですべてを詰め込むのではなく、本当に大事な考え方を授業で整理し、
-                自学で使えるようにすることで、少ない授業回数でも効率よく力を伸ばしていきます。
-              </p>
-              <div class="lesson-self-diagram" aria-label="授業と自学の役割">
-                <div class="lesson-self-block">
-                  <span>授業</span>
-                  <p>本質理解を身につける</p>
-                </div>
-                <div class="lesson-self-arrows" aria-hidden="true">
-                  <span><strong>演習</strong><em>→</em></span>
-                  <span><em>←</em><strong>フィードバック</strong></span>
-                </div>
-                <div class="lesson-self-block">
-                  <span>自学</span>
-                  <p>それを使う練習をする</p>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div class="solution-positioning">
-            <div>
-              <span>この指導の特徴</span>
-              <p>
-                単元同士のつながりや、なぜ成り立つのかを重視した、
-                本質理解×自学設計で、一生使える学力の岩盤を身につけます。
-              </p>
-            </div>
-          </div>
-          <div class="solution-cta">
-            <p class="solution-cta-lead">まずは一緒に、つまずきの原因を基礎から整理してみませんか。</p>
-            <a class="button primary" href="https://forms.gle/FeFnTTy2EWrpfGkZ6" target="_blank" rel="noopener">今すぐ無料60分体験を申し込む</a>
-            <p>無料体験後に、無理に入会を勧めることはありません。</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="band testimonials" id="voice">
-        <div class="section-heading">
-          <p class="eyebrow">Voice</p>
-          <h2>口コミ・保護者の声</h2>
-        </div>
-        <div class="voice-grid">
-          <article class="voice-card">
-            <div class="voice-card-head">
-              <img src="./assets/voice-parent.png" alt="" aria-hidden="true" />
-              <div>
-                <p class="voice-label">保護者の声</p>
-                <h3>中学2年生 保護者さま</h3>
-              </div>
-            </div>
-            <dl class="voice-qa">
-              <div>
-                <dt>指導前のお悩み</dt>
-                <dd>学校の授業は聞いているようでしたが、数学のテストになると点数につながらず、どこから復習すればよいのか親子でわからない状態でした。</dd>
-              </div>
-              <div>
-                <dt>選んだ理由</dt>
-                <dd>基礎まで戻って見てくれることと、体験授業で子どもが質問しやすそうにしていたことが決め手でした。</dd>
-              </div>
-              <div>
-                <dt>受講後の変化</dt>
-                <dd>以前より途中式を書くようになり、「ここがわからない」と自分から言える場面が増えました。勉強への苦手意識も少し和らいだように感じます。</dd>
-              </div>
-            </dl>
-          </article>
-          <article class="voice-card student-voice">
-            <div class="voice-card-head">
-              <img src="./assets/voice-student.png" alt="" aria-hidden="true" />
-              <div>
-                <p class="voice-label">生徒の声</p>
-                <h3>中学1年生 生徒さん</h3>
-              </div>
-            </div>
-            <dl class="voice-qa">
-              <div>
-                <dt>授業前に苦手だったこと</dt>
-                <dd>英語の文法で、be動詞と一般動詞の違いがよくわからなくて、問題になると迷っていました。</dd>
-              </div>
-              <div>
-                <dt>分かりやすいところ</dt>
-                <dd>いきなり答えを言うのではなく、どこを見ればいいかを一緒に考えてくれるところが分かりやすいです。</dd>
-              </div>
-              <div>
-                <dt>できるようになったこと</dt>
-                <dd>前より文の作り方がわかるようになって、学校のワークを進めるときに止まることが減りました。</dd>
-              </div>
-            </dl>
-          </article>
-        </div>
-        <p class="section-note">掲載内容はイメージです。実際の声は、掲載許可をいただいたものを匿名で掲載予定です。</p>
-      </section>
-
-      <section class="section strengths">
-        <div class="section-heading">
-          <p class="eyebrow">Strengths</p>
-          <h2>選ばれる理由</h2>
-        </div>
-        <div class="strength-grid">
-          <article>
-            <div class="strength-card-head">
-              <span class="number">01</span>
-              <h3>「今ある知識」から理解できる説明</h3>
-            </div>
-            <div class="strength-card-body">
-              <img class="strength-icon strength-icon-large" src="./assets/strength-knowledge.png" alt="" aria-hidden="true" />
-              <p>
-                生徒がまだ理解していない知識を前提に説明しても、本当の理解にはつながりません。
-                一人ひとりの理解度に合わせて、説明の順番や言葉を変えながら、今ある知識から理解できるように指導します。
-              </p>
-            </div>
-          </article>
-          <article>
-            <div class="strength-card-head">
-              <span class="number">02</span>
-              <h3>つまずきの原因を見つける戻り学習</h3>
-            </div>
-            <div class="strength-card-body">
-              <img class="strength-icon strength-icon-large" src="./assets/strength-root-cause.png" alt="" aria-hidden="true" />
-              <p>
-                手が止まる場面や間違え方を見ながら、どの知識が抜けているのかを確認します。
-                必要に応じて前の単元まで戻り、暗記でごまかさずに理解し直します。
-              </p>
-            </div>
-          </article>
-          <article>
-            <div class="strength-card-head">
-              <span class="number">03</span>
-              <h3>経験豊富な講師が直接指導</h3>
-            </div>
-            <div class="strength-card-body">
-              <img class="strength-icon strength-icon-large" src="./assets/strength-experience.png" alt="" aria-hidden="true" />
-              <p>
-                個別指導塾での指導経験を含め、多くの生徒を見てきた講師が直接担当します。
-                苦手克服から定期テスト対策まで、一人ひとりに合わせた指導を行ってきました。
-              </p>
-            </div>
-          </article>
-          <article>
-            <div class="strength-card-head">
-              <span class="number">04</span>
-              <h3>オンラインでも分かりやすい手書き解説</h3>
-            </div>
-            <div class="strength-card-body">
-              <img class="strength-icon strength-icon-large" src="./assets/strength-online.png" alt="" aria-hidden="true" />
-              <p>
-                授業では、タブレットを使って図や式をリアルタイムで書きながら説明します。
-                途中式や考え方を画面上で一緒に確認できるため、オンラインでも理解しやすい授業が可能です。
-              </p>
-            </div>
-          </article>
-          <article>
-            <div class="strength-card-head">
-              <span class="number">05</span>
-              <h3>体験から継続まで同じ講師が担当</h3>
-            </div>
-            <div class="strength-card-body">
-              <img class="strength-icon strength-icon-large" src="./assets/strength-same-teacher.png" alt="" aria-hidden="true" />
-              <p>
-                個人指導のため、体験授業から継続指導まで同じ講師が担当します。
-                毎回同じ講師が見ることで、苦手な単元や理解度の変化を継続的に把握できます。
-              </p>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="band" id="subjects">
-        <div class="section-heading">
-          <p class="eyebrow">Subjects</p>
-          <h2>対応内容</h2>
-        </div>
-        <div class="subject-grid">
-          <article>
-            <img class="subject-visual" src="./assets/subject-junior12-web.jpg" alt="中学1・2年生の学習イメージ" />
-            <h3>中1・中2</h3>
-            <p>英語・数学の予習を中心に、学校の授業フォロー、定期テスト対策、苦手単元の復習に対応します。</p>
-          </article>
-          <article>
-            <img class="subject-visual" src="./assets/subject-junior3-web.jpg" alt="机で勉強する中学生のイメージ" />
-            <h3>中3</h3>
-            <p>定期テスト対策や高校受験に向けた基礎固めに対応します。さらに、入試に向けた発展的な内容も学習できます。</p>
-          </article>
-          <article>
-            <img class="subject-visual" src="./assets/subject-highschool-web.jpg" alt="落ち着いて授業を受ける高校生のイメージ" />
-            <h3>高校生</h3>
-            <p>英語・数学の基礎固め、学校授業の予習・復習・補習に対応しています。また、物理・化学も指導可能です。</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section price" id="price">
-        <div class="section-heading">
-          <p class="eyebrow">Price</p>
-          <h2>料金</h2>
-        </div>
-        <div class="price-layout">
-          <article class="price-card">
-            <p class="price-label">基礎定着プラン｜英語・数学</p>
-            <h3>90分 / 4,500円</h3>
-            <p>英語または数学を週1回、じっくり基礎から復習したい方向けです。</p>
-          </article>
-          <article class="price-card add-on-card">
-            <p class="price-label">テスト前サポートプラン｜理科・社会</p>
-            <h3>60分 / 2,500円</h3>
-            <p>定期テスト前に、理科・社会をピンポイントで復習したい方向けのサポートです。</p>
-          </article>
-        </div>
-        <div class="info-grid">
-          <p>基本はオンラインでの個別指導です。近隣で通える場合は、対面授業もご相談いただけます。</p>
-          <p>教材は塾用教材を中心にこちらで用意します。教材準備費は授業料に含まれます。</p>
-          <p>入会金や設備維持費はかかりません。月末締め・翌月初めの銀行振込を基本としています。</p>
-          <p>理科・社会サポートは中学生対象です。テスト範囲に合わせて重要事項を短時間で整理します。</p>
-        </div>
-      </section>
-
-      <section class="section" id="trial">
-        <div class="section-heading">
-          <p class="eyebrow">Trial Lesson</p>
-          <h2>無料体験までの流れ</h2>
-          <p>
-            申し込みはGoogleフォームから簡単にできます。
-            体験後に必ず継続する必要はありませんので、まずは授業の雰囲気や進め方をご確認ください。
-          </p>
-        </div>
-        <div class="trial-layout">
-          <article class="trial-block">
-            <h3>お申し込みの流れ</h3>
-            <ol class="flow compact-flow">
-              <li>
-                <img class="flow-visual" src="./assets/trial-form.png" alt="オンラインフォームで申し込むイメージ" />
-                <span>1</span>
-                <div>
-                  <h3>Googleフォームから申し込み</h3>
-                  <p>
-                    お申し込みはかんたんです。Googleフォームに、お名前・学年・希望科目などを入力するだけで完了します。
-                    苦手な単元がはっきり分からない場合も、「相談して決めたい」で大丈夫です。
-                  </p>
-                </div>
-              </li>
-              <li>
-                <img class="flow-visual" src="./assets/trial-reply.png" alt="返信を受け取るイメージ" />
-                <span>2</span>
-                <div><h3>原則24〜48時間以内に返信</h3><p>内容を確認し、こちらからご連絡します。</p></div>
-              </li>
-              <li>
-                <img class="flow-visual" src="./assets/trial-schedule.png" alt="体験授業の日程を調整するイメージ" />
-                <span>3</span>
-                <div><h3>体験授業の日程調整</h3><p>ご都合のよい日時を相談して決めます。</p></div>
-              </li>
-            </ol>
-          </article>
-
-          <article class="trial-block">
-            <h3>無料体験で行うこと</h3>
-            <ol class="flow compact-flow">
-              <li>
-                <img class="flow-visual" src="./assets/trial-check.png" alt="苦手なところを確認するイメージ" />
-                <span>1</span>
-                <div><h3>簡単なヒアリング</h3><p>学年・科目・苦手単元・テスト範囲などを確認します。</p></div>
-              </li>
-              <li>
-                <img class="flow-visual" src="./assets/trial-online.png" alt="オンラインで体験授業を受けるイメージ" />
-                <span>2</span>
-                <div><h3>約60分の体験授業</h3><p>苦手単元に合わせて、実際の授業に近い形でミニ授業を行います。</p></div>
-              </li>
-              <li>
-                <img class="flow-visual" src="./assets/trial-feedback.png" alt="授業後にフィードバックを受けるイメージ" />
-                <span>3</span>
-                <div><h3>今後の方針を共有</h3><p>どこでつまずいているか、今後どう学習するとよいかをお伝えします。</p></div>
-              </li>
-              <li>
-                <span>4</span>
-                <div><h3>希望があれば継続スタート</h3><p>体験後に、ご家庭で検討してから決めていただけます。</p></div>
-              </li>
-            </ol>
-          </article>
-        </div>
-        <div class="trial-note">
-          <p>準備するものは、Zoomが使える端末と筆記用具です。</p>
-          <p>テスト結果や学校ワークがあれば、より具体的に状況を確認できます。</p>
-          <p>体験授業後、継続をご希望の場合のみ通常授業についてご案内します。無理な勧誘はありません。</p>
-          <a class="button primary" href="https://forms.gle/FeFnTTy2EWrpfGkZ6" target="_blank" rel="noopener">Googleフォームで申し込む</a>
-        </div>
-      </section>
-
-      <section class="band interview" id="interview">
-        <div class="section-heading">
-          <p class="eyebrow">Before / After</p>
-          <h2>体験授業で見えること</h2>
-        </div>
-        <div class="interview-grid">
-          <article>
-            <p class="voice-label">Before</p>
-            <h3>体験前によくある状態</h3>
-            <ul>
-              <li>どの単元から復習すればよいか分からない</li>
-              <li>授業を聞いても、テストで点につながらない</li>
-              <li>質問したいけれど、何を聞けばよいか整理できない</li>
-            </ul>
-          </article>
-          <article>
-            <p class="voice-label">After</p>
-            <h3>体験後に持ち帰れること</h3>
-            <ul>
-              <li>つまずきの原因がどこにあるかの見通し</li>
-              <li>苦手単元をどう復習すればよいかの方針</li>
-              <li>授業の雰囲気や説明の分かりやすさの確認</li>
-            </ul>
-          </article>
-        </div>
-        <p class="section-note">今後、体験授業を受けた方へのインタビューを匿名で掲載予定です。</p>
-      </section>
-
-      <section class="band faq">
-        <div class="section-heading">
-          <p class="eyebrow">FAQ</p>
-          <h2>よくある質問</h2>
-        </div>
-        <div class="faq-list">
-          <details>
-            <summary>オンライン授業でも本当に分かりやすいですか？</summary>
-            <p>授業では、タブレットを使って図や式をリアルタイムで書きながら説明します。画面上で途中式や考え方を一緒に確認できるため、オンラインでも分かりやすく進めることができます。生徒さん自身にも考え方や解き方を確認しながら進めるため、「聞いて終わり」にならないようにしています。</p>
-          </details>
-          <details>
-            <summary>勉強がかなり苦手でも大丈夫ですか？</summary>
-            <p>大丈夫です。今の単元が分からない場合でも、必要に応じて前の単元まで戻って確認します。基礎とは、簡単な問題だけを繰り返すことではなく、どんな問題にも必要になる考え方の土台です。つまずいている部分を一つずつ確認しながら、自分で解ける状態を目指します。</p>
-          </details>
-          <details>
-            <summary>体験授業では何をしますか？</summary>
-            <p>約60分の体験授業では、最初に現在の学習状況や困っていることを簡単に確認し、その後、実際に問題を解きながら授業を行います。苦手な単元がはっきりしている場合はその内容を扱い、特に決まっていない場合は学校のワークや最近のテスト、現在習っている単元などをもとに相談して決められます。</p>
-          </details>
-          <details>
-            <summary>苦手な単元が分からなくても申し込めますか？</summary>
-            <p>はい、問題ありません。保護者の方が、お子さまの苦手単元を正確に把握していなくても大丈夫です。フォームでは「相談して決めたい」を選んでいただければ、体験授業前後に学習状況を確認しながら、扱う内容を一緒に決めます。</p>
-          </details>
-          <details>
-            <summary>申し込み後はどのくらいで連絡が来ますか？</summary>
-            <p>フォーム送信後、原則1〜2日以内にご連絡します。その後、体験授業の日程や扱う内容を相談して決めます。</p>
-          </details>
-          <details>
-            <summary>体験授業を受けたら、必ず継続しないといけませんか？</summary>
-            <p>いいえ。体験授業後に、授業の進め方や相性を見てからご判断いただけます。継続をご希望の場合のみ、通常授業についてご案内します。無理な勧誘はありません。</p>
-          </details>
-          <details>
-            <summary>料金は授業料以外にもかかりますか？</summary>
-            <p>入会金・設備費・退会時の違約金はありません。基本的にお支払いいただくのは、実施した授業分の授業料のみです。追加費用が発生する場合は、事前に必ずご相談します。後から知らない費用を請求することはありません。</p>
-          </details>
-          <details>
-            <summary>途中でやめることはできますか？</summary>
-            <p>はい。長期契約ではないため、継続が難しくなった場合はご相談いただけます。退会時の違約金はありません。月ごとの継続相談を基本としているため、初めての方でも安心して始めやすい形にしています。</p>
-          </details>
-          <details>
-            <summary>どの学年・科目に対応していますか？</summary>
-            <p>主に中学生を対象に、数学・英語を中心に指導しています。中1・中2の基礎固め、中3の定期テスト対策や高校受験に向けた基礎固めに対応します。高校生は英語・数学の基礎補習を中心に、内容を確認したうえで対応します。理科・社会は中学生のテスト前サポートとして相談可能です。</p>
-          </details>
-          <details>
-            <summary>学校のワークや教科書を使えますか？</summary>
-            <p>基本的にはこちらで用意した塾用教材を使って進めます。学校のワーク、教科書、プリント、定期テスト範囲表などは、必要に応じてサブ教材として活用できます。</p>
-          </details>
-          <details>
-            <summary>宿題は出ますか？</summary>
-            <p>生徒さんの状況に合わせて、必要な範囲で宿題を出します。ただ量を増やすのではなく、授業で扱った内容を自分で解けるようにするための復習や演習を中心にします。最終的には、先生がいない時間にも自分で学習を進められる状態を目指します。</p>
-          </details>
-          <details>
-            <summary>保護者への報告や相談はできますか？</summary>
-            <p>必要に応じて、授業後の簡単な共有や、保護者の方との相談時間を設けることもできます。現在の学習状況、目標、今後の進め方などについて、ご希望に応じて確認します。</p>
-          </details>
-        </div>
-      </section>
-
-      <section class="section story" id="story">
-        <div class="story-layout">
-          <div>
-            <p class="eyebrow">Story</p>
-            <h2>なぜ「学力の岩盤」にこだわるのか</h2>
-            <p>
-              個別指導では、直近の定期テスト対策に追われるあまり、
-              本当は前の単元まで戻って理解し直すべきところが、そのまま進んでしまうことがあります。
-              その場の点数を上げる対策は大切ですが、基礎があいまいなまま解き方だけを覚えても、
-              根本的な苦手は残りやすいと感じています。
-            </p>
-            <p>
-              必要なのは、ただ授業回数を増やすことではありません。
-              どこでつまずいているのかを見つけ、必要なところまで戻り、
-              基礎から理解を固めることです。
-              そうすることで、表面的な暗記に頼らず、少ない授業回数でも効率よく力を伸ばしやすくなります。
-            </p>
-            <p>
-              だからこそ、この指導では「学力の岩盤」を大切にしています。
-              学力の岩盤とは、単元同士のつながりを理解する本質理解と、
-              先生がいない時間にも学習を進められる学習習慣のことです。
-              目先のテストだけで終わらず、高校進学後も自分で学び続けられる土台をつくりたい。
-              その思いから、「学力の岩盤」を大切にするオンライン個別指導を立ち上げました。
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section class="final-cta" id="contact">
-        <p class="eyebrow">Contact</p>
-        <h2>まずは無料体験で、現在のつまずきを一緒に整理してみませんか。</h2>
-        <p>
-          無料体験後に、無理に入会を勧めることはありません。
-          授業の雰囲気や進め方を確認したうえで、ご家庭でゆっくりご検討ください。
-          体験の前に聞いておきたいことがあれば、同じフォームからお問い合わせだけでも受け付けています。
-        </p>
-        <div class="cta-row center">
-          <a class="button primary" href="https://forms.gle/FeFnTTy2EWrpfGkZ6" target="_blank" rel="noopener">無料体験を予約する</a>
-          <a class="button secondary" href="https://forms.gle/FeFnTTy2EWrpfGkZ6" target="_blank" rel="noopener">お問い合わせ・ご相談</a>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <p>ステップワイズ英数教室・個別指導部</p>
-      <a href="#contact">お問い合わせ</a>
-    </footer>
-  </body>
+  /* ---- movie: big play button over the poster ---- */
+  var v = document.getElementById('cm'), p = document.getElementById('player'), pb = document.getElementById('playBtn');
+  pb.addEventListener('click', function () { p.classList.add('playing'); v.controls = true; v.play().catch(function () {}); v.focus(); });
+  v.addEventListener('play', function () { p.classList.add('playing'); });
+})();
+</script>
+</body>
 </html>

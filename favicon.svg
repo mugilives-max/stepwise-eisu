@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<title>STEPWISE</title>
+<defs>
+<radialGradient id="dotG" cx="0.36" cy="0.3" r="0.75"><stop offset="0" stop-color="#fbe382"/><stop offset="0.55" stop-color="#efc843"/><stop offset="1" stop-color="#d9ab27"/></radialGradient>
+<radialGradient id="dotGd" cx="0.36" cy="0.3" r="0.75"><stop offset="0" stop-color="#f6d35a"/><stop offset="0.55" stop-color="#e8b825"/><stop offset="1" stop-color="#cf9b12"/></radialGradient>
+<linearGradient id="wordL" gradientUnits="userSpaceOnUse" x1="299" y1="0" x2="912" y2="0"><stop offset="0" stop-color="#f1f3f5"/><stop offset="0.55" stop-color="#e6e8eb"/><stop offset="1" stop-color="#c1c4c8"/></linearGradient>
+<linearGradient id="wordD" gradientUnits="userSpaceOnUse" x1="299" y1="0" x2="912" y2="0"><stop offset="0" stop-color="#16233f"/><stop offset="0.6" stop-color="#1f2d4c"/><stop offset="1" stop-color="#3d4a68"/></linearGradient>
+<radialGradient id="bgG" gradientUnits="userSpaceOnUse" cx="472" cy="171" r="700"><stop offset="0" stop-color="#1d2c4e"/><stop offset="0.6" stop-color="#16233f"/><stop offset="1" stop-color="#101a31"/></radialGradient>
+<radialGradient id="bgI" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#1f2f53"/><stop offset="1" stop-color="#111b33"/></radialGradient></defs>
+<rect width="1024" height="1024" rx="224" fill="url(#bgI)"/>
+<g transform="translate(81.10 230.85) scale(3.1)">
+<g fill="#2e9fc0"><rect x="25" y="141.5" width="51" height="28.5" rx="6"/></g>
+<g fill="#6f90cf"><rect x="84" y="113" width="51" height="57" rx="6"/></g>
+<g fill="#ab78cf"><rect x="143" y="84.5" width="51" height="85.5" rx="6"/></g>
+<g fill="#f55ec9"><rect x="202" y="56" width="51" height="114" rx="6"/></g>
+<circle cx="227.5" cy="38.3" r="16" fill="#edc43f"/>
+<path fill="none" stroke="#f6e3a1" stroke-width="2.6" stroke-linecap="round" d="M217.04 35.30A10.88 10.88 0 0 1 224.14 27.95"/>
+</g>
+</svg>
