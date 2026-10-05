@@ -142,12 +142,14 @@ section{scroll-margin-top:72px}
 @keyframes barber{to{background-position:22.6px 0}}
 .dots::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.6s steps(4) infinite}
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
-/* narrow screens: one column, each step a little further right, the colour bar on the left */
+/* narrow screens: two per row. Cards in a row share one height (stretch); the left one starts a step
+   lower, so both rows rise the same way to the right */
 @media (max-width:860px){
-  .stairs{grid-template-columns:minmax(0,1fr);gap:10px;align-items:stretch}
-  .stair{min-height:0;margin-left:calc(var(--k) * min(7%, 28px));padding:16px 18px 16px 24px}
-  .stair::before{inset:0 auto 0 0;width:6px;height:auto;border-radius:12px 0 0 12px;transform:scaleY(0);transform-origin:top}
-  .stair.on::before{transform:none}
+  .stairs{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px;align-items:stretch}
+  .stair{min-height:0;padding:16px 14px 18px}
+  .stair:nth-child(odd){margin-top:22px}
+  .stair .no{letter-spacing:.1em}
+  .stair b{font-size:1rem}
 }
 
 /* ---------- concept ---------- */
