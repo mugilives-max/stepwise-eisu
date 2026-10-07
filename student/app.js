@@ -1,10 +1,10 @@
 // 生徒の画面（作り直し v2）。専用リンク（?k=）で開く。入口は ホーム・予定・学習（docs/UX_STRUCTURE.md 5）。
-// ホーム（次の授業・宿題・次のテスト）、予定と「変更・お休みの連絡」・テスト・行事を知らせる、記録と宿題・成績（成績票を送る）。
+// ホーム（次の授業・今日やる宿題・次のテスト）、予定（授業を押すと下から出る画面で連絡）、学習（記録と宿題・成績）。
+// 一覧は白い枠に 1 件 1 行、宿題は左の丸を押して「できた」（assets/v2/portal-ui.js）。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替える前は「準備中」の案内を出す（health の cutover.live で決める）。
 import { call, esc, liveState } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261008-launch1';
-import { learningView, checkTag, hwText, hwSubject } from '/assets/v2/learning-view.js?v=20261008-launch1';
 import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
+import { lessonRows, nextLessonHero, lessonSheet, homeworkRows, recordCards, eventRows, eventSheet, wireSheets, keepSheet, picon, md, daysText } from '/assets/v2/portal-ui.js?v=20261008-launch1';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
@@ -14,7 +14,8 @@ const PV_KEY = 'sw2_student_preview';
 if (params.get('k')) { const v = params.get('k'); try { v.startsWith('pv2.') ? sessionStorage.setItem(PV_KEY, v) : localStorage.setItem(KEY, v); } catch {} history.replaceState(null, '', location.pathname + location.hash); }
 const k = (() => { try { return sessionStorage.getItem(PV_KEY) || localStorage.getItem(KEY) || ''; } catch { return ''; } })();
 const preview = k.startsWith('pv2.');
-let sched = null, busy = false, notice = null, change = null, learning = null, grades = null;
+let sched = null, busy = false, notice = null, learning = null, grades = null;
+let sheetState = null; // { kind: 'lesson', id, pick, note } | { kind: 'event' }
 const say = (m, kd = '') => { notice = m ? { m, kd } : null; };
 const noticeHtml = () => notice ? `<p class="notice ${notice.kd}" role="${notice.kd === 'error' ? 'alert' : 'status'}">${esc(notice.m)}</p>` : '';
 async function run(task) { if (busy) return; busy = true; render(); try { await task(); } finally { busy = false; render(); } }
@@ -30,11 +31,26 @@ const ICON = {
   learning: '<path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5z"/>',
 };
 const TABS = [['home', 'ホーム'], ['schedule', '予定'], ['learning', '学習']];
-const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
+const TITLE = { home: '', schedule: '予定', learning: '学習' };
 const loadingHtml = '<p class="muted" style="margin-top:20px">読み込んでいます…</p>';
+const secTitle = (t, extra = '') => `<div class="sec-title">${t}${extra}</div>`;
 function needLearning() { if (!learning) { learning = { loading: true }; call('student/learning', { k }).then(r => { learning = r.ok ? r : { records: [], homework: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); } return learning.loading; }
 function needGrades() { if (!grades) { grades = { loading: true }; call('student/grades', { k }).then(r => { grades = r.ok ? r : { exams: [], files: [] }; if (!r.ok) say(r.error.message, 'error'); render(); }); } return grades.loading; }
+const upcoming = () => sched.lessons.filter(l => l.date >= sched.today && ['proposed', 'decided'].includes(l.status));
 
+function sheetHtml() {
+  const s = sheetState; if (!s || !sched || sched.error) return '';
+  if (s.kind === 'lesson') { const l = sched.lessons.find(x => x.id === s.id); return l ? lessonSheet(l, s, { canRequest: sched.permissions.reschedule, busy, sendLabel: '先生に連絡する' }) : ''; }
+  if (s.kind === 'event') return eventSheet([sched.me]);
+  return '';
+}
+function renderBar(page) {
+  const bar = document.querySelector('.top .in'); if (!bar) return;
+  bar.querySelectorAll('.bar-title').forEach(x => x.remove());
+  const title = sched && !sched.error ? (page === 'home' ? sched.me.name + 'さん' : TITLE[page] || '') : '';
+  if (title) bar.firstElementChild.insertAdjacentHTML('afterend', `<div class="bar-title"><strong>${esc(title)}</strong></div>`);
+  document.body.classList.toggle('has-bar', !!title);
+}
 function render() {
   const raw = location.hash.slice(1) || 'home', [p0, sub0] = raw.split('/');
   const page = p0 === 'events' ? 'schedule' : p0 === 'grades' ? 'learning' : p0, sub = p0 === 'grades' ? 'grades' : sub0;
@@ -43,36 +59,42 @@ function render() {
   if (sched.error) { app.innerHTML = `<h1>マイページ</h1><p class="notice error">${esc(sched.error)}</p>`; return; }
   nav.innerHTML = TABS.map(([key, l]) => `<a href="#${key}" class="${page === key ? 'on' : ''}"${page === key ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[key]}</svg><span>${l}</span></a>`).join('');
   document.body.classList.add('has-tabs');
+  renderBar(page);
   let h = preview ? `<p class="notice" style="background:#fff3c4;color:#5a4300"><strong>プレビュー中</strong>：${esc(sched.me.name)}さんの生徒ページ（表示だけです。押しても変更はされません。1時間で切れます）</p>` : '';
   if (page === 'schedule') {
-    h += `<div class="page-head"><h1>予定</h1></div>${noticeHtml()}`;
-    if (change) h += changeDialog(sched.lessons.find(l => l.id === change.id), change.pick, change.note, busy);
-    h += familyLessonList(sched, { canRequest: sched.permissions.reschedule });
-    if (!sched.permissions.reschedule) h += '<p class="small muted">予定の変更・お休みの連絡は、保護者の方からお願いします。</p>';
-    h += `<h2>テスト・行事を知らせる</h2>${eventList(sched.events, { canDelete: e => sched.permissions.events && e.createdByKind === 'student' })}`;
-    h += sched.permissions.events ? `<details><summary class="small">知らせる</summary>${eventForm([sched.me])}</details>` : '<p class="small muted">テスト・行事を知らせるのは、保護者の方からお願いします。</p>';
+    h += noticeHtml();
+    const kari = sched.lessons.filter(l => l.status === 'proposed' && l.confirmBy);
+    if (kari.length) h += `<p class="notice small">仮予定が${kari.length}件あります。${sched.permissions.reschedule ? '都合の悪い授業だけ押して連絡してください。' : '都合が悪いときは保護者の方から連絡してもらってください。'}締め切りまでに連絡がなければ、この日時で決まります。</p>`;
+    h += lessonRows(sched.lessons.filter(l => l.date >= sched.today || l.status === 'proposed'), { today: sched.today });
+    h += secTitle('テスト・行事', sched.permissions.events ? `<button type="button" class="add" data-action="add-event" aria-label="テスト・行事を知らせる">${picon('plus')}</button>` : '');
+    h += eventRows(sched.events.filter(e => e.dateTo >= sched.today), { canDelete: e => sched.permissions.events && e.createdByKind === 'student', today: sched.today });
+    if (!sched.permissions.events) h += '<p class="small muted">テスト・行事を知らせるのは、保護者の方からお願いします。</p>';
   } else if (page === 'learning') {
     const tab = sub === 'grades' ? 'grades' : 'records';
-    h += `<div class="page-head"><h1>学習</h1></div><div class="seg"><a href="#learning" class="${tab === 'records' ? 'on' : ''}">記録と宿題</a><a href="#learning/grades" class="${tab === 'grades' ? 'on' : ''}">成績</a></div>${noticeHtml()}`;
-    if (tab === 'records') h += needLearning() ? loadingHtml : learningView(learning);
-    else h += needGrades() ? loadingHtml : gradesView(grades, { who: 'student', dis: busy ? ' disabled' : '' });
+    h += `<div class="seg" style="margin-top:10px"><a href="#learning" class="${tab === 'records' ? 'on' : ''}">記録と宿題</a><a href="#learning/grades" class="${tab === 'grades' ? 'on' : ''}">成績</a></div>${noticeHtml()}`;
+    if (tab === 'records') {
+      if (needLearning()) h += loadingHtml;
+      else { const hw = learning.homework.filter(w => w.status !== 'confirmed'); h += secTitle(`宿題${hw.length ? ` <span class="count">${hw.length}</span>` : ''}`) + homeworkRows(hw) + secTitle('授業の記録') + recordCards(learning.records, learning.homework); }
+    } else h += needGrades() ? loadingHtml : gradesView(grades, { who: 'student', dis: busy ? ' disabled' : '' });
   } else {
-    // ホーム: 次の授業・今日やる宿題・次のテスト
-    h += `${preview ? '' : prep()}<div class="page-head"><h1>${esc(sched.me.name)}さん</h1></div>${noticeHtml()}`;
-    const next = sched.lessons.filter(l => l.date >= sched.today && ['proposed', 'decided'].includes(l.status)).slice(0, 3);
-    h += '<h2>次の授業</h2>' + (next.length ? '<div class="rows">' + next.map(l => `<a class="todo" href="#schedule"><span class="b"><strong>${md(l.date)} ${l.start}〜 ${esc(l.subject)}</strong><small class="muted">${l.status === 'proposed' ? '仮予定' : '決定'}${l.deliveryMode === 'online' ? '・オンライン' : ''}</small></span><span class="go">›</span></a>`).join('') + '</div>' : '<p class="muted small">決まっている授業はありません。</p>');
-    h += '<h2>宿題</h2>';
+    // ホーム: 次の授業（大きく）・宿題（左の丸を押して「できた」）・次のテスト
+    h += `${preview ? '' : prep()}${noticeHtml()}`;
+    const next = upcoming();
+    h += nextLessonHero(next[0], { today: sched.today });
+    h += secTitle('宿題');
     if (needLearning()) h += loadingHtml;
-    else {
-      const hw = learning.homework.filter(w => w.status !== 'confirmed');
-      h += hw.length ? '<div class="rows">' + hw.map(w => `<div class="ev"><span class="t">${w.dueMode === 'date' && w.due ? md(w.due) : w.due ? md(w.due) : ''}</span><span class="b" style="color:var(--ink)"><strong>${esc(hwText(w))}</strong>${hwSubject(w) ? '<small class="muted">' + esc(hwSubject(w)) + '</small>' : ''}${checkTag(w) ? '<small>' + checkTag(w) + '</small>' : ''}${w.reviewNote && w.status === 'open' ? `<small class="muted">先生から: ${esc(w.reviewNote)}</small>` : ''}</span>
-        <span>${w.status === 'open' ? `<button class="small-btn primary" data-action="hw-done" data-id="${esc(w.id)}">できた</button>` : `<button class="small-btn" data-action="hw-undo" data-id="${esc(w.id)}">取り消す</button>`}</span></div>`).join('') + '</div>' : '<p class="muted small">今やる宿題はありません。</p>';
-    }
-    const test = sched.events.filter(e => e.kind === 'test' && e.date >= sched.today)[0];
-    if (test) { const days = Math.round((Date.parse(test.date) - Date.parse(sched.today)) / 86400e3); h += `<h2>次のテスト</h2><p class="notice">${esc(test.title || 'テスト')}まで あと <strong>${days}日</strong>（${md(test.date)}）</p>`; }
+    else h += homeworkRows(learning.homework.filter(w => w.status !== 'confirmed'));
+    const test = sched.events.filter(e => e.kind === 'test' && e.dateTo >= sched.today)[0];
+    if (test) h += secTitle('次のテスト') + `<div class="group"><div class="evrow"><span class="t">${md(test.date)}</span><span class="b"><span class="nm">${esc(test.title || 'テスト')}</span><small>${esc(daysText(test.date, sched.today) || '今日')}</small></span><span></span></div></div>`;
+    const more = next.slice(1, 4);
+    if (more.length) h += secTitle('そのあとの授業', '<a class="more" href="#schedule">すべて見る ›</a>') + lessonRows(more, { today: sched.today });
   }
-  app.innerHTML = h;
+  keepSheet(app, () => { app.innerHTML = h + sheetHtml(); });
+  const box = app.querySelector('.bsheet');
+  if (box && notice && notice.kd === 'error') box.querySelector('.bsheet-body').insertAdjacentHTML('afterbegin', noticeHtml());
 }
+const closeSheet = () => { sheetState = null; };
+function captureSheetInputs() { const s = sheetState; if (s && s.kind === 'lesson') { const el = document.getElementById('change-note'); if (el) s.note = el.value; } }
 app.addEventListener('submit', ev => {
   ev.preventDefault();
   const v = Object.fromEntries(new FormData(ev.target).entries());
@@ -80,29 +102,30 @@ app.addEventListener('submit', ev => {
     const file = ev.target.querySelector('input[type=file]').files[0]; if (!file) return;
     return run(async () => { const r = await uploadFile(file, v.note || '', meta => call('student/grades/upload', { ...meta, k })); if (r.ok) { grades = null; say('成績票を送りました。先生が確かめて点数を入れます', 'ok'); } else say(r.error.message, 'error'); });
   }
-  run(async () => { const r = await call('student/events/add', { ...v, k }); if (r.ok) { sched = null; say('共有しました', 'ok'); } else say(r.error.message, 'error'); });
+  run(async () => { const r = await call('student/events/add', { ...v, k }); if (r.ok) { sched = null; closeSheet(); say('先生に知らせました', 'ok'); } else say(r.error.message, 'error'); });
 });
 app.addEventListener('click', ev => {
   const b = ev.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
-  if (a === 'change') { change = { id: b.dataset.id, pick: '', note: '' }; return render(); }
-  if (a === 'pick') { const n = document.getElementById('change-note'); if (n) change.note = n.value; change.pick = b.dataset.c; return render(); }
-  if (a === 'close-change') { change = null; return render(); }
+  if (a === 'lesson') { sheetState = { kind: 'lesson', id: b.dataset.id, pick: '', note: '' }; return render(); }
+  if (a === 'pick') { captureSheetInputs(); sheetState.pick = b.dataset.c; return render(); }
+  if (a === 'close-sheet') { closeSheet(); return render(); }
+  if (a === 'add-event') { sheetState = { kind: 'event' }; return render(); }
   if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openFile(() => call('files/link', { k, id: b.dataset.id }), win); if (!r.ok) say(r.error.message, 'error'); }); return; }
-  // 書いた内容は、送信中の表示に描き直す前に読んでおく（描き直すと入力欄が作り直される）
-  if (a === 'send-change') { const n = document.getElementById('change-note'); if (n) change.note = n.value.trim(); }
+  captureSheetInputs();
   run(async () => {
     let r;
-    if (a === 'send-change') { r = await call('student/lessons/request', { k, lessonId: change.id, kind: change.pick, note: change.note }); if (r.ok) { change = null; sched = null; return say('先生に連絡しました' + (r.fee ? `（キャンセル料 ${Number(r.fee.amount).toLocaleString('ja-JP')}円）` : ''), 'ok'); } }
-    else if (a === 'withdraw') { if (!confirm('この連絡を取り下げますか？')) return; r = await call('student/lessons/withdraw', { k, requestId: b.dataset.id }); if (r.ok) { sched = null; return say('連絡を取り下げました', 'ok'); } }
+    if (a === 'send-change') { const s = sheetState; if (!s || s.kind !== 'lesson' || !s.pick) return; r = await call('student/lessons/request', { k, lessonId: s.id, kind: s.pick, note: (s.note || '').trim() }); if (r.ok) { closeSheet(); sched = null; return say('先生に連絡しました' + (r.fee ? `（キャンセル料 ${Number(r.fee.amount).toLocaleString('ja-JP')}円）` : ''), 'ok'); } }
+    else if (a === 'withdraw') { if (!confirm('この連絡を取り下げますか？')) return; r = await call('student/lessons/withdraw', { k, requestId: b.dataset.id }); if (r.ok) { closeSheet(); sched = null; return say('連絡を取り下げました', 'ok'); } }
     else if (a === 'hw-done' || a === 'hw-undo') { r = await call('student/homework/report', { k, id: b.dataset.id, undo: a === 'hw-undo' }); if (r.ok) { learning = null; return say(a === 'hw-done' ? 'できたと先生に知らせました' : '取り消しました', 'ok'); } }
     else if (a === 'del-event') { r = await call('student/events/delete', { k, id: b.dataset.id }); if (r.ok) { sched = null; return say('消しました', 'ok'); } }
     if (r) say(r.error.message, 'error');
   });
 });
+wireSheets(app);
 // 画面の移り変わり: ふわっと入れ替える（対応しているブラウザだけ。「視差効果を減らす」では付けない）
 window.addEventListener('hashchange', () => {
-  say(''); change = null;
+  say(''); closeSheet();
   if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return render();
   document.documentElement.dataset.nav = 'tab';
   document.startViewTransition(() => render()).finished.finally(() => { delete document.documentElement.dataset.nav; });
