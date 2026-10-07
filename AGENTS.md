@@ -24,6 +24,7 @@ Claude / Codex 共通。塾のホームページと予約・管理システム�
 | 授業サイクルの導入順 / 初回実装 | [REDESIGN_MASTER_PLAN.md](docs/REDESIGN_MASTER_PLAN.md) / [LESSON_CYCLE_PHASE1_SPEC.md](docs/LESSON_CYCLE_PHASE1_SPEC.md) |
 | 作り直し（v2）の要件・設計・進み具合（家族が根っこ、`cf/v2/`・`cf/migrations-v2/`・`/staff/`） | [REQUIREMENTS.md](docs/REQUIREMENTS.md) / [REBUILD_DESIGN.md](docs/REBUILD_DESIGN.md) / [FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md) / 切り替えの手順と案内文 [CUTOVER_RUNBOOK.md](docs/CUTOVER_RUNBOOK.md) |
 | 日程の決め方（締め切りと自動確定・確定後の変更）の設計 / 受講規約の改定案 | [SCHEDULING_FLOW_DESIGN.md](docs/SCHEDULING_FLOW_DESIGN.md) / [TERMS_DRAFT_2026-10.md](docs/TERMS_DRAFT_2026-10.md) |
+| 講師の雇用契約書（労働条件通知書を兼ねる）の下書き | [EMPLOYMENT_CONTRACT_DRAFT.md](docs/EMPLOYMENT_CONTRACT_DRAFT.md) |
 | 過去の調査根拠 / 旧契約条項案 | [REDESIGN_CURRENT_STATE.md](docs/REDESIGN_CURRENT_STATE.md) / [CONTRACT_CLAUSES_DRAFT.md](docs/CONTRACT_CLAUSES_DRAFT.md) |
 
 仕様や運用が変わったら該当する正本を更新し、後続作業に影響する未解決事項だけをFUTURE_WORKへ残す。別の引き継ぎ資料やDriveの本文コピーを増やさない。
