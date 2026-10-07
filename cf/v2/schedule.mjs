@@ -84,7 +84,7 @@ export async function calendarEffect(c, kind, lesson, studentName) {
 export async function familyNotice(c, studentId, subject, text) {
   const s = await c.db.prepare('select f.email, f.testOnly, f.status from students s join families f on f.id = s.familyId where s.id = ?').bind(studentId).first();
   if (!s || !s.email || s.status !== 'active') return;
-  c.effects.push({ kind: 'mail', to: s.email, name: 'ステップワイズ英数教室', subject: '【ステップワイズ】' + subject, body: text + '\n保護者ページでご確認ください。\n\nhttps://www.stepwise-education.jp/family/', testOnly: !!s.testOnly, audience: 'family', held: !(await isLive(c)) });
+  c.effects.push({ kind: 'mail', to: s.email, name: 'ステップワイズ個別指導', subject: '【ステップワイズ】' + subject, body: text + '\n保護者ページでご確認ください。\n\nhttps://www.stepwise-education.jp/family/', testOnly: !!s.testOnly, audience: 'family', held: !(await isLive(c)) });
 }
 // スタッフ（教室管理者）あてのお知らせ
 export async function staffNotice(c, subject, text) {

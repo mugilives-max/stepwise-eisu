@@ -1,6 +1,6 @@
 // 作り直し（v2）の予定の部品。スタッフ・保護者・生徒の画面で共通に使う（言葉と色をそろえる）。
 import { esc } from '/assets/v2/api.js';
-import { cancelRate, cancelAmount, ratePct } from '/assets/v2/cancel-rate.js?v=20261007-emp1';
+import { cancelRate, cancelAmount, ratePct } from '/assets/v2/cancel-rate.js?v=20261008-launch1';
 
 export const STATUS = {
   held: ['gray', '未送信'], proposed: ['warn', '仮予定'], decided: ['', '決定'], done: ['ok', '実施済み'], rested: ['gray', 'お休み'], cancelled: ['danger', 'キャンセル'],

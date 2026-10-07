@@ -1,7 +1,7 @@
 // スタッフの画面: 予定（3段目）。月の予定表・選んだ日の授業・連絡への対応・仮予定を作る・休み・面談。
 // 教室管理者はすべて、講師は自分の担当の授業と自分の休みだけ。
-import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261007-emp1';
-import { nowLocal } from '/assets/v2/cancel-rate.js?v=20261007-emp1';
+import { STATUS, REQUEST, EVENT_KIND, mdw, endOf, statusTag, requestTags } from '/assets/v2/schedule-view.js?v=20261008-launch1';
+import { nowLocal } from '/assets/v2/cancel-rate.js?v=20261008-launch1';
 
 let month = null, data = null, sel = null, sheet = null, families = null, loadedFor = '';
 // スマホ（ライフベアの形）: はじめは月全体。日付を押すと、その週が一番上まで滑り上がり、下から一覧が出る（2週分）。同じ日をもう一度押すか取っ手で月全体に戻る

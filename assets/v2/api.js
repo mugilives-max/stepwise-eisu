@@ -22,3 +22,16 @@ export async function call(route, body = {}, auth = '') {
 }
 
 export const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
+// 切り替えの状態（API の疎通確認 health の cutover.live）。切り替える前だけ「準備中」の案内を出すために使う。
+// 分からないうち（読み込み中・通信できない）は、切り替えたあとと同じ扱い（案内を出さない）
+let liveCache = null;
+export function liveState(onChange) {
+  if (liveCache) return liveCache;
+  liveCache = { known: false, live: true };
+  fetch(API.replace(/v2\/$/, ''), { cache: 'no-store' }).then(r => r.json()).then(h => {
+    liveCache.known = true; liveCache.live = !!(h && h.cutover && h.cutover.live);
+    if (onChange) onChange();
+  }).catch(() => {});
+  return liveCache;
+}

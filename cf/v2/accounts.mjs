@@ -94,7 +94,7 @@ export async function issueChallenge(c, kind, purpose, who, mail) {
   const url = SITE + k.page + '#' + (purpose === k.invite ? 'invite' : 'reset') + '=' + encodeURIComponent(token);
   // 切り替え（settings の live = '1'）より前は、保護者あてのメールは実際には送らない（写した本番のデータで試している間に、本物の保護者へ届かないように）
   const held = kind === 'family' && !(await isLive(c));
-  if (mail) c.effects.push({ kind: 'mail', to: who.email, name: 'ステップワイズ英数教室', subject: mail.subject, body: mail.body(url), testOnly: !!who.testOnly, audience: kind, held });
+  if (mail) c.effects.push({ kind: 'mail', to: who.email, name: 'ステップワイズ個別指導', subject: mail.subject, body: mail.body(url), testOnly: !!who.testOnly, audience: kind, held });
   return url;
 }
 
