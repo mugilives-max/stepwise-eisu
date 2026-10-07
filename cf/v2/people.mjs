@@ -154,6 +154,8 @@ export const peopleRoutes = {
   },
   'student/me': async (c, b) => {
     const code = String(b.k || '');
+    // スタッフのプレビュー（読むだけ）も、予定と同じ鍵で通す
+    if (isPreviewToken(code)) { const p = await previewSubject(c, code, 'student'); if (!p) fail('badLink', 'プレビューの期限が切れました。管理画面からもう一度開いてください', 401); return { me: studentPublicView(p) }; }
     const s = code && code.length <= 100 ? await c.db.prepare("select * from students where linkCode = ? and status <> 'left'").bind(code).first() : null;
     if (!s) fail('badLink', '専用リンクが正しくありません。先生から届いたリンクを開き直してください', 401);
     c.actor = { kind: 'student', id: s.id };
