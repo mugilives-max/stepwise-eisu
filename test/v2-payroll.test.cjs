@@ -1,11 +1,12 @@
 'use strict';
-// 作り直し（v2）7段目: 講師の給与（雇用・月末締め・翌月25日払い・源泉徴収税額表の甲欄乙欄）。cf/v2/payroll.mjs・cf/v2/tax-table.mjs
+// 作り直し（v2）7段目: 講師の給与（雇用・月末締め・翌月25日払い・源泉徴収税額表の甲欄乙欄・準備10分は最低賃金）。cf/v2/payroll.mjs・tax-table.mjs・min-wage.mjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createV2 } = require('./helpers/v2-harness.cjs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const taxTable = () => import(pathToFileURL(path.join(__dirname, '..', 'cf', 'v2', 'tax-table.mjs')).href);
+const minWage = () => import(pathToFileURL(path.join(__dirname, '..', 'cf', 'v2', 'min-wage.mjs')).href);
 
 const at = s => Date.parse(s + '+09:00');
 async function world() {
@@ -39,8 +40,8 @@ test('the month statement counts done lessons and past meetings at each instruct
   await h.ok('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 1555, meetingHourly: 1500 });
   await h.ok('payroll/rates/save', { auth, staffId: u.id, startsOn: '2026-09', lessonHourly: 1400, meetingHourly: 1500 });
   const v = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-09' })).preview;
-  assert.deepEqual(v.items.map(i => [i.kind, i.minutes, i.rate, i.amount]), [['lesson', 90, 1555, 2332], ['lesson', 45, 1555, 1166], ['meeting', 30, 1500, 750]], '1円未満は行ごとに切り捨て');
-  assert.deepEqual([v.lessonMinutes, v.meetingMinutes, v.gross, v.withholding, v.net, v.taxColumn], [135, 30, 4248, 130, 4118, 'otsu'], '扶養控除等申告書が出るまでは乙欄（105,000円未満は 3.063%、1円未満切り捨て）');
+  assert.deepEqual(v.items.map(i => [i.kind, i.minutes, i.rate, i.amount]), [['lesson', 90, 1555, 2332], ['lesson', 45, 1555, 1166], ['meeting', 30, 1500, 750], ['prep', 20, 1141, 380]], '1円未満は行ごとに切り捨て。準備は授業1コマ10分を、その日の埼玉県の最低賃金（9月は1,141円）で');
+  assert.deepEqual([v.lessonMinutes, v.meetingMinutes, v.prepMinutes, v.gross, v.withholding, v.net, v.taxColumn], [135, 30, 20, 4628, 141, 4487, 'otsu'], '扶養控除等申告書が出るまでは乙欄（105,000円未満は 3.063%、1円未満切り捨て）');
   const other = (await h.ok('payroll/staff', { auth, staffId: u.id, month: '2026-09' })).preview;
   assert.match(other.issues.join(), /実施済みになっていません/, '代講の講師の授業も、実施済みにしないと確定できない');
   assert.equal((await h.call('payroll/confirm', { auth, staffId: u.id, month: '2026-09' })).error.code, 'notReady');
@@ -51,7 +52,7 @@ test('the month statement counts done lessons and past meetings at each instruct
   assert.equal((await h.call('payroll/withholding', { auth, staffId: u.id, version: tu.version, taxColumn: 'kou', dependents: 8 })).error.code, 'badDependents');
   await h.ok('payroll/withholding', { auth, staffId: u.id, version: tu.version, taxColumn: 'kou', dependents: 1 });
   const ov = (await h.ok('payroll/staff', { auth, staffId: u.id, month: '2026-09' })).preview;
-  assert.deepEqual([ov.gross, ov.withholding, ov.net, ov.taxColumn, ov.dependents], [2100, 0, 2100, 'kou', 1]);
+  assert.deepEqual([ov.gross, ov.withholding, ov.net, ov.taxColumn, ov.dependents], [2100 + 190, 0, 2290, 'kou', 1], '代講の授業にも準備の10分');
   assert.equal((await h.call('payroll/month', { auth: tAuth, month: '2026-09' })).error.code, 'forbidden', '講師はほかの講師の給与を見られない');
   assert.ok(sub);
 });
@@ -70,13 +71,13 @@ test('confirming fixes the statement; corrections void it with a reason; instruc
   assert.equal((await h.call('payroll/confirm', { auth, staffId: t.id, month: '2026-09' })).error.code, 'notReady');
   await done(late);
   const before = h.mails().length;
-  const p = (await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09', expectedNet: 2250 + 2250 + 1500 })).payroll;
-  assert.deepEqual([p.status, p.gross, p.withholding, p.taxColumn, p.dependents, p.items.length, p.payOn], ['confirmed', 6000, 0, 'kou', 0, 3, '2026-10-25'], '確定した明細に計算した欄を残す');
+  const p = (await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09', expectedNet: 2250 + 2250 + 380 + 1500 })).payroll;
+  assert.deepEqual([p.status, p.gross, p.prepMinutes, p.prepAmount, p.withholding, p.taxColumn, p.dependents, p.items.map(i => i.kind).join(), p.payOn], ['confirmed', 6380, 20, 380, 0, 'kou', 0, 'lesson,lesson,prep,adjust', '2026-10-25'], '確定した明細に準備の行と計算した欄を残す');
   assert.match(h.mails().slice(before).map(m => m.subject).join(), /9月分の給与明細/);
   assert.equal((await h.call('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 1600, meetingHourly: 1500 })).error.code, 'confirmed', '確定した月の時給は変えない');
   // 講師: 自分の明細だけ
   const mine = await h.ok('payroll/mine', { auth: tAuth });
-  assert.deepEqual([mine.statements.length, mine.statements[0].net], [1, 6000]);
+  assert.deepEqual([mine.statements.length, mine.statements[0].net], [1, 6380]);
   assert.equal((await h.ok('payroll/mine', { auth: uAuth })).statements.length, 0);
   assert.equal((await h.ok('payroll/mine', { auth })).owner, true, '代表は給与明細を持たない');
   // 訂正: 取り消して確定し直す
@@ -86,7 +87,7 @@ test('confirming fixes the statement; corrections void it with a reason; instruc
   const adj = h.rows('select id from payrollAdjustments')[0].id;
   await h.ok('payroll/adjust/delete', { auth, id: adj });
   const p2 = (await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09' })).payroll;
-  assert.equal(p2.gross, 4500);
+  assert.equal(p2.gross, 4500 + 380);
   assert.deepEqual(h.rows('select status, voidReason from payrollMonths order by createdAt').map(r => [r.status, r.voidReason]), [['void', '調整の金額の誤り'], ['confirmed', '']], '取り消した明細も記録に残る');
   await h.ok('payroll/paid', { auth, id: p2.id, version: p2.version, paidOn: '2026-10-02' });
   assert.equal((await h.call('payroll/void', { auth, id: p2.id, version: p2.version + 1, reason: 'x' })).error.code, 'paid');
@@ -94,7 +95,7 @@ test('confirming fixes the statement; corrections void it with a reason; instruc
   const after = await lesson('2026-09-30', '17:00', t.id);
   await done(after);
   const oct = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-10' })).preview;
-  assert.deepEqual(oct.items.map(i => [i.date, i.carried]), [['2026-09-30', true]]);
+  assert.deepEqual(oct.items.map(i => [i.kind, i.date, i.carried, i.rate]), [['lesson', '2026-09-30', true, 1500], ['prep', '', undefined, 1141]], '前の月の分の授業は、その授業の日の最低賃金で準備を数える');
 });
 
 test('two lessons at once are paid by the time worked, not per student', async () => {
@@ -111,9 +112,9 @@ test('two lessons at once are paid by the time worked, not per student', async (
   await done(a); await done(b.id); await done(c);
   await h.ok('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 2000, meetingHourly: 1500 });
   const v = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-09' })).preview;
-  assert.deepEqual(v.items.map(i => [i.date, i.minutes, i.amount]), [['2026-09-08', 60, 2000], ['2026-09-08', 30, 1000], ['2026-09-15', 60, 2000]], '重なる30分は1回だけ');
+  assert.deepEqual(v.items.filter(i => i.kind === 'lesson').map(i => [i.date, i.minutes, i.amount]), [['2026-09-08', 60, 2000], ['2026-09-08', 30, 1000], ['2026-09-15', 60, 2000]], '重なる30分は1回だけ');
   assert.match(v.items[1].label, /重なる30分を除く/);
-  assert.deepEqual([v.lessonMinutes, v.gross], [150, 5000]);
+  assert.deepEqual([v.lessonMinutes, v.prepMinutes, v.prepAmount, v.gross], [150, 30, 570, 5570], '準備は生徒ごとに1コマ10分（同時の授業も2コマ）');
   await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09', expectedNet: v.net });
   assert.equal(h.rows("select count(*) n from lessons where payrollId <> ''")[0].n, 3, '同時の授業も明細に入る（もう一度数えない）');
 });
@@ -137,5 +138,12 @@ test('withholding follows the monthly tax table of the pay year (kou by dependen
   await h.ok('payroll/withholding', { auth, staffId: t.id, version: h.rows('select version from staff where id = ?', t.id)[0].version, taxColumn: 'kou', dependents: 0 });
   await h.db2.prepare("update lessons set status = 'done' where id = ?").bind(dec).run(); // 実施済みにした（日をまたぐとログインが切れるので直接）
   const v = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-12' })).preview;
-  assert.deepEqual([v.payOn, v.gross, v.withholding], ['2027-01-25', 109000, 0], '令和9年分の表では 109,000円の甲欄は0円（令和8年分なら380円）');
+  assert.deepEqual([v.payOn, v.prepAmount, v.gross, v.withholding], ['2027-01-25', 199, 109199, 0], '令和9年分の表では 109,199円の甲欄は0円（令和8年分なら380円）。準備は10月からの最低賃金 1,196円');
+});
+
+test('the minimum wage for prep time follows the effective date and asks for the next revision after a year', async () => {
+  const { minWageOn } = await minWage();
+  assert.deepEqual([minWageOn('2026-09-30').hourly, minWageOn('2026-10-01').hourly, minWageOn('2027-09-30').hourly], [1141, 1196, 1196]);
+  assert.match(minWageOn('2025-10-31').error, /最低賃金がシステムに入っていません/);
+  assert.match(minWageOn('2027-10-01').error, /2027年に改定されていないか/, '前の改定から1年たったら、次の額を足すまで確定できない');
 });
