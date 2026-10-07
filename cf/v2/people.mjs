@@ -1,5 +1,6 @@
 // 家族・生徒の管理（教室管理者）と、保護者・生徒から見た自分の情報。家族が根っこ（生徒は必ず家族に属する）。
 import { fail, newId, normEmail, validEmail, iso, audit } from './util.mjs';
+import { isPreviewToken, previewSubject } from './preview.mjs';
 import { requireStaff } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { issueChallenge, revokeSessions, SITE } from './accounts.mjs';
@@ -154,6 +155,8 @@ export const peopleRoutes = {
   },
   'student/me': async (c, b) => {
     const code = String(b.k || '');
+    // スタッフのプレビュー（読むだけ）も、予定と同じ鍵で通す
+    if (isPreviewToken(code)) { const p = await previewSubject(c, code, 'student'); if (!p) fail('badLink', 'プレビューの期限が切れました。管理画面からもう一度開いてください', 401); return { me: studentPublicView(p) }; }
     const s = code && code.length <= 100 ? await c.db.prepare("select * from students where linkCode = ? and status <> 'left'").bind(code).first() : null;
     if (!s) fail('badLink', '専用リンクが正しくありません。先生から届いたリンクを開き直してください', 401);
     c.actor = { kind: 'student', id: s.id };
