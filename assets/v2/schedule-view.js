@@ -22,7 +22,7 @@ function rateChoice(l, c) {
     return [CHOICE.late[0], '先生に相談', `先生の都合がつくときだけ応じます。応じた場合は、遅らせた分の取消料がかかります（今の連絡で${half}分遅らせると ${yen(amount)}）。応じられない場合は、元の時刻に来られなければ、今の時刻でのキャンセルまたは遅刻として扱います。`, CHOICE.late[3]]; }
   return CHOICE[c];
 }
-const choiceOf = (l, c) => l.feeBase !== undefined && (c === 'cancel' || c === 'late') ? rateChoice(l, c) : CHOICE[c];
+export const choiceOf = (l, c) => l.feeBase !== undefined && (c === 'cancel' || c === 'late') ? rateChoice(l, c) : CHOICE[c];
 export const EVENT_KIND = { test: 'テスト', event: '行事', unavailable: '授業ができない日' };
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
 export const mdw = d => { const t = new Date(d + 'T00:00:00Z'); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate() + '(' + WD[t.getUTCDay()] + ')'; };
