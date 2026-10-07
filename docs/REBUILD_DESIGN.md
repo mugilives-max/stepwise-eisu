@@ -440,7 +440,8 @@
   - 書面や LINE でもらった同意は、家族の画面の「同意を記録」（`admin/families/terms`）。設定の「受講規約」に同意の記録の一覧と、同意した家族の数。
   - 版を変えると、全家族が「同意が要る」に戻る。統合3の D07（規約の版・計画の版・承認者・日時・経路を残す）のうち、規約の版と経路はここで、計画の版と承認者は planLines で持つ。
 - **送れなかったメール・カレンダー**（`cf/v2/effects-admin.mjs`）：effects 表の failed と、10 分以上たっても pending のものを「設定 → 送信の記録」に出す（`admin/effects/list`）。1 件ずつ・まとめて送り直す（`admin/effects/retry`）、取り下げる（`admin/effects/dismiss`）。毎日の定期実行（`runV2Scheduled`）が 48 時間以内に失敗したものを 3 回まで送り直す。「今日」の対応することに「送れなかったお知らせ」の数。
-- **テスト**：`test/v2-terms-effects.test.cjs`。
+- **外のサービス（MCP）の読み取りの鍵**（`cf/v2/service.mjs`、2026-10-08）：本文の `serviceKey` が Secret `V2_SERVICE_KEY` と合えば、代表のスタッフとして読むだけの操作（`SERVICE_READS`）を通す。書き込みは断る。`stepwise-mcp` 0.4.0 がこれで v2 を読む（[MCP_OPERATIONS.md](MCP_OPERATIONS.md) 0 章）。
+- **テスト**：`test/v2-terms-effects.test.cjs`、`test/v2-service.test.cjs`。
 - **公開の記録（2026-10-08）**：本番の DB2 に `0016_terms.sql` を当てた（1 回目は Cloudflare API の 7403 で失敗し、2 回目で成功）→ Worker `86721e98-a689-4723-9c1a-54dbca18cebc`（release `2026-10-08-v2-terms-effects`）→ 画面（PR #14 のマージ）。
 
 ### 8段目：移行の道具とリハーサル（2026-10-02）

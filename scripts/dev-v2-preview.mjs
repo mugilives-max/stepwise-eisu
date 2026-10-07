@@ -99,6 +99,7 @@ async function seed() {
 }
 
 const { h, k, kh } = await seed();
+if (process.env.V2_SERVICE_KEY) h.env.V2_SERVICE_KEY = process.env.V2_SERVICE_KEY; // MCP の読み取りの鍵を試すとき
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   h.clock = Date.now();
