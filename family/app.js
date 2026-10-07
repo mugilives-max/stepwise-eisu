@@ -1,11 +1,11 @@
 // 保護者の画面（作り直し v2）。入口は ホーム・予定・学習・お支払い（docs/UX_STRUCTURE.md 4）。子どもが2人以上なら上で切り替える。
 // ログイン・招待・再設定、予定と「変更・お休みの連絡」、テスト・行事を知らせる、記録と宿題・成績、計画の承認とお支払い（family/money.js）、アカウント（右上）。
-// 切り替えまでは準備中（今までの保護者ページ /hogosha/ を使う）。
-import { call, session, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261007-emp1';
-import { learningView } from '/assets/v2/learning-view.js?v=20261007-emp1';
-import { moneyView } from '/family/money.js?v=20261007-emp1';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261007-emp1';
+// 切り替える前は「準備中」の案内を出す（health の cutover.live で決める。今までの保護者ページ /hogosha/ を使ってもらう）。
+import { call, session, esc, liveState } from '/assets/v2/api.js';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261008-launch1';
+import { learningView } from '/assets/v2/learning-view.js?v=20261008-launch1';
+import { moneyView } from '/family/money.js?v=20261008-launch1';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';
@@ -26,14 +26,16 @@ const say = (m, k = '') => { notice = m ? { m, k } : null; };
 const noticeHtml = () => notice ? `<p class="notice ${notice.k}" role="${notice.k === 'error' ? 'alert' : 'status'}">${esc(notice.m)}</p>` : '';
 const dis = () => busy ? ' disabled' : '';
 async function run(task) { if (busy) return; busy = true; render(); try { await task(); } finally { busy = false; render(); } }
-const prep = '<p class="notice small">準備中の新しい保護者ページです。今は今までの <a href="/hogosha/">保護者ページ</a> をお使いください。</p>';
+// 切り替える前だけ出す案内（health の cutover.live で決める）
+const prepText = '<p class="notice small">準備中の新しい保護者ページです。今は今までの <a href="/hogosha/">保護者ページ</a> をお使いください。</p>';
+const prep = () => { const s = liveState(render); return s.known && !s.live ? prepText : ''; };
 
 function newPasswordForm(kind, label) {
   return `<form class="stack" data-form="${kind}"><label>新しいパスワード（12文字以上）<input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
     <label>もう一度<input type="password" name="confirm" autocomplete="new-password" minlength="12" maxlength="128" required></label><button class="primary"${dis()}>${label}</button></form>`;
 }
 function loginPage() {
-  return `${prep}<h1>保護者ページ</h1>${noticeHtml()}<form class="stack" data-form="login"><label>メールアドレス<input type="email" name="email" autocomplete="username" required></label>
+  return `${prep()}<h1>保護者ページ</h1>${noticeHtml()}<form class="stack" data-form="login"><label>メールアドレス<input type="email" name="email" autocomplete="username" required></label>
     <label>パスワード<input type="password" name="password" autocomplete="current-password" required></label><button class="primary"${dis()}>${busy ? 'ログインしています…' : 'ログイン'}</button></form><p><a href="#forgot">パスワードを忘れたとき</a></p>`;
 }
 function invitePage(token) {
@@ -83,7 +85,7 @@ const loading = '<p class="muted" style="margin-top:20px">読み込んでいま�
 function homePage() {
   if (need('sched', 'learning', 'money')) return loading;
   const multi = kids().length > 1, first = id => { const s = kids().find(k => k.id === id); return multi && s ? s.name.split(' ').pop() + ' ' : ''; };
-  let h = `${prep}<div class="page-head"><h1>ホーム</h1></div>${noticeHtml()}`;
+  let h = `${prep()}<div class="page-head"><h1>ホーム</h1></div>${noticeHtml()}`;
   const todo = [];
   const asks = money.plans.filter(l => l.status === 'proposed'), acks = money.plans.filter(l => l.status === 'approved' && l.approvedBy === 'staff' && !l.familyAck);
   if (asks.length) todo.push(['#money', '授業計画の承認', `${asks.length}件・内容を確かめて承認してください`]);

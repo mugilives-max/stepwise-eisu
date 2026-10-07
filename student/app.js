@@ -1,10 +1,10 @@
 // 生徒の画面（作り直し v2）。専用リンク（?k=）で開く。入口は ホーム・予定・学習（docs/UX_STRUCTURE.md 5）。
 // ホーム（次の授業・宿題・次のテスト）、予定と「変更・お休みの連絡」・テスト・行事を知らせる、記録と宿題・成績（成績票を送る）。
-// 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替えまでは準備中。
-import { call, esc } from '/assets/v2/api.js';
-import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261007-emp1';
-import { learningView, checkTag, hwText, hwSubject } from '/assets/v2/learning-view.js?v=20261007-emp1';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261007-emp1';
+// 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替える前は「準備中」の案内を出す（health の cutover.live で決める）。
+import { call, esc, liveState } from '/assets/v2/api.js';
+import { familyLessonList, changeDialog, eventList, eventForm } from '/assets/v2/schedule-view.js?v=20261008-launch1';
+import { learningView, checkTag, hwText, hwSubject } from '/assets/v2/learning-view.js?v=20261008-launch1';
+import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
 
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 const KEY = 'sw2_student_k';
@@ -18,7 +18,9 @@ let sched = null, busy = false, notice = null, change = null, learning = null, g
 const say = (m, kd = '') => { notice = m ? { m, kd } : null; };
 const noticeHtml = () => notice ? `<p class="notice ${notice.kd}" role="${notice.kd === 'error' ? 'alert' : 'status'}">${esc(notice.m)}</p>` : '';
 async function run(task) { if (busy) return; busy = true; render(); try { await task(); } finally { busy = false; render(); } }
-const prep = '<p class="notice small">準備中の新しい生徒ページです。今は今までの専用リンク（マイページ）をお使いください。</p>';
+// 切り替える前だけ出す案内（health の cutover.live で決める）
+const prepText = '<p class="notice small">準備中の新しい生徒ページです。今は今までの専用リンク（マイページ）をお使いください。</p>';
+const prep = () => { const s = liveState(render); return s.known && !s.live ? prepText : ''; };
 
 async function load() { const r = await call('student/schedule', { k }); if (r.ok) sched = r; else { sched = { error: r.error.message }; } render(); }
 // 入口（docs/UX_STRUCTURE.md 5）: ホーム・予定・学習。スマホでは画面の下。前の URL（#events・#grades）も開ける
@@ -56,7 +58,7 @@ function render() {
     else h += needGrades() ? loadingHtml : gradesView(grades, { who: 'student', dis: busy ? ' disabled' : '' });
   } else {
     // ホーム: 次の授業・今日やる宿題・次のテスト
-    h += `${preview ? '' : prep}<div class="page-head"><h1>${esc(sched.me.name)}さん</h1></div>${noticeHtml()}`;
+    h += `${preview ? '' : prep()}<div class="page-head"><h1>${esc(sched.me.name)}さん</h1></div>${noticeHtml()}`;
     const next = sched.lessons.filter(l => l.date >= sched.today && ['proposed', 'decided'].includes(l.status)).slice(0, 3);
     h += '<h2>次の授業</h2>' + (next.length ? '<div class="rows">' + next.map(l => `<a class="todo" href="#schedule"><span class="b"><strong>${md(l.date)} ${l.start}〜 ${esc(l.subject)}</strong><small class="muted">${l.status === 'proposed' ? '仮予定' : '決定'}${l.deliveryMode === 'online' ? '・オンライン' : ''}</small></span><span class="go">›</span></a>`).join('') + '</div>' : '<p class="muted small">決まっている授業はありません。</p>');
     h += '<h2>宿題</h2>';
