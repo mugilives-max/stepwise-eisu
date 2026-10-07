@@ -7,7 +7,7 @@ let today = null;
 export function resetToday() { today = null; }
 export const todayBar = () => today && today.today ? { title: '今日', sub: mdw(today.today), right: '' } : null;
 // 対応することのアイコン（種類ごと）
-const TODO_ICON = { requests: ['mail', '#d0533c'], records: ['comment', '#2f6fde'], handover: ['memo', '#138a8a'], homework: ['homework', '#7b4fd6'], sheets: ['file', '#2e9b5f'], tests: ['accuracy', '#e0a100'], fees: ['yen', '#c0392b'], plans: ['plan', '#5b6672'] };
+const TODO_ICON = { requests: ['mail', '#d0533c'], records: ['comment', '#2f6fde'], handover: ['memo', '#138a8a'], homework: ['homework', '#7b4fd6'], sheets: ['file', '#2e9b5f'], tests: ['accuracy', '#e0a100'], fees: ['yen', '#c0392b'], plans: ['plan', '#5b6672'], effects: ['mail', '#c0392b'] };
 const roundIcon = (k, label, cls = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg><span class="sr">${label}</span>`;
 
 export function todayPage(ctx, me) {

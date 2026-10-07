@@ -8,6 +8,7 @@ import { fail, newId, iso, audit } from './util.mjs';
 import { requireStaff } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { isLive } from './accounts.mjs';
+import { familyTerms, currentTerms } from './terms.mjs';
 import { todayJst, addDays, familyNotice, staffNotice } from './schedule.mjs';
 import { validMonth, monthEnd, shiftMonth, lineCap, lessonAmount, lineMatches, studentBilling, estimateFor, assignLines, parseParts, PART_LABEL } from './plan-calc.mjs';
 
@@ -22,7 +23,7 @@ const DAY = 86400e3;
 export function lineView(l, extra = {}) {
   return { id: l.id, studentId: l.studentId, parentId: l.parentId, subject: l.subject, kind: l.kind, startDate: l.startDate, endDate: l.endDate, count: l.count, minutes: l.minutes, fee: l.fee,
     comment: l.comment, status: l.status, approvedCount: l.approvedCount, proposedAt: l.proposedAt, approvedAt: l.approvedAt, approvedBy: l.approvedBy ? (l.approvedBy === 'family' ? 'family' : 'staff') : '',
-    approvedVia: l.approvedVia, consentDate: l.consentDate, approvalNote: l.approvalNote, familyAck: l.familyAck, familyAckAt: l.familyAckAt, familyAckNote: l.familyAckNote, remindedAt: l.remindedAt || '', version: l.version, ...extra };
+    approvedVia: l.approvedVia, consentDate: l.consentDate, approvalNote: l.approvalNote, termsVersion: l.termsVersion || '', familyAck: l.familyAck, familyAckAt: l.familyAckAt, familyAckNote: l.familyAckNote, remindedAt: l.remindedAt || '', version: l.version, ...extra };
 }
 const feeView = f => ({ id: f.id, lessonId: f.lessonId, studentId: f.studentId, type: f.type, receivedAt: f.receivedAt, standardAmount: f.standardAmount, amount: f.amount, decision: f.decision, note: f.note,
   reliefStatus: f.reliefStatus, reliefReason: f.reliefReason, reliefResponse: f.reliefResponse, invoiceId: f.invoiceId, date: f.date, start: f.start, minutes: f.minutes, subject: f.subject, version: f.version,
@@ -270,9 +271,9 @@ export const billingRoutes = {
     const sb = await studentBilling(c.db, l.studentId);
     const before = sb.lessons.some(ls => lineMatches(l, ls) && ls.date < consentDate);
     if ((l.endDate < consentDate || before) && !note) fail('needNote', '授業のあとで承諾をもらったときは、メモに事情を書いてください');
-    const now = iso(c.now);
-    await c.db.prepare("update planLines set status = 'approved', approvedCount = ?, approvedAt = ?, approvedBy = ?, approvedVia = ?, consentDate = ?, approvalNote = ?, familyAck = '', familyAckAt = '', familyAckNote = '', proposedAt = case when proposedAt = '' then ? else proposedAt end, updatedAt = ?, version = version + 1 where id = ?")
-      .bind(count, now, 'staff:' + me.id, via, consentDate, note, now, now, l.id).run();
+    const now = iso(c.now), terms = await currentTerms(c.db);
+    await c.db.prepare("update planLines set status = 'approved', approvedCount = ?, approvedAt = ?, approvedBy = ?, approvedVia = ?, consentDate = ?, approvalNote = ?, termsVersion = ?, familyAck = '', familyAckAt = '', familyAckNote = '', proposedAt = case when proposedAt = '' then ? else proposedAt end, updatedAt = ?, version = version + 1 where id = ?")
+      .bind(count, now, 'staff:' + me.id, via, consentDate, note, terms.version, now, now, l.id).run();
     await audit(c, 'planConsent', l.id, { via, consentDate, count });
     return { line: lineView(await getLine(c, l.id)) };
   },
@@ -433,7 +434,8 @@ export const billingRoutes = {
     const me = await requireFamily(c, b);
     const students = (await c.db.prepare('select * from students where familyId = ? order by createdAt').bind(me.id).all()).results, ids = students.map(s => s.id);
     const names = Object.fromEntries(students.map(s => [s.id, fullName(s)]));
-    if (!ids.length) return { plans: [], fees: [], invoices: [] };
+    const terms = await familyTerms(c.db, me);
+    if (!ids.length) return { plans: [], fees: [], invoices: [], terms };
     const q = `(${ids.map(() => '?').join(', ')})`, since = addDays(todayJst(c.now), -92);
     // 承認待ちは期間が過ぎても出し続ける（承認できるように）。ほかは終わってから3か月まで
     const lines = (await c.db.prepare(`select * from planLines where studentId in ${q} and (status = 'proposed' or (status <> 'draft' and endDate >= ?)) order by startDate, subject`).bind(...ids, since).all()).results;
@@ -443,7 +445,7 @@ export const billingRoutes = {
     const invs = (await c.db.prepare("select * from invoices where familyId = ? and status <> 'void' order by month desc limit 24").bind(me.id).all()).results;
     const invoices = [];
     for (const v of invs) invoices.push({ ...invoiceView(v), items: (await c.db.prepare('select * from invoiceItems where invoiceId = ? order by sortOrder').bind(v.id).all()).results.map(i => ({ ...itemView(i), studentName: names[i.studentId] || '' })) });
-    return { plans, fees, invoices };
+    return { plans, fees, invoices, terms };
   },
   // 承認（回数を減らして承認・0回で見送り）
   'family/plans/decide': async (c, b) => {
@@ -455,9 +457,12 @@ export const billingRoutes = {
     const count = Number(b.approvedCount), min = await minCountFor(c, l);
     if (!Number.isInteger(count) || count < 0 || count > l.count) fail('badCount', `回数は0〜${l.count}回で選んでください`);
     if (count < min) fail('badCount', `すでに決まっている授業が${min}回あるため、${min}回より少なくはできません。先生にご相談ください`);
+    // 受講規約の今の版に同意していなければ、承認できない（統合3 D07。見送りは同意がなくてもよい）
+    const terms = await familyTerms(c.db, me);
+    if (count > 0 && terms.needs) fail('needTerms', '受講規約への同意が必要です。「お支払い」の画面で規約を確かめて、同意してから承認してください', 409);
     const now = iso(c.now);
-    await c.db.prepare("update planLines set status = ?, approvedCount = ?, approvedAt = ?, approvedBy = 'family', approvedVia = '保護者ページ', consentDate = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?")
-      .bind(count > 0 ? 'approved' : 'declined', count, now, todayJst(c.now), now, l.id, l.version).run();
+    await c.db.prepare("update planLines set status = ?, approvedCount = ?, approvedAt = ?, approvedBy = 'family', approvedVia = '保護者ページ', consentDate = ?, termsVersion = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?")
+      .bind(count > 0 ? 'approved' : 'declined', count, now, todayJst(c.now), terms.agreed.version, now, l.id, l.version).run();
     const s = await getStudent(c, l.studentId);
     await staffNotice(c, `【計画の${count > 0 ? '承認' : '見送り'}】${fullName(s)}さん`, `${fullName(s)}さん ${l.subject}（${md(l.startDate)}〜${md(l.endDate)}）\n${count > 0 ? `${count}回で承認されました（お知らせは${l.count}回）` : '見送りになりました'}`);
     await audit(c, 'planDecide', l.id, { count });

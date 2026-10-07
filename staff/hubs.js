@@ -56,7 +56,7 @@ export function settingsPage(ctx, me) {
   const { esc } = ctx, roles = me.roles;
   let h = ctx.notice();
   h += '<div class="group" style="margin-top:12px">' + row('#account', 'person', '#2f6fde', esc(me.name) + ' さん', esc(me.email) + '・パスワード・ログアウト') + '</div>';
-  if (roles.includes('manager')) h += '<div class="sec-title">教室の運営</div><div class="group">' + row('#rates', 'yen', '#2e9b5f', '時給と源泉徴収', '講師ごとの授業・面談の時給、甲欄・乙欄') + row('#kinds', 'plan', '#5b6672', '授業の種類と標準料金', '計画を作るときの初期値') + '</div>';
+  if (roles.includes('manager')) h += '<div class="sec-title">教室の運営</div><div class="group">' + row('#rates', 'yen', '#2e9b5f', '時給と源泉徴収', '講師ごとの授業・面談の時給、甲欄・乙欄') + row('#kinds', 'plan', '#5b6672', '授業の種類と標準料金', '計画を作るときの初期値') + row('#terms', 'file', '#c98a00', '受講規約', '今の版・全文のリンク・家族の同意') + row('#effects', 'mail', '#d0533c', '送信の記録', '送れなかったメール・カレンダーを送り直す') + '</div>';
   if (roles.includes('sysadmin')) h += '<div class="sec-title">システム</div><div class="group">' + row('#staff', 'person', '#7b4fd6', 'スタッフ', '招待・名前と役割・停止') + row('#migrate', 'swap', '#c98a00', '移行と切り替え', '今の仕組みからの写し・照らし合わせ・切り替え') + '</div>';
   return h;
 }

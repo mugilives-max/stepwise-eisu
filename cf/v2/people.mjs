@@ -1,6 +1,7 @@
 // 家族・生徒の管理（教室管理者）と、保護者・生徒から見た自分の情報。家族が根っこ（生徒は必ず家族に属する）。
 import { fail, newId, normEmail, validEmail, iso, audit } from './util.mjs';
 import { isPreviewToken, previewSubject } from './preview.mjs';
+import { currentTerms } from './terms.mjs';
 import { requireStaff } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { issueChallenge, revokeSessions, SITE } from './accounts.mjs';
@@ -14,7 +15,7 @@ export const studentLink = code => SITE + '/student/?k=' + encodeURIComponent(co
 const fullName = s => [s.familyName, s.givenName].filter(Boolean).join(' ');
 
 export function familyAdminView(f) {
-  return { id: f.id, name: f.name, guardianName: f.guardianName, email: f.email, phone: f.phone, note: f.note, status: f.status, hasPassword: !!f.passHash, testOnly: !!f.testOnly, legacyId: f.legacyId, version: f.version };
+  return { id: f.id, name: f.name, guardianName: f.guardianName, email: f.email, phone: f.phone, note: f.note, status: f.status, hasPassword: !!f.passHash, testOnly: !!f.testOnly, legacyId: f.legacyId, termsVersion: f.termsVersion || '', termsAcceptedAt: f.termsAcceptedAt || '', version: f.version };
 }
 export function studentAdminView(s) {
   return { id: s.id, familyId: s.familyId, name: fullName(s), familyName: s.familyName, givenName: s.givenName, familyKana: s.familyKana, givenKana: s.givenKana,
@@ -66,7 +67,7 @@ export const peopleRoutes = {
     await requireStaff(c, b, 'manager');
     const f = await getFamily(c, b.id);
     const studs = (await c.db.prepare('select * from students where familyId = ? order by createdAt').bind(f.id).all()).results;
-    return { family: { ...familyAdminView(f), students: studs.map(studentAdminView) } };
+    return { terms: await currentTerms(c.db), family: { ...familyAdminView(f), students: studs.map(studentAdminView) } };
   },
   'admin/families/create': async (c, b) => {
     await requireStaff(c, b, 'manager');

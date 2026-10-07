@@ -9,7 +9,7 @@ export const PREFIX = 'pv2.';
 export const isPreviewToken = v => typeof v === 'string' && v.startsWith(PREFIX) && v.length <= 100;
 // プレビューで通す操作（読むだけ）。files/link は成績票などを開く鍵を作るだけで、台帳は変えない
 export const READS = new Set(['family/me', 'family/students', 'family/schedule', 'family/learning', 'family/money', 'family/grades',
-  'student/me', 'student/schedule', 'student/learning', 'student/grades', 'files/link']);
+  'student/me', 'student/schedule', 'student/learning', 'student/grades', 'files/link', 'family/terms']);
 
 // 鍵から、プレビューの相手（家族か生徒の行）を読む。kind が合わなければ null
 export async function previewSubject(c, token, kind) {

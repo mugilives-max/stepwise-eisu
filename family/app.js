@@ -5,7 +5,7 @@ import { call, session, esc, liveState } from '/assets/v2/api.js';
 import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
 import { monthCalendar, gridStart, gridEnd } from '/assets/v2/calendar.js?v=20261008-launch1';
 import { EVENT_KIND } from '/assets/v2/schedule-view.js?v=20261008-launch1';
-import { lessonRows, dayRows, nextLessonHero, lessonSheet, homeworkRows, recordCards, planGroups, planApprovalCard, planAckCard, planHistory, inquirySheet, invoiceRows, invoiceSheet, feeRows, feeSheet, eventRows, eventSheet, wireSheets, keepSheet, ibox, picon, yen, md, monthLabel, daysText, given } from '/assets/v2/portal-ui.js?v=20261008-launch1';
+import { termsCard, termsLine, lessonRows, dayRows, nextLessonHero, lessonSheet, homeworkRows, recordCards, planGroups, planApprovalCard, planAckCard, planHistory, inquirySheet, invoiceRows, invoiceSheet, feeRows, feeSheet, eventRows, eventSheet, wireSheets, keepSheet, ibox, picon, yen, md, monthLabel, daysText, given } from '/assets/v2/portal-ui.js?v=20261008-launch1';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';
@@ -18,6 +18,7 @@ let me = null, busy = false, notice = null, sched = null, learning = null, money
 let cal = null, calData = {}; // 月の予定表と、月ごとに読んだ予定（{ 'YYYY-MM': 応答 }）
 let sheetState = null; // 下から出る画面: { kind: 'lesson', id, pick, note } | { kind: 'event' } | { kind: 'invoice', id } | { kind: 'fee', id, note } | { kind: 'inquiry', month, note }
 const planCounts = {}; // 承認の画面で変えた回数 { [lineId]: n }
+let termsChecked = false; // 規約の「同意します」の印（描き直しても消えないように）
 
 function route() {
   const h = location.hash;
@@ -96,6 +97,7 @@ function homePage() {
   h += nextLessonHero(next[0], { names: names(), today: sched.today });
   // やること（押すとその画面へ）
   const todo = [], { asks, acks } = planGroups(money.plans);
+  if (money.terms && money.terms.needs) todo.push(['#money', 'file', '#c98a00', '受講規約への同意', (money.terms.current.title || '受講規約') + '・全文を読んで同意してください', 1]);
   if (asks.length) todo.push(['#money', 'plan', '#5b6672', '授業計画の承認', asks.map(([m]) => monthLabel(m)).join('・') + 'の計画を確かめて承認してください', asks.length]);
   if (acks.length) todo.push(['#money', 'check', '#138a8a', '授業計画の確認', acks.map(([m]) => monthLabel(m)).join('・') + '・先生が記録した承諾の内容を確かめてください', acks.length]);
   const kari = sched.lessons.filter(l => l.status === 'proposed' && l.confirmBy);
@@ -164,20 +166,22 @@ function moneyPage() {
   if (need('money')) return loading;
   const multi = new Set(money.plans.map(l => l.studentId).concat(money.fees.map(f => f.studentId))).size > 1;
   let h = noticeHtml();
-  const { asks, acks, others } = planGroups(money.plans);
-  if (asks.length || acks.length) {
+  const { asks, acks, others } = planGroups(money.plans), needTerms = !!(money.terms && money.terms.needs);
+  if (asks.length || acks.length || needTerms) {
     h += secTitle('確かめていただきたいこと');
-    h += asks.map(([m, ls]) => planApprovalCard(m, ls, { multi, counts: planCounts, dis: dis() })).join('');
+    if (needTerms) h += termsCard(money.terms, { busy, checked: termsChecked });
+    h += asks.map(([m, ls]) => planApprovalCard(m, ls, { multi, counts: planCounts, dis: dis() || (needTerms ? ' disabled' : '') })).join('');
     h += acks.map(([m, ls]) => planAckCard(m, ls, { multi, dis: dis() })).join('');
   }
   h += secTitle('授業料') + invoiceRows(money.invoices);
   if (money.fees.length) h += secTitle('キャンセル料・取消料') + feeRows(money.fees, { multi });
   if (others.length) h += secTitle('授業計画') + planHistory(others, { multi });
+  if (money.terms && !needTerms) h += termsLine(money.terms);
   return h;
 }
 function accountPage() {
   if (previewToken) return `<p class="muted">プレビューでは使えません。</p>`;
-  return `<p>${esc(me.name)}（${esc(me.email)}）</p>${noticeHtml()}<h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
+  return `<p>${esc(me.name)}（${esc(me.email)}）</p>${money && money.terms ? termsLine(money.terms) : ''}${noticeHtml()}<h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label><label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" required></label>
     <label>もう一度<input type="password" name="confirm" autocomplete="new-password" minlength="12" required></label><button class="primary"${dis()}>変える</button></form><h2>ログアウト</h2><p><button data-action="logout"${dis()}>この端末からログアウト</button></p>`;
 }
@@ -265,7 +269,7 @@ app.addEventListener('submit', ev => {
     failed(r);
   });
 });
-app.addEventListener('change', ev => { const id = ev.target.dataset && ev.target.dataset.planCount; if (id) { planCounts[id] = Number(ev.target.value); render(); } });
+app.addEventListener('change', ev => { if (ev.target.id === 'terms-agree') { termsChecked = ev.target.checked; return; } const id = ev.target.dataset && ev.target.dataset.planCount; if (id) { planCounts[id] = Number(ev.target.value); render(); } });
 app.addEventListener('click', ev => {
   const b = ev.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
@@ -297,7 +301,8 @@ app.addEventListener('click', ev => {
       const [, lines] = planGroups(money.plans).acks.find(([m]) => m === s.month) || [];
       for (const l of (lines || [])) { r = await call('family/plans/ack', { id: l.id, version: l.version, ack: 'inquiry', note }, store.get()); if (!r.ok) break; }
       money = null; if (r && r.ok) { closeSheet(); return say('先生に伝えました。返事をお待ちください', 'ok'); }
-    } else if (a === 'inv-report') { if (!confirm('振り込んだことを先生に知らせますか？')) return; r = await call('family/invoices/report', { id: b.dataset.id, version: Number(b.dataset.version) }, store.get()); if (r.ok) { closeSheet(); money = null; return say('振込のご連絡を受け付けました。ありがとうございます', 'ok'); } }
+    } else if (a === 'terms-accept') { if (!termsChecked) return say('全文を読んで「同意します」に印を付けてください', 'error'); r = await call('family/terms/accept', { version: b.dataset.version, agree: true }, store.get()); if (r.ok) { money = null; termsChecked = false; return say('受講規約に同意いただきました。ありがとうございます', 'ok'); } }
+    else if (a === 'inv-report') { if (!confirm('振り込んだことを先生に知らせますか？')) return; r = await call('family/invoices/report', { id: b.dataset.id, version: Number(b.dataset.version) }, store.get()); if (r.ok) { closeSheet(); money = null; return say('振込のご連絡を受け付けました。ありがとうございます', 'ok'); } }
     else if (a === 'send-relief') { const s = sheetState; const reason = (s.note || '').trim(); if (!reason) return say('事情を書いてください', 'error'); r = await call('family/fees/relief', { id: b.dataset.id, version: Number(b.dataset.version), reason }, store.get()); if (r.ok) { closeSheet(); money = null; return say('申請を受け付けました。先生が確かめて返事をします', 'ok'); } }
     else if (a === 'del-event') { r = await call('family/events/delete', { id: b.dataset.id }, store.get()); if (r.ok) { sched = null; calData = {}; return say('消しました', 'ok'); } }
     else if (a === 'logout') { await call('family/logout', {}, store.get()); store.set(''); me = null; location.hash = ''; return say('ログアウトしました', 'ok'); }

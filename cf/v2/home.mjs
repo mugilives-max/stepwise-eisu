@@ -5,6 +5,7 @@ import { todayJst, addDays, scheduleRoutes } from './schedule.mjs';
 import { recordRoutes } from './records.mjs';
 import { gradesRoutes } from './grades.mjs';
 import { billingRoutes } from './billing.mjs';
+import { failedEffectsCount } from './effects-admin.mjs';
 
 export const homeRoutes = {
   'home/today': async (c, b) => {
@@ -18,6 +19,7 @@ export const homeRoutes = {
       manager ? billingRoutes['billing/fees/list'](c, b) : null,
       manager ? c.db.prepare("select count(*) n from planLines where status = 'proposed'").first() : null,
     ]);
+    const failedEffects = manager ? await failedEffectsCount(c.db, c.now) : 0;
     const todo = [];
     const add = (key, label, count, link, note = '') => { if (count) todo.push({ key, label, count, link, note }); };
     if (manager) add('requests', '生徒・保護者からの連絡', range.openRequests.length, '#schedule', '変更・お休み・キャンセル');
@@ -28,6 +30,7 @@ export const homeRoutes = {
     add('tests', '結果待ちのテスト', grades.pendingTests.length, '#grades');
     if (manager && fees) add('fees', 'キャンセル料の判断', fees.fees.filter(f => f.decision === 'pending' || f.reliefStatus === 'pending').length, '#billing');
     if (manager && plans) add('plans', '承認待ちの計画', plans.n, '#plans', '保護者の承認を待っている');
+    if (manager) add('effects', '送れなかったお知らせ', failedEffects, '#effects', 'メール・カレンダー。送り直せます');
     const pendingIds = new Set(pending.lessons.map(l => l.id));
     const name = Object.fromEntries(range.students.map(s => [s.id, s.name])), staff = Object.fromEntries(range.staff.map(s => [s.id, s.name]));
     const lessons = range.lessons.filter(l => ['held', 'proposed', 'decided', 'done'].includes(l.status)).sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start))
