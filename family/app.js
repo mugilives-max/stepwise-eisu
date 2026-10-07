@@ -3,7 +3,9 @@
 // ログイン・招待・再設定、アカウント（右上）。切り替える前は「準備中」の案内を出す（health の cutover.live で決める）。
 import { call, session, esc, liveState } from '/assets/v2/api.js';
 import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
-import { lessonRows, nextLessonHero, lessonSheet, homeworkRows, recordCards, planGroups, planApprovalCard, planAckCard, planHistory, inquirySheet, invoiceRows, invoiceSheet, feeRows, feeSheet, eventRows, eventSheet, wireSheets, keepSheet, ibox, picon, yen, md, monthLabel, daysText, given } from '/assets/v2/portal-ui.js?v=20261008-launch1';
+import { monthCalendar, gridStart, gridEnd } from '/assets/v2/calendar.js?v=20261008-launch1';
+import { EVENT_KIND } from '/assets/v2/schedule-view.js?v=20261008-launch1';
+import { lessonRows, dayRows, nextLessonHero, lessonSheet, homeworkRows, recordCards, planGroups, planApprovalCard, planAckCard, planHistory, inquirySheet, invoiceRows, invoiceSheet, feeRows, feeSheet, eventRows, eventSheet, wireSheets, keepSheet, ibox, picon, yen, md, monthLabel, daysText, given } from '/assets/v2/portal-ui.js?v=20261008-launch1';
 
 // スタッフのプレビュー（#preview=pv2.…）: 本物のログイン（sw2_family）には触れず、このタブだけで使う。書き込みはサーバーが断る
 const PV_KEY = 'sw2_family_preview';
@@ -13,6 +15,7 @@ const store = previewToken ? { get: () => previewToken, set: () => {} } : sessio
 const previewBar = () => previewToken && me ? `<p class="notice" style="background:#fff3c4;color:#5a4300"><strong>プレビュー中</strong>：${esc(me.name)}の保護者ページ（表示だけです。押しても変更はされません。1時間で切れます）</p>` : '';
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 let me = null, busy = false, notice = null, sched = null, learning = null, money = null, grades = null, inviteInfo = null;
+let cal = null, calData = {}; // 月の予定表と、月ごとに読んだ予定（{ 'YYYY-MM': 応答 }）
 let sheetState = null; // 下から出る画面: { kind: 'lesson', id, pick, note } | { kind: 'event' } | { kind: 'invoice', id } | { kind: 'fee', id, note } | { kind: 'inquiry', month, note }
 const planCounts = {}; // 承認の画面で変えた回数 { [lineId]: n }
 
@@ -111,16 +114,33 @@ function homePage() {
   if (learning.records.length) h += secTitle('新しい授業の記録', '<a class="more" href="#learning">すべて見る ›</a>') + recordCards(learning.records, learning.homework, { names: multiKids() ? names() : {}, limit: 1 });
   return h;
 }
-// 予定: 子どもを選んで一覧。授業を押すと下から出る画面で「変更・お休みの連絡」。テスト・行事を知らせるもここ
+// 予定: 月の表（スタッフと同じ動き）。子どもを選べる。日を押すとその日の一覧、授業を押すと下から出る画面で「変更・お休みの連絡」。テスト・行事を知らせるは上の帯の右
+const RANK = { proposed: 1, decided: 2, done: 3 };
+function needCal(month) {
+  if (!calData[month]) { calData[month] = { loading: true }; call('family/schedule', { from: gridStart(month), to: gridEnd(month) }, store.get()).then(r => { calData[month] = r.ok ? r : { lessons: [], events: [], students: [], today: '' }; if (!r.ok) failed(r); render(); }); }
+  return calData[month].loading;
+}
+// 月の表に出す短い名前: 名（同じ名の子がいれば姓名）
+const shortName = id => { const s = kids().find(k => k.id === id); if (!s) return ''; const g = given(s.name); return kids().filter(k => given(k.name) === g).length > 1 ? s.name : g; };
 function schedulePage() {
   if (need('sched')) return loading;
-  let h = `${kidPicker(true)}${noticeHtml()}`;
-  const kari = forKid(sched.lessons).filter(l => l.status === 'proposed' && l.confirmBy);
-  if (kari.length) h += `<p class="notice small">仮予定が${kari.length}件あります。都合の悪い授業だけ押して「日時の変更」か「お休み」を連絡してください。締め切りまでに連絡がなければ、この日時で決まります。</p>`;
-  const list = forKid(sched.lessons).filter(l => l.date >= sched.today || l.status === 'proposed');
-  h += lessonRows(list, { names: multiKids() && !kid ? names() : {}, today: sched.today });
-  h += secTitle('テスト・行事', `<button type="button" class="add" data-action="add-event" aria-label="テスト・行事を知らせる">${picon('plus')}</button>`);
-  h += eventRows(forKid(sched.events).filter(e => e.dateTo >= sched.today), { names: multiKids() && !kid ? names() : {}, canDelete: e => e.createdByKind === 'family', today: sched.today });
+  if (!cal) cal = monthCalendar({ today: sched.today, onChange: () => render() });
+  let h = `${kidPicker(true)}${cal.bar(esc, `<button class="ibtn" data-action="add-event" aria-label="テスト・行事を知らせる" title="テスト・行事を知らせる">${picon('plus')}</button>`)}${noticeHtml()}`;
+  if (needCal(cal.month)) return h + loading;
+  const d = calData[cal.month], multi = multiKids() && !kid, nm = names();
+  const lessons = forKid(d.lessons).filter(l => l.status !== 'held'), events = forKid(d.events);
+  const kari = lessons.filter(l => l.status === 'proposed' && l.confirmBy);
+  if (kari.length) h += `<p class="notice small" style="margin:0 0 6px">仮予定（オレンジ）${kari.length}件：都合の悪い授業だけ押して連絡してください。連絡がなければ締め切りで決まります。</p>`;
+  const cell = date => {
+    const ls = lessons.filter(l => l.date === date && l.status in RANK);
+    const bars = events.filter(e => e.date <= date && date <= e.dateTo).map(e => `<span class="bar ${e.kind === 'unavailable' ? 'off' : e.kind}">${esc(e.title || EVENT_KIND[e.kind])}</span>`);
+    let chips;
+    if (multi) { const by = {}; ls.forEach(l => { const g = by[l.studentId] = by[l.studentId] || { n: 0, rank: 9 }; g.n++; g.rank = Math.min(g.rank, RANK[l.status]); }); chips = Object.entries(by).map(([sid, g]) => `<span class="nm r${g.rank}">${esc(shortName(sid))}${g.n > 1 ? `<small>×${g.n}</small>` : ''}</span>`); }
+    else chips = ls.sort((a, b) => a.start.localeCompare(b.start)).map(l => `<span class="nm r${RANK[l.status]}">${esc(l.subject)}</span>`);
+    return { lines: bars.concat(chips), count: ls.length };
+  };
+  const day = (date, first) => cal.dayHead(date, first, `<span class="muted small">授業 ${lessons.filter(l => l.date === date && l.status in RANK).length}件</span>`) + dayRows(date, lessons, events, { names: multi ? nm : {}, canDelete: e => e.createdByKind === 'family' });
+  h += cal.html(esc, { cell, day });
   return h;
 }
 // 学習: 子どもを選んで「記録と宿題」「成績」
@@ -161,10 +181,11 @@ function accountPage() {
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label><label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" required></label>
     <label>もう一度<input type="password" name="confirm" autocomplete="new-password" minlength="12" required></label><button class="primary"${dis()}>変える</button></form><h2>ログアウト</h2><p><button data-action="logout"${dis()}>この端末からログアウト</button></p>`;
 }
+const findLesson = id => { for (const src of [sched].concat(Object.values(calData))) { const l = src && src.lessons && src.lessons.find(x => x.id === id); if (l) return l; } return null; };
 // 下から出る画面
 function sheetHtml() {
   const s = sheetState; if (!s || !me) return '';
-  if (s.kind === 'lesson') { const l = sched && sched.lessons && sched.lessons.find(x => x.id === s.id); return l ? lessonSheet(l, s, { names: multiKids() ? names() : {}, busy }) : ''; }
+  if (s.kind === 'lesson') { const l = findLesson(s.id); return l ? lessonSheet(l, s, { names: multiKids() ? names() : {}, busy }) : ''; }
   if (s.kind === 'event') return eventSheet(kid ? kids().filter(x => x.id === kid) : kids());
   if (s.kind === 'invoice') { const v = money && money.invoices && money.invoices.find(x => x.id === s.id); return v ? invoiceSheet(v, { multi: multiKids(), busy }) : ''; }
   if (s.kind === 'fee') { const f = money && money.fees && money.fees.find(x => x.id === s.id); return f ? feeSheet(f, { busy, note: s.note }) : ''; }
@@ -192,10 +213,11 @@ function render() {
   app.className = !me ? 'narrow' : '';
   renderBar(me ? page : '');
   keepSheet(app, () => { app.innerHTML = previewBar() + h + sheetHtml(); });
+  if (me && page === 'schedule' && cal) cal.afterRender(render);
   const box = app.querySelector('.bsheet');
   if (box && notice && notice.k === 'error') box.querySelector('.bsheet-body').insertAdjacentHTML('afterbegin', noticeHtml()); // 下から出る画面の中でも見えるように
 }
-function signedIn(r) { store.set(r.auth); me = r.me; sched = null; learning = null; money = null; grades = null; say(''); location.hash = '#home'; }
+function signedIn(r) { store.set(r.auth); me = r.me; sched = null; calData = {}; cal = null; learning = null; money = null; grades = null; say(''); location.hash = '#home'; }
 const closeSheet = () => { sheetState = null; };
 // 下から出る画面の入力は、描き直す前に読んでおく（描き直すと入力欄が作り直される）
 function captureSheetInputs() {
@@ -238,7 +260,7 @@ app.addEventListener('submit', ev => {
       money = null;
       if (r.ok) return say(`${monthLabel(el.dataset.month)}の計画を承認しました。ありがとうございます`, 'ok');
       if (okCount) say(`${okCount}件は承認できましたが、途中で止まりました: ${r.error.message}`, 'error');
-    } else if (kind === 'event') { r = await call('family/events/add', v, store.get()); if (r.ok) { sched = null; closeSheet(); return say('先生に知らせました', 'ok'); } }
+    } else if (kind === 'event') { r = await call('family/events/add', v, store.get()); if (r.ok) { sched = null; calData = {}; closeSheet(); return say('先生に知らせました', 'ok'); } }
     if (!r) return;
     failed(r);
   });
@@ -247,6 +269,7 @@ app.addEventListener('change', ev => { const id = ev.target.dataset && ev.target
 app.addEventListener('click', ev => {
   const b = ev.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
+  if (cal && cal.click(a, b)) return render();
   if (a === 'kid') { kid = b.dataset.id; try { sessionStorage.setItem(KID_KEY, kid); } catch {} ev.preventDefault(); return render(); }
   if (a === 'lesson') { sheetState = { kind: 'lesson', id: b.dataset.id, pick: '', note: '' }; return render(); }
   if (a === 'pick') { captureSheetInputs(); sheetState.pick = b.dataset.c; return render(); }
@@ -262,8 +285,8 @@ app.addEventListener('click', ev => {
     if (a === 'send-change') {
       const s = sheetState; if (!s || s.kind !== 'lesson' || !s.pick) return;
       r = await call('family/lessons/request', { lessonId: s.id, kind: s.pick, note: (s.note || '').trim() }, store.get());
-      if (r.ok) { closeSheet(); sched = null; return say({ move: '日時の変更をお願いしました。先生から連絡があります', rest: 'お休みにしました', late: '先生に連絡しました', cancel: 'キャンセルの連絡を受け付けました' + (r.fee ? `（キャンセル料 ${yen(r.fee.amount)}）` : '') }[r.request ? r.request.kind : 'move'], 'ok'); }
-    } else if (a === 'withdraw') { if (!confirm('この連絡を取り下げますか？')) return; r = await call('family/lessons/withdraw', { requestId: b.dataset.id }, store.get()); if (r.ok) { closeSheet(); sched = null; return say('連絡を取り下げました', 'ok'); } }
+      if (r.ok) { closeSheet(); sched = null; calData = {}; return say({ move: '日時の変更をお願いしました。先生から連絡があります', rest: 'お休みにしました', late: '先生に連絡しました', cancel: 'キャンセルの連絡を受け付けました' + (r.fee ? `（キャンセル料 ${yen(r.fee.amount)}）` : '') }[r.request ? r.request.kind : 'move'], 'ok'); }
+    } else if (a === 'withdraw') { if (!confirm('この連絡を取り下げますか？')) return; r = await call('family/lessons/withdraw', { requestId: b.dataset.id }, store.get()); if (r.ok) { closeSheet(); sched = null; calData = {}; return say('連絡を取り下げました', 'ok'); } }
     else if (a === 'hw-done' || a === 'hw-undo') { r = await call('family/homework/report', { id: b.dataset.id, undo: a === 'hw-undo' }, store.get()); if (r.ok) { learning = null; return say(a === 'hw-done' ? 'できたと先生に知らせました' : '取り消しました', 'ok'); } }
     else if (a === 'plan-ack-month') {
       const [, lines] = planGroups(money.plans).acks.find(([m]) => m === b.dataset.month) || [];
@@ -276,7 +299,7 @@ app.addEventListener('click', ev => {
       money = null; if (r && r.ok) { closeSheet(); return say('先生に伝えました。返事をお待ちください', 'ok'); }
     } else if (a === 'inv-report') { if (!confirm('振り込んだことを先生に知らせますか？')) return; r = await call('family/invoices/report', { id: b.dataset.id, version: Number(b.dataset.version) }, store.get()); if (r.ok) { closeSheet(); money = null; return say('振込のご連絡を受け付けました。ありがとうございます', 'ok'); } }
     else if (a === 'send-relief') { const s = sheetState; const reason = (s.note || '').trim(); if (!reason) return say('事情を書いてください', 'error'); r = await call('family/fees/relief', { id: b.dataset.id, version: Number(b.dataset.version), reason }, store.get()); if (r.ok) { closeSheet(); money = null; return say('申請を受け付けました。先生が確かめて返事をします', 'ok'); } }
-    else if (a === 'del-event') { r = await call('family/events/delete', { id: b.dataset.id }, store.get()); if (r.ok) { sched = null; return say('消しました', 'ok'); } }
+    else if (a === 'del-event') { r = await call('family/events/delete', { id: b.dataset.id }, store.get()); if (r.ok) { sched = null; calData = {}; return say('消しました', 'ok'); } }
     else if (a === 'logout') { await call('family/logout', {}, store.get()); store.set(''); me = null; location.hash = ''; return say('ログアウトしました', 'ok'); }
     if (r) failed(r);
   });
