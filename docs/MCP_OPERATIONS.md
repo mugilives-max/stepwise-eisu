@@ -4,6 +4,22 @@
 
 照合基準は `stepwise-eisu` の `1f0f522` と、別リポジトリ `stepwise-mcp` の `c3fc9e0`。今回の整理はローカルソースと既存文書の確認であり、Cloudflare・ChatGPT・Codexの現在の認証や本番疎通を再検証したものではありません。過去の登録済み記録を現在の疎通確認に代えず、作業目的に必要な状態を確認します。
 
+## 0. 2026-10-08 から：作り直し（v2）を読む（閲覧だけ）
+
+2026-10-08 の切り替えで、今の台帳（D1 `stepwise`）は読むだけになり、正本は v2（D1 `stepwise-v2`、API は Worker `stepwise-api` の `/v2/`）。MCP も同日から **v2 を読む**形にした（`stepwise-mcp` 0.4.0、`src/toolsV2.ts`・`src/v2.ts`）。
+
+```
+ChatGPT / Codex ─OAuth(パスフレーズ)─► Workers "stepwise-mcp"(/mcp) ─serviceKey─► Workers "stepwise-api"(/v2/…) ─► D1 stepwise-v2
+```
+
+- **鍵**：`stepwise-api` の Secret `V2_SERVICE_KEY` と、`stepwise-mcp` の Secret `STEPWISE_V2_KEY` に同じ値（36 バイトの乱数）。鍵が合えば、代表のスタッフとして **読むだけの操作**（`cf/v2/service.mjs` の `SERVICE_READS`）を通す。登録・変更は `service` のエラーで断る。鍵は Secret にだけ置く（文書・Git・チャットに書かない）。替えるときは乱数を作って両方の Secret に入れ直し、両 Worker を出し直す。
+- **MCP 側の切り替え**：`STEPWISE_V2_KEY` と `STEPWISE_API_URL` が設定されていれば、v2 の閲覧ツール 7 つだけを出す（今の仕組み向けの登録・連絡欄のツールは出さない）。無ければ今までどおり（GAS / 今の Worker 経由）。
+- **ツール**（名前と入力は前と同じ。中身は v2）：`find_student`（students/list）、`get_schedule`（schedule/staff/range。授業・連絡・共有予定・先生の休み・面談）、`get_student`（students/hub。記録・宿題・引き継ぎメモ・成績・計画・請求）、`get_pending_actions`（home/today ＋ monthly/overview）、`get_billing_summary`（billing/month ＋ billing/fees/list）、`get_teacher_off`、`get_student_wishes`（v2 に希望日程はないので共有予定を返す）。
+- **返さないもの**：メール・電話・専用リンク・Meet の URL・鍵（`scrub`）。
+- **確かめ方**：`stepwise-eisu` で `V2_SERVICE_KEY=<仮の鍵> node scripts/dev-v2-preview.mjs` を起動し、`stepwise-mcp` で `STEPWISE_API_URL=http://localhost:8790 STEPWISE_V2_KEY=<同じ鍵> node test/v2-client.mjs`。本番には触れない。
+- **登録・変更**は新しい管理画面（/staff/）で行う。MCP からの書き込みを v2 でも使いたくなったら、`SERVICE_READS` とは別に書き込みの範囲を決めてから作る。
+- 以下の 1〜 章は今の仕組み（GAS / 今の Worker）向けの記述で、切り替え後は参考。
+
 ## 1. 構成と置き場所
 
 ```

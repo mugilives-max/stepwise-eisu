@@ -18,9 +18,9 @@ function nameParts(b, base = {}) {
 
 // ログイン中のスタッフを確かめ、必要な役割を持っているか見る。c.actor に入れる
 export async function requireStaff(c, body, ...roles) {
-  const me = await readSession(c, 'staff', body.auth);
+  const me = c.serviceStaff || await readSession(c, 'staff', body.auth);
   if (!me) fail('needLogin', 'ログインし直してください', 401);
-  c.actor = { kind: 'staff', id: me.id };
+  c.actor = { kind: c.serviceStaff ? 'service' : 'staff', id: me.id };
   if (roles.length && !roles.some(r => rolesOf(me).includes(r))) fail('forbidden', 'この操作をする役割がありません', 403);
   return me;
 }

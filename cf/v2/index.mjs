@@ -25,6 +25,7 @@ import { monthlyRoutes } from './monthly.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
 import { effectsAdminRoutes, retryFailedEffects } from './effects-admin.mjs';
 import { termsRoutes } from './terms.mjs';
+import { serviceActor, SERVICE_READS } from './service.mjs';
 
 const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes, ...previewRoutes, ...homeRoutes, ...studentHubRoutes, ...monthlyRoutes, ...effectsAdminRoutes, ...termsRoutes };
 const MAX_BODY = 200000;
@@ -66,6 +67,13 @@ export async function handleV2(request, env, ctx, head = {}) {
   if ((isPreviewToken(body.auth) || isPreviewToken(body.k)) && !PREVIEW_READS.has(route)) return reply(403, { ok: false, error: { code: 'preview', message: 'プレビュー中のため、変更はできません（表示だけです）' } });
 
   const c = { env, db: env.DB2, now: Date.now(), effects: [], actor: null, userAgent: request.headers.get('user-agent') || '' };
+  // 外のサービス（MCP）の鍵: 読むだけの操作を、代表のスタッフとして通す（cf/v2/service.mjs）
+  if (body.serviceKey !== undefined) {
+    if (!SERVICE_READS.has(route)) return reply(403, { ok: false, error: { code: 'service', message: 'この鍵では読むことしかできません（登録・変更は管理画面で）' } });
+    const who = await serviceActor(c, body.serviceKey);
+    if (!who) return reply(401, { ok: false, error: { code: 'badKey', message: '鍵が正しくありません' } });
+    c.serviceStaff = who; delete body.serviceKey; delete body.auth;
+  }
   try {
     const result = await handler(c, body);
     if (c.effects.length) {
