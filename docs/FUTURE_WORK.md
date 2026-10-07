@@ -25,7 +25,7 @@
 ### 講師の給与（雇用）の残り（2026-10-07 追加）
 
 - **背景**: 講師の契約を業務委託から雇用（アルバイト）に変えた（2026-10-07 本人決定）。要件は [REQUIREMENTS.md 5-1](REQUIREMENTS.md#5-1-講師の給与の計算) と 8章。
-- **済み（2026-10-07）**: 源泉徴収を税額表の甲欄・乙欄に（`cf/v2/tax-table.mjs`、令和8年分・令和9年分）、`staff.contractType` を `employee` に（`cf/migrations-v2/0015_employment.sql`）、画面・メールの呼び方を「給与」「給与明細」に。設計は [REBUILD_DESIGN.md](REBUILD_DESIGN.md) 7段目。0015 は本番の DB2 にはまだ当てていない（v2 の公開と一緒に `cf:migrate:v2:remote`）。
+- **済み（2026-10-07）**: 源泉徴収を税額表の甲欄・乙欄に（`cf/v2/tax-table.mjs`、令和8年分・令和9年分）、`staff.contractType` を `employee` に（`cf/migrations-v2/0015_employment.sql`）、画面・メールの呼び方を「給与」「給与明細」に。設計は [REBUILD_DESIGN.md](REBUILD_DESIGN.md) 7段目。2026-10-07 に本番の DB2 へ 0015 を当て、Worker を出し直して公開した（記録は REBUILD_DESIGN.md 7段目）。
 - **次の行動**:
   - **毎年**: 国税庁が次の年の源泉徴収税額表を出したら（例年8〜9月ごろ）、`cf/v2/tax-table.mjs` に足す。令和10年分は 2027年12月分（2028年1月払い）から要る。入っていない年の明細は確定できない。
   - 授業の準備・授業記録の入力の時間の数え方が決まったら、計算に入れる（それまでは「調整」で足す）。
