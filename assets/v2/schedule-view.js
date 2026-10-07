@@ -30,39 +30,6 @@ export const endOf = (start, minutes) => { const m = Number(start.slice(0, 2)) *
 export const statusTag = l => { const [cls, label] = STATUS[l.status] || ['gray', l.status]; return `<span class="tag ${cls}">${label}${l.status === 'proposed' && l.confirmBy ? ' ' + Number(l.confirmBy.slice(5, 7)) + '/' + Number(l.confirmBy.slice(8)) + 'まで' : ''}</span>`; };
 export const requestTags = l => (l.requests || []).filter(r => r.status === 'open').map(r => `<span class="tag ${r.kind === 'cancel' ? 'danger' : 'warn'}">${REQUEST[r.kind]}</span>`).join('');
 
-// 保護者・生徒の予定の一覧（日付ごと）。choices があれば「変更・お休みの連絡」のボタンを出す
-export function familyLessonList(data, { names = {}, canRequest = true } = {}) {
-  const lessons = data.lessons.filter(l => l.date >= data.today || l.status === 'proposed');
-  if (!lessons.length) return '<p class="muted">これからの授業はありません。</p>';
-  const kari = lessons.filter(l => l.status === 'proposed' && l.confirmBy);
-  let h = kari.length ? `<p class="notice">仮予定が${kari.length}件あります。締め切りまでに連絡がなければ、この日時で決定します。都合の悪い授業だけ「変更・お休みの連絡」を押してください。</p>` : '';
-  let last = '';
-  h += '<div class="list">' + lessons.map(l => {
-    const open = (l.requests || []).find(r => r.status === 'open' || (r.kind === 'rest' && l.status === 'rested'));
-    const row = `${l.date !== last ? `<div class="day-head">${mdw(l.date)}</div>` : ''}<div><div><strong>${l.start}〜${endOf(l.start, l.minutes)}</strong> ${esc(names[l.studentId] || '')} ${esc(l.subject)}${l.kind && l.kind !== '通常' ? '（' + esc(l.kind) + '）' : ''} ${l.deliveryMode === 'online' ? '<span class="tag gray">オンライン</span>' : ''}
-      <div>${statusTag(l)}${requestTags(l)}</div>${l.meetUrl && ['decided'].includes(l.status) ? `<div class="small"><a href="${esc(l.meetUrl)}" target="_blank" rel="noopener">Meet に参加</a></div>` : ''}</div>
-      <div class="row">${open && ['move', 'late', 'cancel', 'rest'].includes(open.kind) && canRequest ? `<button data-action="withdraw" data-id="${esc(open.id)}">連絡を取り下げる</button>` : (l.choices || []).length && canRequest ? `<button data-action="change" data-id="${esc(l.id)}">変更・お休みの連絡</button>` : ''}</div></div>`;
-    last = l.date; return row;
-  }).join('') + '</div>';
-  return h;
-}
-
-// 「変更・お休みの連絡」の選ぶ画面
-export function changeDialog(l, pick, note, busy) {
-  let h = `<div class="sheet" role="dialog" aria-label="変更・お休みの連絡"><p><strong>${mdw(l.date)} ${l.start}〜${endOf(l.start, l.minutes)}</strong> ${esc(l.subject)}${l.status === 'proposed' ? '（仮予定）' : ''}</p>`;
-  if (!(l.choices || []).length) h += '<p>授業が始まっているため、ここからは連絡できません。先生に直接お知らせください。</p>';
-  else {
-    h += '<p>どうしますか？</p><div class="row">' + l.choices.map(c => `<button type="button" class="${pick === c ? 'primary' : ''}" aria-pressed="${pick === c}" data-action="pick" data-c="${c}">${choiceOf(l, c)[0]}（${choiceOf(l, c)[1]}）</button>`).join('') + '</div>';
-    if (pick) {
-      const offerRest = pick === 'rest' && l.status === 'proposed';
-      h += `<p class="small muted">${offerRest ? 'この仮予定をお休みにします。料金はかかりません。' : choiceOf(l, pick)[2]}</p>`;
-      if (!offerRest) h += `<input id="change-note" maxlength="500" value="${esc(note || '')}" placeholder="${choiceOf(l, pick)[3]}">`;
-    }
-  }
-  h += `<div class="row" style="margin-top:10px">${pick ? `<button class="${pick === 'cancel' ? 'danger' : 'primary'}" data-action="send-change"${busy ? ' disabled' : ''}>${busy ? '送っています…' : '連絡する'}</button>` : ''}<button data-action="close-change">やめる</button></div></div>`;
-  return h;
-}
-
 export function eventList(events, { names = {}, canDelete = () => false } = {}) {
   if (!events.length) return '<p class="muted">共有した予定はありません。</p>';
   return '<div class="list">' + events.map(e => `<div><div><span class="tag ${e.kind === 'unavailable' ? 'gray' : e.kind === 'test' ? 'warn' : ''}">${EVENT_KIND[e.kind]}</span> ${mdw(e.date)}${e.dateTo !== e.date ? '〜' + mdw(e.dateTo) : ''}${e.start ? ' ' + e.start + '〜' + e.end : ''} ${esc(names[e.studentId] || '')} ${esc(e.title)}</div>
