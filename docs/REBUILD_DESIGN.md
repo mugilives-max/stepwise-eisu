@@ -467,6 +467,8 @@
 - **テスト**：`test/v2-cutover.test.cjs`。
 - 手順書を、このボタンに合わせて直した（[CUTOVER_RUNBOOK.md](CUTOVER_RUNBOOK.md)）。
 
+- **切り替えの記録**：2026-10-08 01:04 JST に本番を切り替えた（[CUTOVER_RUNBOOK.md](CUTOVER_RUNBOOK.md) の記録）。以後、今の台帳（DB）は読むだけ、正本は DB2。
+
 ### プレビュー（2026-10-02）
 
 - 教室管理者が、保護者ページ・生徒ページを、その家族・生徒の目で見る（`cf/v2/preview.mjs`、`0012_preview.sql`）。「家族と生徒」の家族の画面に「保護者ページを見る（プレビュー）」「生徒ページを見る（プレビュー）」。

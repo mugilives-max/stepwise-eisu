@@ -5,7 +5,9 @@
 生徒画面・生徒プレビュー・生徒権限のAPI応答には、授業料、単価、請求額、入金額などの料金情報を含めない。CSSで隠すだけでなく、APIは学習に必要な項目だけを許可して返す。料金の閲覧・承認は認証済みの保護者と管理者に限定する。生徒と共有するコメント・授業内容にも料金を書かない。今後の画面・API追加もこの方針を必須とし、回帰テストで確認する。
 
 
-最終更新: 2026-09-23 / 管理者: 麦倉優輔 (mugilives@gmail.com)
+最終更新: 2026-10-08 / 管理者: 麦倉優輔 (mugilives@gmail.com)
+
+> **2026-10-08 に作り直し（v2）へ切り替えた。** 画面は `/staff/`・`/family/`・`/student/`、API は Worker `stepwise-api` の `/v2/`、台帳は D1 `stepwise-v2`（DB2）。構成・表・公開の記録は [REBUILD_DESIGN.md](REBUILD_DESIGN.md)、画面の組み立ては [UX_STRUCTURE.md](UX_STRUCTURE.md)、切り替えの記録は [CUTOVER_RUNBOOK.md](CUTOVER_RUNBOOK.md)。この文書の以下の記述は、今の仕組み（`/kanri/`・`/hogosha/`・`/yoyaku/`、Apps Script、D1 `stepwise`）のもので、切り替え後は読むだけ。旧 MCP（`stepwise-mcp`）は書き込みが断られ、読む内容は切り替え時点で止まる。
 
 現行の構成・台帳・API・反映手順の正本。作業対象に関係する節を参照する。共通の制約と資料案内は [AGENTS.md](../AGENTS.md)、未完了事項は [FUTURE_WORK.md](FUTURE_WORK.md)。
 
