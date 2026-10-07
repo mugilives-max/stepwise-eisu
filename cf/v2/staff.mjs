@@ -81,7 +81,7 @@ export const staffRoutes = {
     const { familyName, givenName, name } = nameParts(b), email = normEmail(b.email), roles = cleanRoles(b.roles);
     if (!validEmail(email)) fail('badEmail', 'メールアドレスを確かめてください');
     if (await c.db.prepare('select 1 from staff where email = ?').bind(email).first()) fail('duplicate', 'このメールアドレスのスタッフはすでにいます', 409);
-    const who = { id: newId('st'), name, familyName, givenName, email, roles, status: 'invited', contractType: b.contractType === 'owner' ? 'owner' : 'contractor', version: 1 };
+    const who = { id: newId('st'), name, familyName, givenName, email, roles, status: 'invited', contractType: b.contractType === 'owner' ? 'owner' : 'employee', version: 1 };
     await c.db.prepare('insert into staff (id, name, familyName, givenName, email, roles, status, contractType, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(who.id, name, familyName, givenName, email, roles, 'invited', who.contractType, iso(c.now), iso(c.now)).run();
     const inviteUrl = await issueChallenge(c, 'staff', 'staffInvite', who, INVITE_MAIL);

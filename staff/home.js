@@ -1,7 +1,7 @@
 // スタッフの「今日」（docs/UX_STRUCTURE.md 3）。上の帯に「今日」と日付。対応すること（色つきのアイコンと件数）と、今日・明日の授業（1枚の枠）。
 // 始まった決定の授業は右の鉛筆の丸ボタンで「実施済みにして記録」へ。記録が済んだ授業は ✓
-import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261003-ux31';
-import { iconBox, ICON } from '/staff/ui.js?v=20261003-ux31';
+import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261007-emp1';
+import { iconBox, ICON } from '/staff/ui.js?v=20261007-emp1';
 
 let today = null;
 export function resetToday() { today = null; }

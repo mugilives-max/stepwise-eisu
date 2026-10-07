@@ -1,5 +1,5 @@
 // スタッフの「月の仕事」（docs/UX_STRUCTURE.md 3）。月の流れの順に、どこまで済んだかをまとめる。教室管理者だけ。
-// 1〜2日: 前月分の請求 / 〜20日: 翌月の計画と予定表 / 月が終わったら〜25日: 前月分の報酬
+// 1〜2日: 前月分の請求 / 〜20日: 翌月の計画と予定表 / 月が終わったら〜25日: 前月分の給与
 // 中身はそれぞれの領域の操作をそのまま呼んで、数え直すだけ（決まりは各領域に任せる）。
 import { requireStaff } from './staff.mjs';
 import { todayJst } from './schedule.mjs';
@@ -47,14 +47,14 @@ export const monthlyRoutes = {
       proposed: lessons.filter(l => l.status === 'proposed').reduce((n, l) => n + l.n, 0),
       decided: lessons.filter(l => l.status === 'decided').reduce((n, l) => n + l.n, 0),
     };
-    // 4. 前月分の報酬
+    // 4. 前月分の給与
     const payroll = {
       month: prev, payOn: pay.payOn, staff: pay.staff.length,
       confirmed: count(pay.staff, s => s.payroll && s.payroll.status === 'confirmed'), paid: count(pay.staff, s => s.payroll && s.payroll.status === 'paid'),
       ready: count(pay.staff, s => s.preview && s.preview.canConfirm), check: pay.staff.filter(s => s.preview && s.preview.issues.length).map(s => ({ name: s.name, issues: s.preview.issues })),
       unassigned: pay.unassigned,
     };
-    // 今の時期（目安）: 1〜2日は請求、〜20日は計画と予定表、21日〜は予定表の締め切り（25日）と報酬
+    // 今の時期（目安）: 1〜2日は請求、〜20日は計画と予定表、21日〜は予定表の締め切り（25日）と給与
     const now = day <= 2 ? 'billing' : day <= 20 ? 'planning' : 'closing';
     return { today, now, billing, planning, schedule, payroll };
   },
