@@ -640,3 +640,5 @@ h2::after { display: none; }
 .rows .lesson-row { grid-template-columns: 5.4em minmax(0, 1fr) auto; }
 .rows .lesson-row .t small, .rows .ev .t { white-space: nowrap; }
 .tabs2 { margin-top: 10px; }
+.agree { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink); padding: 4px 0; }
+.agree input { width: 20px; height: 20px; }

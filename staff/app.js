@@ -11,6 +11,7 @@ import { todayPage, todayBar, todayClick, resetToday } from '/staff/home.js?v=20
 import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261008-launch1';
 import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261008-launch1';
 import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261008-launch1';
+import { termsPage, effectsPage, extrasSubmit, extrasClick, resetExtras, leaveExtras } from '/staff/extras.js?v=20261008-launch1';
 import { gradesOverviewPage, gradesStudentPage, gradesBar, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261008-launch1';
 
 const store = session('sw2_staff');
@@ -21,7 +22,7 @@ let lastPage = '';
 let me = null, busy = false, notice = null, staffList = null, shownLink = null, bootstrap = null, staffOpen = '';
 
 // 上の帯に出す画面の名前（本文には大見出しを置かない）
-const PAGE_TITLE = { monthly: '月の仕事', settings: '設定', plans: '授業計画', billing: '請求', payroll: '給与', grades: '成績', families: '家族と生徒', rates: '時給と源泉徴収', kinds: '授業の種類と標準料金', staff: 'スタッフ', account: 'アカウント', migrate: '移行と切り替え', records: '記録' };
+const PAGE_TITLE = { monthly: '月の仕事', settings: '設定', plans: '授業計画', billing: '請求', payroll: '給与', grades: '成績', families: '家族と生徒', rates: '時給と源泉徴収', kinds: '授業の種類と標準料金', staff: 'スタッフ', account: 'アカウント', migrate: '移行と切り替え', records: '記録', terms: '受講規約', effects: '送信の記録' };
 const legacyToken = () => { try { return localStorage.getItem('sw_admt') || ''; } catch { return ''; } };
 function route() {
   const h = location.hash;
@@ -63,7 +64,7 @@ function tabOf(page) {
   if (['records', 'record'].includes(page)) return 'home';
   if (['plans', 'billing'].includes(page)) return 'monthly';
   if (page === 'payroll') return m ? 'monthly' : 'payroll';
-  if (['staff', 'migrate', 'account', 'rates', 'kinds'].includes(page)) return 'settings';
+  if (['staff', 'migrate', 'account', 'rates', 'kinds', 'terms', 'effects'].includes(page)) return 'settings';
   return page;
 }
 // 戻る（入口の下の画面の左上）。来た道をたどる。直接開いたときは、その画面の入口へ
@@ -181,7 +182,7 @@ async function loadStaff() {
   if (!r.ok) { if (r.error.code === 'needLogin') return signedOut(); say(r.error.message, 'error'); staffList = []; } else staffList = r.staff;
   render();
 }
-function signedOut() { store.set(''); me = null; resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); resetToday(); resetStudents(); say('ログインし直してください', 'error'); render(); }
+function signedOut() { store.set(''); me = null; resetExtras(); resetFamilies(); resetMigrate(); resetSchedule(); resetRecords(); resetBilling(); resetGrades(); resetPayroll(); resetToday(); resetStudents(); say('ログインし直してください', 'error'); render(); }
 // 各ページ（families.js・migrate.js）に渡す共通の道具
 const ctx = {
   call: (route, body = {}) => call(route, body, store.get()), esc, render: () => render(), dis: () => dis(), notice: () => noticeHtml(),
@@ -211,6 +212,8 @@ function render() {
   else if (r.page === 'billing' && me.roles.includes('manager')) h = billingPage(ctx);
   else if (r.page === 'kinds' && me.roles.includes('manager')) h = kindsPage(ctx);
   else if (r.page === 'rates' && me.roles.includes('manager')) h = ratesPage(ctx);
+  else if (r.page === 'terms' && me.roles.includes('manager')) h = termsPage(ctx);
+  else if (r.page === 'effects' && me.roles.includes('manager')) h = effectsPage(ctx);
   else if (r.page === 'migrate' && me.roles.includes('sysadmin')) h = migratePage(ctx);
   else if (r.page === 'monthly' && me.roles.includes('manager')) h = monthlyPage(ctx);
   else if (r.page === 'settings') h = settingsPage(ctx, me);
@@ -248,7 +251,7 @@ app.addEventListener('submit', ev => {
   const submitter = ev.submitter;
   captureRecordInputs(); // 記録の画面の書きかけを、描き直す前に覚えておく
   run(async () => {
-    if (await familiesSubmit(ctx, kind, el) || await scheduleSubmit(ctx, kind, el) || await recordsSubmit(ctx, kind, el, { submitter }) || await billingSubmit(ctx, kind, el) || await gradesSubmit(ctx, kind, el) || await payrollSubmit(ctx, kind, el) || await migrateSubmit(ctx, kind, el)) return;
+    if (await extrasSubmit(ctx, kind, el) || await familiesSubmit(ctx, kind, el) || await scheduleSubmit(ctx, kind, el) || await recordsSubmit(ctx, kind, el, { submitter }) || await billingSubmit(ctx, kind, el) || await gradesSubmit(ctx, kind, el) || await payrollSubmit(ctx, kind, el) || await migrateSubmit(ctx, kind, el)) return;
     let r;
     if (kind === 'login') { r = await call('staff/login', v); if (r.ok) return signedIn(r); }
     else if (kind === 'forgot') { r = await call('staff/reset/request', v); if (r.ok) return say(r.message, 'ok'); }
@@ -283,7 +286,7 @@ document.addEventListener('click', ev => {
   if (a === 'gr-resolve') { const sel = document.querySelector(`[data-resolve-exam="${b.dataset.id}"]`); b.dataset.exam = sel ? sel.value : ''; }
   captureRecordInputs();
   run(async () => {
-    if (await todayClick(ctx, a, b) || await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b) || await billingClick(ctx, a, b) || await gradesClick(ctx, a, b) || await payrollClick(ctx, a, b)) return;
+    if (await todayClick(ctx, a, b) || await extrasClick(ctx, a, b) || await familiesClick(ctx, a, b) || await migrateClick(ctx, a) || await scheduleClick(ctx, a, b) || await recordsClick(ctx, a, b) || await billingClick(ctx, a, b) || await gradesClick(ctx, a, b) || await payrollClick(ctx, a, b)) return;
     let r;
     if (a === 'bootstrap') {
       r = await call('staff/bootstrap', { legacyToken: legacyToken() });
@@ -318,7 +321,7 @@ window.addEventListener('hashchange', () => {
   if (pg === 'monthly') resetMonthly();
   if ((pg === 'student' && lastPage !== 'student') || pg === 'students') resetStudents();
   lastPage = pg;
-  if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); leaveRecords(pg); leaveGrades(); leaveBilling(); leavePayroll(); say(''); moveTo(navKind); });
+  if (!['invite', 'reset'].includes(route().page)) inviteInfo = null; leaveFamilies(); leaveExtras(); leaveRecords(pg); leaveGrades(); leaveBilling(); leavePayroll(); say(''); moveTo(navKind); });
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function moveTo(kind) {
   if (!kind || !document.startViewTransition || reduced()) { render(); if (kind) fadeIn(); return; }

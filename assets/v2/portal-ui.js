@@ -177,6 +177,17 @@ export function planGroups(plans) {
 }
 export const inquirySheet = (month, note, busy) => sheet(esc, `${monthLabel(month)}の授業計画について`, `<p class="small muted">違うところや確かめたいことを書いてください。先生に届きます。</p><textarea id="inquiry-note" rows="3" maxlength="500" placeholder="例: 英語は 4 回ではなく 3 回で話していました">${esc(note || '')}</textarea><div class="row" style="margin-top:10px"><button class="primary wide" data-action="send-inquiry" data-month="${esc(month)}"${busy ? ' disabled' : ''}>${busy ? '送っています…' : '先生に伝える'}</button></div>`, 'close-sheet');
 
+// ---- 受講規約（同意が要るとき） ----
+export function termsCard(terms, { busy = false, checked = false } = {}) {
+  const t = terms.current;
+  return `<div class="pcard ask" data-terms="${esc(t.version)}"><div class="pc-head"><strong>${esc(t.title || '受講規約')}</strong><span class="tag warn">同意をお願いします</span></div>
+    <p class="small">${t.from ? `${esc(t.from)} から適用されます。` : ''}${t.note ? esc(t.note) : '授業計画を承認する前に、受講規約をお読みください。'}${terms.agreed.version ? `<br><span class="muted">前の版（${esc(terms.agreed.version)}）には同意いただいています。</span>` : ''}</p>
+    ${t.url ? `<a class="btn wide" href="${esc(t.url)}" target="_blank" rel="noopener">${picon('file')} 規約の全文を読む</a>` : '<p class="small muted">全文は教室からお渡しします。</p>'}
+    <label class="agree"><input type="checkbox" id="terms-agree"${checked ? ' checked' : ''}> 全文を読み、内容に同意します</label>
+    <button class="primary wide" data-action="terms-accept" data-version="${esc(t.version)}"${busy ? ' disabled' : ''}>同意する</button></div>`;
+}
+export const termsLine = terms => terms && terms.agreed.version ? `<p class="small muted">受講規約 ${esc(terms.agreed.version)} に同意済み（${esc(String(terms.agreed.at).slice(0, 10))}）${terms.current.url ? `・<a href="${esc(terms.current.url)}" target="_blank" rel="noopener">全文</a>` : ''}</p>` : '';
+
 // ---- 請求 ----
 const INV = { confirmed: ['お支払い待ち', 'warn'], reported: ['入金の確認待ち', ''], paid: ['お支払い済み', 'ok'] };
 export function invoiceRows(invoices) {

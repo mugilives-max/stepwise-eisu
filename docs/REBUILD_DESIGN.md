@@ -432,6 +432,17 @@
 - **テスト**：`test/v2-payroll.test.cjs`（税額表の値・支払日の年の表・甲欄乙欄を含む）。
 - **公開の記録（雇用に合わせた分、2026-10-07）**：本番の DB2 に `0015_employment.sql` を当てた（当てる前の Time Travel の復元点 `0000006f-00000000-000050fd-2a1aaddce7d79fa4bfe7218d8b0aeb37`。当時の staff は代表1人だけ）→ Worker `392c002e-9df5-44c6-ac06-789d6cee0f56` → 画面（PR #5 のマージ）の順。ログインの要る API が needLogin を返す（壊れていない）ことを確かめた。
 
+### 10段目：受講規約の版と同意、送れなかったメールの送り直し（2026-10-08）
+
+- **受講規約の版**（`cf/v2/terms.mjs`、`0016_terms.sql`）：今の版は settings（`termsVersion`・`termsTitle`・`termsUrl`・`termsFrom`・`termsNote`）。教室管理者が「設定 → 受講規約」で決める（`admin/terms/set`）。版が空なら同意は求めない。
+  - 保護者は「お支払い」の上に出る規約のカードで全文（リンク）を読み、「同意します」に印を付けて同意する（`family/terms/accept`）。families の `termsVersion`／`termsAcceptedAt` に加え、`termsConsents` に履歴（版・日時・経路・だれが）。
+  - 今の版に同意していない家族は、計画を**承認できない**（`family/plans/decide` が `needTerms`。見送りはできる）。承認した行には `planLines.termsVersion` を残す。先生が LINE などの承諾を記録したとき（`billing/plans/consent`）も、そのときの版を残す。
+  - 書面や LINE でもらった同意は、家族の画面の「同意を記録」（`admin/families/terms`）。設定の「受講規約」に同意の記録の一覧と、同意した家族の数。
+  - 版を変えると、全家族が「同意が要る」に戻る。統合3の D07（規約の版・計画の版・承認者・日時・経路を残す）のうち、規約の版と経路はここで、計画の版と承認者は planLines で持つ。
+- **送れなかったメール・カレンダー**（`cf/v2/effects-admin.mjs`）：effects 表の failed と、10 分以上たっても pending のものを「設定 → 送信の記録」に出す（`admin/effects/list`）。1 件ずつ・まとめて送り直す（`admin/effects/retry`）、取り下げる（`admin/effects/dismiss`）。毎日の定期実行（`runV2Scheduled`）が 48 時間以内に失敗したものを 3 回まで送り直す。「今日」の対応することに「送れなかったお知らせ」の数。
+- **テスト**：`test/v2-terms-effects.test.cjs`。
+- **公開の記録**：（マージのときに書く）
+
 ### 8段目：移行の道具とリハーサル（2026-10-02）
 
 - **照らし合わせ**（`admin/migrate/check`、`cf/v2/migrate-check.mjs`）：今の台帳の元の表を直接数えて、新しい台帳と並べる（写す道具の計画を通さないので、取りこぼしも見つかる）。家族・保護者の登録・生徒・専用リンク・講師、授業（状態ごと）・連絡・共有予定・休み、授業記録・宿題・引き継ぎメモ、計画・キャンセル料（件数と金額）・請求と入金（金額）。

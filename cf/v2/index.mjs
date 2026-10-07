@@ -23,8 +23,10 @@ import { homeRoutes } from './home.mjs';
 import { studentHubRoutes } from './student-hub.mjs';
 import { monthlyRoutes } from './monthly.mjs';
 import { recordEffects, deliverEffects } from './effects.mjs';
+import { effectsAdminRoutes, retryFailedEffects } from './effects-admin.mjs';
+import { termsRoutes } from './terms.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes, ...previewRoutes, ...homeRoutes, ...studentHubRoutes, ...monthlyRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes, ...previewRoutes, ...homeRoutes, ...studentHubRoutes, ...monthlyRoutes, ...effectsAdminRoutes, ...termsRoutes };
 const MAX_BODY = 200000;
 
 // 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
@@ -36,6 +38,7 @@ export async function runV2Scheduled(env, now = Date.now()) {
   result.tests = await remindTestResults(c);
   result.files = await cleanupFiles(c);
   if (c.effects.length) await deliverEffects(env, c.db, await recordEffects(c.db, c.effects, c.now));
+  result.effects = await retryFailedEffects(env, c.db, c.now); // 送れなかったメール・カレンダーを送り直す（3 回まで）
   return result;
 }
 
