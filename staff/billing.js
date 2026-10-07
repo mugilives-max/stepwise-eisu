@@ -17,7 +17,7 @@ const monthLabel = m => `${m.slice(0, 4)}年${Number(m.slice(5))}月`;
 const LINE_STATUS = { draft: ['下書き', 'gray'], proposed: ['承認待ち', 'warn'], approved: ['承認', 'ok'], declined: ['見送り', 'gray'] };
 const INV_STATUS = { confirmed: ['お支払い待ち', 'warn'], reported: ['振込の連絡あり', 'warn'], paid: ['入金済み', 'ok'], void: ['取消', 'gray'] };
 const FEE_TYPE = { late: '開始前の連絡', noshow: '開始後・連絡なし' };
-const monthPicker = (m, action) => `<div class="row"><button data-action="${action}" data-d="-1">◀</button><strong style="min-width:8em;text-align:center">${monthLabel(m)}</strong><button data-action="${action}" data-d="1">▶</button></div>`;
+const monthPicker = (m, action) => `<div class="mpick"><button class="icon" data-action="${action}" data-d="-1" aria-label="前の月">‹</button><strong>${monthLabel(m)}</strong><button class="icon" data-action="${action}" data-d="1" aria-label="次の月">›</button></div>`;
 
 // ---------- 計画 ----------
 function needPlans(ctx) {
@@ -30,30 +30,28 @@ function needPlans(ctx) {
 export function plansPage(ctx) {
   const { esc } = ctx;
   needPlans(ctx);
-  let h = `<div class="page-head"><h1>授業計画</h1></div><p class="sub" style="margin-top:0">月ごとの授業計画（科目・回数・1回の時間・1回の授業料）。下書きを作って家族にお知らせし、保護者が承認します。料金は承認した計画で決まります。</p>${ctx.notice()}${monthPicker(planMonth, 'pl-month')}`;
+  let h = `${monthPicker(planMonth, 'pl-month')}${ctx.notice()}`;
   if (plans.loading) return h + '<p class="muted">読み込んでいます…</p>';
-  h += `<p><button data-action="pl-copy"${ctx.dis()}>先月と同じ内容で下書きを作る（在籍の全員）</button></p>`;
+  h += `<p class="small" style="margin:0 0 4px"><button class="small-btn" data-action="pl-copy"${ctx.dis()}>先月と同じ内容で下書きを作る</button></p>`;
   const byFamily = {};
   for (const s of plans.students) (byFamily[s.familyId] = byFamily[s.familyId] || []).push(s);
   for (const group of Object.values(byFamily)) {
     const drafts = group.reduce((n, s) => n + s.lines.filter(l => l.status === 'draft').length, 0);
     const asks = group.flatMap(s => s.lines.filter(l => l.status === 'proposed')), last = asks.map(l => l.remindedAt).filter(Boolean).sort().at(-1) || '';
-    h += `<div class="sheet stack"><div class="row" style="justify-content:space-between"><strong>${esc(group[0].familyLabel)}</strong><div class="row">${drafts ? `<button class="primary" data-action="pl-send" data-family="${esc(group[0].familyId)}"${ctx.dis()}>下書き ${drafts}件をお知らせする</button>` : ''}${asks.length ? remindButton(ctx, group[0].familyId, asks.length, last) : ''}</div></div>`;
+    h += `<div class="fam-head"><span>${esc(group[0].familyLabel)}</span><span class="row">${drafts ? `<button class="small-btn primary" data-action="pl-send" data-family="${esc(group[0].familyId)}"${ctx.dis()}>下書き ${drafts}件をお知らせ</button>` : ''}${asks.length ? remindButton(ctx, group[0].familyId, asks.length, last) : ''}</span></div>`;
     for (const s of group) h += studentPlans(ctx, s);
-    h += '</div>';
   }
   if (!plans.students.length) h += '<p class="muted">在籍の生徒がいません。</p>';
   h += planSheet(ctx);
-  h += '<p class="small muted" style="margin-top:16px">授業の種類と標準料金は「設定」にあります（<a href="#kinds">開く</a>）。</p>';
+  h += '<p class="small muted" style="margin-top:16px">料金は承認した計画で決まります。授業の種類と標準料金は<a href="#kinds">設定</a>にあります。</p>';
   return h;
 }
 function studentPlans(ctx, s) {
   const { esc } = ctx;
-  let h = `<div><h3 style="margin:8px 0 4px">${esc(s.name)} <span class="small muted">基本単価 ${yen(s.baseRate30)}/30分${s.status === 'paused' ? '・休会' : ''}</span></h3>`;
-  if (s.unplanned) h += `<p class="small notice">計画に入っていない授業が ${s.unplanned}件あります（承認がないと請求できません）。</p>`;
-  if (s.lines.length) h += '<div class="rows">' + s.lines.map(l => lineRow(ctx, s, l)).join('') + '</div>';
-  else h += '<p class="small muted">この月の計画はまだありません。</p>';
-  h += `<p style="margin:6px 0 4px"><button class="small-btn" data-action="pl-add" data-id="${esc(s.id)}"${ctx.dis()}>＋ 計画を足す</button></p>`;
+  let h = `<div class="group"><div class="sub-head"><strong>${esc(s.name)}</strong><small class="muted">基本単価 ${yen(s.baseRate30)}/30分${s.status === 'paused' ? '・休会' : ''}</small><button class="mini-btn" data-action="pl-add" data-id="${esc(s.id)}" aria-label="${esc(s.name)} の計画を足す"${ctx.dis()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
+  if (s.unplanned) h += `<p class="small notice" style="margin:6px 0">計画に入っていない授業が ${s.unplanned}件あります（承認がないと請求できません）。</p>`;
+  if (s.lines.length) h += s.lines.map(l => lineRow(ctx, s, l)).join('');
+  else h += '<p class="small muted" style="padding:6px 0 10px">この月の計画はまだありません。</p>';
   return h + '</div>';
 }
 const lineCount = l => l.status === 'approved' && l.approvedCount !== l.count ? `${l.approvedCount}回（お知らせ ${l.count}回）` : `${l.count}回`;
@@ -115,11 +113,11 @@ function lineForm(ctx, s, l) {
 export function kindsPage(ctx) {
   const { esc } = ctx;
   needPlans(ctx);
-  let h = `<div class="page-head"><h1>授業の種類と標準料金</h1></div><p class="sub">計画を作るときの初期値です。標準の料金が0円なら、生徒の基本単価で計算します。</p>${ctx.notice()}`;
+  let h = ctx.notice();
   if (plans.loading) return h + '<p class="muted">読み込んでいます…</p>';
-  h += '<div class="rows">' + plans.kinds.map(k => rowButton(esc, 'kind-open', { name: k.name }, `${esc(k.name)}${k.active ? '' : ' <span class="tag gray">使わない</span>'}`,
+  h += '<div class="group" style="margin-top:12px">' + plans.kinds.map(k => rowButton(esc, 'kind-open', { name: k.name }, `${esc(k.name)}${k.active ? '' : ' <span class="tag gray">使わない</span>'}`,
     `標準 ${k.standardMinutes ? k.standardMinutes + '分' : '時間なし'}・${k.standardFee ? yen(k.standardFee) : '生徒の基本単価'}`)).join('') + '</div>';
-  h += `<p style="margin-top:12px"><button data-action="kind-open" data-name=""${ctx.dis()}>種類を足す</button></p>`;
+  h += `<p style="margin-top:12px"><button data-action="kind-open" data-name=""${ctx.dis()}>＋ 種類を足す</button></p><p class="small muted">計画を作るときの初期値です。標準の料金が0円なら、生徒の基本単価で計算します。</p>`;
   if (kindOpen !== null) {
     const k = plans.kinds.find(x => x.name === kindOpen);
     const body = `<form class="stack" data-form="kind-save">${k ? `<input type="hidden" name="name" value="${esc(k.name)}">` : '<label>名前<input name="name" maxlength="20" placeholder="例: 講習" required></label>'}
@@ -140,16 +138,16 @@ export function billingPage(ctx) {
     ctx.call('billing/month', { month: want }).then(r => { if (billMonth !== want) return; bill = r.ok ? r : { month: want, families: [], voided: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); });
   }
   if (!fees) { fees = { loading: true }; ctx.call('billing/fees/list').then(r => { fees = r.ok ? r : { fees: [] }; ctx.render(); }); }
-  let h = `<div class="page-head"><h1>請求</h1></div><p class="sub" style="margin-top:0">家族ごと・月ごとの請求。月の分は翌月3日の0時10分に自動で確定します（確かめることがある家族は止まります）。1日・2日に内容を確かめてください。</p>${ctx.notice()}`;
+  let h = ctx.notice();
   h += feesPart(ctx);
-  h += `<h2>月の請求</h2>${monthPicker(billMonth, 'bl-month')}`;
+  h += `<div class="sec-title">月の請求</div>${monthPicker(billMonth, 'bl-month')}`;
   if (bill.loading) return h + '<p class="muted">読み込んでいます…</p>';
-  if (!bill.families.length) h += '<p class="muted">この月に請求するものはありません。</p>';
-  h += '<div class="rows">' + bill.families.map(f => {
+  if (!bill.families.length) h += '<p class="muted small">この月に請求するものはありません。</p>';
+  else h += '<div class="group">' + bill.families.map(f => {
     const st = invStatus(f), n = f.preview ? f.preview.issues.length : 0;
-    return rowButton(esc, 'bl-open', { id: f.familyId }, `${esc(f.name)} <span class="tag ${st[1]}">${st[0]}</span>`,
-      `${yen(f.invoice ? f.invoice.total : f.preview.total)}${n ? `・確かめること ${n}件` : ''}${f.preview && f.preview.pendingCount ? `・承認のない授業 ${f.preview.pendingCount}件` : ''}`);
+    return `<button type="button" class="irow" data-action="bl-open" data-id="${esc(f.familyId)}"><span class="b"><b>${esc(f.name)}</b><small><span class="tag ${st[1]}">${st[0]}</span>${n ? ` 確かめること ${n}件` : ''}${f.preview && f.preview.pendingCount ? ` 承認のない授業 ${f.preview.pendingCount}件` : ''}</small></span><span class="amt">${yen(f.invoice ? f.invoice.total : f.preview.total)}</span><span class="go">›</span></button>`;
   }).join('') + '</div>';
+  h += '<p class="small muted">月の分は翌月3日の0時10分に自動で確定します（確かめることがある家族は止まります）。1日・2日に内容を確かめてください。</p>';
   const f = openFamily && bill.families.find(x => x.familyId === openFamily);
   if (f) {
     const st = invStatus(f);
@@ -202,10 +200,10 @@ function feesPart(ctx) {
   if (fees.loading) return '';
   const open = fees.fees.filter(f => f.decision === 'pending' || f.reliefStatus === 'pending');
   const rest = fees.fees.filter(f => !open.includes(f) && !f.invoiceId);
-  let h = `<h2>キャンセル料${open.length ? ` <span class="count">${open.length}</span>` : ''}</h2>`;
+  let h = `<div class="sec-title">キャンセル料${open.length ? ` <span class="count">${open.length}</span>` : ''}</div>`;
   if (!fees.fees.length) return h + '<p class="small muted">請求前のキャンセル料はありません。</p>';
   const title = f => `${esc(f.studentName)} ${md(f.date)} ${esc(f.start)} ${esc(f.subject)}`;
-  h += '<div class="rows">' + open.map(f => rowButton(esc, 'fee-open', { id: f.id }, `${title(f)} <span class="tag danger">${f.reliefStatus === 'pending' ? '減額・免除の申請' : '判断待ち'}</span>`, `${FEE_TYPE[f.type]}・規定額 ${yen(f.standardAmount)}`)).join('')
+  h += '<div class="group">' + open.map(f => rowButton(esc, 'fee-open', { id: f.id }, `${title(f)} <span class="tag danger">${f.reliefStatus === 'pending' ? '減額・免除の申請' : '判断待ち'}</span>`, `${FEE_TYPE[f.type]}・規定額 ${yen(f.standardAmount)}`)).join('')
     + rest.map(f => `<div class="todo"><span class="b"><strong>${title(f)}</strong><small class="muted">${f.rule === 'rate' && f.decision === 'charge' ? '自動' : f.decision === 'charge' ? '規定どおり' : f.decision === 'waive' ? '免除' : '減額'} ${yen(f.amount)}${f.note ? '・' + esc(f.note) : ''}${f.reliefStatus ? '・申請への回答済み' : ''}（請求前）${(f.parts || []).length ? '<br>' + f.parts.map(p => esc(partText(p, f.date))).join('<br>') : ''}</small></span></div>`).join('') + '</div>';
   const f = feeOpen && open.find(x => x.id === feeOpen);
   if (f) {

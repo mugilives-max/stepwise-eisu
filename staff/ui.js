@@ -24,6 +24,10 @@ export const ICON = {
   plan: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4M9 14.5l2 2 4-4"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   video: '<rect x="3.5" y="6.5" width="12" height="11" rx="2"/><path d="M15.5 10.5l5-3v9l-5-3"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  payroll: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+  person: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>',
+  swap: '<path d="M4 7h13l-3-3M20 17H7l3 3"/>',
 };
 export const iconBox = (k, label) => `<span class="ibox i-${k}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg></span>`;
 export const miniIcon = (k, on, label) => `<span class="mini-i${on ? ' on' : ''}" title="${label}" aria-label="${label}${on ? 'あり' : 'なし'}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg></span>`;

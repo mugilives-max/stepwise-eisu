@@ -51,6 +51,7 @@ export function studentsInput(ctx, name, el) {
 }
 
 // ---------- 1人の生徒 ----------
+export const studentHubBar = () => hub && hub.student ? { title: hub.student.name, sub: [hub.student.grade || '', hub.student.status === 'paused' ? '休会' : hub.student.status === 'left' ? '退会' : ''].filter(Boolean).join('・'), right: '' } : { title: '生徒', sub: '', right: '' };
 export function studentPage(ctx, id, tab) {
   const { esc } = ctx;
   if (hubFor !== id) { hubFor = id; hub = null; ctx.call('students/hub', { studentId: id }).then(r => { if (hubFor !== id) return; hub = r.ok ? r : { error: r.error.message }; if (!r.ok) ctx.handleAuth(r); ctx.render(); }); }
@@ -59,7 +60,7 @@ export function studentPage(ctx, id, tab) {
   if (hub.error) return h + `<p class="notice error">${esc(hub.error)}</p>`;
   const s = hub.student, tabs = TABS.filter(t => !t[2] || hub.manager);
   if (!tabs.some(t => t[0] === tab)) tab = 'summary';
-  h += `<div class="page-head"><h1>${esc(s.name)}</h1><span class="muted">${esc(s.grade || '')}${s.status === 'paused' ? '・休会' : s.status === 'left' ? '・退会' : ''}</span></div>${ctx.notice()}`;
+  h += ctx.notice();
   h += '<div class="tabs2" role="tablist">' + tabs.map(([k, label]) => `<a role="tab" href="#student=${encodeURIComponent(s.id)}/${k}" class="${k === tab ? 'on' : ''}"${k === tab ? ' aria-selected="true"' : ''}>${label}</a>`).join('') + '</div>';
   return h + ({ summary, schedule, records, grades, money, basic }[tab])(ctx, hub);
 }

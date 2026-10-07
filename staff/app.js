@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
 // 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 給与（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261008-launch1';
+import { familiesPage, familyDetailPage, familyBar, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261008-launch1';
 import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261008-launch1';
 import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261008-launch1';
 import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261008-launch1';
 import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261008-launch1';
-import { studentsPage, studentsBar, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261008-launch1';
+import { studentsPage, studentsBar, studentHubBar, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261008-launch1';
 import { todayPage, todayBar, todayClick, resetToday } from '/staff/home.js?v=20261008-launch1';
 import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261008-launch1';
 import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261008-launch1';
 import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261008-launch1';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261008-launch1';
+import { gradesOverviewPage, gradesStudentPage, gradesBar, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261008-launch1';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -20,6 +20,8 @@ const app = document.getElementById('app'), nav = document.getElementById('nav')
 let lastPage = '';
 let me = null, busy = false, notice = null, staffList = null, shownLink = null, bootstrap = null, staffOpen = '';
 
+// 上の帯に出す画面の名前（本文には大見出しを置かない）
+const PAGE_TITLE = { monthly: '月の仕事', settings: '設定', plans: '授業計画', billing: '請求', payroll: '給与', grades: '成績', families: '家族と生徒', rates: '時給と源泉徴収', kinds: '授業の種類と標準料金', staff: 'スタッフ', account: 'アカウント', migrate: '移行と切り替え', records: '記録' };
 const legacyToken = () => { try { return localStorage.getItem('sw_admt') || ''; } catch { return ''; } };
 function route() {
   const h = location.hash;
@@ -84,7 +86,7 @@ function renderBack(r) {
   if (html) bar.insertAdjacentHTML('afterbegin', html);
   document.body.classList.toggle('has-back', !!html);
   // 記録を書く画面: 上の帯に名前と日時・三本線（「ステップワイズ」は出さない）。下のメニューは隠して、その画面だけにする
-  const info = !me ? null : r.page === 'record' ? recordBar() : r.page === 'home' ? todayBar() : r.page === 'students' ? studentsBar() : null; // 上の帯に画面の名前（記録・今日）
+  const info = !me ? null : r.page === 'record' ? recordBar() : r.page === 'home' ? todayBar() : r.page === 'students' ? studentsBar() : r.page === 'student' ? studentHubBar() : r.page === 'family' ? familyBar() : r.page === 'gradesOf' ? gradesBar() : PAGE_TITLE[r.page] ? { title: PAGE_TITLE[r.page], sub: '', right: '' } : null; // 上の帯に画面の名前
   bar.querySelectorAll('.bar-title, .bar-right').forEach(x => x.remove());
   if (info) {
     const back = bar.querySelector('a.back');
@@ -143,7 +145,7 @@ function resetPage() { return `<h1>新しいパスワード</h1>${noticeHtml()}$
 
 // ---------- ログインしたあとの画面 ----------
 function accountPage() {
-  return `<div class="page-head"><h1>アカウント</h1></div><p>${esc(me.name)}（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
+  return `<p style="margin-top:14px"><strong>${esc(me.name)}</strong>（${esc(me.email)}）</p><p>${roleTags(me.roles)}</p>${noticeHtml()}
     <h2>パスワードを変える</h2><form class="stack" data-form="password"><input type="email" value="${esc(me.email)}" autocomplete="username" hidden>
     <label>今のパスワード<input type="password" name="current" autocomplete="current-password" required></label>
     <label>新しいパスワード（12文字以上）<input type="password" name="next" autocomplete="new-password" minlength="12" maxlength="128" required></label>
@@ -154,12 +156,12 @@ function accountPage() {
 const roleChecks = (name, chosen) => `<div class="checks">${Object.keys(ROLE_LABEL).map(r => `<label><input type="checkbox" name="${name}" value="${r}"${chosen.includes(r) ? ' checked' : ''}> ${ROLE_LABEL[r]}</label>`).join('')}</div>`;
 function staffPage() {
   if (!me.roles.includes('sysadmin')) return '<h1>スタッフ</h1><p class="notice error">システム管理者だけが使えます。</p>';
-  if (!staffList) { loadStaff(); return '<h1>スタッフ</h1><p class="muted">読み込んでいます…</p>'; }
-  let h = `<div class="page-head"><h1>スタッフ</h1></div><p class="sub">講師は担当の授業と生徒だけ、教室管理者は運営のすべて、システム管理者は設定とアカウントを扱えます。</p>${noticeHtml()}`;
+  if (!staffList) { loadStaff(); return '<p class="muted" style="margin-top:20px">読み込んでいます…</p>'; }
+  let h = noticeHtml();
   if (shownLink) h += `<div class="notice ok"><p>${esc(shownLink.name)} さんに招待のメールを送りました。届かないときは、このリンクを LINE などで渡してください（7日有効・1回だけ使えます）。</p><p class="copy">${esc(shownLink.url)}</p><button data-action="copy-link"${dis()}>リンクをコピー</button></div>`;
-  h += '<div class="rows">' + staffList.map(s => rowButton(esc, 'st-open', { id: s.id }, `${esc(s.name)} <span class="tag ${s.status === 'active' ? '' : s.status === 'invited' ? 'warn' : 'gray'}">${STATUS_LABEL[s.status] || s.status}</span>`,
+  h += '<div class="group" style="margin-top:12px">' + staffList.map(s => rowButton(esc, 'st-open', { id: s.id }, `${esc(s.name)} <span class="tag ${s.status === 'active' ? '' : s.status === 'invited' ? 'warn' : 'gray'}">${STATUS_LABEL[s.status] || s.status}</span>`,
     esc(s.roles.map(r => ROLE_LABEL[r] || r).join('・') + '・' + s.email))).join('') + '</div>';
-  h += `<p style="margin-top:12px"><button class="primary" data-action="st-open" data-id="new"${dis()}>スタッフを招待する</button></p>`;
+  h += `<p style="margin-top:12px"><button data-action="st-open" data-id="new"${dis()}>＋ スタッフを招待する</button></p><p class="small muted">講師は担当の授業と生徒だけ、教室管理者は運営のすべて、システム管理者は設定とアカウントを扱えます。</p>`;
   if (staffOpen === 'new') {
     h += sheet(esc, 'スタッフを招待する', `<form class="stack" data-form="invite-staff"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" required></label><label style="flex:1">名<input name="givenName" maxlength="30"></label></div>
       <label>メールアドレス<input type="email" name="email" required></label><div><div class="small muted">役割</div>${roleChecks('roles', ['teacher'])}</div>
