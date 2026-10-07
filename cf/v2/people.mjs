@@ -1,5 +1,6 @@
 // 家族・生徒の管理（教室管理者）と、保護者・生徒から見た自分の情報。家族が根っこ（生徒は必ず家族に属する）。
 import { fail, newId, normEmail, validEmail, iso, audit } from './util.mjs';
+import { isPreviewToken, previewSubject } from './preview.mjs';
 import { requireStaff } from './staff.mjs';
 import { requireFamily } from './family.mjs';
 import { issueChallenge, revokeSessions, SITE } from './accounts.mjs';
