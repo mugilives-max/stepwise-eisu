@@ -28,14 +28,13 @@ function pagesText(p) { const s = String(p || '').trim().replace(/^p\.?\s*/i, ''
 // 「記録」: 記録待ちと、宿題の確認待ち。宿題は押すと下から「確認した・やり直し」
 export function recordsPage(ctx) {
   const { esc } = ctx;
-  const head = `<div class="page-head"><h1>記録</h1></div>`;
-  if (!pending) { ctx.call('records/pending').then(r => { pending = r.ok ? r : { lessons: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); }); return head + '<p class="muted">読み込んでいます…</p>'; }
+  if (!pending) { ctx.call('records/pending').then(r => { pending = r.ok ? r : { lessons: [] }; if (!r.ok && !ctx.handleAuth(r)) ctx.say(r.error.message, 'error'); ctx.render(); }); return '<p class="muted" style="margin-top:20px">読み込んでいます…</p>'; }
   if (!reported) { ctx.call('homework/reported').then(r => { reported = r.ok ? r.homework : []; ctx.render(); }); }
-  let h = head + ctx.notice();
+  let h = ctx.notice();
   if (pending.unreadHandover) h += `<p class="notice">まだ読んでいない引き継ぎメモが ${pending.unreadHandover}件あります。記録を書く画面に出ます。</p>`;
-  h += `<h2>記録待ち${pending.lessons.length ? ` <span class="count">${pending.lessons.length}</span>` : ''}</h2>`;
+  h += `<div class="sec-title">記録待ち${pending.lessons.length ? ` <span class="count">${pending.lessons.length}</span>` : ''}</div>`;
   h += pending.lessons.length ? '<div class="rows">' + pending.lessons.map(l => rowLink('#record=' + encodeURIComponent(l.id), `${mdw(l.date)} ${l.start} ${esc(l.studentName)}`, esc(l.subject), l.draft ? '<span class="tag warn">下書き</span>' : '')).join('') + '</div><p class="small muted">直近60日の、実施済み・始まった授業のうち記録がないもの。</p>' : '<p class="muted small">記録待ちの授業はありません。</p>';
-  h += `<h2>宿題の確認待ち${reported && reported.length ? ` <span class="count">${reported.length}</span>` : ''}</h2>`;
+  h += `<div class="sec-title">宿題の確認待ち${reported && reported.length ? ` <span class="count">${reported.length}</span>` : ''}</div>`;
   if (!reported) h += '<p class="muted small">読み込んでいます…</p>';
   else h += reported.length ? '<div class="rows">' + reported.map(w => rowButton(esc, 'hw-open', { id: w.id }, `${esc(w.studentName)} ${esc(hwText(w))}`, `${esc(w.dueSubject || '')}・できたと報告 ${esc(String(w.reportedAt).slice(5, 16).replace('T', ' ').replace('-', '/'))}`)).join('') + '</div>' : '<p class="muted small">確認待ちの宿題はありません。</p>';
   const w = hwOpen && reported && reported.find(x => x.id === hwOpen);
