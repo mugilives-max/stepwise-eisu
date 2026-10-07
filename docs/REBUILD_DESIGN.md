@@ -419,7 +419,7 @@
 - **表**（`cf/migrations-v2/0011_payroll.sql`）：`payrollMonths`（講師ごと・月ごとの明細。確定・支払い済み・取消）、`payrollItems`（授業・面談・調整の行）、`payrollAdjustments`（確定の前に足す調整）、`lessons.payrollId`・`meetings.payrollId`（明細に入ったもの）。時給は1段目からある `staffRates`（変えた月から）。
   - `0015_employment.sql`（2026-10-07）：講師は雇用（アルバイト）にしたので、`staff.contractType` を `owner`／`employee`（前は `contractor`＝業務委託）にし、`staff.withholding`（する・しない）をやめて `staff.taxColumn`（`kou` 甲欄／`otsu` 乙欄。既定は乙欄）と `staff.dependents`（扶養親族等の数 0〜7）を持つ。確定した明細にも `taxColumn`・`dependents` を残す（`''` は業務委託として 10.21% で計算した前の明細）。staff は多くの表から参照されるので表を作り直さず、列を足して → 古い列を消して → 名前を変える。
 - **計算**（`cf/v2/payroll.mjs`）
-  - 数える：実施済みの担当授業（代講は実際に担当した講師）と、日が過ぎて取りやめでない面談（面談に「実施済み」の操作はまだないため）。交通費は払わない。授業の準備・記録の入力の時間の数え方はまだ決めていない（決まるまでは「調整」で足す）。代表（contractType = owner）は数えない。
+  - 数える：実施済みの担当授業（代講は実際に担当した講師）と、日が過ぎて取りやめでない面談（面談に「実施済み」の操作はまだないため）。交通費は払わない。授業の準備・記録の入力は、数えた授業1コマごとに10分を埼玉県の最低賃金（`cf/v2/min-wage.mjs`、授業の日の額）で足す（2026-10-07 本人決定。`0016_prep_time.sql` で明細の行 `kind = prep` と `payrollMonths.prepMinutes`・`prepAmount` を足した。月ごと・最低賃金の額ごとに1行）。代表（contractType = owner）は数えない。
   - 行ごとに「分 × 時給 ÷ 60」の1円未満を切り捨てて足す。授業と面談は別の時給。
   - 決定のまま実施済みにしていない授業や、時給のない月があると確定できない。
   - 確定のあとで実施済みになった前の月の授業・面談は、次の月の明細に入る（「前の月の分」）。
