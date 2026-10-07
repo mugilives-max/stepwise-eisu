@@ -1,17 +1,17 @@
 // スタッフの画面（作り直し v2、1段目）。ログイン・最初の設定・招待・再設定・アカウント・スタッフの管理。
-// 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 報酬（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
+// 2段目: 家族と生徒・移行の準備。3段目: 予定。4段目: 記録。5段目: 計画・請求（staff/billing.js）。6段目: 成績（staff/grades.js）。7段目: 給与（staff/payroll.js）。切り替えまでは今の管理画面（/kanri/）を使う。
 import { call, session, esc } from '/assets/v2/api.js';
-import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261003-ux31';
-import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261003-ux31';
-import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261003-ux31';
-import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261003-ux31';
-import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261003-ux31';
-import { studentsPage, studentsBar, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261003-ux31';
-import { todayPage, todayBar, todayClick, resetToday } from '/staff/home.js?v=20261003-ux31';
-import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261003-ux31';
-import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261003-ux31';
-import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261003-ux31';
-import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261003-ux31';
+import { familiesPage, familyDetailPage, familiesSubmit, familiesClick, familiesInput, resetFamilies, leaveFamilies } from '/staff/families.js?v=20261007-emp1';
+import { migratePage, migrateClick, migrateSubmit, resetMigrate } from '/staff/migrate.js?v=20261007-emp1';
+import { schedulePage, scheduleSubmit, scheduleClick, resetSchedule } from '/staff/schedule.js?v=20261007-emp1';
+import { recordsPage, recordPage, recordBar, recordsSubmit, recordsClick, resetRecords, leaveRecords, captureRecordInputs, autosaveRecord, autosaveOnLeave } from '/staff/records.js?v=20261007-emp1';
+import { plansPage, kindsPage, billingPage, billingSubmit, billingClick, resetBilling, leaveBilling } from '/staff/billing.js?v=20261007-emp1';
+import { studentsPage, studentsBar, studentPage, studentsInput, resetStudents } from '/staff/students.js?v=20261007-emp1';
+import { todayPage, todayBar, todayClick, resetToday } from '/staff/home.js?v=20261007-emp1';
+import { monthlyPage, settingsPage, resetMonthly } from '/staff/hubs.js?v=20261007-emp1';
+import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, resetPayroll, leavePayroll } from '/staff/payroll.js?v=20261007-emp1';
+import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261007-emp1';
+import { gradesOverviewPage, gradesStudentPage, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261007-emp1';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -38,7 +38,7 @@ const roleTags = roles => roles.map(r => `<span class="tag">${esc(ROLE_LABEL[r] 
 
 async function run(task) { if (busy) return; busy = true; render(); try { await task(); } finally { busy = false; render(); } }
 
-// メニュー（docs/UX_STRUCTURE.md 3）: 教室管理者は 今日・予定・生徒・月の仕事・設定、講師は 今日・予定・生徒・報酬。スマホでは画面の下に出る
+// メニュー（docs/UX_STRUCTURE.md 3）: 教室管理者は 今日・予定・生徒・月の仕事・設定、講師は 今日・予定・生徒・給与。スマホでは画面の下に出る
 const ICON = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
   schedule: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -51,7 +51,7 @@ function navItems() {
   if (!me) return [];
   const m = me.roles.includes('manager'), t = me.roles.includes('teacher');
   if (m) return [['home', '今日'], ['schedule', '予定'], ['students', '生徒'], ['monthly', '月の仕事'], ['settings', '設定']];
-  if (t) return [['home', '今日'], ['schedule', '予定'], ['students', '生徒'], ['payroll', '報酬'], ['settings', '設定']];
+  if (t) return [['home', '今日'], ['schedule', '予定'], ['students', '生徒'], ['payroll', '給与'], ['settings', '設定']];
   return [['home', '今日'], ['settings', '設定']]; // システム管理者だけのとき
 }
 // いまの画面が、どの入口の下にあるか
@@ -167,7 +167,7 @@ function staffPage() {
   } else if (staffOpen) {
     const s = staffList.find(x => x.id === staffOpen);
     if (s) h += sheet(esc, s.name, `<p class="small muted" style="margin-top:0">${esc(s.email)}・${STATUS_LABEL[s.status] || s.status}</p>
-      <form class="stack" data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" value="${esc(s.familyName || s.name)}"></label><label style="flex:1">名<input name="givenName" maxlength="30" value="${esc(s.givenName || '')}"></label></div><p class="small muted" style="margin:0">名前は担当の表示と報酬の明細に出ます。</p>
+      <form class="stack" data-form="roles" data-id="${esc(s.id)}" data-version="${s.version}"><div class="row"><label style="flex:1">姓<input name="familyName" maxlength="30" value="${esc(s.familyName || s.name)}"></label><label style="flex:1">名<input name="givenName" maxlength="30" value="${esc(s.givenName || '')}"></label></div><p class="small muted" style="margin:0">名前は担当の表示と給与明細に出ます。</p>
       <div><div class="small muted">役割</div>${roleChecks('roles', s.roles)}</div><button class="primary"${dis()}>名前と役割を保存</button></form>
       <div class="row" style="margin-top:14px">${s.status === 'invited' ? `<button data-action="reinvite" data-id="${esc(s.id)}" data-name="${esc(s.name)}"${dis()}>招待をやり直す</button>` : ''}
       ${s.status === 'stopped' ? `<button data-action="status" data-status="active" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>再開する</button>` : s.id === me.id ? '' : `<button class="danger" data-action="status" data-status="stopped" data-id="${esc(s.id)}" data-version="${s.version}"${dis()}>停止する</button>`}</div>`, 'st-close');

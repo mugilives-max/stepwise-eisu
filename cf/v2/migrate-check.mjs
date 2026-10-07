@@ -29,7 +29,7 @@ export async function checkRows(old, db2) {
   const codes2 = new Set((await all(db2, "select linkCode from students where legacyId <> ''")).map(r => r.linkCode));
   add('家族と生徒', '生徒の専用リンク（同じ鍵のまま）', students.filter(s => s.code).length, students.filter(s => s.code && codes2.has(String(s.code))).length, '生徒は今の専用リンクの鍵のまま、新しいページを開ける');
   const instructors = await all(old, 'select email from instructors').catch(() => []);
-  const staffEmails = new Set((await all(db2, "select email from staff where contractType = 'contractor'")).map(r => r.email));
+  const staffEmails = new Set((await all(db2, "select email from staff where contractType = 'employee'")).map(r => r.email));
   add('家族と生徒', '講師（同じメールのスタッフ）', instructors.length, instructors.filter(i => staffEmails.has(String(i.email).toLowerCase())).length, '講師は新しい仕組みで招待し直す（パスワードは本人が決める）');
 
   // 予定

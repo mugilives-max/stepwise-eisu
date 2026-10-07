@@ -1,8 +1,11 @@
 'use strict';
-// 作り直し（v2）7段目: 講師の報酬（業務委託・月末締め・翌月25日払い）。cf/v2/payroll.mjs
+// 作り直し（v2）7段目: 講師の給与（雇用・月末締め・翌月25日払い・源泉徴収税額表の甲欄乙欄）。cf/v2/payroll.mjs・cf/v2/tax-table.mjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createV2 } = require('./helpers/v2-harness.cjs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const taxTable = () => import(pathToFileURL(path.join(__dirname, '..', 'cf', 'v2', 'tax-table.mjs')).href);
 
 const at = s => Date.parse(s + '+09:00');
 async function world() {
@@ -37,23 +40,26 @@ test('the month statement counts done lessons and past meetings at each instruct
   await h.ok('payroll/rates/save', { auth, staffId: u.id, startsOn: '2026-09', lessonHourly: 1400, meetingHourly: 1500 });
   const v = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-09' })).preview;
   assert.deepEqual(v.items.map(i => [i.kind, i.minutes, i.rate, i.amount]), [['lesson', 90, 1555, 2332], ['lesson', 45, 1555, 1166], ['meeting', 30, 1500, 750]], '1円未満は行ごとに切り捨て');
-  assert.deepEqual([v.lessonMinutes, v.meetingMinutes, v.gross, v.withholding, v.net], [135, 30, 4248, 0, 4248]);
+  assert.deepEqual([v.lessonMinutes, v.meetingMinutes, v.gross, v.withholding, v.net, v.taxColumn], [135, 30, 4248, 130, 4118, 'otsu'], '扶養控除等申告書が出るまでは乙欄（105,000円未満は 3.063%、1円未満切り捨て）');
   const other = (await h.ok('payroll/staff', { auth, staffId: u.id, month: '2026-09' })).preview;
   assert.match(other.issues.join(), /実施済みになっていません/, '代講の講師の授業も、実施済みにしないと確定できない');
   assert.equal((await h.call('payroll/confirm', { auth, staffId: u.id, month: '2026-09' })).error.code, 'notReady');
   await done(sub);
-  // 源泉徴収をする講師
-  const tu = h.rows('select version from staff where id = ?', u.id)[0];
-  await h.ok('payroll/withholding', { auth, staffId: u.id, version: tu.version, withholding: true });
+  // 扶養控除等申告書を出した講師は甲欄（105,000円未満は0円）
+  const tu = h.rows('select version, contractType from staff where id = ?', u.id)[0];
+  assert.equal(tu.contractType, 'employee', '招待した講師は雇用');
+  assert.equal((await h.call('payroll/withholding', { auth, staffId: u.id, version: tu.version, taxColumn: 'kou', dependents: 8 })).error.code, 'badDependents');
+  await h.ok('payroll/withholding', { auth, staffId: u.id, version: tu.version, taxColumn: 'kou', dependents: 1 });
   const ov = (await h.ok('payroll/staff', { auth, staffId: u.id, month: '2026-09' })).preview;
-  assert.deepEqual([ov.gross, ov.withholding, ov.net], [2100, 214, 1886], '10.21% を切り捨て');
-  assert.equal((await h.call('payroll/month', { auth: tAuth, month: '2026-09' })).error.code, 'forbidden', '講師はほかの講師の報酬を見られない');
+  assert.deepEqual([ov.gross, ov.withholding, ov.net, ov.taxColumn, ov.dependents], [2100, 0, 2100, 'kou', 1]);
+  assert.equal((await h.call('payroll/month', { auth: tAuth, month: '2026-09' })).error.code, 'forbidden', '講師はほかの講師の給与を見られない');
   assert.ok(sub);
 });
 
 test('confirming fixes the statement; corrections void it with a reason; instructors see only their own; later lessons go to the next statement', async () => {
   const { h, auth, tAuth, t, uAuth, lesson, done } = await world();
   const a = await lesson('2026-09-08', '17:00', t.id), late = await lesson('2026-09-29', '17:00', t.id);
+  await h.ok('payroll/withholding', { auth, staffId: t.id, version: h.rows('select version from staff where id = ?', t.id)[0].version, taxColumn: 'kou', dependents: 0 });
   await h.ok('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 1500, meetingHourly: 1500 });
   h.clock = at('2026-09-30T20:00:00');
   await done(a);
@@ -65,14 +71,14 @@ test('confirming fixes the statement; corrections void it with a reason; instruc
   await done(late);
   const before = h.mails().length;
   const p = (await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09', expectedNet: 2250 + 2250 + 1500 })).payroll;
-  assert.deepEqual([p.status, p.gross, p.items.length, p.payOn], ['confirmed', 6000, 3, '2026-10-25']);
-  assert.match(h.mails().slice(before).map(m => m.subject).join(), /9月分の支払明細/);
+  assert.deepEqual([p.status, p.gross, p.withholding, p.taxColumn, p.dependents, p.items.length, p.payOn], ['confirmed', 6000, 0, 'kou', 0, 3, '2026-10-25'], '確定した明細に計算した欄を残す');
+  assert.match(h.mails().slice(before).map(m => m.subject).join(), /9月分の給与明細/);
   assert.equal((await h.call('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 1600, meetingHourly: 1500 })).error.code, 'confirmed', '確定した月の時給は変えない');
   // 講師: 自分の明細だけ
   const mine = await h.ok('payroll/mine', { auth: tAuth });
   assert.deepEqual([mine.statements.length, mine.statements[0].net], [1, 6000]);
   assert.equal((await h.ok('payroll/mine', { auth: uAuth })).statements.length, 0);
-  assert.equal((await h.ok('payroll/mine', { auth })).owner, true, '代表は報酬の明細を持たない');
+  assert.equal((await h.ok('payroll/mine', { auth })).owner, true, '代表は給与明細を持たない');
   // 訂正: 取り消して確定し直す
   assert.equal((await h.call('payroll/void', { auth, id: p.id, version: p.version })).error.code, 'needReason');
   await h.ok('payroll/void', { auth, id: p.id, version: p.version, reason: '調整の金額の誤り' });
@@ -110,4 +116,26 @@ test('two lessons at once are paid by the time worked, not per student', async (
   assert.deepEqual([v.lessonMinutes, v.gross], [150, 5000]);
   await h.ok('payroll/confirm', { auth, staffId: t.id, month: '2026-09', expectedNet: v.net });
   assert.equal(h.rows("select count(*) n from lessons where payrollId <> ''")[0].n, 3, '同時の授業も明細に入る（もう一度数えない）');
+});
+
+test('withholding follows the monthly tax table of the pay year (kou by dependents, otsu otherwise)', async () => {
+  const { monthlyWithholding } = await taxTable();
+  const w = (amount, year, column, dependents) => monthlyWithholding(amount, { year, column, dependents });
+  // 令和8年分の月額表（国税庁）から
+  assert.deepEqual([w(104999, 2026, 'kou', 0).tax, w(105000, 2026, 'kou', 0).tax, w(137000, 2026, 'kou', 1).tax, w(171000, 2026, 'kou', 2).tax], [0, 170, 190, 100]);
+  assert.deepEqual([w(104999, 2026, 'otsu').tax, w(105000, 2026, 'otsu').tax, w(193000, 2026, 'otsu').tax], [3216, 3800, 17600]);
+  assert.equal(w(737000, 2026, 'kou', 7).tax, 26110);
+  // 令和9年分は 111,000円から（12月分は翌年1月25日払いなので令和9年分を使う）
+  assert.deepEqual([w(110999, 2027, 'kou', 0).tax, w(111000, 2027, 'kou', 0).tax], [0, 140]);
+  assert.match(w(740000, 2026, 'kou', 0).error, /税額表の計算式/);
+  assert.match(w(50000, 2030, 'kou', 0).error, /2030年分/);
+
+  const { h, auth, t, lesson } = await world();
+  const dec = await lesson('2026-12-08', '17:00', t.id, 60);
+  await h.ok('payroll/rates/save', { auth, staffId: t.id, startsOn: '2026-09', lessonHourly: 2000, meetingHourly: 1500 });
+  await h.ok('payroll/adjust/add', { auth, staffId: t.id, month: '2026-12', label: '冬期講習の準備', amount: 107000 });
+  await h.ok('payroll/withholding', { auth, staffId: t.id, version: h.rows('select version from staff where id = ?', t.id)[0].version, taxColumn: 'kou', dependents: 0 });
+  await h.db2.prepare("update lessons set status = 'done' where id = ?").bind(dec).run(); // 実施済みにした（日をまたぐとログインが切れるので直接）
+  const v = (await h.ok('payroll/staff', { auth, staffId: t.id, month: '2026-12' })).preview;
+  assert.deepEqual([v.payOn, v.gross, v.withholding], ['2027-01-25', 109000, 0], '令和9年分の表では 109,000円の甲欄は0円（令和8年分なら380円）');
 });

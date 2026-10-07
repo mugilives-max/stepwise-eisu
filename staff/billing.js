@@ -1,7 +1,7 @@
 // スタッフの画面: 授業計画（#plans）と請求（#billing、キャンセル料を含む）。5段目。教室管理者だけ。設定の「授業の種類と標準料金」（#kinds）も。
 // 計画は月ごとに生徒の行を並べる。請求は月ごとに家族の行を並べ、開くと内訳。
-import { sheet, rowButton } from '/staff/ui.js?v=20261003-ux31';
-import { partText } from '/assets/v2/cancel-rate.js?v=20261003-ux31';
+import { sheet, rowButton } from '/staff/ui.js?v=20261007-emp1';
+import { partText } from '/assets/v2/cancel-rate.js?v=20261007-emp1';
 // 下から出る画面: lineOpen（計画の行）・editing（直す）・consentFor（承諾を記録）・addFor（足す）・openFamily（請求の内訳）・feeOpen（キャンセル料）
 let plans = null, planMonth = '', editing = '', consentFor = '', addFor = '', kindOpen = null, lineOpen = '', feeOpen = '';
 let bill = null, billMonth = '', openFamily = '', detail = null, fees = null;

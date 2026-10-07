@@ -132,7 +132,7 @@ async function checkConflicts(c, candidates, { force, exceptId = '' } = {}) {
   candidates.forEach((x, i) => {
     const others = lessons.concat(candidates.filter((_, j) => j !== i));
     if (others.some(o => o.studentId === x.studentId && overlap(o, x))) errors.push(`${x.date} ${x.start} は同じ生徒の授業と重なっています`);
-    // 同じ講師の授業の重なり: 対面どうしなら2人まで（2人同時の授業。確かめてから）。オンラインが入るなら同時にはできない。報酬は授業ごとのまま
+    // 同じ講師の授業の重なり: 対面どうしなら2人まで（2人同時の授業。確かめてから）。オンラインが入るなら同時にはできない。給与は講師が働いた時間で数える（重なりは1回。cf/v2/payroll.mjs）
     const same = x.staffId ? others.filter(o => o.staffId === x.staffId && overlap(o, x)) : [];
     if (same.length) {
       if (x.deliveryMode === 'online' || same.some(o => o.deliveryMode === 'online')) errors.push(`${x.date} ${x.start} は同じ講師の授業と重なっています（オンラインの授業は同時にできません）`);

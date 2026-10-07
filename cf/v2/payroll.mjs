@@ -1,20 +1,23 @@
-// 講師の報酬（7段目）。migrations-v2/0011_payroll.sql、docs/REQUIREMENTS.md 5-1
-// - 数える: 実施済みの担当授業（代講は実際に担当した講師）、担当した面談（日が過ぎて取りやめでないもの）。準備・交通費は数えない
-// - 時間で払う: 2人同時の授業は、講師が働いた時間（重なりは1回）だけ数える。生徒が1人でも2人でも報酬は同じ（2026-10-03 本人）
+// 講師の給与（7段目）。講師は雇用（アルバイト。2026-10-07 本人決定）。migrations-v2/0011_payroll.sql・0015_employment.sql、docs/REQUIREMENTS.md 5-1
+// - 数える: 実施済みの担当授業（代講は実際に担当した講師）、担当した面談（日が過ぎて取りやめでないもの）。交通費は払わない
+//   （授業の準備・記録の入力の時間をどう数えるかは未決。決まるまでは、要るときに「調整」で足す）
+// - 時間で払う: 2人同時の授業は、講師が働いた時間（重なりは1回）だけ数える。生徒が1人でも2人でも給与は同じ（2026-10-03 本人）
 // - 時給: 講師ごと（staffRates。変えた月から）。面談は別の時給。行ごとに「分 × 時給 ÷ 60」の1円未満を切り捨て
 // - 月末締め・翌月25日払い。教室管理者が確かめて確定する。確定した明細は変えず、直すときは取り消して確定し直す（理由を残す）
-// - 源泉徴収: 講師ごとに する・しない（staff.withholding）。するときは 10.21%（100万円を超える分は 20.42%）
-// - 代表（contractType = owner）は数えない。講師は自分の明細だけを見る
+// - 源泉徴収: 給与所得の源泉徴収税額表（月額表、cf/v2/tax-table.mjs）。講師ごとに甲欄・乙欄（staff.taxColumn）と扶養の人数（staff.dependents）。
+//   社会保険料（雇用保険料）はまだ差し引かないので、総支給額をそのまま表に当てる。表の年は支払日（翌月25日）の年
+// - 代表（contractType = owner）は数えない。講師（contractType = employee）は自分の明細だけを見る
 import { fail, newId, iso, audit } from './util.mjs';
 import { requireStaff } from './staff.mjs';
 import { todayJst } from './schedule.mjs';
 import { validMonth, monthEnd, shiftMonth } from './plan-calc.mjs';
+import { monthlyWithholding } from './tax-table.mjs';
 
 const fullName = s => [s.familyName, s.givenName].filter(Boolean).join(' ') || s.name || '';
 const sameVersion = (row, b) => { if (Number(b.version) !== Number(row.version)) fail('conflict', 'ほかの操作で変わりました。画面を更新してください', 409); };
 const md = d => d.slice(5).replace('-', '/');
 export const payOnFor = month => shiftMonth(month, 1) + '-25';
-export const withholdingFor = gross => gross <= 0 ? 0 : gross <= 1000000 ? Math.floor(gross * 0.1021) : Math.floor((gross - 1000000) * 0.2042) + 102100;
+export const TAX_COLUMN_LABEL = { kou: '甲欄', otsu: '乙欄' };
 const itemAmount = (minutes, rate) => Math.floor(minutes * rate / 60);
 const toMin = hm => { const [h, m] = String(hm).split(':').map(Number); return h * 60 + m; };
 
@@ -22,8 +25,8 @@ const toMin = hm => { const [h, m] = String(hm).split(':').map(Number); return h
 function rateFor(rates, month) {
   return rates.filter(r => r.startsOn.slice(0, 7) <= month).sort((a, b) => b.startsOn.localeCompare(a.startsOn))[0] || null;
 }
-async function contractors(c) {
-  return (await c.db.prepare("select * from staff where contractType = 'contractor' and status <> 'invited' order by familyName, givenName").all()).results;
+async function employees(c) {
+  return (await c.db.prepare("select * from staff where contractType = 'employee' and status <> 'invited' order by familyName, givenName").all()).results;
 }
 
 // ---- 月の計算（講師ごと） ----
@@ -58,14 +61,17 @@ export async function payPreview(c, staffId, month, { ignorePayrollId = '' } = {
   const sum = (k, f) => items.filter(i => i.kind === k).reduce((n, i) => n + i[f], 0);
   const t = { lessonMinutes: sum('lesson', 'minutes'), meetingMinutes: sum('meeting', 'minutes'), lessonAmount: sum('lesson', 'amount'), meetingAmount: sum('meeting', 'amount'), adjustAmount: sum('adjust', 'amount') };
   t.gross = t.lessonAmount + t.meetingAmount + t.adjustAmount;
-  t.withholding = s.withholding ? withholdingFor(t.gross) : 0;
+  const payOn = payOnFor(month), tax = { taxColumn: s.taxColumn, dependents: s.taxColumn === 'kou' ? s.dependents : 0 };
+  const w = monthlyWithholding(t.gross, { year: Number(payOn.slice(0, 4)), column: tax.taxColumn, dependents: tax.dependents });
+  if (w.error) issues.push(w.error);
+  t.withholding = w.tax || 0;
   t.net = t.gross - t.withholding;
   if (t.gross < 0) issues.push('総支給額がマイナスです。調整を確かめてください');
-  return { staffId, name: fullName(s), month, payOn: payOnFor(month), withholdingOn: !!s.withholding, items, issues, ...t, canConfirm: !issues.length && items.length > 0 };
+  return { staffId, name: fullName(s), month, payOn, ...tax, items, issues, ...t, canConfirm: !issues.length && items.length > 0 };
 }
 
 const payrollView = p => ({ id: p.id, staffId: p.staffId, month: p.month, status: p.status, lessonMinutes: p.lessonMinutes, meetingMinutes: p.meetingMinutes, lessonAmount: p.lessonAmount, meetingAmount: p.meetingAmount,
-  adjustAmount: p.adjustAmount, gross: p.gross, withholding: p.withholding, net: p.net, payOn: p.payOn, paidOn: p.paidOn, confirmedAt: p.confirmedAt, voidReason: p.voidReason, version: p.version });
+  adjustAmount: p.adjustAmount, gross: p.gross, withholding: p.withholding, taxColumn: p.taxColumn, dependents: p.dependents, net: p.net, payOn: p.payOn, paidOn: p.paidOn, confirmedAt: p.confirmedAt, voidReason: p.voidReason, version: p.version });
 const itemView = i => ({ kind: i.kind, date: i.date, start: i.start, minutes: i.minutes, label: i.label, rate: i.rate, amount: i.amount });
 async function activePayroll(c, staffId, month) { return c.db.prepare("select * from payrollMonths where staffId = ? and month = ? and status <> 'void'").bind(staffId, month).first(); }
 async function withItems(c, p) { return { ...payrollView(p), items: (await c.db.prepare('select * from payrollItems where payrollId = ? order by sortOrder').bind(p.id).all()).results.map(itemView) }; }
@@ -73,20 +79,20 @@ async function getPayroll(c, id) { const p = await c.db.prepare('select * from p
 
 export const payrollRoutes = {
   // ---- 教室管理者 ----
-  // 時給と源泉徴収（講師ごと）
+  // 時給と源泉徴収の欄（講師ごと）
   'payroll/rates/list': async (c, b) => {
     await requireStaff(c, b, 'manager');
     const out = [];
-    for (const s of await contractors(c)) {
+    for (const s of await employees(c)) {
       const rates = (await c.db.prepare('select * from staffRates where staffId = ? order by startsOn desc').bind(s.id).all()).results;
-      out.push({ id: s.id, name: fullName(s), status: s.status, withholding: !!s.withholding, version: s.version, rates: rates.map(r => ({ id: r.id, startsOn: r.startsOn.slice(0, 7), lessonHourly: r.lessonHourly, meetingHourly: r.meetingHourly })) });
+      out.push({ id: s.id, name: fullName(s), status: s.status, taxColumn: s.taxColumn, dependents: s.dependents, version: s.version, rates: rates.map(r => ({ id: r.id, startsOn: r.startsOn.slice(0, 7), lessonHourly: r.lessonHourly, meetingHourly: r.meetingHourly })) });
     }
     return { staff: out };
   },
   // 時給を決める（その月から）。同じ月なら置き換える。確定した明細は変わらない
   'payroll/rates/save': async (c, b) => {
     await requireStaff(c, b, 'manager');
-    const s = await c.db.prepare("select * from staff where id = ? and contractType = 'contractor'").bind(String(b.staffId || '')).first(); if (!s) fail('notFound', '講師が見つかりません', 404);
+    const s = await c.db.prepare("select * from staff where id = ? and contractType = 'employee'").bind(String(b.staffId || '')).first(); if (!s) fail('notFound', '講師が見つかりません', 404);
     if (!validMonth(b.startsOn)) fail('badMonth', 'いつの月からかを選んでください');
     const lesson = Number(b.lessonHourly), meeting = Number(b.meetingHourly);
     for (const [v, label] of [[lesson, '授業'], [meeting, '面談']]) if (!Number.isInteger(v) || v < 0 || v > 20000) fail('badRate', `${label}の時給は0〜20,000円にしてください`);
@@ -98,18 +104,22 @@ export const payrollRoutes = {
     await audit(c, 'staffRateSave', s.id, { startsOn: b.startsOn, lesson, meeting });
     return {};
   },
+  // 源泉徴収の欄: 扶養控除等申告書を出していれば甲欄（扶養の人数も）、出していなければ乙欄。まだ確定していない明細から使う
   'payroll/withholding': async (c, b) => {
     await requireStaff(c, b, 'manager');
-    const s = await c.db.prepare("select * from staff where id = ? and contractType = 'contractor'").bind(String(b.staffId || '')).first(); if (!s) fail('notFound', '講師が見つかりません', 404); sameVersion(s, b);
-    await c.db.prepare('update staff set withholding = ?, updatedAt = ?, version = version + 1 where id = ?').bind(b.withholding ? 1 : 0, iso(c.now), s.id).run();
-    await audit(c, 'staffWithholding', s.id, { on: !!b.withholding });
+    const s = await c.db.prepare("select * from staff where id = ? and contractType = 'employee'").bind(String(b.staffId || '')).first(); if (!s) fail('notFound', '講師が見つかりません', 404); sameVersion(s, b);
+    const column = b.taxColumn, dependents = column === 'kou' ? Number(b.dependents || 0) : 0;
+    if (!TAX_COLUMN_LABEL[column]) fail('badColumn', '甲欄か乙欄を選んでください');
+    if (!Number.isInteger(dependents) || dependents < 0 || dependents > 7) fail('badDependents', '扶養の人数は0〜7人にしてください（8人以上は税額表で確かめる）');
+    await c.db.prepare('update staff set taxColumn = ?, dependents = ?, updatedAt = ?, version = version + 1 where id = ?').bind(column, dependents, iso(c.now), s.id).run();
+    await audit(c, 'staffTaxColumn', s.id, { column, dependents });
     return {};
   },
   // 月の一覧: 講師ごとの見込み（確定前）か、確定した明細
   'payroll/month': async (c, b) => {
     await requireStaff(c, b, 'manager');
     const month = validMonth(b.month) ? b.month : shiftMonth(todayJst(c.now).slice(0, 7), -1), rows = [];
-    for (const s of await contractors(c)) {
+    for (const s of await employees(c)) {
       const p = await activePayroll(c, s.id, month);
       if (p) { rows.push({ staffId: s.id, name: fullName(s), payroll: payrollView(p) }); continue; }
       const v = await payPreview(c, s.id, month);
@@ -130,7 +140,7 @@ export const payrollRoutes = {
   // 調整（確定の前）。理由と金額（マイナスもよい）
   'payroll/adjust/add': async (c, b) => {
     const me = await requireStaff(c, b, 'manager');
-    const s = await c.db.prepare("select id from staff where id = ? and contractType = 'contractor'").bind(String(b.staffId || '')).first(); if (!s) fail('notFound', '講師が見つかりません', 404);
+    const s = await c.db.prepare("select id from staff where id = ? and contractType = 'employee'").bind(String(b.staffId || '')).first(); if (!s) fail('notFound', '講師が見つかりません', 404);
     if (!validMonth(b.month)) fail('badMonth', '月を選んでください');
     if (await activePayroll(c, s.id, b.month)) fail('confirmed', 'この月の明細はもう確定しています', 409);
     const label = String(b.label || '').trim(), amount = Number(b.amount);
@@ -159,8 +169,8 @@ export const payrollRoutes = {
     if (!v.canConfirm) fail('notReady', v.issues.length ? '確かめることがあります: ' + v.issues.join(' / ') : 'この月の勤務はありません', 409);
     if (b.expectedNet !== undefined && Number(b.expectedNet) !== v.net) fail('changed', '金額が変わりました。画面を更新して確かめてください', 409);
     const id = newId('pm'), now = iso(c.now), db = c.db;
-    const stmts = [db.prepare("insert into payrollMonths (id, staffId, month, status, lessonMinutes, meetingMinutes, lessonAmount, meetingAmount, adjustAmount, gross, withholding, net, payOn, confirmedAt, confirmedBy, createdAt, updatedAt) values (?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, staffId, b.month, v.lessonMinutes, v.meetingMinutes, v.lessonAmount, v.meetingAmount, v.adjustAmount, v.gross, v.withholding, v.net, v.payOn, now, 'staff:' + me.id, now, now)];
+    const stmts = [db.prepare("insert into payrollMonths (id, staffId, month, status, lessonMinutes, meetingMinutes, lessonAmount, meetingAmount, adjustAmount, gross, withholding, taxColumn, dependents, net, payOn, confirmedAt, confirmedBy, createdAt, updatedAt) values (?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, staffId, b.month, v.lessonMinutes, v.meetingMinutes, v.lessonAmount, v.meetingAmount, v.adjustAmount, v.gross, v.withholding, v.taxColumn, v.dependents, v.net, v.payOn, now, 'staff:' + me.id, now, now)];
     v.items.forEach((i, n) => {
       stmts.push(db.prepare('insert into payrollItems (id, payrollId, kind, lessonId, meetingId, date, start, minutes, label, rate, amount, sortOrder) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(newId('pi'), id, i.kind, i.lessonId || '', i.meetingId || '', i.date, i.start, i.minutes, i.label, i.rate, i.amount, n));
@@ -170,7 +180,7 @@ export const payrollRoutes = {
     });
     await db.batch(stmts);
     const s = await db.prepare('select email from staff where id = ?').bind(staffId).first();
-    c.effects.push({ kind: 'mail', to: s.email, name: 'ステップワイズ', subject: `[ステップワイズ] ${Number(b.month.slice(5))}月分の支払明細`, body: `${Number(b.month.slice(5))}月分の報酬が確定しました。\n差引支給額 ${v.net.toLocaleString('ja-JP')}円（${v.payOn} にお支払いします）\n明細は「報酬」の画面で見られます。\n\nhttps://www.stepwise-education.jp/staff/#payroll`, audience: 'staff' });
+    c.effects.push({ kind: 'mail', to: s.email, name: 'ステップワイズ', subject: `[ステップワイズ] ${Number(b.month.slice(5))}月分の給与明細`, body: `${Number(b.month.slice(5))}月分の給与が確定しました。\n差引支給額 ${v.net.toLocaleString('ja-JP')}円（${v.payOn} にお支払いします）\n明細は「給与」の画面で見られます。\n\nhttps://www.stepwise-education.jp/staff/#payroll`, audience: 'staff' });
     await audit(c, 'payrollConfirm', id, { staffId, month: b.month, gross: v.gross, net: v.net });
     return { payroll: await withItems(c, await getPayroll(c, id)) };
   },

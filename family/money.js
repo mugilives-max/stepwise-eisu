@@ -1,6 +1,6 @@
 // 保護者の画面: 計画・お支払い（5段目）。授業計画の承認、キャンセル料、月ごとの請求と振込の連絡。
 import { esc } from '/assets/v2/api.js';
-import { partText } from '/assets/v2/cancel-rate.js?v=20261003-ux31';
+import { partText } from '/assets/v2/cancel-rate.js?v=20261007-emp1';
 
 const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
 const md = d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8));

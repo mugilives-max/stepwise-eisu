@@ -1,5 +1,5 @@
 // スタッフの「月の仕事」と「設定」（docs/UX_STRUCTURE.md 3）。設定は アカウント・教室の運営（時給・授業の種類）・システム（スタッフ・移行）。
-// 月の仕事は、月の流れの順（前月分の請求 → 翌月の計画 → 翌月の予定表 → 前月分の報酬）に、どこまで済んだかを出す（API monthly/overview）。
+// 月の仕事は、月の流れの順（前月分の請求 → 翌月の計画 → 翌月の予定表 → 前月分の給与）に、どこまで済んだかを出す（API monthly/overview）。
 let overview = null;
 export function resetMonthly() { overview = null; }
 const card = (esc, href, title, note) => `<a class="todo" href="${href}"><span class="b"><strong>${esc(title)}</strong><small class="muted">${esc(note)}</small></span><span class="go">›</span></a>`;
@@ -34,12 +34,12 @@ export function monthlyPage(ctx) {
   if (s.held.length) sb += `<div class="small muted">予定表を送っていない: ${s.held.map(x => esc(x.name) + ' ' + x.n + '件').join('・')}</div>`;
   sb += '<div class="small muted">締め切りは原則25日。連絡がなければ締め切りの翌日に決定します。</div>';
   h += step('planning', `〜20日：${mon(s.month)}の予定表`, sb, '#schedule', '予定を開く');
-  // 4. 報酬
+  // 4. 給与
   let yb = chips([['講師', y.staff, 'gray', true], ['確定できる', y.ready, 'ok'], ['確かめること', y.check.length, 'danger'], ['確定・支払い待ち', y.confirmed, 'warn'], ['支払い済み', y.paid, 'ok']]);
   yb += `<div class="small muted">支払日 ${md(y.payOn)}。</div>`;
   if (y.check.length) yb += '<div class="small" style="margin-top:4px">' + y.check.map(x => `<div><strong>${esc(x.name)}</strong>：${esc(x.issues.join(' / '))}</div>`).join('') + '</div>';
   if (y.unassigned) yb += `<div class="small" style="color:var(--danger)">担当の講師がいない実施済みの授業が ${y.unassigned}件あります。</div>`;
-  h += step('closing', `月が終わったら〜25日：${mon(y.month)}分の報酬`, yb, '#payroll', '報酬を開く');
+  h += step('closing', `月が終わったら〜25日：${mon(y.month)}分の給与`, yb, '#payroll', '給与を開く');
   return h;
 }
 

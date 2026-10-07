@@ -3,7 +3,7 @@
 // - 送る: 領域の操作（例: family/grades/upload）が startUpload で行を作り、送る鍵を返す → 画面が POST /v2/files/put?t=鍵 に中身を送る。
 // - 開く: files/link で開く鍵（5分）をもらう → GET /v2/files/get?t=鍵 を新しいタブで開く。
 // - 誰が開けるかは canRead だけで決める（種類ごと）。領域ごとに決まりを書かない。
-// - お金の書類（請求書・領収書・支払明細）は7年消せない（retainUntil）。
+// - お金の書類（請求書・領収書・給与明細）は7年消せない（retainUntil）。
 import { fail, newId, newToken, sha256Hex, iso, audit } from './util.mjs';
 import { readSession } from './accounts.mjs';
 import { rolesOf } from './staff.mjs';
@@ -34,7 +34,7 @@ export async function canRead(c, f, who) {
   if (who.kind === 'staff') {
     const roles = rolesOf(who.me);
     if (roles.includes('manager')) return true;
-    return f.category === 'payStatement' && f.staffId === who.me.id; // 講師は自分の支払明細だけ
+    return f.category === 'payStatement' && f.staffId === who.me.id; // 講師は自分の給与明細だけ
   }
   if (who.kind === 'family') {
     if (!['scoreSheet', 'invoice', 'receipt', 'contract'].includes(f.category)) return false;
