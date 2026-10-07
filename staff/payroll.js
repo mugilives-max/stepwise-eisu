@@ -1,6 +1,6 @@
 // スタッフの画面: 給与（7段目。講師は雇用）。#payroll と、設定の「時給と源泉徴収」（#rates）。
 // 教室管理者: 月ごとの講師の給与明細（見込み・確定・支払い）、調整。時給と源泉徴収の欄（甲欄・乙欄）は設定の下。講師: 自分の給与明細だけ（印刷・PDF で保存できる）。
-import { sheet, rowButton } from '/staff/ui.js?v=20261007-emp1';
+import { sheet, rowButton } from '/staff/ui.js?v=20261008-launch1';
 let month = '', list = null, open = '', detail = null, rates = null, mine = null, rateOpen = '';
 export function leavePayroll() { open = ''; rateOpen = ''; }
 export function resetPayroll() { list = null; detail = null; rates = null; mine = null; open = ''; rateOpen = ''; }
@@ -27,7 +27,7 @@ export function printStatement(esc, s, name) {
   const w = window.open('', '_blank'); if (!w) return false;
   w.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>給与明細 ${esc(label(s.month))} ${esc(name)}</title>
     <style>body{font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif;color:#111;margin:32px;max-width:720px}h1{font-size:20px}td,th{padding:4px 6px;border-bottom:1px solid #ddd;font-size:13px}.small{font-size:13px}.muted{color:#666}</style></head>
-    <body><h1>給与明細（${esc(label(s.month))}分）</h1><p>${esc(name)} 様</p><p class="small">ステップワイズ英数教室・給与（月末締め・翌月25日払い）<br>確定 ${esc(String(s.confirmedAt || '').slice(0, 10))}・お支払い ${esc(s.paidOn || s.payOn)}${s.paidOn ? '（支払い済み）' : '（予定）'}</p>
+    <body><h1>給与明細（${esc(label(s.month))}分）</h1><p>${esc(name)} 様</p><p class="small">ステップワイズ個別指導・給与（月末締め・翌月25日払い）<br>確定 ${esc(String(s.confirmedAt || '').slice(0, 10))}・お支払い ${esc(s.paidOn || s.payOn)}${s.paidOn ? '（支払い済み）' : '（予定）'}</p>
     ${statementTable(esc, s)}<script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
   return true;
