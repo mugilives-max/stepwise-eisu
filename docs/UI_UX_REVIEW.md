@@ -92,7 +92,7 @@ UI・UXに関する利用目的、判断理由、合意した方針、改善候�
 
 ### 本番公開・検証・復旧（2026-09-23）
 
-- 17:23 JSTに公開コミット `b7f6760` の [Pages run 35836669810](https://github.com/mugilives-max/stepwise-eisu/actions/runs/35836669810) 成功を確認。共有作業先のmainへfast-forwardし、通常のpushで反映した。
+- 17:23 JSTに公開コミット `b7f6760` の [Pages run 35836669810](https://github.com/mugilives-max/stepwise-kobetsu/actions/runs/35836669810) 成功を確認。共有作業先のmainへfast-forwardし、通常のpushで反映した。
 - 最新本番との統合後に `npm run check` と全696テストが成功。公開前は対象4ファイルが `d690e82` と一致し、公開後は `www.stepwise-education.jp` の `yoyaku/index.html`・`hogosha/index.html`・`assets/portal.js`・`assets/portal.css` がすべてHTTP 200、改行正規化後に公開候補と全文一致することを確認した。
 - 今回はPagesのみ。GAS・Worker・台帳・認証・管理画面のコードは公開直前の本番と同一。実生徒の課題・予定の確認書き込みは行っていない。
 - 本番ブラウザー接続が2回とも失敗したため、ログイン後の実画面の目視・本番での完了操作は今回未実施。PC・スマホの操作確認は前段のローカル合成データ試験、公開確認はビルド成功・配信ファイル照合によるものと区別する。先生の実利用時にメニューの宿題表示とホームの予定表を確認する。

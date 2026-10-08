@@ -1,5 +1,5 @@
 {
-  "name": "stepwise-eisu-checks",
+  "name": "stepwise-kobetsu-checks",
   "private": true,
   "scripts": {
     "build:crypto": "node scripts/build-parent-crypto.mjs",
