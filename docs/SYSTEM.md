@@ -69,7 +69,7 @@ Google Apps Script Web アプリ (/exec)  … gas/*.gs が本体
 
 | 置き場所 | 何があるか | 備考 |
 |---|---|---|
-| GitHub `mugilives-max/stepwise-eisu`（public、main / root を Pages 配信） | `index.html` ホームページ、`yoyaku/index.html` 生徒マイページ、`hogosha/index.html` 保護者ページ、`kanri/index.html` 管理画面、`gas/*.gs` サーバーコードの写し、`docs/` 文書 | 作業先は [AGENTS.md](../AGENTS.md)。公開確認は `?nc=適当な値` でキャッシュを避け、配信内容を照合する |
+| GitHub `mugilives-max/stepwise-kobetsu`（public、main / root を Pages 配信） | `index.html` ホームページ、`yoyaku/index.html` 生徒マイページ、`hogosha/index.html` 保護者ページ、`kanri/index.html` 管理画面、`gas/*.gs` サーバーコードの写し、`docs/` 文書 | 作業先は [AGENTS.md](../AGENTS.md)。公開確認は `?nc=適当な値` でキャッシュを避け、配信内容を照合する |
 | Google Apps Script（予約システムに紐づくコンテナバインド） | 実行中のコード。WebアプリURL・デプロイIDは管理HTMLと `assets/portal.js` の `API` 定数を参照 | [プロジェクト](https://script.google.com/home/projects/1vlfS4thMpRgV0WbHXZ8joFLzZBMmoROdopAJXK6JEIQWplokSgvgo619/edit)。Script IDはこのURLの `/projects/` と `/edit` の間。反映は6章 |
 | Drive: スプレッドシート「ステップワイズ予約システム」 | 生徒一覧と専用リンクコード、授業枠、授業できない日、希望日程、共有予定、月の授業回数(計画)と保護者承認、宿題・持ち物、先生ログイン情報(ハッシュ)、操作ログ | 場所: マイドライブ/ステップワイズ塾/ |
 | Drive: スプレッドシート「塾管理台帳」 | 生徒台帳、成績推移、模試、入金管理、面談記録 | 同上。ID は `Code.gs` の `LEDGER_ID` |
