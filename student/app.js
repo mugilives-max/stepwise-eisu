@@ -69,7 +69,9 @@ function render() {
   nav.innerHTML = TABS.map(([key, l]) => `<a href="#${key}" class="${page === key ? 'on' : ''}"${page === key ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[key]}</svg><span>${l}</span></a>`).join('');
   document.body.classList.add('has-tabs');
   renderBar(page);
-  let h = preview ? `<p class="notice" style="background:#fff3c4;color:#5a4300"><strong>プレビュー中</strong>：${esc(sched.me.name)}さんの生徒ページ（表示だけです。押しても変更はされません。1時間で切れます）</p>` : '';
+  // プレビューでは画面に帯を出さない（本物と同じ見え方を確かめるため。本人 2026-10-09）。見分けはタブの題名だけ
+  if (preview && !document.title.startsWith('（プレビュー）')) document.title = `（プレビュー）${document.title}`;
+  let h = '';
   if (page === 'schedule') {
     // 予定: 月の表（保護者と同じ）。日を押すとその日の一覧、授業を押すと下から出る画面
     if (!cal) cal = monthCalendar({ today: sched.today, onChange: () => render() });
