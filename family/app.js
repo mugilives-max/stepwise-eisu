@@ -12,7 +12,8 @@ const PV_KEY = 'sw2_family_preview';
 if (location.hash.startsWith('#preview=')) { try { sessionStorage.setItem(PV_KEY, decodeURIComponent(location.hash.slice(9))); } catch {} history.replaceState(null, '', location.pathname + '#home'); }
 const previewToken = (() => { try { return sessionStorage.getItem(PV_KEY) || ''; } catch { return ''; } })();
 const store = previewToken ? { get: () => previewToken, set: () => {} } : session('sw2_family');
-const previewBar = () => previewToken && me ? `<p class="notice" style="background:#fff3c4;color:#5a4300"><strong>プレビュー中</strong>：${esc(me.name)}の保護者ページ（表示だけです。押しても変更はされません。1時間で切れます）</p>` : '';
+// プレビューでは画面に帯を出さない（本物と同じ見え方を確かめるため。本人 2026-10-09）。見分けはタブの題名だけ。押しても変わらないことはサーバーが保証する
+const previewBar = () => { if (previewToken && me && !document.title.startsWith('（プレビュー）')) document.title = `（プレビュー）${document.title}`; return ''; };
 const app = document.getElementById('app'), nav = document.getElementById('nav');
 let me = null, busy = false, notice = null, sched = null, learning = null, money = null, grades = null, inviteInfo = null;
 let cal = null, calData = {}; // 月の予定表と、月ごとに読んだ予定（{ 'YYYY-MM': 応答 }）
