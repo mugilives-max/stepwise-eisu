@@ -1,6 +1,6 @@
 // スタッフの画面: 成績（6段目）。#grades（一覧・届いた成績票・結果の入力待ち）と #grades=<生徒>（試験の記録・入力）。
 // 講師は担当の生徒の担当科目だけ入力でき、ほかの科目は合計だけ見える。成績票は教室管理者だけ。
-import { examCard, gradeCharts, summaryTable, examPager, gradeSel, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261008-launch1';
+import { examCard, gradeCharts, summaryTable, examPager, gradeSel, seriesPick, seriesOf, SERIES_FIRST, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261008-launch1';
 import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261008-launch1';
 
 let overview = null, student = null, studentFor = '', editing = '', prefill = null, pick = null; // pick: 下から出る画面 { kind: 'file'|'test'|'resolve', id }
@@ -54,9 +54,10 @@ export function gradesStudentPage(ctx, studentId) {
   if (st.nextTest) h += `<p class="small">次のテスト: ${esc(st.nextTest.title || '')}（${esc(md(st.nextTest.date))}、あと${st.nextTest.days}日）</p>`;
   if (st.pendingTests.length) h += `<h2>結果の入力待ち</h2>${pendingList(ctx, st.pendingTests, false)}`;
   h += `<p><button class="primary" data-action="gr-new"${ctx.dis()}>＋ 試験の結果を入れる</button></p>`;
-  h += summaryTable(st.exams) + gradeCharts(st.exams, studentId);
-  // 試験は 1 つずつ（‹ ›）。その試験にひもづいた成績票（PDF・写真）はカードの中から開く
-  h += examPager(st.exams, studentId, e => examCard(e, { sheets: st.manager ? st.files.filter(f => f.examId === e.id && f.status !== 'dismissed') : [], actions: `<div class="row"><button data-action="gr-edit" data-id="${esc(e.id)}"${ctx.dis()}>直す</button>${st.manager ? `<button class="danger" data-action="gr-delete" data-id="${esc(e.id)}" data-version="${e.version}"${ctx.dis()}>消す</button>` : ''}</div>` }));
+  // 階層: 何の試験か（定期テスト・北辰テスト …）の帯 → その一覧 → グラフ → 試験を 1 つずつ（‹ ›）。ひもづいた成績票（PDF・写真）はカードの中から開く
+  const pk = seriesPick(st.exams, studentId);
+  h += pk.bar + summaryTable(pk.list) + gradeCharts(pk.list, studentId);
+  h += examPager(pk.list, studentId, e => examCard(e, { sheets: st.manager ? st.files.filter(f => f.examId === e.id && f.status !== 'dismissed') : [], actions: `<div class="row"><button data-action="gr-edit" data-id="${esc(e.id)}"${ctx.dis()}>直す</button>${st.manager ? `<button class="danger" data-action="gr-delete" data-id="${esc(e.id)}" data-version="${e.version}"${ctx.dis()}>消す</button>` : ''}</div>` }));
   if (!st.exams.length) h += '<p class="muted">まだ記録がありません。成績票（PDF・写真）があれば、下の「この成績票の結果を入れる」から点数と偏差値を入れます。</p>';
   if (st.manager) {
     // 試験にひもづいていない成績票: ここから結果を入れる（入れると自動でひもづく）か、できている試験にひもづける
@@ -79,7 +80,9 @@ function examForm(ctx, e) {
   const { esc } = ctx, st = student, manager = st.manager, p = e ? null : prefill;
   const v = (x, k) => x && x[k] !== null && x[k] !== undefined ? esc(String(x[k])) : '';
   let subjects;
-  const kind0 = e ? e.kind : (p && p.kind) || 'regular', middle = /中/.test(st.student.grade || '');
+  const series0 = e ? e.series : (p && p.series) || gradeSel(studentFor).series || '定期テスト';
+  const kind0 = e ? e.kind : series0 === '定期テスト' ? 'regular' : 'mock', middle = /中/.test(st.student.grade || '');
+  const seriesChoices = [...new Set([...SERIES_FIRST, ...seriesOf(st.exams), series0].filter(Boolean))];
   if (!manager) subjects = st.subjects.map(s => (e && e.scores.find(x => x.subject === s)) || { subject: s });
   else { subjects = e ? e.scores.slice() : (kind0 === 'mock' && middle ? ['国語', '数学', '社会', '理科', '英語', '3教科'] : st.lessonSubjects).map(s => ({ subject: s })); const want = e ? e.scores.length + 2 : Math.max(5, subjects.length + 1); while (subjects.length < want) subjects.push({ subject: '' }); }
   const t = e ? e.total : {};
@@ -87,10 +90,12 @@ function examForm(ctx, e) {
   const field = (name, label, val, attrs = '') => `<label>${label}<input name="${name}" value="${val}" ${attrs}></label>`;
   const numAttrs = 'inputmode="decimal" style="width:5.5em"';
   const COL = { score: '点数', max: '満点', average: '平均点', rank: '順位', rankOf: '人数', deviation: '偏差値' }, colClass = k => k === 'rank' || k === 'rankOf' ? ' class="c-rank"' : k === 'deviation' ? ' class="c-dev"' : '';
-  return `<form class="stack" data-form="gr-save"${e ? ` data-id="${esc(e.id)}" data-version="${e.version}" data-review-version="${r.version || ''}"` : ''}>
+  return `<form class="stack" data-form="gr-save" data-kind="${kind0}"${e ? ` data-id="${esc(e.id)}" data-version="${e.version}" data-review-version="${r.version || ''}"` : ''}>
     ${p && p.eventId ? `<input type="hidden" name="eventId" value="${esc(p.eventId)}">` : ''}${p && p.fileId ? `<input type="hidden" name="fileId" value="${esc(p.fileId)}">` : ''}
-    <div class="row"><label>種類<select name="kind"><option value="regular"${kind0 === 'regular' ? ' selected' : ''}>定期テスト</option><option value="mock"${kind0 === 'mock' ? ' selected' : ''}>模試</option></select></label>
-    <label style="flex:1">名前<input name="name" maxlength="40" required value="${esc(e ? e.name : p ? p.title : '')}" placeholder="例: 2学期中間テスト"></label>
+    <input type="hidden" name="kind" value="${kind0}">
+    <div class="row"><label>何の試験<select name="series">${seriesChoices.map(x => `<option value="${esc(x)}"${x === series0 ? ' selected' : ''}>${esc(x)}</option>`).join('')}<option value="__new"${!seriesChoices.includes(series0) ? ' selected' : ''}>ほかの試験…</option></select></label>
+    <label class="c-newseries">試験の名前<input name="seriesNew" maxlength="20" placeholder="例: 東部地区テスト"></label>
+    <label style="flex:1">回<input name="name" maxlength="40" required value="${esc(e ? e.name : p ? p.title : '')}" placeholder="例: 2学期中間、3年4回"></label>
     <label>実施日<input type="date" name="date" required max="${today()}" value="${esc(e ? e.date : p ? p.date : '')}"></label><label>学年<input name="grade" maxlength="20" style="width:5em" value="${esc(e ? e.grade : st.student.grade || '')}"></label></div>
     <div class="small muted">科目ごと。分かる項目だけでよい（点数と偏差値だけ、など）。空の行は飛ばします</div>
     <div style="overflow-x:auto"><table class="small gform"><tr><th>科目</th>${['score', 'max', 'average', 'rank', 'rankOf', 'deviation'].map(k => `<th${colClass(k)}>${COL[k]}</th>`).join('')}</tr>
@@ -112,7 +117,9 @@ export async function gradesSubmit(ctx, kind, el) {
   }
   if (kind !== 'gr-save') return false;
   const v = Object.fromEntries(new FormData(el).entries()), id = el.dataset.id, fileId = v.fileId || '';
-  const exam = { id, version: id ? Number(el.dataset.version) : undefined, studentId: studentFor, kind: v.kind, name: v.name, date: v.date, grade: v.grade, eventId: v.eventId };
+  const series = v.series === '__new' ? String(v.seriesNew || '').trim() : v.series;
+  if (!series) { ctx.say('何の試験かを選ぶか、名前を入れてください', 'error'); return true; }
+  const exam = { id, version: id ? Number(el.dataset.version) : undefined, studentId: studentFor, series, kind: series === '定期テスト' ? 'regular' : 'mock', name: v.name, date: v.date, grade: v.grade, eventId: v.eventId };
   if (student.manager) {
     Object.assign(exam, { totalScore: v.totalScore, totalMax: v.totalMax, totalRank: v.totalRank, totalRankOf: v.totalRankOf, totalDeviation: v.totalDeviation });
   }
@@ -144,11 +151,13 @@ export async function gradesClick(ctx, a, b) {
   if (a === 'gr-new') { editing = 'new'; prefill = null; return true; }
   if (a === 'gr-edit') { editing = b.dataset.id; return true; }
   if (a === 'gr-close') { editing = ''; prefill = null; return true; }
-  if (a === 'gr-from-test') { pick = null; prefill = { eventId: b.dataset.event, title: b.dataset.title, date: b.dataset.date }; editing = 'new'; studentFor = ''; location.hash = '#grades=' + encodeURIComponent(b.dataset.student); return true; }
+  if (a === 'gr-from-test') { const t = String(b.dataset.title || ''); pick = null; prefill = { eventId: b.dataset.event, title: t, date: b.dataset.date, series: /北辰/.test(t) ? '北辰テスト' : /東部/.test(t) ? '東部地区テスト' : /英検/.test(t) ? '英検' : '定期テスト' }; editing = 'new'; studentFor = ''; location.hash = '#grades=' + encodeURIComponent(b.dataset.student); return true; }
   if (a === 'gr-from-file') { // 成績票の名前から、種類と試験の名前の当たりを付ける（例: 北辰_3年4回_山本実祈.pdf → 模試「北辰 3年4回」）
     const name = String(b.dataset.name || ''), who = (student && student.student && student.student.name || '').replace(/\s+/g, '');
-    const title = name.replace(/\.[a-z0-9]+$/i, '').replace(who, '').replace(who.slice(0, 2), '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
-    pick = null; prefill = { fileId: b.dataset.id, title, kind: /北辰|模試|もぎ|駿台|全統|会場/.test(name) ? 'mock' : 'regular' }; editing = 'new'; return true;
+    let title = name.replace(/\.[a-z0-9]+$/i, '').replace(who, '').replace(who.slice(0, 2), '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const series = /北辰/.test(name) ? '北辰テスト' : /東部/.test(name) ? '東部地区テスト' : /英検/.test(name) ? '英検' : /模試|もぎ|駿台|全統|会場/.test(name) ? '模試' : '定期テスト';
+    title = title.replace(/^(北辰テスト|北辰|東部地区テスト|東部地区|東部|英検|模試)\s*/, '').trim();
+    pick = null; prefill = { fileId: b.dataset.id, title, series }; editing = 'new'; return true;
   }
   if (a === 'gr-open') return false; // app.js で開く（新しいタブを先に開くため）
   if (a === 'gr-skip') {

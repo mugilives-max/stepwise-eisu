@@ -2,7 +2,7 @@
 // タブ: 概要・予定・記録と宿題・成績・計画と請求・基本情報。講師は担当の生徒だけで、計画と請求・基本情報は出ない。
 import { hwSubject } from '/assets/v2/learning-view.js?v=20261008-launch1';
 import { mdw, endOf, statusTag } from '/assets/v2/schedule-view.js?v=20261008-launch1';
-import { examCard, gradeCharts, summaryTable, examPager } from '/assets/v2/grades-view.js?v=20261008-launch1';
+import { examCard, gradeCharts, summaryTable, examPager, seriesPick } from '/assets/v2/grades-view.js?v=20261008-launch1';
 import { ICON } from '/staff/ui.js?v=20261008-launch1';
 
 let list = null, query = '', hub = null, hubFor = '';
@@ -119,7 +119,8 @@ function grades(ctx, x) {
   let h = `<p style="margin-top:12px"><a class="small-btn primary" href="#grades=${sid}">結果を入れる・直す</a></p>`;
   if (g.nextTest) h += `<p class="small">次のテスト: ${ctx.esc(g.nextTest.title || '')} ${md(g.nextTest.date)}（あと${g.nextTest.days}日）</p>`;
   if (!g.exams.length) return h + '<p class="muted small">まだ成績の記録はありません。</p>';
-  return h + summaryTable(g.exams) + gradeCharts(g.exams, x.student.id) + examPager(g.exams, x.student.id, e => examCard(e));
+  const pk = seriesPick(g.exams, x.student.id);
+  return h + pk.bar + summaryTable(pk.list) + gradeCharts(pk.list, x.student.id) + examPager(pk.list, x.student.id, e => examCard(e));
 }
 function money(ctx, x) {
   const { esc } = ctx;

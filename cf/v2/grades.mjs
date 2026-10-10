@@ -61,7 +61,7 @@ async function examsOf(c, studentId, who, subjects = null) {
   return exams.map(e => {
     const all = scores.filter(s => s.examId === e.id), r = reviews[e.id];
     const total = { score: e.totalScore ?? sum(all, 'score'), max: e.totalMax ?? sum(all, 'max'), rank: e.totalRank, rankOf: e.totalRankOf, deviation: e.totalDeviation, fromSubjects: e.totalScore === null && all.length > 0 };
-    const out = { id: e.id, kind: e.kind, name: e.name, date: e.date, grade: e.grade, total, scores: all.map(scoreView), version: e.version };
+    const out = { id: e.id, kind: e.kind, series: e.series || (e.kind === 'regular' ? '定期テスト' : '模試'), name: e.name, date: e.date, grade: e.grade, total, scores: all.map(scoreView), version: e.version };
     if (who === 'teacher') { out.scores = all.filter(s => subjects.includes(s.subject)).map(scoreView); out.otherSubjects = all.filter(s => !subjects.includes(s.subject)).map(s => s.subject); }
     if (r) out.review = who === 'student' ? { nextSteps: r.nextSteps } : who === 'teacher' ? { issues: r.issues, nextSteps: r.nextSteps, version: r.version } : { good: r.good, issues: r.issues, nextSteps: r.nextSteps, version: r.version };
     return out;
@@ -113,9 +113,13 @@ async function saveExam(c, me, b) {
   const studentId = old ? old.studentId : String(b.studentId || '');
   const s = await c.db.prepare('select * from students where id = ?').bind(studentId).first(); if (!s) fail('notFound', '生徒が見つかりません', 404);
   await staffScope(c, me, s.id);
-  const kind = String(b.kind ?? old?.kind ?? ''), name = String(b.name ?? old?.name ?? '').trim(), date = String(b.date ?? old?.date ?? ''), grade = String(b.grade ?? old?.grade ?? s.grade ?? '').trim().slice(0, 20);
+  // series は「何の試験か」（定期テスト・北辰テスト・東部地区テスト・英検 …）。name はその中の回（3年4回、2学期中間 …）。kind は 定期テスト → regular、それ以外 → mock（見せ方: 得点率か偏差値か）
+  const kindRaw = String(b.kind ?? old?.kind ?? '');
+  const series = String(b.series ?? old?.series ?? '').trim().slice(0, 20) || (kindRaw === 'regular' ? '定期テスト' : kindRaw === 'mock' ? '模試' : ''); // 種類だけ来たら（前の画面・道具）そこから
+  const kind = kindRaw || (series === '定期テスト' ? 'regular' : 'mock'), name = String(b.name ?? old?.name ?? '').trim(), date = String(b.date ?? old?.date ?? ''), grade = String(b.grade ?? old?.grade ?? s.grade ?? '').trim().slice(0, 20);
   if (!['regular', 'mock'].includes(kind)) fail('badKind', '定期テストか模試かを選んでください');
-  if (!name || name.length > 40) fail('badName', '試験の名前を40文字以内で入れてください（例: 2学期中間テスト）');
+  if (!series) fail('badSeries', '何の試験かを選んでください（定期テスト・北辰テスト など）');
+  if (!name || name.length > 40) fail('badName', '回の名前を40文字以内で入れてください（例: 2学期中間、3年4回）');
   if (!validDate(date) || date > todayJst(c.now)) fail('badDate', '実施日（今日まで）を入れてください');
   // 全体の数は教室管理者だけ
   const manager = isManager(me);
@@ -124,10 +128,10 @@ async function saveExam(c, me, b) {
   const eventId = old ? old.eventId : String(b.eventId || '');
   if (eventId && !(await c.db.prepare("select 1 from sharedEvents where id = ? and studentId = ?").bind(eventId, s.id).first())) fail('badEvent', 'テストの予定が見つかりません');
   const now = iso(c.now), id = old ? old.id : newId('ex');
-  if (old) await c.db.prepare('update exams set kind = ?, name = ?, date = ?, grade = ?, totalScore = ?, totalMax = ?, totalRank = ?, totalRankOf = ?, totalDeviation = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')
-    .bind(kind, name, date, grade, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, now, id, old.version).run();
-  else await c.db.prepare("insert into exams (id, studentId, kind, name, date, grade, eventId, totalScore, totalMax, totalRank, totalRankOf, totalDeviation, createdBy, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, s.id, kind, name, date, grade, eventId, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, 'staff:' + me.id, now, now).run();
+  if (old) await c.db.prepare('update exams set kind = ?, series = ?, name = ?, date = ?, grade = ?, totalScore = ?, totalMax = ?, totalRank = ?, totalRankOf = ?, totalDeviation = ?, updatedAt = ?, version = version + 1 where id = ? and version = ?')
+    .bind(kind, series, name, date, grade, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, now, id, old.version).run();
+  else await c.db.prepare("insert into exams (id, studentId, kind, series, name, date, grade, eventId, totalScore, totalMax, totalRank, totalRankOf, totalDeviation, createdBy, createdAt, updatedAt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, s.id, kind, series, name, date, grade, eventId, t.totalScore, t.totalMax, t.totalRank, t.totalRankOf, t.totalDeviation, 'staff:' + me.id, now, now).run();
   await audit(c, old ? 'examUpdate' : 'examCreate', id, { kind, date });
   return { examId: id };
 }
@@ -206,7 +210,7 @@ export const gradesRoutes = {
     const ev = await c.db.prepare("select * from sharedEvents where id = ? and kind = 'test'").bind(String(b.eventId || '')).first(); if (!ev) fail('notFound', 'テストの予定が見つかりません', 404);
     await staffScope(c, me, ev.studentId);
     if (!(await c.db.prepare('select 1 from exams where eventId = ?').bind(ev.id).first()))
-      await c.db.prepare("insert into exams (id, studentId, kind, name, date, status, eventId, createdBy, createdAt, updatedAt) values (?, ?, 'regular', ?, ?, 'skipped', ?, ?, ?, ?)").bind(newId('ex'), ev.studentId, ev.title || 'テスト', ev.dateTo, ev.id, 'staff:' + me.id, iso(c.now), iso(c.now)).run();
+      await c.db.prepare("insert into exams (id, studentId, kind, series, name, date, status, eventId, createdBy, createdAt, updatedAt) values (?, ?, 'regular', '定期テスト', ?, ?, 'skipped', ?, ?, ?, ?)").bind(newId('ex'), ev.studentId, ev.title || 'テスト', ev.dateTo, ev.id, 'staff:' + me.id, iso(c.now), iso(c.now)).run();
     await audit(c, 'examSkip', ev.id);
     return {};
   },
