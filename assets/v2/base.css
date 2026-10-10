@@ -642,3 +642,29 @@ h2::after { display: none; }
 .tabs2 { margin-top: 10px; }
 .agree { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink); padding: 4px 0; }
 .agree input { width: 20px; height: 20px; }
+
+/* 成績: 科目の表と試験をまたいだ一覧（2026-10-11）。数字は右寄せ、1 列目は科目 */
+.gwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.gtable { border-collapse: collapse; font-size: 14px; min-width: 100%; }
+table.gtable th, table.gtable td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.gtable thead th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: right; vertical-align: bottom; }
+table.gtable thead th .nm { display: block; color: var(--ink); font-size: 13px; }
+table.gtable thead th small { display: block; font-weight: 400; }
+table.gtable tbody th { text-align: left; font-weight: 500; position: sticky; left: 0; background: var(--white); }
+table.gtable td { text-align: right; font-variant-numeric: tabular-nums; }
+table.gtable td small { color: var(--muted); font-size: 11px; }
+table.gtable tr.tot th, table.gtable tr.tot td { border-top: 2px solid var(--line); font-weight: 600; }
+.gsum { margin: 12px 0; }
+.gcard .ghead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+button.linkish { background: none; border: 0; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; font-size: 13px; }
+/* 入力欄: 模試は順位・人数の列を隠し、定期テストは偏差値の列を隠す（種類を切り替えるとその場で変わる） */
+form[data-form=gr-save]:has(select[name=kind] option[value=mock]:checked) .c-rank { display: none; }
+form[data-form=gr-save]:has(select[name=kind] option[value=regular]:checked) .c-dev { display: none; }
+table.gform th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: left; }
+.gmini { margin: 12px 0; }
+.gmini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 6px; }
+.gmini-one { margin: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 4px; background: var(--white); }
+.gmini-one figcaption { display: flex; align-items: baseline; gap: 6px; font-size: 12px; margin-bottom: 2px; }
+.gmini-one figcaption .val { font-size: 15px; font-weight: 700; margin-left: auto; font-variant-numeric: tabular-nums; }
+.gmini-one figcaption .up { color: var(--ok); } .gmini-one figcaption .down { color: var(--danger); }
+.gmini-one svg { width: 100%; height: auto; display: block; }
