@@ -3,7 +3,7 @@
 // 一覧は白い枠に 1 件 1 行、宿題は左の丸を押して「できた」（assets/v2/portal-ui.js）。
 // 鍵は端末に保存して URL から消す。保護者が「保護者だけ」にした操作はできない。切り替える前は「準備中」の案内を出す（health の cutover.live で決める）。
 import { call, esc, liveState } from '/assets/v2/api.js';
-import { gradesView, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
+import { gradesView, gradesClickShared, uploadFile, openFile } from '/assets/v2/grades-view.js?v=20261008-launch1';
 import { monthCalendar, gridStart, gridEnd } from '/assets/v2/calendar.js?v=20261008-launch1';
 import { EVENT_KIND } from '/assets/v2/schedule-view.js?v=20261008-launch1';
 import { lessonRows, dayRows, nextLessonHero, lessonSheet, homeworkRows, recordCards, eventRows, eventSheet, wireSheets, keepSheet, picon, md, daysText } from '/assets/v2/portal-ui.js?v=20261008-launch1';
@@ -126,6 +126,7 @@ app.addEventListener('click', ev => {
   const b = ev.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
   if (cal && cal.click(a, b)) return render();
+  if (gradesClickShared(a, b)) return render();
   if (a === 'lesson') { sheetState = { kind: 'lesson', id: b.dataset.id, pick: '', note: '' }; return render(); }
   if (a === 'pick') { captureSheetInputs(); sheetState.pick = b.dataset.c; return render(); }
   if (a === 'close-sheet') { closeSheet(); return render(); }

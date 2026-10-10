@@ -19,38 +19,66 @@ function fitTicks(values, step, pad, floor, ceil, minSteps) {
   const t = []; for (let v = lo; v <= hi + 1e-9; v += step) t.push(v);
   return t;
 }
-// 科目ごとに小さなグラフを並べる（1 つのグラフに全科目の線を重ねると読めない。本人 2026-10-11）。
-// 目盛りは全部の小さなグラフで同じにして、科目どうしを見比べられるようにする。各グラフに最新の値と前回からの差を添える
-function miniCharts(list, caption, value, totalValue, fit, unit) {
-  if (list.length < 2) return '';
-  const n = list.length, mk = f => list.map((e, i) => ({ i, v: f(e), e })).filter(p => p.v !== null && p.v !== undefined && !Number.isNaN(p.v));
-  const series = [{ name: '合計', pts: mk(totalValue) }, ...subjectsOf(list).map(s => ({ name: s, pts: mk(e => value(e, s)) }))].filter(x => x.pts.length >= 2);
-  if (!series.length) return '';
-  const ticks = fitTicks(series.flatMap(x => x.pts.map(p => p.v)), fit.step, fit.pad, fit.floor, fit.ceil, fit.minSteps);
-  const min = ticks[0], max = ticks[ticks.length - 1];
-  const W = 220, H = 110, L = 26, R = 10, T = 8, B = 18;
-  const x = i => L + i * (W - L - R) / (n - 1), y = v => T + (H - T - B) * (1 - (v - min) / (max - min));
-  const grid = ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 4}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(v)}</text>`).join('');
-  const dates = [0, n - 1].map(i => `<text x="${x(i)}" y="${H - 5}" text-anchor="${i ? 'end' : 'start'}" font-size="9" fill="var(--muted)">${esc(md(list[i].date))}</text>`).join('');
-  const one = ({ name, pts }) => {
-    const last = pts[pts.length - 1], prev = pts[pts.length - 2], d = last.v - prev.v;
-    const delta = Math.abs(d) < 0.05 ? '<span class="muted">→ 変わらず</span>' : `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${n1(Math.abs(d))}</span>`;
-    const dots = pts.map(p => `<circle cx="${x(p.i)}" cy="${y(p.v)}" r="3.5" fill="var(--primary)" stroke="var(--white)" stroke-width="1.5"><title>${esc(p.e.name)}（${esc(md(p.e.date))}）: ${n1(p.v)}${unit}</title></circle>`).join('');
-    return `<figure class="gmini-one"><figcaption><strong>${esc(name)}</strong><span class="val">${n1(last.v)}${unit}</span>${delta}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(name)}の推移">${grid}${dates}<polyline fill="none" stroke="var(--primary)" stroke-width="2" points="${pts.map(p => x(p.i) + ',' + y(p.v)).join(' ')}"/>${dots}</svg></figure>`;
-  };
-  return `<div class="gmini"><div class="small muted">${caption}（最新と、前回からの差）</div><div class="gmini-grid">${series.map(one).join('')}</div></div>`;
+// 画面の中の選択（生徒ごと）: グラフの種類と科目、開いている試験。スタッフ・保護者・生徒の画面で共通。
+// 1 画面に全科目の線を重ねず、科目の帯で切り替えて 1 本を大きく見せる（本人 2026-10-11「グラフが小さすぎて見えない。バーで表示科目を変えられるとか」）
+const SEL = {};
+export function gradeSel(studentId) { return SEL[studentId] || (SEL[studentId] = { kind: '', subject: '合計', exam: '' }); }
+export function gradesClickShared(a, b) {
+  if (a !== 'gv-subject' && a !== 'gv-kind' && a !== 'gv-exam') return false;
+  const sel = gradeSel(b.dataset.sid);
+  if (a === 'gv-subject') sel.subject = b.dataset.s;
+  else if (a === 'gv-kind') { sel.kind = b.dataset.k; sel.subject = '合計'; }
+  else sel.exam = b.dataset.id;
+  return true;
 }
-// 推移: 模試は偏差値、定期テストは得点率（点数 ÷ 満点）。その種類の試験が 2 つ以上あるときだけ
-export function gradeCharts(exams) {
+const chip = (action, sid, attrs, label, on) => `<button type="button" class="gchip${on ? ' on' : ''}" data-action="${action}" data-sid="${esc(sid)}" ${attrs}${on ? ' aria-pressed="true"' : ''}>${esc(label)}</button>`;
+
+// 推移のグラフ（1 本を大きく）。模試は偏差値、定期テストは得点率。上の帯で種類（両方あるとき）と科目を選ぶ。目盛りは値に合わせる
+export function gradeCharts(exams, studentId = '') {
   const list = exams.filter(e => e.scores.length).slice().sort((a, b) => a.date.localeCompare(b.date));
   const mock = list.filter(e => e.kind === 'mock'), regular = list.filter(e => e.kind !== 'mock');
+  const sel = gradeSel(studentId);
+  const kinds = [['mock', '模試'], ['regular', '定期テスト']].filter(([k]) => (k === 'mock' ? mock : regular).length >= 2);
+  if (!kinds.length) return '';
+  if (!kinds.some(([k]) => k === sel.kind)) sel.kind = kinds[0][0];
+  const kind = sel.kind, cur = kind === 'mock' ? mock : regular, useDev = kind === 'mock' && cur.some(e => e.scores.some(x => x.deviation !== null && x.deviation !== undefined));
   const find = (e, s) => e.scores.find(x => x.subject === s);
-  const rate = (e, s) => { const x = find(e, s); return x && x.score !== null && x.max ? x.score / x.max * 100 : null; };
-  const dev = (e, s) => { const x = find(e, s); return x && x.deviation !== null ? x.deviation : null; };
-  const totalRate = e => e.total.score !== null && e.total.score !== undefined && e.total.max ? e.total.score / e.total.max * 100 : null;
-  const totalDev = e => e.total.deviation !== null && e.total.deviation !== undefined ? e.total.deviation : null;
-  return miniCharts(mock, '模試の偏差値の推移', dev, totalDev, { step: 5, pad: 2, floor: 20, ceil: 90, minSteps: 3 }, '')
-    + miniCharts(regular, '定期テストの得点率の推移（%）', rate, totalRate, { step: 10, pad: 5, floor: 0, ceil: 100, minSteps: 3 }, '%');
+  const value = (e, s) => s === '合計' ? (useDev ? (e.total.deviation ?? null) : (e.total.score !== null && e.total.score !== undefined && e.total.max ? e.total.score / e.total.max * 100 : null))
+    : (() => { const x = find(e, s); if (!x) return null; return useDev ? (x.deviation ?? null) : (x.score !== null && x.max ? x.score / x.max * 100 : null); })();
+  const subjects = ['合計', ...subjectsOf(cur)].filter(s => cur.filter(e => value(e, s) !== null).length >= 2);
+  if (!subjects.length) return '';
+  if (!subjects.includes(sel.subject)) sel.subject = subjects[0];
+  const pts = cur.map((e, i) => ({ i, v: value(e, sel.subject), e })).filter(p => p.v !== null);
+  const allVals = subjects.flatMap(s => cur.map(e => value(e, s))).filter(v => v !== null); // 目盛りは科目を切り替えても同じ（見比べられるように）
+  const ticks = useDev ? fitTicks(allVals, 5, 2, 20, 90, 3) : fitTicks(allVals, 10, 5, 0, 100, 3);
+  const min = ticks[0], max = ticks[ticks.length - 1], n = cur.length, unit = useDev ? '' : '%';
+  const W = 640, H = 250, L = 38, R = 20, T = 26, B = 44;
+  const x = i => n === 1 ? W / 2 : L + i * (W - L - R) / (n - 1), y = v => T + (H - T - B) * (1 - (v - min) / (max - min));
+  const grid = ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${Math.round(v)}</text>`).join('');
+  const short = s => { const t = String(s).replace(/テスト/g, '').replace(/[（(].*?[）)]/g, m => m.slice(1, -1)); return t.length > 7 ? t.slice(0, 7) + '…' : t; };
+  const labels = cur.map((e, i) => `<text x="${x(i)}" y="${H - 26}" text-anchor="middle" font-size="11" fill="var(--ink)">${esc(short(e.name))}</text><text x="${x(i)}" y="${H - 12}" text-anchor="middle" font-size="10" fill="var(--muted)">${esc(md(e.date))}</text>`).join('');
+  const line = pts.length >= 2 ? `<polyline fill="none" stroke="var(--primary)" stroke-width="2.5" points="${pts.map(p => x(p.i) + ',' + y(p.v)).join(' ')}"/>` : '';
+  const dots = pts.map(p => `<circle cx="${x(p.i)}" cy="${y(p.v)}" r="5" fill="var(--primary)" stroke="var(--white)" stroke-width="2"><title>${esc(p.e.name)}（${esc(md(p.e.date))}）: ${n1(p.v)}${unit}</title></circle><text x="${x(p.i)}" y="${y(p.v) - 10}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">${n1(p.v)}</text>`).join('');
+  const last = pts[pts.length - 1], prev = pts[pts.length - 2], d = last && prev ? last.v - prev.v : null;
+  const delta = d === null ? '' : Math.abs(d) < 0.05 ? '<span class="muted">前回と同じ</span>' : `<span class="${d > 0 ? 'up' : 'down'}">前回から ${d > 0 ? '▲' : '▼'} ${n1(Math.abs(d))}${unit}</span>`;
+  let h = '<div class="gchart">';
+  if (kinds.length > 1) h += `<div class="gchips kinds">${kinds.map(([k, l]) => chip('gv-kind', studentId, `data-k="${k}"`, l, k === kind)).join('')}</div>`;
+  h += `<div class="gchips">${subjects.map(s => chip('gv-subject', studentId, `data-s="${esc(s)}"`, s, s === sel.subject)).join('')}</div>`;
+  h += `<div class="gchart-head"><strong>${esc(sel.subject)}</strong><span class="small muted">${useDev ? '偏差値' : '得点率（%）'}の推移</span><span class="small" style="margin-left:auto">${delta}</span></div>`;
+  h += `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sel.subject)}の${useDev ? '偏差値' : '得点率'}の推移">${grid}${labels}${line}${dots}</svg></div>`;
+  return h;
+}
+
+// 試験を 1 つずつ見る（‹ 北辰 3年3回 ›）。card(e) がその試験のカードを返す（本人 2026-10-11「カレンダーっぽく移動できるように」）
+export function examPager(exams, studentId, card) {
+  const list = exams.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)); // 新しい順
+  if (!list.length) return '';
+  const sel = gradeSel(studentId);
+  let i = list.findIndex(e => e.id === sel.exam); if (i < 0) i = 0;
+  const e = list[i], newer = list[i - 1], older = list[i + 1];
+  const btn = (t, label, arrow) => t ? `<button type="button" class="icon" data-action="gv-exam" data-sid="${esc(studentId)}" data-id="${esc(t.id)}" aria-label="${label}">${arrow}</button>` : '<span class="icon-ph"></span>';
+  const bar = list.length > 1 ? `<div class="gpager">${btn(older, '前の試験', '‹')}<div class="gpager-t"><strong>${esc(e.name)}</strong><small>${esc(md(e.date))}・${list.length - i} / ${list.length}</small></div>${btn(newer, '次の試験', '›')}</div>` : '';
+  return bar + card(e);
 }
 
 const KIND = { regular: '定期テスト', mock: '模試' };
@@ -104,9 +132,7 @@ export function gradesView(st, { who, dis = '' }) {
   let h = '';
   if (st.nextTest) h += `<p class="notice">${esc(st.nextTest.title || 'テスト')}まで あと <strong>${st.nextTest.days}日</strong>（${esc(md(st.nextTest.date))}）</p>`;
   if (!st.exams.length) h += '<p class="muted">まだ成績の記録はありません。成績票が返ってきたら、写真を送ってください。</p>';
-  h += summaryTable(st.exams) + gradeCharts(st.exams);
-  const list = st.exams.slice().reverse();
-  h += list.map(e => examCard(e, { lessons: who === 'family' && st.lessons ? st.lessons.find(x => x.examId === e.id) : null })).join('');
+  h += summaryTable(st.exams) + gradeCharts(st.exams, st.id) + examPager(st.exams, st.id, e => examCard(e, { lessons: who === 'family' && st.lessons ? st.lessons.find(x => x.examId === e.id) : null }));
   h += `<h2>成績票を送る</h2>${uploadForm(dis, who === 'family' ? `<input type="hidden" name="studentId" value="${esc(st.id)}">` : '')}`;
   if (st.files.length) h += `<h3>送った成績票</h3>${fileList(st.files, 'gr-open')}`;
   return h;

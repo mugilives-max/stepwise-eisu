@@ -1,6 +1,6 @@
 // スタッフの画面: 成績（6段目）。#grades（一覧・届いた成績票・結果の入力待ち）と #grades=<生徒>（試験の記録・入力）。
 // 講師は担当の生徒の担当科目だけ入力でき、ほかの科目は合計だけ見える。成績票は教室管理者だけ。
-import { examCard, gradeCharts, summaryTable, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261008-launch1';
+import { examCard, gradeCharts, summaryTable, examPager, gradeSel, fileList, uploadForm, uploadFile, openFile, jst } from '/assets/v2/grades-view.js?v=20261008-launch1';
 import { sheet, rowButton, rowLink } from '/staff/ui.js?v=20261008-launch1';
 
 let overview = null, student = null, studentFor = '', editing = '', prefill = null, pick = null; // pick: 下から出る画面 { kind: 'file'|'test'|'resolve', id }
@@ -54,9 +54,9 @@ export function gradesStudentPage(ctx, studentId) {
   if (st.nextTest) h += `<p class="small">次のテスト: ${esc(st.nextTest.title || '')}（${esc(md(st.nextTest.date))}、あと${st.nextTest.days}日）</p>`;
   if (st.pendingTests.length) h += `<h2>結果の入力待ち</h2>${pendingList(ctx, st.pendingTests, false)}`;
   h += `<p><button class="primary" data-action="gr-new"${ctx.dis()}>＋ 試験の結果を入れる</button></p>`;
-  h += summaryTable(st.exams) + gradeCharts(st.exams);
-  // 試験のカード。その試験にひもづいた成績票（PDF・写真）はカードの中から開く
-  h += st.exams.slice().reverse().map(e => examCard(e, { sheets: st.manager ? st.files.filter(f => f.examId === e.id && f.status !== 'dismissed') : [], actions: `<div class="row"><button data-action="gr-edit" data-id="${esc(e.id)}"${ctx.dis()}>直す</button>${st.manager ? `<button class="danger" data-action="gr-delete" data-id="${esc(e.id)}" data-version="${e.version}"${ctx.dis()}>消す</button>` : ''}</div>` })).join('');
+  h += summaryTable(st.exams) + gradeCharts(st.exams, studentId);
+  // 試験は 1 つずつ（‹ ›）。その試験にひもづいた成績票（PDF・写真）はカードの中から開く
+  h += examPager(st.exams, studentId, e => examCard(e, { sheets: st.manager ? st.files.filter(f => f.examId === e.id && f.status !== 'dismissed') : [], actions: `<div class="row"><button data-action="gr-edit" data-id="${esc(e.id)}"${ctx.dis()}>直す</button>${st.manager ? `<button class="danger" data-action="gr-delete" data-id="${esc(e.id)}" data-version="${e.version}"${ctx.dis()}>消す</button>` : ''}</div>` }));
   if (!st.exams.length) h += '<p class="muted">まだ記録がありません。成績票（PDF・写真）があれば、下の「この成績票の結果を入れる」から点数と偏差値を入れます。</p>';
   if (st.manager) {
     // 試験にひもづいていない成績票: ここから結果を入れる（入れると自動でひもづく）か、できている試験にひもづける
@@ -133,7 +133,7 @@ export async function gradesSubmit(ctx, kind, el) {
     if (r.ok && fileId) r = await ctx.call('grades/files/resolve', { id: fileId, status: 'imported', examId });
     if (r.ok && (v.good || v.issues || v.nextSteps || el.dataset.reviewVersion)) r = await ctx.call('grades/reviews/save', { examId, version: el.dataset.reviewVersion ? Number(el.dataset.reviewVersion) : undefined, good: v.good, issues: v.issues, nextSteps: v.nextSteps });
   }
-  if (r.ok) { editing = ''; prefill = null; student = null; studentFor = ''; overview = null; ctx.say('保存しました', 'ok'); }
+  if (r.ok) { if (!id) gradeSel(studentFor).exam = ''; editing = ''; prefill = null; student = null; studentFor = ''; overview = null; ctx.say('保存しました', 'ok'); }
   else if (!ctx.handleAuth(r)) ctx.say(r.error.message + (id ? '' : '（試験はできている場合があります。画面を更新して確かめてください）'), 'error');
   return true;
 }
