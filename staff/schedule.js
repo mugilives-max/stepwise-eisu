@@ -65,7 +65,7 @@ export function schedulePage(ctx, me) {
     const d = addDays(start, i);
     if (i === 35 && ymOf(d) !== month) break; // 6週目がまるごと次の月なら描かない
     const ls = data.lessons.filter(l => l.date === d && l.status in RANK);
-    const bars = data.events.filter(e => e.date <= d && d <= e.dateTo && e.kind !== 'unavailable').map(e => `<span class="bar ${e.kind}">${esc(e.title || 'テスト')}</span>`)
+    const bars = groupEvents(data.events.filter(e => e.date <= d && d <= e.dateTo && e.kind !== 'unavailable')).map(g => `<span class="bar ${g.kind}">${esc(g.title || 'テスト')}${g.items.length > 1 ? `<small>×${g.items.length}</small>` : ''}</span>`)
       .concat(data.unavailability.filter(o => o.date === d).map(o => `<span class="bar off">${o.staffId ? '休み' : '休校'}</span>`))
       .concat(data.meetings.filter(m => m.date === d).map(() => '<span class="bar meeting">面談</span>'));
     const by = {}; ls.forEach(l => { const g = by[l.studentId] = by[l.studentId] || { n: 0, rank: 9 }; g.n++; g.rank = Math.min(g.rank, RANK[l.status]); });
@@ -174,12 +174,12 @@ function dayPanel(ctx, me, manager, nameOf, staffOf) {
 }
 function oneDay(ctx, me, manager, nameOf, staffOf, d, first) {
   const { esc } = ctx;
-  const ls = data.lessons.filter(l => l.date === d).sort((a, b) => a.start.localeCompare(b.start)), offs = data.unavailability.filter(o => o.date === d), evs = data.events.filter(e => e.date <= d && d <= e.dateTo), mts = data.meetings.filter(m => m.date === d);
+  const ls = data.lessons.filter(l => l.date === d).sort((a, b) => a.start.localeCompare(b.start)), offs = data.unavailability.filter(o => o.date === d), evs = groupEvents(data.events.filter(e => e.date <= d && d <= e.dateTo)), mts = data.meetings.filter(m => m.date === d);
   let h = first ? `<div class="day-title"><strong>${mdw(d)}</strong><span class="muted small">授業 ${ls.filter(l => l.status in RANK).length}件</span><span style="flex:1"></span>${manager ? '<button class="small-btn" data-action="sch-sheet" data-k="create">＋ この日に仮予定</button>' : ''}</div>`
     : `<button class="day-band" data-action="sch-day" data-date="${d}">${mdw(d)}</button>`;
   if (!ls.length && !offs.length && !evs.length && !mts.length) return h + `<p class="muted small"${first ? '' : ' style="margin:4px 2px 8px"'}>予定はありません。</p>`;
   h += '<div class="rows">';
-  evs.forEach(e => { h += `<div class="ev ${e.kind}"><span class="t">${e.start ? e.start + '〜' : '終日'}</span><span class="b">${EVENT_KIND[e.kind]}：${esc(e.studentName)} ${esc(e.title)}</span>${manager ? `<button class="x" data-action="sch-ev-del" data-id="${esc(e.id)}" aria-label="消す"${ctx.dis()}>×</button>` : ''}</div>`; });
+  evs.forEach(g => { h += `<div class="ev ${g.kind}"><span class="t">${g.start ? g.start + '〜' : '終日'}</span><span class="b">${EVENT_KIND[g.kind]}：${esc(g.items.map(e => e.studentName).filter(Boolean).join('・'))} ${esc(g.title)}</span>${manager ? `<button class="x" data-action="sch-ev-del" data-ids="${esc(g.items.map(e => e.id).join(','))}" data-n="${g.items.length}" aria-label="消す"${ctx.dis()}>×</button>` : ''}</div>`; });
   offs.forEach(o => { h += `<div class="ev off"><span class="t">${o.start ? o.start + '〜' + o.end : '終日'}</span><span class="b">休み：${esc(o.staffId ? staffOf[o.staffId] || '' : '教室全体')} ${esc(o.note)}</span>${manager || o.staffId === me.id ? `<button class="x" data-action="sch-off-del" data-id="${esc(o.id)}" aria-label="消す"${ctx.dis()}>×</button>` : ''}</div>`; });
   mts.forEach(m => { h += `<div class="ev meeting"><span class="t">${m.start}〜${endOf(m.start, m.minutes)}</span><span class="b">面談：${esc(m.title)}${m.deliveryMode === 'online' ? '（オンライン）' : ''}</span><button class="x" data-action="sch-mt-cancel" data-id="${esc(m.id)}" aria-label="取りやめる"${ctx.dis()}>×</button></div>`; });
   ls.forEach(l => {
@@ -363,7 +363,23 @@ export async function scheduleClick(ctx, a, b) {
   if (a === 'sch-resolve') { await after(ctx, await ctx.call('schedule/requests/resolve', { id }), '済みにしました'); return true; }
   if (a === 'sch-send') { if (!confirm('未送信の仮予定を予定表として送りますか？ 保護者に1回お知らせします。')) return true; const r = await ctx.call('schedule/lessons/sendHeld', { studentId: b.dataset.sid }); await after(ctx, r, r.ok ? r.sent + '件の予定表を送りました' : ''); return true; }
   if (a === 'sch-off-del') { await after(ctx, await ctx.call('schedule/unavailability/delete', { id }), '休みを消しました'); return true; }
-  if (a === 'sch-ev-del') { if (!confirm('この共有予定を消しますか？')) return true; await after(ctx, await ctx.call('schedule/events/delete', { id }), '消しました'); return true; }
+  if (a === 'sch-ev-del') {
+    const ids = String(b.dataset.ids || id || '').split(',').filter(Boolean), n = Number(b.dataset.n || ids.length);
+    if (!confirm(n > 1 ? `${n} 人分の共有予定をまとめて消しますか？` : 'この共有予定を消しますか？')) return true;
+    let last = { ok: true }; for (const x of ids) { last = await ctx.call('schedule/events/delete', { id: x }); if (!last.ok) break; }
+    await after(ctx, last, n > 1 ? `${n} 人分を消しました` : '消しました'); return true;
+  }
   if (a === 'sch-mt-cancel') { if (!confirm('この面談を取りやめますか？')) return true; await after(ctx, await ctx.call('schedule/meetings/cancel', { id }), '面談を取りやめました'); return true; }
   return false;
+}
+
+// 同じ種類・題名・期間・時刻の共有予定（たとえば中 3 全員の北辰テスト）を 1 つにまとめる。items に各生徒の分
+function groupEvents(events) {
+  const by = new Map();
+  for (const e of events) {
+    const k = [e.kind, e.title || '', e.date, e.dateTo, e.start || '', e.end || ''].join('|');
+    if (!by.has(k)) by.set(k, { kind: e.kind, title: e.title, date: e.date, dateTo: e.dateTo, start: e.start, end: e.end, items: [] });
+    by.get(k).items.push(e);
+  }
+  return [...by.values()];
 }
