@@ -27,7 +27,7 @@ export async function backupToR2(env, db, now) {
   const snap = await snapshot(db, now);
   const key = BACKUP_PREFIX + jstDate(now) + '.json';
   const counts = Object.fromEntries(Object.entries(snap.tables).map(([k, v]) => [k, v.length]));
-  const body = JSON.stringify({ takenAt: snap.takenAt, counts, tables: snap.tables });
+  const body = new TextEncoder().encode(JSON.stringify({ takenAt: snap.takenAt, counts, tables: snap.tables })); // バイト数で数える（日本語は 1 文字 3 バイト）
   await env.FILES.put(key, body, { httpMetadata: { contentType: 'application/json' }, customMetadata: { takenAt: snap.takenAt, rows: String(snap.rows) } });
   const removed = await prune(env, now);
   return { key, tables: Object.keys(snap.tables).length, rows: snap.rows, bytes: body.length, removed };
@@ -43,7 +43,7 @@ export async function listBackups(env) {
   if (!env.FILES) return [];
   const out = []; let cursor;
   do {
-    const r = await env.FILES.list({ prefix: BACKUP_PREFIX, cursor });
+    const r = await env.FILES.list({ prefix: BACKUP_PREFIX, cursor, include: ['customMetadata'] }); // 行数は customMetadata に持つ（頼まないと返ってこない）
     for (const o of r.objects) out.push({ key: o.key, date: o.key.slice(BACKUP_PREFIX.length, BACKUP_PREFIX.length + 10), size: o.size, rows: Number((o.customMetadata || {}).rows || 0) || 0 });
     cursor = r.truncated ? r.cursor : undefined;
   } while (cursor);
