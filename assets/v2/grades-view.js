@@ -29,12 +29,12 @@ export function seriesOf(exams) {
   const last = {}; for (const e of exams) if (!last[e.series] || last[e.series] < e.date) last[e.series] = e.date;
   return Object.keys(last).sort((a, b) => (SERIES_FIRST.indexOf(a) + 1 || 99) - (SERIES_FIRST.indexOf(b) + 1 || 99) || last[b].localeCompare(last[a]));
 }
-// 帯（何の試験か）と、選んだものの試験。1 種類しかなければ帯は出さない
+// 帯（何の試験か）と、選んだものの試験。1 種類だけでも帯は出す（階層が見えるように。本人 2026-10-11「成績でいきなり北辰になってる」）
 export function seriesPick(exams, studentId) {
   const all = seriesOf(exams), sel = gradeSel(studentId);
   if (!all.includes(sel.series)) sel.series = all[0] || '';
   const list = exams.filter(e => e.series === sel.series);
-  const bar = all.length > 1 ? `<div class="gchips series">${all.map(x => chip('gv-series', studentId, `data-s="${esc(x)}"`, x, x === sel.series)).join('')}</div>` : '';
+  const bar = all.length ? `<div class="gchips series">${all.map(x => chip('gv-series', studentId, `data-s="${esc(x)}"`, x, x === sel.series)).join('')}</div>` : '';
   return { bar, list, series: sel.series };
 }
 export function gradesClickShared(a, b) {
