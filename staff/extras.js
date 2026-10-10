@@ -3,8 +3,8 @@
 // 送信の記録: 送れなかったメール・カレンダー（失敗・止まっているもの）を送り直す・取り下げる。最近送ったものも見える。
 import { sheet, ICON } from '/staff/ui.js?v=20261008-launch1';
 
-let terms = null, effects = null, effOpen = 0;
-export function resetExtras() { terms = null; effects = null; effOpen = 0; }
+let terms = null, effects = null, effOpen = 0, backups = null;
+export function resetExtras() { terms = null; effects = null; effOpen = 0; backups = null; }
 export function leaveExtras() { effOpen = 0; }
 const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k] || ''}</svg>`;
 const jst = t => t ? new Date(Date.parse(t) + 9 * 3600e3).toISOString().slice(5, 16).replace('T', ' ').replace('-', '/') : '';
@@ -42,10 +42,25 @@ export function effectsPage(ctx) {
   h += effects.failed.length ? '<div class="group">' + effects.failed.map(row).join('') + '</div>' : '<p class="muted small">ありません。</p>';
   h += '<div class="sec-title">最近送ったもの</div>' + (effects.recent.length ? '<div class="group">' + effects.recent.map(row).join('') + '</div>' : '<p class="muted small">直近 30 日に送ったものはありません。</p>');
   h += `<p class="small muted">メールとカレンダーは Apps Script に頼んで送ります。失敗したものは、毎日の定期実行で 3 回まで自動で送り直します。${effects.dismissed ? `切り替え前・テスト用・取り下げで送らなかったもの ${effects.dismissed}件。` : ''}</p>`;
+  h += `<p><button class="small-btn" data-action="eff-test"${ctx.dis()}>テスト送信（代表あてに 1 通）</button></p>`;
+  h += backupHtml(ctx);
   const x = effOpen && [...effects.failed, ...effects.recent].find(e => e.id === effOpen);
   if (x) h += sheet(esc, x.subject || x.label, `<p class="small muted" style="margin-top:0">${esc(x.label)}${x.to ? '・' + esc(x.to) : ''}<br>作成 ${jst(x.createdAt)}${x.sentAt ? '・送信 ' + jst(x.sentAt) : ''}・試行 ${x.attempts}回</p>
     ${x.error ? `<p class="notice error small">${esc(x.error)}</p>` : ''}
     ${x.status === 'sent' ? '<p class="small">送りました。</p>' : `<div class="row"><button class="primary" data-action="eff-retry" data-id="${x.id}"${ctx.dis()}>送り直す</button><button data-action="eff-dismiss" data-id="${x.id}"${ctx.dis()}>取り下げる（送らない）</button></div>`}`, 'eff-close');
+  return h;
+}
+
+// ---- 台帳の控え（毎日 0:10 に全表を R2 へ。90 日分） ----
+function backupHtml(ctx) {
+  const { esc } = ctx;
+  if (!backups) { backups = { loading: true }; ctx.call('admin/backup/list').then(r => { backups = r.ok ? r : { error: r.error.message }; ctx.render(); }); }
+  let h = '<div class="sec-title">台帳の控え</div>';
+  if (backups.loading) return h + '<p class="muted small">読み込んでいます…</p>';
+  if (backups.error) return h + `<p class="notice error small">${esc(backups.error)}</p>`;
+  const l = backups.latest;
+  h += '<div class="group"><div class="irow" style="cursor:default"><span class="b"><b>' + (l ? `最新 ${esc(l.date)}${backups.stale ? ' <span class="tag danger">古い</span>' : ''}` : '<span class="tag danger">まだありません</span>') + `</b><small>${l ? `${l.rows}行・${Math.round(l.size / 1024)}KB・` : ''}${backups.count}日分（${backups.keepDays}日まで残す）</small></span><button class="small-btn" data-action="bk-run"${ctx.dis()}>今すぐ取る</button></div></div>`;
+  h += '<p class="small muted">毎日 0:10 に全表を Cloudflare R2 へ写します（30 日の巻き戻しとは別）。ドライブへの週次の写しは 11 月に。</p>';
   return h;
 }
 
@@ -62,6 +77,16 @@ export async function extrasClick(ctx, a, b) {
   let r;
   if (a === 'eff-open') { effOpen = Number(b.dataset.id); ctx.say(''); return true; }
   if (a === 'eff-close') { effOpen = 0; return true; }
+  if (a === 'eff-test') {
+    r = await ctx.call('admin/effects/test');
+    if (r.ok) { effects = null; ctx.say('代表あてに確認のメールを送りました', 'ok'); } else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
+    return true;
+  }
+  if (a === 'bk-run') {
+    r = await ctx.call('admin/backup/run');
+    if (r.ok) { backups = null; ctx.say(`控えを取りました（${r.tables}表・${r.rows}行）`, 'ok'); } else if (!ctx.handleAuth(r)) ctx.say(r.error.message, 'error');
+    return true;
+  }
   if (a === 'eff-retry' || a === 'eff-retry-all') {
     const ids = a === 'eff-retry' ? [Number(b.dataset.id)] : effects.failed.map(x => x.id);
     r = await ctx.call('admin/effects/retry', { ids });

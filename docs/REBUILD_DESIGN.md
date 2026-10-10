@@ -414,6 +414,18 @@
 - **片づけ**：送られなかった行（1日たった pending）と切れた鍵は、毎日0時10分に消す。
 - **テスト**：`test/v2-files.test.cjs`（テストでは R2 の代わりにメモリを使う。`test/helpers/v2-harness.cjs`）。
 
+### 台帳の控え（2026-10-11）
+
+切り替え後、v2 の台帳には D1 の巻き戻し（30 日）しか無かった（旧システムの週次バックアップは旧台帳だけを対象にしていて、10/10 に止めた）。本人の決定（2026-10-10、Kura の issues/stepwise-v2-backup.md）で 2 段にする。
+
+- **毎日（この段）**：`cf/v2/backup.mjs`。定期実行（0:10）の最初に、DB2 の全表（sqlite_master から取る）を 1 つの JSON にして R2 の `backup/<日付>.json` に置く。その日の処理の前の姿を残す。90 日より古いものは消す。控えが取れなくても、ほかの定期処理は止めない（結果の `backup.error` に残り、画面に「古い」と出る）。鍵は `backup/` で始まり `files` 表には載らないので、`files/get` からは開けない。
+  - 教室管理者は 設定 → 送信の記録と控え で、最新の日付・何日分・古すぎないか（2 日以上）を見て、「今すぐ取る」で取れる（`admin/backup/run`。切り替えや移行の前に）。外から読む鍵（`V2_SERVICE_KEY`）でも `admin/backup/list` は読める。
+  - 守るもの：30 日を過ぎてから気づく間違った更新・削除。同じ Cloudflare のアカウントの中なので、アカウントごとの事故は次の段で守る。
+- **週 1 回、ドライブへ（11 月）**：送信だけの独立 Apps Script（`gas-effects/`。issues/stepwise-v2-google-relay.md）に、v2 から全表の JSON と新しいファイルを取り寄せて `Kura/塾/バックアップ/` に置く仕事を載せる。本人がドライブで見られ、Cloudflare の外に出る。お金の書類（7 年）の置き場にもなる。
+- 手で取る：`npx wrangler d1 export stepwise-v2 --remote --output …` と `npx wrangler r2 object get stepwise-files/f/<id> --remote --file …`（2026-10-10 に最初の 1 回を `Kura/塾/バックアップ/2026-10-10` に置いた）。
+- **テスト**：`test/v2-backup.test.cjs`。
+- 同じ画面に「テスト送信」（`admin/effects/test`。代表あてに 1 通）を足した。送る先の Apps Script を差し替えるときの確かめ。
+
 ### 7段目：講師の給与（2026-10-02。2026-10-07 雇用に合わせて直した）
 
 - **表**（`cf/migrations-v2/0011_payroll.sql`）：`payrollMonths`（講師ごと・月ごとの明細。確定・支払い済み・取消）、`payrollItems`（授業・面談・調整の行）、`payrollAdjustments`（確定の前に足す調整）、`lessons.payrollId`・`meetings.payrollId`（明細に入ったもの）。時給は1段目からある `staffRates`（変えた月から）。

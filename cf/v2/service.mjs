@@ -7,7 +7,7 @@ export const SERVICE_READS = new Set([
   'students/list', 'students/hub', 'schedule/staff/range', 'home/today', 'monthly/overview',
   'billing/month', 'billing/family', 'billing/plans/list', 'billing/fees/list',
   'records/pending', 'homework/reported', 'grades/overview', 'grades/student',
-  'admin/families/list', 'admin/families/get', 'admin/effects/list', 'admin/terms/get', 'payroll/month',
+  'admin/families/list', 'admin/families/get', 'admin/effects/list', 'admin/terms/get','admin/backup/list', 'payroll/month',
 ]);
 const same = (a, b) => a.length === b.length && sha256Hex(a) === sha256Hex(b); // 長さの違いで落ちる以外は時間が一定
 // 鍵が合えば代表のスタッフの行、合わなければ null。鍵が設定されていなければ null

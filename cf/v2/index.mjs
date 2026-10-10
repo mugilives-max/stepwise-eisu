@@ -26,15 +26,18 @@ import { recordEffects, deliverEffects } from './effects.mjs';
 import { effectsAdminRoutes, retryFailedEffects } from './effects-admin.mjs';
 import { termsRoutes } from './terms.mjs';
 import { serviceActor, SERVICE_READS } from './service.mjs';
+import { backupRoutes, backupToR2 } from './backup.mjs';
 
-const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes, ...previewRoutes, ...homeRoutes, ...studentHubRoutes, ...monthlyRoutes, ...effectsAdminRoutes, ...termsRoutes };
+const ROUTES = { ...staffRoutes, ...familyRoutes, ...peopleRoutes, ...migrateRoutes, ...scheduleRoutes, ...migrateScheduleRoutes, ...recordRoutes, ...migrateRecordsRoutes, ...billingRoutes, ...migrateBillingRoutes, ...gradesRoutes, ...fileRoutes, ...payrollRoutes, ...migrateCheckRoutes, ...cutoverRoutes, ...previewRoutes, ...homeRoutes, ...studentHubRoutes, ...monthlyRoutes, ...effectsAdminRoutes, ...termsRoutes, ...backupRoutes };
 const MAX_BODY = 200000;
 
-// 毎日0時10分（Worker の定期実行）: 締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
+// 毎日0時10分（Worker の定期実行）: まず台帳の控えを R2 に置き（その日の処理の前の姿）、締め切りを過ぎた仮予定を決定する。切り替えたあとは、3日以降に前月分の請求を確定する
 export async function runV2Scheduled(env, now = Date.now()) {
   if (!env.DB2) return null;
   const c = { env, db: env.DB2, now, effects: [], actor: null, userAgent: 'scheduled' };
+  let backup; try { backup = await backupToR2(env, c.db, now); } catch (e) { backup = { error: String((e && e.message) || e).slice(0, 200) }; } // 控えが取れなくても、ほかの処理は止めない（画面に「古い」と出る）
   const result = await autoConfirm(c);
+  result.backup = backup;
   result.invoices = await autoCloseInvoices(c);
   result.tests = await remindTestResults(c);
   result.files = await cleanupFiles(c);
