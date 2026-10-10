@@ -28,6 +28,8 @@ test('backup: the manager takes a snapshot of every table into R2, lists it, and
   assert.ok(json.tables.staff[0].passwordHash === undefined || typeof json.tables.staff[0].passwordHash === 'string', '表はそのまま（控えは R2 の中でだけ読める）');
 
   const list = await h.ok('admin/backup/list', { auth });
+  assert.equal(list.latest.rows, r.rows, '行数は一覧でも見える');
+  assert.equal(list.latest.size, r.bytes, '大きさはバイト数');
   assert.deepEqual(list.recent.map(x => x.key), [r.key, 'backup/2026-09-01.json']);
   assert.equal(list.latest.key, r.key);
   assert.equal(list.stale, false);
