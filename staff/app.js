@@ -13,6 +13,7 @@ import { payrollPage, ratesPage, payrollSubmit, payrollClick, payrollPrint, rese
 import { sheet, rowButton, sliderInput } from '/staff/ui.js?v=20261008-launch1';
 import { termsPage, effectsPage, extrasSubmit, extrasClick, resetExtras, leaveExtras } from '/staff/extras.js?v=20261008-launch1';
 import { gradesOverviewPage, gradesStudentPage, gradesBar, gradesSubmit, gradesClick, resetGrades, leaveGrades, openGradeFile } from '/staff/grades.js?v=20261008-launch1';
+import { gradesClickShared } from '/assets/v2/grades-view.js?v=20261008-launch1';
 
 const store = session('sw2_staff');
 const ROLE_LABEL = { teacher: '講師', manager: '教室管理者', sysadmin: 'システム管理者' };
@@ -278,6 +279,7 @@ document.addEventListener('click', ev => {
   if (a === 'copy') { navigator.clipboard.writeText(b.dataset.text || '').then(() => { say('コピーしました', 'ok'); render(); }); return; }
   // 成績票は、待たずに新しいタブを開いてから読む（あとから開くと止められる）
   if (a === 'gr-open') { const win = window.open('', '_blank'); run(async () => { const r = await openGradeFile(ctx, b, win); if (!r.ok) say(r.error.message, 'error'); }); return; }
+  if (gradesClickShared(a, b)) return render(); // 成績のグラフの帯・試験の ‹ ›
   // 保護者ページ・生徒ページのプレビュー: 新しいタブを先に開いてから、プレビューの鍵をもらって移す
   if (a === 'pv-open') { const win = window.open('', '_blank'); run(async () => { const r = await call('admin/preview/start', { kind: b.dataset.kind, id: b.dataset.id }, store.get()); if (r.ok) { if (win && !win.closed) win.location.href = r.url; else location.href = r.url; } else { if (win) win.close(); say(r.error.message, 'error'); } }); return; }
   if (a === 'pr-print' || a === 'pr-print-mine') { if (!payrollPrint(ctx, a, b, me)) { say('印刷の窓を開けませんでした。ポップアップを許可してください', 'error'); render(); } return; }

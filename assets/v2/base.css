@@ -661,10 +661,20 @@ button.linkish { background: none; border: 0; padding: 0; color: var(--primary);
 form[data-form=gr-save]:has(select[name=kind] option[value=mock]:checked) .c-rank { display: none; }
 form[data-form=gr-save]:has(select[name=kind] option[value=regular]:checked) .c-dev { display: none; }
 table.gform th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: left; }
-.gmini { margin: 12px 0; }
-.gmini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 6px; }
-.gmini-one { margin: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 4px; background: var(--white); }
-.gmini-one figcaption { display: flex; align-items: baseline; gap: 6px; font-size: 12px; margin-bottom: 2px; }
-.gmini-one figcaption .val { font-size: 15px; font-weight: 700; margin-left: auto; font-variant-numeric: tabular-nums; }
-.gmini-one figcaption .up { color: var(--ok); } .gmini-one figcaption .down { color: var(--danger); }
-.gmini-one svg { width: 100%; height: auto; display: block; }
+/* 成績のグラフ: 科目の帯で 1 本を大きく。試験は ‹ › で 1 つずつ（2026-10-11） */
+.gchart { margin: 12px 0; }
+.gchips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.gchips.kinds { margin-bottom: 2px; }
+.gchip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--white); color: var(--ink); font-size: 13px; white-space: nowrap; }
+.gchip.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+.gchips.kinds .gchip { font-size: 12px; padding: 4px 10px; }
+.gchips.kinds .gchip.on { background: var(--ink); border-color: var(--ink); }
+.gchart-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 2px 2px; }
+.gchart-head .up { color: var(--ok); } .gchart-head .down { color: var(--danger); }
+.gchart svg { width: 100%; height: auto; display: block; background: var(--white); border: 1px solid var(--line); border-radius: 12px; }
+.gpager { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; }
+.gpager .gpager-t { flex: 1; text-align: center; display: flex; flex-direction: column; line-height: 1.25; }
+.gpager .gpager-t small { color: var(--muted); }
+.gpager button.icon { width: 36px; height: 36px; border-radius: 50%; font-size: 24px; padding: 0; display: grid; place-items: center; }
+.gpager .icon-ph { width: 36px; height: 36px; }
+.gpager + .gcard { margin-top: 8px; }
