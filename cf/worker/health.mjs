@@ -1,5 +1,5 @@
 // 疎通確認。GAS の doGet と同じ形。release は移行の段階が分かる文字列にする。
-export const RELEASE = "2026-10-08-v2-service-key";
+export const RELEASE = "2026-10-11-v2-backup";
 
 export async function health(env) {
   const out = { ok: true, service: "stepwise-api", release: RELEASE };

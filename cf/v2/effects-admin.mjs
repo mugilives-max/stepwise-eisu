@@ -2,7 +2,7 @@
 // 毎日の定期実行でも、失敗したものを 3 回まで送り直す（retryFailedEffects）。
 import { fail, audit } from './util.mjs';
 import { requireStaff } from './staff.mjs';
-import { deliverEffects } from './effects.mjs';
+import { deliverEffects, recordEffects } from './effects.mjs';
 
 const LABEL = { mail: 'メール', calendarCreate: 'カレンダーに予定を作る', calendarUpdate: 'カレンダーの予定を直す', calendarDelete: 'カレンダーの予定を消す', calendarMeet: 'Meet のリンク' };
 const parse = s => { try { return JSON.parse(s) || {}; } catch { return {}; } };
@@ -34,6 +34,17 @@ export const effectsAdminRoutes = {
     await audit(c, 'effectsRetry', '', { ids: rows.map(x => x.id), sent: r.sent, error: r.error || r.skipped || '' });
     if (r.skipped) fail('unavailable', '送る先（Apps Script）の設定がありません', 503);
     return { sent: r.sent, failed: rows.length - r.sent, error: r.error || '' };
+  },
+  // テスト送信: 代表あてに 1 通送る（送る先の Apps Script を差し替えたときの確かめ）
+  'admin/effects/test': async (c, b) => {
+    const me = await requireStaff(c, b, 'manager');
+    const item = { kind: 'mail', to: 'TEACHER', subject: '[ステップワイズ] 送信の確認', body: `${me.name} さんがスタッフ画面から送った確認のメールです。届いていれば、メールとカレンダーの送る先は生きています。\n送った時刻: ${new Date(c.now + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ')}`, audience: 'staff' };
+    const queued = await recordEffects(c.db, [item], c.now);
+    const r = await deliverEffects(c.env, c.db, queued);
+    await audit(c, 'effectsTest', '', { sent: r.sent, error: r.error || r.skipped || '' });
+    if (r.skipped) fail('unavailable', '送る先（Apps Script）の設定がありません', 503);
+    if (!r.sent) fail('failed', '送れませんでした: ' + r.error, 502);
+    return { sent: 1 };
   },
   // 取り下げる（もう要らないもの。送らない）
   'admin/effects/dismiss': async (c, b) => {

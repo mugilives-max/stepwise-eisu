@@ -94,3 +94,16 @@ test('effects: failed mail shows up for the manager, can be re-sent, and the nig
   assert.equal(h.rows('select status from effects where id = ?', failedId)[0].status, 'dismissed');
   assert.equal((await h.call('admin/effects/list', { auth: 'bad' })).error.code, 'needLogin');
 });
+
+test('effects: the manager can send one test mail to the owner to check the relay', async () => {
+  const { h, auth } = await world();
+  h.env.GAS_URL = 'https://gas.example.invalid/exec'; h.env.SYNC_KEY = 's'.repeat(30);
+  const asked = await withFetch({ fail: false }, async () => { assert.equal((await h.ok('admin/effects/test', { auth })).sent, 1); });
+  assert.equal(asked.length, 1);
+  assert.deepEqual(asked[0].items.map(i => [i.kind, i.to, i.subject]), [['mail', 'TEACHER', '[ステップワイズ] 送信の確認']]);
+  assert.equal(h.mails().at(-1).status, 'sent');
+  await withFetch({ fail: true }, async () => { assert.equal((await h.call('admin/effects/test', { auth })).error.code, 'failed'); });
+  assert.equal(h.mails().at(-1).status, 'failed');
+  delete h.env.GAS_URL; delete h.env.SYNC_KEY;
+  assert.equal((await h.call('admin/effects/test', { auth })).error.code, 'unavailable');
+});

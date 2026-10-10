@@ -14,6 +14,7 @@ function fakeR2() {
     async put(k, v, o) { const b = v instanceof Uint8Array ? v : new Uint8Array(await new Response(v).arrayBuffer()); m.set(k, { b, o }); return {}; },
     async get(k) { const x = m.get(k); return x ? { body: new Blob([x.b]).stream(), httpMetadata: x.o && x.o.httpMetadata, size: x.b.length } : null; },
     async delete(k) { m.delete(k); },
+    async list({ prefix = '' } = {}) { return { objects: [...m.entries()].filter(([k]) => k.startsWith(prefix)).map(([k, x]) => ({ key: k, size: x.b.length, customMetadata: (x.o && x.o.customMetadata) || {} })), truncated: false }; },
   };
 }
 
