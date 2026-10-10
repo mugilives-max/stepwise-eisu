@@ -658,17 +658,18 @@ table.gtable tr.tot th, table.gtable tr.tot td { border-top: 2px solid var(--lin
 .gcard .ghead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 button.linkish { background: none; border: 0; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; font-size: 13px; }
 /* 入力欄: 模試は順位・人数の列を隠し、定期テストは偏差値の列を隠す（種類を切り替えるとその場で変わる） */
-form[data-form=gr-save]:has(select[name=kind] option[value=mock]:checked) .c-rank { display: none; }
-form[data-form=gr-save]:has(select[name=kind] option[value=regular]:checked) .c-dev { display: none; }
+form[data-form=gr-save]:has(select[name=series] option[value="__new"]:checked) .c-newseries, form[data-form=gr-save]:has(select[name=series] option:not([value="定期テスト"]):checked) .c-rank, form[data-form=gr-save]:has(select[name=series] option[value="定期テスト"]:checked) .c-dev { display: none; }
+form[data-form=gr-save]:has(select[name=series] option[value="__new"]:checked) .c-newseries { display: block; }
+form[data-form=gr-save] .c-newseries { display: none; }
 table.gform th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: left; }
 /* 成績のグラフ: 科目の帯で 1 本を大きく。試験は ‹ › で 1 つずつ（2026-10-11） */
 .gchart { margin: 12px 0; }
 .gchips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
-.gchips.kinds { margin-bottom: 2px; }
+.gchips.series { margin: 12px 0 2px; }
+.gchips.series .gchip { font-size: 14px; padding: 7px 14px; }
+.gchips.series .gchip.on { background: var(--ink); border-color: var(--ink); }
 .gchip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--white); color: var(--ink); font-size: 13px; white-space: nowrap; }
 .gchip.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
-.gchips.kinds .gchip { font-size: 12px; padding: 4px 10px; }
-.gchips.kinds .gchip.on { background: var(--ink); border-color: var(--ink); }
 .gchart-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 2px 2px; }
 .gchart-head .up { color: var(--ok); } .gchart-head .down { color: var(--danger); }
 .gchart svg { width: 100%; height: auto; display: block; background: var(--white); border: 1px solid var(--line); border-radius: 12px; }

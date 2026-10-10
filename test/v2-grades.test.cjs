@@ -114,3 +114,20 @@ test('tests shared by families wait for results until recorded or marked as no r
   assert.equal((await h.ok('grades/student', { auth, studentId: kid.id })).exams.length, 0, '「結果なし」は成績に出ない');
   assert.ok(teacher);
 });
+
+test('exams carry what test they belong to (series); the round is the name, and the kind follows the series', async () => {
+  const { h, auth, kid } = await world();
+  const a = await h.ok('grades/exams/save', { auth, studentId: kid.id, series: '北辰テスト', name: '3年4回', date: '2026-09-06' });
+  const b = await h.ok('grades/exams/save', { auth, studentId: kid.id, series: '定期テスト', name: '2学期中間', date: '2026-10-02' });
+  const got = (await h.ok('grades/student', { auth, studentId: kid.id })).exams;
+  assert.deepEqual(got.map(e => [e.series, e.name, e.kind]), [['北辰テスト', '3年4回', 'mock'], ['定期テスト', '2学期中間', 'regular']]);
+  assert.equal((await h.call('grades/exams/save', { auth, studentId: kid.id, name: 'x', date: '2026-09-06' })).error.code, 'badSeries', '何の試験かも種類も無ければ断る');
+  assert.equal((await h.ok('grades/exams/save', { auth, studentId: kid.id, kind: 'mock', name: 'y', date: '2026-09-06' })).examId.length > 0, true, '種類だけなら「模試」として受ける');
+  // 名前に「北辰 」を入れていた前の記録は、移行の SQL で分かれる（0017）
+  h.db2._sqlite.prepare("insert into exams (id, studentId, kind, name, date, createdAt, updatedAt) values ('ex_old', ?, 'mock', '北辰 2年2回', '2026-03-01', '2026-03-01T00:00:00Z', '2026-03-01T00:00:00Z')").run(kid.id);
+  const fs = require('node:fs'), sql = fs.readFileSync(require('node:path').join(__dirname, '../cf/migrations-v2/0017_exam_series.sql'), 'utf8').split('\n').filter(l => l.startsWith('UPDATE'));
+  for (const l of sql) h.db2._sqlite.prepare(l).run();
+  const moved = h.rows("select series, name from exams where id = 'ex_old'")[0];
+  assert.equal(moved.series, '北辰テスト'); assert.equal(moved.name, '2年2回');
+  void a; void b;
+});

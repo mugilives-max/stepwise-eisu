@@ -22,26 +22,37 @@ function fitTicks(values, step, pad, floor, ceil, minSteps) {
 // 画面の中の選択（生徒ごと）: グラフの種類と科目、開いている試験。スタッフ・保護者・生徒の画面で共通。
 // 1 画面に全科目の線を重ねず、科目の帯で切り替えて 1 本を大きく見せる（本人 2026-10-11「グラフが小さすぎて見えない。バーで表示科目を変えられるとか」）
 const SEL = {};
-export function gradeSel(studentId) { return SEL[studentId] || (SEL[studentId] = { kind: '', subject: '合計', exam: '' }); }
+export function gradeSel(studentId) { return SEL[studentId] || (SEL[studentId] = { series: '', subject: '合計', exam: '' }); }
+// 試験の階層: 何の試験か（定期テスト・北辰テスト・東部地区テスト・英検 …）→ その中の回。定期テストを先に、あとは新しい順
+export const SERIES_FIRST = ['定期テスト', '北辰テスト', '東部地区テスト', '英検'];
+export function seriesOf(exams) {
+  const last = {}; for (const e of exams) if (!last[e.series] || last[e.series] < e.date) last[e.series] = e.date;
+  return Object.keys(last).sort((a, b) => (SERIES_FIRST.indexOf(a) + 1 || 99) - (SERIES_FIRST.indexOf(b) + 1 || 99) || last[b].localeCompare(last[a]));
+}
+// 帯（何の試験か）と、選んだものの試験。1 種類しかなければ帯は出さない
+export function seriesPick(exams, studentId) {
+  const all = seriesOf(exams), sel = gradeSel(studentId);
+  if (!all.includes(sel.series)) sel.series = all[0] || '';
+  const list = exams.filter(e => e.series === sel.series);
+  const bar = all.length > 1 ? `<div class="gchips series">${all.map(x => chip('gv-series', studentId, `data-s="${esc(x)}"`, x, x === sel.series)).join('')}</div>` : '';
+  return { bar, list, series: sel.series };
+}
 export function gradesClickShared(a, b) {
-  if (a !== 'gv-subject' && a !== 'gv-kind' && a !== 'gv-exam') return false;
+  if (a !== 'gv-subject' && a !== 'gv-series' && a !== 'gv-exam') return false;
   const sel = gradeSel(b.dataset.sid);
   if (a === 'gv-subject') sel.subject = b.dataset.s;
-  else if (a === 'gv-kind') { sel.kind = b.dataset.k; sel.subject = '合計'; }
+  else if (a === 'gv-series') { sel.series = b.dataset.s; sel.subject = '合計'; sel.exam = ''; }
   else sel.exam = b.dataset.id;
   return true;
 }
 const chip = (action, sid, attrs, label, on) => `<button type="button" class="gchip${on ? ' on' : ''}" data-action="${action}" data-sid="${esc(sid)}" ${attrs}${on ? ' aria-pressed="true"' : ''}>${esc(label)}</button>`;
 
-// 推移のグラフ（1 本を大きく）。模試は偏差値、定期テストは得点率。上の帯で種類（両方あるとき）と科目を選ぶ。目盛りは値に合わせる
+// 推移のグラフ（1 本を大きく）。渡された試験（同じ種類）で、模試は偏差値、定期テストは得点率。上の帯で科目を選ぶ。目盛りは値に合わせる
 export function gradeCharts(exams, studentId = '') {
-  const list = exams.filter(e => e.scores.length).slice().sort((a, b) => a.date.localeCompare(b.date));
-  const mock = list.filter(e => e.kind === 'mock'), regular = list.filter(e => e.kind !== 'mock');
+  const cur = exams.filter(e => e.scores.length).slice().sort((a, b) => a.date.localeCompare(b.date));
+  if (cur.length < 2) return '';
   const sel = gradeSel(studentId);
-  const kinds = [['mock', '模試'], ['regular', '定期テスト']].filter(([k]) => (k === 'mock' ? mock : regular).length >= 2);
-  if (!kinds.length) return '';
-  if (!kinds.some(([k]) => k === sel.kind)) sel.kind = kinds[0][0];
-  const kind = sel.kind, cur = kind === 'mock' ? mock : regular, useDev = kind === 'mock' && cur.some(e => e.scores.some(x => x.deviation !== null && x.deviation !== undefined));
+  const useDev = cur.some(e => e.kind === 'mock') && cur.some(e => e.scores.some(x => x.deviation !== null && x.deviation !== undefined) || (e.total.deviation !== null && e.total.deviation !== undefined));
   const find = (e, s) => e.scores.find(x => x.subject === s);
   const value = (e, s) => s === '合計' ? (useDev ? (e.total.deviation ?? null) : (e.total.score !== null && e.total.score !== undefined && e.total.max ? e.total.score / e.total.max * 100 : null))
     : (() => { const x = find(e, s); if (!x) return null; return useDev ? (x.deviation ?? null) : (x.score !== null && x.max ? x.score / x.max * 100 : null); })();
@@ -62,7 +73,6 @@ export function gradeCharts(exams, studentId = '') {
   const last = pts[pts.length - 1], prev = pts[pts.length - 2], d = last && prev ? last.v - prev.v : null;
   const delta = d === null ? '' : Math.abs(d) < 0.05 ? '<span class="muted">前回と同じ</span>' : `<span class="${d > 0 ? 'up' : 'down'}">前回から ${d > 0 ? '▲' : '▼'} ${n1(Math.abs(d))}${unit}</span>`;
   let h = '<div class="gchart">';
-  if (kinds.length > 1) h += `<div class="gchips kinds">${kinds.map(([k, l]) => chip('gv-kind', studentId, `data-k="${k}"`, l, k === kind)).join('')}</div>`;
   h += `<div class="gchips">${subjects.map(s => chip('gv-subject', studentId, `data-s="${esc(s)}"`, s, s === sel.subject)).join('')}</div>`;
   h += `<div class="gchart-head"><strong>${esc(sel.subject)}</strong><span class="small muted">${useDev ? '偏差値' : '得点率（%）'}の推移</span><span class="small" style="margin-left:auto">${delta}</span></div>`;
   h += `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sel.subject)}の${useDev ? '偏差値' : '得点率'}の推移">${grid}${labels}${line}${dots}</svg></div>`;
@@ -77,7 +87,7 @@ export function examPager(exams, studentId, card) {
   let i = list.findIndex(e => e.id === sel.exam); if (i < 0) i = 0;
   const e = list[i], newer = list[i - 1], older = list[i + 1];
   const btn = (t, label, arrow) => t ? `<button type="button" class="icon" data-action="gv-exam" data-sid="${esc(studentId)}" data-id="${esc(t.id)}" aria-label="${label}">${arrow}</button>` : '<span class="icon-ph"></span>';
-  const bar = list.length > 1 ? `<div class="gpager">${btn(older, '前の試験', '‹')}<div class="gpager-t"><strong>${esc(e.name)}</strong><small>${esc(md(e.date))}・${list.length - i} / ${list.length}</small></div>${btn(newer, '次の試験', '›')}</div>` : '';
+  const bar = list.length > 1 ? `<div class="gpager">${btn(older, '前の試験', '‹')}<div class="gpager-t"><strong>${esc(e.series ? e.series + ' ' : '')}${esc(e.name)}</strong><small>${esc(md(e.date))}・${list.length - i} / ${list.length}</small></div>${btn(newer, '次の試験', '›')}</div>` : '';
   return bar + card(e);
 }
 
@@ -102,14 +112,14 @@ function oneSummary(list, useDev, caption) {
 }
 export function summaryTable(exams) {
   const list = exams.filter(e => e.scores.length).slice().sort((a, b) => a.date.localeCompare(b.date));
-  const mock = list.filter(e => e.kind === 'mock'), regular = list.filter(e => e.kind !== 'mock');
-  const mockDev = mock.some(e => e.scores.some(s => s.deviation !== null && s.deviation !== undefined));
-  return oneSummary(mock, mockDev, mockDev ? '模試の偏差値' : '模試の点数') + oneSummary(regular, false, '定期テストの点数');
+  if (list.length < 2) return '';
+  const useDev = list.some(e => e.kind === 'mock') && list.some(e => e.scores.some(s => s.deviation !== null && s.deviation !== undefined));
+  return oneSummary(list, useDev, `${esc(list[0].series)}の${useDev ? '偏差値' : '点数'}`);
 }
 // 試験のカード。opts.lessons は保護者向けの「その期間の授業」
 export function examCard(e, { lessons = null, actions = '', sheets = [] } = {}) {
   const t = e.total, tparts = [t.score !== null && t.score !== undefined ? `合計 <strong>${n1(t.score)}</strong>${t.max ? ' / ' + n1(t.max) : ''}` : '', t.rank ? `${t.rank}位${t.rankOf ? ' / ' + t.rankOf + '人' : ''}` : '', t.deviation !== null && t.deviation !== undefined ? `偏差値 <strong>${n1(t.deviation)}</strong>` : ''].filter(Boolean);
-  let h = `<div class="sheet stack gcard"><div class="ghead"><div><strong>${esc(e.name)}</strong> <span class="tag gray">${KIND[e.kind] || ''}</span></div><span class="small muted">${esc(md(e.date))}${e.grade ? '・' + esc(e.grade) : ''}</span></div>`;
+  let h = `<div class="sheet stack gcard"><div class="ghead"><div><strong>${esc(e.name)}</strong> <span class="tag gray">${esc(e.series || KIND[e.kind] || '')}</span></div><span class="small muted">${esc(md(e.date))}${e.grade ? '・' + esc(e.grade) : ''}</span></div>`;
   if (tparts.length) h += `<div>${tparts.join('　')}</div>`;
   if (e.scores.length) h += scoreTable(e.scores);
   if (sheets.length) h += `<div class="small">成績票: ${sheets.map(f => `<button type="button" class="linkish" data-action="gr-open" data-id="${esc(f.id)}">${esc(f.name)}</button>`).join('　')}</div>`;
@@ -132,7 +142,8 @@ export function gradesView(st, { who, dis = '' }) {
   let h = '';
   if (st.nextTest) h += `<p class="notice">${esc(st.nextTest.title || 'テスト')}まで あと <strong>${st.nextTest.days}日</strong>（${esc(md(st.nextTest.date))}）</p>`;
   if (!st.exams.length) h += '<p class="muted">まだ成績の記録はありません。成績票が返ってきたら、写真を送ってください。</p>';
-  h += summaryTable(st.exams) + gradeCharts(st.exams, st.id) + examPager(st.exams, st.id, e => examCard(e, { lessons: who === 'family' && st.lessons ? st.lessons.find(x => x.examId === e.id) : null }));
+  const pk = seriesPick(st.exams, st.id);
+  h += pk.bar + summaryTable(pk.list) + gradeCharts(pk.list, st.id) + examPager(pk.list, st.id, e => examCard(e, { lessons: who === 'family' && st.lessons ? st.lessons.find(x => x.examId === e.id) : null }));
   h += `<h2>成績票を送る</h2>${uploadForm(dis, who === 'family' ? `<input type="hidden" name="studentId" value="${esc(st.id)}">` : '')}`;
   if (st.files.length) h += `<h3>送った成績票</h3>${fileList(st.files, 'gr-open')}`;
   return h;
